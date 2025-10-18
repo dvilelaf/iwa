@@ -12,3 +12,7 @@ wheels/
 *.env
 
 .python-version
+
+wallet.json
+
+tenderly.yaml
