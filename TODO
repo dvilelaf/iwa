@@ -1,8 +1,7 @@
-- async
-- web3 rate limiter
-- multi RPC?
-
 - olas
+
+- async + web3 rate limiter
+- multi RPC?
 
 - telegram
 - Docker

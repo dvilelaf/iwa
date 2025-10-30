@@ -1,16 +1,17 @@
-import logging
+import warnings
+
+warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
+warnings.filterwarnings(
+    "ignore", message="This AsyncLimiter instance is being re-used across loops.*"
+)
+
 import time
 
 import requests
 from eth_account import Account
 from web3 import Web3
 from cowdao_cowpy.order_book.generated.model import (
-    UID,
-    OrderCreation,
     OrderQuoteRequest,
-    OrderQuoteResponse,
-    OrderQuoteSide1,
-    OrderQuoteSideKindSell,
     TokenAmount,
     OrderQuoteSide3,
     OrderQuoteSideKindBuy,
@@ -33,18 +34,15 @@ from eth_typing.evm import ChecksumAddress
 from web3 import Web3
 from iwa.core.contracts.ERC20 import ERC20Contract
 from iwa.core.chain import SupportedChain
-import warnings
 from eth_account.signers.local import LocalAccount
 from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
 from cowdao_cowpy.contracts.sign import (
-    EcdsaSignature,
     SigningScheme,
     PreSignSignature,
-    Signature,
 )
 from cowdao_cowpy.contracts.order import Order
 
-warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
+
 logger = configure_logger()
 
 COW_API_URLS = {100: "https://api.cow.fi/xdai"}
