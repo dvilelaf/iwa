@@ -30,7 +30,7 @@ def account_create(
         key_storage.create_account(tag)
     except ValueError as e:
         typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @wallet_cli.command("create-multisig")
@@ -73,7 +73,7 @@ def create_safe(
         )
     except ValueError as e:
         typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @wallet_cli.command("list")

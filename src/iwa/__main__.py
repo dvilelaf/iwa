@@ -1,4 +1,6 @@
-from iwa.core.cli import iwa_cli
+"""iwa main."""
+
+from iwa.core import cli
 
 if __name__ == "__main__":
-    iwa_cli()
+    cli.iwa_cli()

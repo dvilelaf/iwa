@@ -78,6 +78,7 @@ class KeyStorage(BaseModel):
     _password: str = PrivateAttr()
 
     def __init__(self, path: Path = Path(WALLET_PATH), password: Optional[str] = None):
+        """Initialize key storage."""
         super().__init__()
         self._path = path
         self._password = password or Secrets().wallet_password.get_secret_value()

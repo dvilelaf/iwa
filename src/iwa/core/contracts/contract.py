@@ -1,3 +1,5 @@
+"""Contract interaction helpers."""
+
 import json
 import warnings
 from pathlib import Path
@@ -21,6 +23,7 @@ class ContractInstance:
     abi_path: Path = None
 
     def __init__(self, address: str, chain_name: str = "gnosis"):
+        """Initialize contract instance."""
         self.address = address
         self.abi = None
         self.chain_interface = ChainInterfaces().get(chain_name)
@@ -79,12 +82,14 @@ class ContractInstance:
             if selector in self.error_selectors:
                 error_name, types, names = self.error_selectors[selector]
                 decoded = decode(types, bytes.fromhex(encoded_args))
-                error_str = ", ".join(f"{name}={value}" for name, value in zip(names, decoded))
+                error_str = ", ".join(
+                    f"{name}={value}" for name, value in zip(names, decoded, strict=True)
+                )
                 raise Exception(
                     f"CustomError in '{self.name}' contract[{self.address}]\n{error_name}({error_str})"
-                )
+                ) from e
             else:
-                raise Exception(f"Unknown custom error (selector={selector})")
+                raise Exception(f"Unknown custom error (selector={selector})") from e
 
         except Exception as e:
             data = getattr(e, "args", [None])[1]

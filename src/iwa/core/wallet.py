@@ -1,3 +1,5 @@
+"""Wallet module."""
+
 from typing import Optional
 
 from safe_eth.safe import SafeOperationEnum
@@ -5,7 +7,7 @@ from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces, SupportedChain
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
-from iwa.core.contracts.ERC20 import ERC20Contract
+from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.contracts.multisend import (
     MULTISEND_ADDRESS_GNOSIS,
     MULTISEND_CALL_ONLY_ADDRESS_GNOSIS,
@@ -26,6 +28,7 @@ class Wallet:
     """Wallet management"""
 
     def __init__(self):
+        """Initialize wallet."""
         self.key_storage = KeyStorage()
 
     def get_token_address(
@@ -426,8 +429,8 @@ class Wallet:
         account = self.key_storage.get_account(account_address_or_tag)
 
         retries = 1
-        MAX_RETRIES = 3
-        while retries < MAX_RETRIES + 1:
+        max_retries = 3
+        while retries < max_retries + 1:
             cow = CowSwap(
                 private_key=account.key,
                 chain=chain,
@@ -461,7 +464,7 @@ class Wallet:
                 logger.info("Swap successful")
                 return True
 
-            logger.error(f"Swap try {retries}/{MAX_RETRIES}] failed")
+            logger.error(f"Swap try {retries}/{max_retries}] failed")
             retries += 1
 
         logger.error("Max swap retries reached. Swap failed.")

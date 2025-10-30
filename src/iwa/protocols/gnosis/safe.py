@@ -1,3 +1,5 @@
+"""Gnosis Safe interaction."""
+
 from typing import Optional
 
 from safe_eth.eth import EthereumClient

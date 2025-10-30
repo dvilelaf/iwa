@@ -1,3 +1,5 @@
+"""Olas service manager."""
+
 import logging
 from typing import Dict, Optional
 
@@ -13,7 +15,7 @@ from iwa.core.constants import (
     TRADER_AGENT_ID,
     TRADER_CONFIG_HASH,
 )
-from iwa.core.contracts.ERC20 import ERC20Contract
+from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.protocols.olas.contracts.service import (
     ServiceManagerContract,
     ServiceRegistryContract,
@@ -28,6 +30,7 @@ class ServiceManager:
     """ServiceManager"""
 
     def __init__(self, config: ServiceConfig):
+        """Initialize ServiceManager."""
         self.config = config
         self.registry = ServiceRegistryContract(SERVICE_REGISTRY_ADDRESS_GNOSIS)
         self.manager = ServiceManagerContract(SERVICE_MANAGER_ADDRESS_GNOSIS)

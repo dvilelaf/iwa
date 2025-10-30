@@ -24,6 +24,7 @@ class EthereumAddress(str):
     """EthereumAddress"""
 
     def __new__(cls, value: str):
+        """Create a new EthereumAddress instance."""
         if not re.fullmatch(ETHEREUM_ADDRESS_REGEX, value):
             raise ValueError(f"Invalid Ethereum address: {value}")
         return str.__new__(cls, Web3.to_checksum_address(value))

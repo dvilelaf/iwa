@@ -1,3 +1,5 @@
+"""Staking contract interaction."""
+
 import math
 import time
 from datetime import datetime, timezone
@@ -23,6 +25,7 @@ class StakingContract(ContractInstance):
     name = "staking"
 
     def __init__(self, address: str):
+        """Initialize StakingContract."""
         super().__init__(address)
 
         activity_checker_address = self.call("activityChecker")
@@ -94,7 +97,7 @@ class StakingContract(ContractInstance):
 
     def get_required_requests(self) -> int:
         """Calculate the required requests for the next epoch."""
-        REQUESTS_SAFETY_MARGIN = 1
+        requests_safety_margin = 1
         now_ts = time.time()
         return math.ceil(
             (
@@ -102,7 +105,7 @@ class StakingContract(ContractInstance):
                 * self.activity_checker.liveness_ratio
             )
             / 1e18
-            + REQUESTS_SAFETY_MARGIN
+            + requests_safety_margin
         )
 
     def prepare_stake_tx(

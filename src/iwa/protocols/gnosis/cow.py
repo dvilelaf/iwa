@@ -1,11 +1,14 @@
+"""CoW Swap interaction."""
+
+# ruff: noqa: E402
+
+import time
 import warnings
 
 warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
 warnings.filterwarnings(
     "ignore", message="This AsyncLimiter instance is being re-used across loops.*"
 )
-
-import time
 
 import requests
 from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
@@ -56,6 +59,7 @@ class CowSwap:
     env: Envs = "prod"
 
     def __init__(self, private_key: str, chain: SupportedChain):
+        """Initialize CowSwap."""
         self.account = Account.from_key(private_key)
         self.chain = chain
         self.supported_chain_id = SupportedChainId(chain.chain_id)
@@ -77,20 +81,20 @@ class CowSwap:
         """Check if a Cowswap order has been executed"""
         logger.info("Checking order status")
 
-        MAX_RETRIES = 8
-        SLEEP_BETWEEN_RETRIES = 30
+        max_retries = 8
+        sleep_between_retries = 30
         retries = 0
 
-        while retries < MAX_RETRIES:
+        while retries < max_retries:
             retries += 1
 
             response = requests.get(order.url, timeout=60)
 
             if response.status_code != HTTP_OK:
                 logger.info(
-                    f"Order is not ready yet: {response.status_code}. Checking again in {SLEEP_BETWEEN_RETRIES}s"
+                    f"Order is not ready yet: {response.status_code}. Checking again in {sleep_between_retries}s"
                 )
-                time.sleep(SLEEP_BETWEEN_RETRIES)
+                time.sleep(sleep_between_retries)
                 continue
 
             order_data = response.json()
@@ -116,9 +120,9 @@ class CowSwap:
                 return True
 
             logger.info(
-                f"Order has not been executed yet. Checking again in {SLEEP_BETWEEN_RETRIES}s"
+                f"Order has not been executed yet. Checking again in {sleep_between_retries}s"
             )
-            time.sleep(SLEEP_BETWEEN_RETRIES)
+            time.sleep(sleep_between_retries)
 
         logger.error("Max retries reached. Could not verify the order.")
         return False

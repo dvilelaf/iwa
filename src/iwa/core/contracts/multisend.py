@@ -1,3 +1,5 @@
+"""Multisend contract interaction."""
+
 from typing import Dict, List, Optional, cast
 
 from hexbytes import HexBytes

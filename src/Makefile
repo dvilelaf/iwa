@@ -13,3 +13,8 @@ format:
 publish:
 	uv build && \
 	uv run twine upload dist/*
+
+
+.PHONY: gemini
+gemini:
+	npx https://github.com/google-gemini/gemini-cli

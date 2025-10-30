@@ -1,3 +1,5 @@
+"""Activity checker contract interaction."""
+
 from iwa.protocols.olas.contracts.base import ContractInstance
 
 from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
@@ -9,6 +11,7 @@ class ActivityCheckerContract(ContractInstance):
     name = "activity_checker"
 
     def __init__(self, address):
+        """Initialize ActivityCheckerContract."""
         super().__init__(address)
         agent_mech_function = getattr(self.contract.functions, "agentMech", None)
         self.agent_mech = (

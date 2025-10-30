@@ -1,3 +1,5 @@
+"""ERC20 contract interaction."""
+
 from typing import Dict, Optional
 
 from iwa.core.constants import ABI_PATH
@@ -11,6 +13,7 @@ class ERC20Contract(ContractInstance):
     abi_path = ABI_PATH / "ERC20.json"
 
     def __init__(self, address: str, chain_name: str = "gnosis"):
+        """Initialize ERC20 contract instance."""
         super().__init__(address, chain_name)
 
         self.decimals = self.call("decimals")

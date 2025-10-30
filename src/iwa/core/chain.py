@@ -1,3 +1,5 @@
+"""Chain interaction helpers."""
+
 import time
 from typing import Dict, Optional, Tuple, Union
 
@@ -75,8 +77,10 @@ class SupportedChains:
 class ChainInterface:
     """ChainInterface"""
 
-    def __init__(self, chain: Union[SupportedChain, str] = Gnosis()):
+    def __init__(self, chain: Union[SupportedChain, str] = None):
         """ChainInterface"""
+        if chain is None:
+            chain = Gnosis()
         if isinstance(chain, str):
             chain: SupportedChain = getattr(SupportedChains(), chain.lower())
 

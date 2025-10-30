@@ -1,3 +1,5 @@
+"""Test module."""
+
 import asyncio
 
 from iwa.core.wallet import Wallet

@@ -1,3 +1,5 @@
+"""Service contract interaction."""
+
 import time
 from enum import Enum
 from typing import Dict, Optional
@@ -6,6 +8,10 @@ from iwa.protocols.olas.contracts.base import ContractInstance
 from web3 import Web3
 
 from iwa.core.constants import MULTISIG_IMPLEMENTATION_ADDRESS
+from iwa.protocols.olas.constants import (
+    DEFAULT_DEPLOY_PAYLOAD,
+    DEFAULT_FALLBACK_HANDLER,
+)
 
 
 def get_deployment_payload(fallback_handler: Optional[str] = None) -> str:

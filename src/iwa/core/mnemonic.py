@@ -181,6 +181,10 @@ class MnemonicManager:
         Args:
             password (bytes): The password in bytes.
             salt (bytes): A random salt.
+            n (int | None): CPU/memory cost factor.
+            r (int | None): Block size parameter.
+            p (int | None): Parallelization parameter.
+            length (int | None): Desired key length in bytes.
 
         Returns:
             bytes: The derived key of length `self.scrypt_len`.
