@@ -180,5 +180,25 @@ def erc20_approve(
     )
 
 
+@wallet_cli.command("drain")
+def drain_wallet(
+    from_address_or_tag: str = typer.Option(..., "--from", "-f", help="From address or tag"),
+    to_address_or_tag: str = typer.Option(..., "--to", "-t", help="To address or tag"),
+    chain_name: str = typer.Option(
+        "gnosis",
+        "--chain",
+        "-c",
+        help="Chain to drain from.",
+    ),
+):
+    """Drain all tokens and native currency from one wallet to another"""
+    wallet = Wallet()
+    wallet.drain(
+        from_address_or_tag=from_address_or_tag,
+        to_address_or_tag=to_address_or_tag,
+        chain_name=chain_name,
+    )
+
+
 if __name__ == "__main__":
     iwa_cli()

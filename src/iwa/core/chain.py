@@ -92,7 +92,7 @@ class ChainInterface:
         """Get the native balance in wei"""
         return self.web3.eth.get_balance(address)
 
-    def get_native_balance(self, address: str):
+    def get_native_balance_eth(self, address: str):
         """Get the native balance in ether"""
         balance_wei = self.get_native_balance_wei(address)
         balance_ether = self.web3.from_wei(balance_wei, "ether")

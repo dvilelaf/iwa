@@ -231,6 +231,9 @@ class KeyStorage(BaseModel):
             if isinstance(account, StoredSafeAccount):
                 return account
 
+            if account is None:
+                return None
+
             return Account.from_key(self.get_private_key(address))
 
         except ValueError:

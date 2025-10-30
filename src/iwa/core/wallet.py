@@ -57,7 +57,7 @@ class Wallet:
                 account_address: {
                     token_name: self.get_erc20_balance_eth(account_address, token_name)
                     if token_name != "native"
-                    else chain_interface.get_native_balance(account_address)
+                    else chain_interface.get_native_balance_eth(account_address)
                     for token_name in token_names
                 }
                 for account_address in self.key_storage.accounts.keys()
@@ -79,13 +79,10 @@ class Wallet:
         """Send native currency or ERC20 tokens to an address"""
         from_account = self.key_storage.get_account(from_address_or_tag)
         to_account = self.key_storage.get_account(to_address_or_tag)
+        to_address = to_account.address if to_account else to_address_or_tag
 
         if not from_account:
             logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
-            return
-
-        if not to_account:
-            logger.error(f"To account '{to_address_or_tag}' not found in wallet.")
             return
 
         chain_interface = ChainInterfaces().get(chain_name)
@@ -97,11 +94,13 @@ class Wallet:
         is_safe = isinstance(from_account, StoredSafeAccount)
 
         if token_address == NATIVE_CURRENCY_ADDRESS:
-            logger.info("Sending native transfer")
+            logger.info(
+                f"Sending {chain_interface.web3.from_wei(amount_wei, 'ether'):.4f} {chain_interface.chain.native_currency} from {from_address_or_tag} to {to_address_or_tag}"
+            )
             if is_safe:
                 safe = SafeMultisig(from_account, chain_name)
                 safe.send_tx(
-                    to=to_account.address,
+                    to=to_address,
                     value=amount_wei,
                     signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
                 )
@@ -109,7 +108,7 @@ class Wallet:
             else:
                 chain_interface.send_native_transaction(
                     from_account,
-                    to_account.address,
+                    to_address,
                     amount_wei,
                 )
             return
@@ -117,13 +116,16 @@ class Wallet:
         erc20 = ERC20Contract(token_address)
         transaction = erc20.prepare_transfer_tx(
             from_account.address,
-            to_account.address,
+            to_address,
             amount_wei,
         )
         if not transaction:
             return
 
-        logger.info("Sending ERC20 transfer")
+        amount_eth = chain_interface.web3.from_wei(amount_wei, "ether")
+        logger.info(
+            f"Sending {amount_eth:.4f} {token_address_or_name} from {from_address_or_tag} to {to_address_or_tag}"
+        )
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
@@ -218,6 +220,20 @@ class Wallet:
             )
         else:
             chain_interface.sign_and_send_transaction(transaction, from_account.key)
+
+    def get_native_balance_eth(
+        self, account_address: str, chain_name: str = "gnosis"
+    ) -> Optional[float]:
+        """Get native currency balance"""
+        chain_interface = ChainInterfaces().get(chain_name)
+        return chain_interface.get_native_balance_eth(account_address)
+
+    def get_native_balance_wei(
+        self, account_address: str, chain_name: str = "gnosis"
+    ) -> Optional[int]:
+        """Get native currency balance"""
+        chain_interface = ChainInterfaces().get(chain_name)
+        return chain_interface.get_native_balance_wei(account_address)
 
     def get_erc20_balance_eth(
         self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
@@ -452,3 +468,60 @@ class Wallet:
             retries += 1
 
         logger.error("Max swap retries reached. Swap failed.")
+
+    def drain(
+        self,
+        from_address_or_tag: str,
+        to_address_or_tag: str = "master",
+        chain_name: str = "gnosis",
+    ):
+        """Drain entire balance of an account to another account"""
+        from_account = self.key_storage.get_account(from_address_or_tag)
+
+        if not from_account:
+            logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
+            return
+
+        is_safe = isinstance(from_account, StoredSafeAccount)
+        chain_interface = ChainInterfaces().get(chain_name)
+
+        # ERC-20 tokens
+        for token_name in chain_interface.chain.tokens.keys():
+            balance_wei = self.get_erc20_balance_wei(from_address_or_tag, token_name, chain_name)
+            if balance_wei and balance_wei > 0:
+                self.send(
+                    from_address_or_tag=from_address_or_tag,
+                    to_address_or_tag=to_address_or_tag,
+                    token_address_or_name=token_name,
+                    amount_wei=balance_wei,
+                    chain_name=chain_name,
+                )
+            else:
+                logger.info(f"No {token_name} to drain on {from_address_or_tag}.")
+
+        # Native currency
+        native_balance_wei = self.get_native_balance_wei(from_account.address)
+        if native_balance_wei and native_balance_wei > 0:
+            if is_safe:
+                drainable_balance_wei = native_balance_wei
+            else:
+                # Estimate gas cost
+                estimated_gas = (
+                    30_000  # Basic transfer gas is 21_000 EOA->EOA. but more expensive EOA->Safe
+                )
+                gas_cost_wei = chain_interface.web3.eth.gas_price * estimated_gas
+                drainable_balance_wei = native_balance_wei - gas_cost_wei
+
+            if drainable_balance_wei <= 0:
+                logger.info(
+                    f"Not enough native balance to cover gas fees for draining from {from_address_or_tag}."
+                )
+                return
+
+            self.send(
+                from_address_or_tag=from_address_or_tag,
+                to_address_or_tag=to_address_or_tag,
+                token_address_or_name=NATIVE_CURRENCY_ADDRESS,
+                amount_wei=drainable_balance_wei,
+                chain_name=chain_name,
+            )
