@@ -1,6 +1,6 @@
 from typing import Optional
 
-from loguru import logger
+from iwa.core.utils import configure_logger
 
 from iwa.core.chain import ChainInterfaces, SupportedChain
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
@@ -16,6 +16,10 @@ from iwa.core.contracts.multisend import (
     MultiSendCallOnlyContract,
 )
 from safe_eth.safe import SafeOperationEnum
+from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS
+from iwa.protocols.gnosis.cow import CowSwap
+
+logger = configure_logger()
 
 
 class Wallet:
@@ -351,3 +355,39 @@ class Wallet:
             )
         else:
             chain_interface.sign_and_send_transaction(transaction, from_account.key)
+
+    async def swap_tokens(
+        self,
+        account_address_or_tag: str,
+        amount_eth: float,
+        sell_token_name: str,
+        buy_token_name: str,
+        chain_name: str = "gnosis",
+    ):
+        """Swap ERC-20 tokens on CowSwap."""
+
+        chain = ChainInterfaces().get(chain_name).chain
+        account = self.key_storage.get_account(account_address_or_tag)
+
+        self.approve_erc20(
+            owner_address_or_tag=account.address,
+            spender_address=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
+            token_address_or_name=chain.get_token_address(sell_token_name),
+            amount_eth=1,
+            chain_name="gnosis",
+        )
+
+        cow = CowSwap(
+            private_key=account.key,
+            chain=chain,
+        )
+
+        success = await cow.swap_tokens(
+            amount_eth=amount_eth,
+            sell_token_name=sell_token_name,
+            buy_token_name=buy_token_name,
+        )
+        if success:
+            logger.info("Swap successful")
+        else:
+            logger.error("Swap failed")

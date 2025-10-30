@@ -2,12 +2,14 @@ import time
 from typing import Dict, Optional, Tuple, Union
 
 from eth_account import Account
-from loguru import logger
+from iwa.core.utils import configure_logger
 from pydantic import BaseModel
 from web3 import Web3
 
 from iwa.core.models import EthereumAddress, Secrets
 from iwa.core.utils import singleton
+
+logger = configure_logger()
 
 
 class SupportedChain(BaseModel):

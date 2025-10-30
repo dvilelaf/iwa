@@ -19,7 +19,7 @@ from cowdao_cowpy.order_book.api import OrderBookApi
 from cowdao_cowpy.order_book.config import Envs, OrderBookAPIConfigFactory
 from cowdao_cowpy.common.chains import Chain
 from cowdao_cowpy.common.chains import SupportedChainId
-from loguru import logger
+from iwa.core.utils import configure_logger
 from pydantic import BaseModel
 from cowdao_cowpy.cow.swap import CompletedOrder, swap_tokens
 from web3.types import Wei
@@ -30,6 +30,7 @@ from iwa.core.chain import SupportedChain
 import warnings
 
 warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
+logger = configure_logger()
 
 COW_API_URLS = {100: "https://api.cow.fi/xdai"}
 COW_EXPLORER_URL = "https://explorer.cow.fi/gc/orders/"

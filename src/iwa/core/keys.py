@@ -14,7 +14,9 @@ from safe_eth.eth import EthereumClient
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, Secrets, StoredAccount, StoredSafeAccount
 from iwa.core.utils import get_safe_master_copy_address
-from loguru import logger
+from iwa.core.utils import configure_logger
+
+logger = configure_logger()
 
 
 class EncryptedAccount(StoredAccount):

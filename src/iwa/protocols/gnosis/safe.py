@@ -4,8 +4,10 @@ from safe_eth.safe.safe_tx import SafeTx
 from typing import Optional, Dict
 from iwa.core.models import EthereumAddress, Secrets, StoredSafeAccount
 from safe_eth.eth.constants import NULL_ADDRESS
-from loguru import logger
+from iwa.core.utils import configure_logger
 from safe_eth.safe import SafeOperationEnum
+
+logger = configure_logger()
 
 
 class SafeMultisig:

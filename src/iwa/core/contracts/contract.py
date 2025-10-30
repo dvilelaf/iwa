@@ -4,12 +4,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from eth_abi import decode
-from loguru import logger
+from iwa.core.utils import configure_logger
 from web3 import Web3
 from web3.contract import Contract
 from web3.exceptions import ContractCustomError
 from eth_abi import decode
 from iwa.core.chain import ChainInterfaces
+
+logger = configure_logger()
 
 
 class ContractInstance:
