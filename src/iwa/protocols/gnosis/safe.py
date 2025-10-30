@@ -1,11 +1,11 @@
+from typing import Optional
+
 from safe_eth.eth import EthereumClient
-from safe_eth.safe import Safe
-from safe_eth.safe.safe_tx import SafeTx
-from typing import Optional, Dict
-from iwa.core.models import EthereumAddress, Secrets, StoredSafeAccount
 from safe_eth.eth.constants import NULL_ADDRESS
+from safe_eth.safe import Safe, SafeOperationEnum
+
+from iwa.core.models import Secrets, StoredSafeAccount
 from iwa.core.utils import configure_logger
-from safe_eth.safe import SafeOperationEnum
 
 logger = configure_logger()
 
@@ -15,7 +15,6 @@ class SafeMultisig:
 
     def __init__(self, safe_account: StoredSafeAccount, chain_name: str):
         """Initialize the SafeMultisig instance."""
-
         if chain_name not in safe_account.chains:
             raise ValueError(f"Safe account is not deployed on chain: {chain_name}")
 
@@ -55,7 +54,6 @@ class SafeMultisig:
         safe_nonce: Optional[int] = None,
     ) -> dict:
         """Prepare a multisig transaction."""
-
         safe_tx = self.multisig.build_multisig_tx(
             to,
             value,

@@ -1,10 +1,11 @@
-from iwa.protocols.olas.contracts.base import ContractInstance
-from typing import Dict
-from enum import Enum
-from web3 import Web3
-from iwa.core.constants import MULTISIG_IMPLEMENTATION_ADDRESS
-from typing import Optional
 import time
+from enum import Enum
+from typing import Dict, Optional
+
+from iwa.protocols.olas.contracts.base import ContractInstance
+from web3 import Web3
+
+from iwa.core.constants import MULTISIG_IMPLEMENTATION_ADDRESS
 
 
 def get_deployment_payload(fallback_handler: Optional[str] = None) -> str:
@@ -35,7 +36,6 @@ class ServiceRegistryContract(ContractInstance):
 
     def get_service(self, service_id: int) -> Dict:
         """Get the IDs of all registered services."""
-
         (
             security_deposit,
             multisig,

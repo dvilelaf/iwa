@@ -8,40 +8,36 @@ warnings.filterwarnings(
 import time
 
 import requests
-from eth_account import Account
-from web3 import Web3
-from cowdao_cowpy.order_book.generated.model import (
-    OrderQuoteRequest,
-    TokenAmount,
-    OrderQuoteSide3,
-    OrderQuoteSideKindBuy,
+from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
+from cowdao_cowpy.common.chains import Chain, SupportedChainId
+from cowdao_cowpy.contracts.order import Order
+from cowdao_cowpy.contracts.sign import (
+    PreSignSignature,
+    SigningScheme,
+)
+from cowdao_cowpy.cow.swap import (
+    CompletedOrder,
+    get_order_quote,
+    post_order,
+    sign_order,
+    swap_tokens,
 )
 from cowdao_cowpy.order_book.api import OrderBookApi
 from cowdao_cowpy.order_book.config import Envs, OrderBookAPIConfigFactory
-from cowdao_cowpy.common.chains import Chain
-from cowdao_cowpy.common.chains import SupportedChainId
-from iwa.core.utils import configure_logger
-from pydantic import BaseModel
-from cowdao_cowpy.cow.swap import (
-    CompletedOrder,
-    swap_tokens,
-    get_order_quote,
-    sign_order,
-    post_order,
+from cowdao_cowpy.order_book.generated.model import (
+    OrderQuoteRequest,
+    OrderQuoteSide3,
+    OrderQuoteSideKindBuy,
+    TokenAmount,
 )
-from web3.types import Wei
+from eth_account import Account
+from eth_account.signers.local import LocalAccount
 from eth_typing.evm import ChecksumAddress
 from web3 import Web3
-from iwa.core.contracts.ERC20 import ERC20Contract
-from iwa.core.chain import SupportedChain
-from eth_account.signers.local import LocalAccount
-from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
-from cowdao_cowpy.contracts.sign import (
-    SigningScheme,
-    PreSignSignature,
-)
-from cowdao_cowpy.contracts.order import Order
+from web3.types import Wei
 
+from iwa.core.chain import SupportedChain
+from iwa.core.utils import configure_logger
 
 logger = configure_logger()
 
@@ -79,8 +75,7 @@ class CowSwap:
     @staticmethod
     def check_cowswap_order(order: CompletedOrder) -> bool:
         """Check if a Cowswap order has been executed"""
-
-        logger.info(f"Checking order status")
+        logger.info("Checking order status")
 
         MAX_RETRIES = 8
         SLEEP_BETWEEN_RETRIES = 30
@@ -137,7 +132,6 @@ class CowSwap:
         fixed_buy_amount: bool = False,
     ) -> bool:
         """Swap tokens."""
-
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
         if fixed_buy_amount:
@@ -221,9 +215,7 @@ class CowSwap:
         slippage_tolerance: float = 0.005,
         partially_fillable: bool = False,
     ) -> CompletedOrder:
-        """
-        A modified version of cowdao_cowpy.cow.swap.swap_tokens to allow swapping to exact tokens.
-        """
+        """A modified version of cowdao_cowpy.cow.swap.swap_tokens to allow swapping to exact tokens."""
         chain_id = SupportedChainId(chain.value[0])
         order_book_api = OrderBookApi(OrderBookAPIConfigFactory.get_config(env, chain_id))
 

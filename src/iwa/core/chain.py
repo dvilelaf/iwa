@@ -2,13 +2,12 @@ import time
 from typing import Dict, Optional, Tuple, Union
 
 from eth_account import Account
-from iwa.core.utils import configure_logger
 from pydantic import BaseModel
 from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.models import EthereumAddress, Secrets
-from iwa.core.utils import singleton
+from iwa.core.utils import configure_logger, singleton
 
 logger = configure_logger()
 
@@ -194,7 +193,6 @@ class ChainInterface:
         amount_wei: int,
     ) -> bool:
         """Send native currency transaction"""
-
         tx = {
             "from": from_account.address,
             "to": to_address,

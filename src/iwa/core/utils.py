@@ -1,9 +1,10 @@
 """Utility functions"""
 
-from safe_eth.safe.addresses import MASTER_COPIES
-from safe_eth.eth import EthereumNetwork
-from loguru import logger
 import sys
+
+from loguru import logger
+from safe_eth.eth import EthereumNetwork
+from safe_eth.safe.addresses import MASTER_COPIES
 
 
 def singleton(cls):
@@ -20,7 +21,6 @@ def singleton(cls):
 
 def get_safe_master_copy_address(target_version: str = "1.4.1") -> str:
     """Get Safe master copy address by version"""
-
     for address, _, version in MASTER_COPIES[EthereumNetwork.MAINNET]:
         if version == target_version:
             return address

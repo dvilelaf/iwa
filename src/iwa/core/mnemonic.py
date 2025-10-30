@@ -4,6 +4,8 @@ import base64
 import getpass
 import json
 import os
+from pathlib import Path
+from typing import Dict
 
 from bip_utils import (
     Bip39MnemonicGenerator,
@@ -25,6 +27,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from iwa.core.constants import WALLET_PATH
+from iwa.core.models import EthereumAddress, StoredAccount
 
 MNEMONIC_WORD_NUMBER = Bip39WordsNum.WORDS_NUM_24
 SCRYPT_N = 2**14

@@ -41,7 +41,14 @@ fix = true
 
 [tool.ruff.lint]
 extend-select = ["I", "B", "C90", "N", "D"]  # imports, bugbear, complexity, naming, docstrings
-ignore = ["E501", "D203", "D213"]
+ignore = [
+    "E501",
+    "D203",
+    "D213",
+    "D400",  # First line should end with a period
+    "D401", # First line should be in imperative mood
+    "D415",  # First line should end with a period, question mark, or exclamation point
+]
 
 [tool.ruff.format]
 quote-style = "double"

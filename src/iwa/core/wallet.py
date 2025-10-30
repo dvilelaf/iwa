@@ -1,24 +1,23 @@
 from typing import Optional
 
-from iwa.core.utils import configure_logger
+from safe_eth.safe import SafeOperationEnum
+from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces, SupportedChain
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.ERC20 import ERC20Contract
+from iwa.core.contracts.multisend import (
+    MULTISEND_ADDRESS_GNOSIS,
+    MULTISEND_CALL_ONLY_ADDRESS_GNOSIS,
+    MultiSendCallOnlyContract,
+    MultiSendContract,
+)
 from iwa.core.keys import KeyStorage
 from iwa.core.models import EthereumAddress, StoredSafeAccount
 from iwa.core.tables import list_accounts
+from iwa.core.utils import configure_logger
+from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap
 from iwa.protocols.gnosis.safe import SafeMultisig
-from iwa.core.contracts.multisend import (
-    MultiSendContract,
-    MULTISEND_CALL_ONLY_ADDRESS_GNOSIS,
-    MULTISEND_ADDRESS_GNOSIS,
-    MultiSendCallOnlyContract,
-)
-from safe_eth.safe import SafeOperationEnum
-from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS
-from iwa.protocols.gnosis.cow import CowSwap
-from web3 import Web3
 
 logger = configure_logger()
 
@@ -33,7 +32,6 @@ class Wallet:
         self, token_address_or_name: str, chain: SupportedChain
     ) -> Optional[EthereumAddress]:
         """Get token address from address or name"""
-
         if token_address_or_name == "native":
             return EthereumAddress(NATIVE_CURRENCY_ADDRESS)
 
@@ -413,7 +411,6 @@ class Wallet:
         fixed_buy_amount: bool = False,
     ) -> bool:
         """Swap ERC-20 tokens on CowSwap."""
-
         if amount_eth is None:
             if fixed_buy_amount:
                 raise ValueError("Amount must be specified for fixed buy amount swaps.")

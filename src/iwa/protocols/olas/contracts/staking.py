@@ -1,10 +1,12 @@
-from iwa.protocols.olas.contracts.base import ContractInstance
-from iwa.protocols.olas.contracts.activity_checker import ActivityCheckerContract
-from datetime import datetime, timezone
 import math
 import time
-from typing import List, Dict
+from datetime import datetime, timezone
 from enum import Enum
+from typing import Dict, List
+
+from iwa.protocols.olas.contracts.base import ContractInstance
+
+from iwa.protocols.olas.contracts.activity_checker import ActivityCheckerContract
 
 
 class StakingState(Enum):

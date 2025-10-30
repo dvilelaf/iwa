@@ -1,22 +1,25 @@
-from triton.models import ServiceConfig
-from iwa.protocols.olas.contracts.service import ServiceManagerContract, ServiceRegistryContract
-from iwa.core.constants import (
-    SERVICE_REGISTRY_ADDRESS_GNOSIS,
-    TRADER_AGENT_ID,
-    SERVICE_MANAGER_ADDRESS_GNOSIS,
-    DEFAULT_TOKEN_ADDRESS,
-    TRADER_CONFIG_HASH,
-    OLAS_TOKEN_ADDRESS_GNOSIS,
-    SERVICE_REGISTRY_TOKEN_UTILITY_ADDRESS_GNOSIS,
-)
-from triton.key_storage import TritonWallet
 import logging
-from typing import Optional
+from typing import Dict, Optional
+
+from triton.key_storage import TritonWallet
+from triton.models import ServiceConfig
 from web3 import Web3
-from typing import Dict
-from iwa.protocols.olas.contracts.staking import StakingState
+
+from iwa.core.constants import (
+    DEFAULT_TOKEN_ADDRESS,
+    SERVICE_MANAGER_ADDRESS_GNOSIS,
+    SERVICE_REGISTRY_ADDRESS_GNOSIS,
+    SERVICE_REGISTRY_TOKEN_UTILITY_ADDRESS_GNOSIS,
+    TRADER_AGENT_ID,
+    TRADER_CONFIG_HASH,
+)
 from iwa.core.contracts.ERC20 import ERC20Contract
-from iwa.protocols.olas.contracts.service import ServiceState
+from iwa.protocols.olas.contracts.service import (
+    ServiceManagerContract,
+    ServiceRegistryContract,
+    ServiceState,
+)
+from iwa.protocols.olas.contracts.staking import StakingState
 
 logger = logging.getLogger("service")
 
@@ -36,7 +39,6 @@ class ServiceManager:
 
     def create(self, erc20_contract=None, bond_amount: int = 1) -> Optional[int]:
         """Create a new service."""
-
         create_tx = self.manager.prepare_create_tx(
             from_address=self.wallet.master_account.address,
             service_owner=self.wallet.master_account.address,
@@ -89,7 +91,6 @@ class ServiceManager:
 
     def activate_registration(self) -> bool:
         """Activate registration for the service."""
-
         # Check that the service is created
         service_state = self.registry.get_service(self.config.service_id)["state"]
         if service_state != ServiceState.PRE_REGISTRATION:
@@ -117,7 +118,6 @@ class ServiceManager:
 
     def register_agent(self) -> bool:
         """Register an agent for the service."""
-
         # Check that the service is in active registration
         service_state = self.registry.get_service(self.config.service_id)["state"]
         if service_state != ServiceState.ACTIVE_REGISTRATION:
@@ -159,7 +159,6 @@ class ServiceManager:
 
     def deploy(self) -> Optional[str]:
         """Deploy the service."""
-
         # Check that the service has finished registration
         service_state = self.registry.get_service(self.config.service_id)["state"]
         if service_state != ServiceState.FINISHED_REGISTRATION:
@@ -203,7 +202,6 @@ class ServiceManager:
 
     def terminate(self) -> bool:
         """Terminate the service."""
-
         # Check that the service is deployed
         service_state = self.registry.get_service(self.config.service_id)["state"]
         if service_state != ServiceState.DEPLOYED:
@@ -239,7 +237,6 @@ class ServiceManager:
 
     def unbond(self) -> bool:
         """Unbond the service."""
-
         # Check that the service is terminated
         service_state = self.registry.get_service(self.config.service_id)["state"]
         if service_state != ServiceState.TERMINATED_BONDED:
@@ -270,7 +267,6 @@ class ServiceManager:
 
     def stake(self, staking_contract) -> bool:
         """Stake the service in a staking contract."""
-
         erc20_contract = ERC20Contract(staking_contract.staking_token_address)
 
         # Check that she service is deployed
@@ -340,7 +336,6 @@ class ServiceManager:
 
     def unstake(self, staking_contract) -> bool:
         """Unstake the service from the staking contract."""
-
         # Check that the service is staked
         staking_state = staking_contract.get_staking_state(self.config.service_id)
         if staking_state != StakingState.STAKED:

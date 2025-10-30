@@ -1,12 +1,10 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional, cast
 
-from iwa.core.constants import ABI_PATH
-from iwa.core.contracts.contract import ContractInstance
-from enum import Enum
-from typing import List, cast
 from hexbytes import HexBytes
 from safe_eth.safe import SafeOperationEnum
 
+from iwa.core.constants import ABI_PATH
+from iwa.core.contracts.contract import ContractInstance
 
 MULTISEND_CALL_ONLY_ADDRESS_GNOSIS = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
 MULTISEND_ADDRESS_GNOSIS = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"

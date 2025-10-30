@@ -1,6 +1,6 @@
-from iwa.core.wallet import Wallet
 import asyncio
 
+from iwa.core.wallet import Wallet
 
 wallet = Wallet()
 

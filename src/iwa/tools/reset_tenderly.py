@@ -1,4 +1,4 @@
-"""This script handles adding and removing vnets on Tenderly"""
+"""Recreates Tenderly networks and funds wallets as per configuration."""
 
 import json
 import os
@@ -11,8 +11,8 @@ import requests
 from dotenv import load_dotenv
 
 from iwa.core.constants import SECRETS_PATH, TENDERLY_CONFIG_PATH
-from iwa.core.models import TenderlyConfig
 from iwa.core.keys import KeyStorage
+from iwa.core.models import TenderlyConfig
 
 load_dotenv(SECRETS_PATH, override=True)
 

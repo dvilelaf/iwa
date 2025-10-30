@@ -1,4 +1,5 @@
 from iwa.protocols.olas.contracts.base import ContractInstance
+
 from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
 
 

@@ -5,14 +5,11 @@ reset-tenderly:
 
 .PHONY: format
 format:
-	uv run ruff format
+	uv run ruff format && \
+	uv run ruff check . --fix
 
-
-.PHONY: lint
-lint:
-	uv run ruff check
 
 .PHONY: publish
 publish:
-	uv build
+	uv build && \
 	uv run twine upload dist/*

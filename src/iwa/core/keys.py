@@ -5,16 +5,17 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
-from safe_eth.safe import Safe
+
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from eth_account import Account
 from pydantic import BaseModel, PrivateAttr
 from safe_eth.eth import EthereumClient
+from safe_eth.safe import Safe
+
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, Secrets, StoredAccount, StoredSafeAccount
-from iwa.core.utils import get_safe_master_copy_address
-from iwa.core.utils import configure_logger
+from iwa.core.utils import configure_logger, get_safe_master_copy_address
 
 logger = configure_logger()
 

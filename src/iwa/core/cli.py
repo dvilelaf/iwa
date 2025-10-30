@@ -3,11 +3,11 @@
 from typing import Optional
 
 import typer
+from web3 import Web3
 
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.keys import KeyStorage
 from iwa.core.wallet import Wallet
-from web3 import Web3
 
 iwa_cli = typer.Typer(help="iwa command line interface")
 wallet_cli = typer.Typer(help="Manage wallet")

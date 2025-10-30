@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Type, TypeVar
 import tomli
 import tomli_w
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, PrivateAttr, SecretStr
 from pydantic_core import core_schema
 from pydantic_settings import BaseSettings
@@ -15,7 +16,6 @@ from web3 import Web3
 
 from iwa.core.constants import SECRETS_PATH
 from iwa.core.utils import singleton
-from dotenv import load_dotenv
 
 ETHEREUM_ADDRESS_REGEX = r"0x[0-9a-fA-F]{40}"
 
