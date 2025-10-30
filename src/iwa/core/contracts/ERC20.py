@@ -18,9 +18,13 @@ class ERC20Contract(ContractInstance):
         self.name = self.call("name")
         self.total_supply = self.call("totalSupply")
 
-    def allowance(self, owner: str, spender: str) -> int:
+    def allowance_wei(self, owner: str, spender: str) -> int:
         """Allowance"""
         return self.call("allowance", owner, spender)
+
+    def allowance_eth(self, owner: str, spender: str) -> float:
+        """Allowance in human readable format"""
+        return self.allowance_wei(owner, spender) / (10**self.decimals)
 
     def balance_of_wei(self, account: str) -> int:
         """Balance of"""

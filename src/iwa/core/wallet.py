@@ -93,6 +93,7 @@ class Wallet:
         is_safe = isinstance(from_account, StoredSafeAccount)
 
         if token_address == NATIVE_CURRENCY_ADDRESS:
+            logger.info("Sending native transfer")
             if is_safe:
                 safe = SafeMultisig(from_account, chain_name)
                 safe.send_tx(
@@ -117,6 +118,8 @@ class Wallet:
         )
         if not transaction:
             return
+
+        logger.info("Sending ERC20 transfer")
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
@@ -198,6 +201,8 @@ class Wallet:
         if not transaction:
             return
 
+        logger.info("Sending multisend transaction")
+
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
             safe.send_tx(
@@ -211,41 +216,60 @@ class Wallet:
             chain_interface.sign_and_send_transaction(transaction, from_account.key)
 
     def get_erc20_balance(
-        self, account_address: str, token_address_or_name: str, chain_name: str = "gnosis"
-    ) -> float:
+        self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
+    ) -> Optional[float]:
         """Get ERC20 token balance"""
         chain = ChainInterfaces().get(chain_name)
 
-        try:
-            token_address = EthereumAddress(token_address_or_name)
-        except ValueError:
-            token_address = self.get_token_address(token_address_or_name, chain)
-            if not token_address:
-                logger.error(f"Token '{token_address_or_name}' not found on chain '{chain_name}'.")
-                return None
+        token_address = self.get_token_address(token_address_or_name, chain.chain)
+        if not token_address:
+            return None
+
+        account = self.key_storage.get_account(account_address_or_tag)
+        if not account:
+            return None
 
         contract = ERC20Contract(chain_name=chain_name, address=token_address)
-        return contract.balance_of_eth(account_address)
+        return contract.balance_of_eth(account.address)
+
+    def get_erc20_allowance(
+        self,
+        owner_address_or_tag: str,
+        spender_address: str,
+        token_address_or_name: str,
+        chain_name: str = "gnosis",
+    ) -> Optional[float]:
+        """Get ERC20 token allowance"""
+        chain = ChainInterfaces().get(chain_name)
+
+        token_address = self.get_token_address(token_address_or_name, chain.chain)
+        if not token_address:
+            return None
+
+        owner_account = self.key_storage.get_account(owner_address_or_tag)
+        if not owner_account:
+            return None
+
+        contract = ERC20Contract(chain_name=chain_name, address=token_address)
+        return contract.allowance_eth(owner_account.address, spender_address)
 
     def approve_erc20(
         self,
         owner_address_or_tag: str,
-        spender_address_or_tag: str,
+        spender_address: EthereumAddress,
         token_address_or_name: str,
-        amount: int,
+        amount_eth: float,
         chain_name: str = "gnosis",
     ):
         """Approve ERC20 token allowance"""
         owner_account = self.key_storage.get_account(owner_address_or_tag)
-        spender_account = self.key_storage.get_account(spender_address_or_tag)
-        spender_address = spender_account.address if spender_account else spender_address_or_tag
 
         if not owner_account:
             logger.error(f"Owner account '{owner_address_or_tag}' not found in wallet.")
             return None
 
         chain_interface = ChainInterfaces().get(chain_name)
-        amount_wei = chain_interface.web3.to_wei(amount, "ether")
+        amount_wei = chain_interface.web3.to_wei(amount_eth, "ether")
 
         token_address = self.get_token_address(token_address_or_name, chain_interface)
         if not token_address:
@@ -261,6 +285,8 @@ class Wallet:
             return
 
         is_safe = isinstance(owner_account, StoredSafeAccount)
+
+        logger.info("Approving ERC20 allowance")
 
         if is_safe:
             safe = SafeMultisig(owner_account, chain_name)
@@ -312,6 +338,8 @@ class Wallet:
             return
 
         is_safe = isinstance(from_account, StoredSafeAccount)
+
+        logger.info("Transferring ERC20 tokens via TransferFrom")
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
