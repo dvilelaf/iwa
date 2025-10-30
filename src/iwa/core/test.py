@@ -1,4 +1,3 @@
-from iwa.core.keys import KeyStorage
 from iwa.core.wallet import Wallet
 import asyncio
 import warnings
@@ -13,10 +12,11 @@ async def main():
 
     await wallet.swap_tokens(
         account_address_or_tag="master",
-        amount_eth=0.9,
-        sell_token_name="OLAS",
-        buy_token_name="SDAI",
+        amount_eth=None,  # Swap entire balance
+        sell_token_name="SDAI",
+        buy_token_name="OLAS",
         chain_name="gnosis",
+        fixed_buy_amount=False,
     )
 
 

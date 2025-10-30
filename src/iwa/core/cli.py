@@ -7,6 +7,7 @@ import typer
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.keys import KeyStorage
 from iwa.core.wallet import Wallet
+from web3 import Web3
 
 iwa_cli = typer.Typer(help="iwa command line interface")
 wallet_cli = typer.Typer(help="Manage wallet")
@@ -105,7 +106,7 @@ def account_send(
         "-k",
         help="ERC20 token contract address, ignore for native",
     ),
-    amount: float = typer.Option(..., "--amount", "-a", help="Amount to send, in ether"),
+    amount_eth: float = typer.Option(..., "--amount", "-a", help="Amount to send, in ether"),
     chain: str = typer.Option(
         "gnosis",
         "--chain",
@@ -118,7 +119,7 @@ def account_send(
         from_address_or_tag=from_address_or_tag,
         to_address_or_tag=to_address_or_tag,
         token_address_or_name=token_address_or_name,
-        amount_eth=amount,
+        amount_wei=Web3.to_wei(amount_eth, "ether"),
         chain_name=chain,
     )
 
@@ -133,7 +134,7 @@ def erc20_transfer_from(
     token_address_or_name: str = typer.Option(
         ..., "--token", "-k", help="ERC20 token contract address"
     ),
-    amount: float = typer.Option(..., "--amount", "-a", help="Amount to transfer, in ether"),
+    amount_eth: float = typer.Option(..., "--amount", "-a", help="Amount to transfer, in ether"),
     chain: str = typer.Option(
         "gnosis",
         "--chain",
@@ -147,7 +148,7 @@ def erc20_transfer_from(
         sender_address_or_tag=sender_address_or_tag,
         recipient_address_or_tag=recipient_address_or_tag,
         token_address_or_name=token_address_or_name,
-        amount=amount,
+        amount_wei=Web3.to_wei(amount_eth, "ether"),
         chain_name=chain,
     )
 
@@ -161,7 +162,7 @@ def erc20_approve(
     token_address_or_name: str = typer.Option(
         ..., "--token", "-k", help="ERC20 token contract address"
     ),
-    amount: float = typer.Option(..., "--amount", "-a", help="Amount to approve, in ether"),
+    amount_eth: float = typer.Option(..., "--amount", "-a", help="Amount to approve, in ether"),
     chain: str = typer.Option(
         "gnosis",
         "--chain",
@@ -174,7 +175,7 @@ def erc20_approve(
         owner_address_or_tag=owner_address_or_tag,
         spender_address_or_tag=spender_address_or_tag,
         token_address_or_name=token_address_or_name,
-        amount=amount,
+        amount_wei=Web3.to_wei(amount_eth, "ether"),
         chain_name=chain,
     )
 

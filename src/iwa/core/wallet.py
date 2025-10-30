@@ -18,6 +18,7 @@ from iwa.core.contracts.multisend import (
 from safe_eth.safe import SafeOperationEnum
 from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS
 from iwa.protocols.gnosis.cow import CowSwap
+from web3 import Web3
 
 logger = configure_logger()
 
@@ -54,7 +55,7 @@ class Wallet:
         token_balances = (
             {
                 account_address: {
-                    token_name: self.get_erc20_balance(account_address, token_name)
+                    token_name: self.get_erc20_balance_eth(account_address, token_name)
                     if token_name != "native"
                     else chain_interface.get_native_balance(account_address)
                     for token_name in token_names
@@ -72,7 +73,7 @@ class Wallet:
         from_address_or_tag: str,
         to_address_or_tag: str,
         token_address_or_name: str,
-        amount_eth: float,
+        amount_wei: int,
         chain_name: str = "gnosis",
     ):
         """Send native currency or ERC20 tokens to an address"""
@@ -88,7 +89,6 @@ class Wallet:
             return
 
         chain_interface = ChainInterfaces().get(chain_name)
-        amount_wei = chain_interface.web3.to_wei(amount_eth, "ether")
 
         token_address = self.get_token_address(token_address_or_name, chain_interface.chain)
         if not token_address:
@@ -219,7 +219,7 @@ class Wallet:
         else:
             chain_interface.sign_and_send_transaction(transaction, from_account.key)
 
-    def get_erc20_balance(
+    def get_erc20_balance_eth(
         self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
     ) -> Optional[float]:
         """Get ERC20 token balance"""
@@ -235,6 +235,23 @@ class Wallet:
 
         contract = ERC20Contract(chain_name=chain_name, address=token_address)
         return contract.balance_of_eth(account.address)
+
+    def get_erc20_balance_wei(
+        self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
+    ) -> Optional[int]:
+        """Get ERC20 token balance"""
+        chain = ChainInterfaces().get(chain_name)
+
+        token_address = self.get_token_address(token_address_or_name, chain.chain)
+        if not token_address:
+            return None
+
+        account = self.key_storage.get_account(account_address_or_tag)
+        if not account:
+            return None
+
+        contract = ERC20Contract(chain_name=chain_name, address=token_address)
+        return contract.balance_of_wei(account.address)
 
     def get_erc20_allowance(
         self,
@@ -255,31 +272,43 @@ class Wallet:
             return None
 
         contract = ERC20Contract(chain_name=chain_name, address=token_address)
-        return contract.allowance_eth(owner_account.address, spender_address)
+        return contract.allowance_wei(owner_account.address, spender_address)
 
     def approve_erc20(
         self,
         owner_address_or_tag: str,
-        spender_address: EthereumAddress,
+        spender_address_or_tag: str,
         token_address_or_name: str,
-        amount_eth: float,
+        amount_wei: int,
         chain_name: str = "gnosis",
     ):
         """Approve ERC20 token allowance"""
         owner_account = self.key_storage.get_account(owner_address_or_tag)
+        spender_account = self.key_storage.get_account(spender_address_or_tag)
+        spender_address = spender_account.address if spender_account else spender_address_or_tag
 
         if not owner_account:
             logger.error(f"Owner account '{owner_address_or_tag}' not found in wallet.")
             return None
 
         chain_interface = ChainInterfaces().get(chain_name)
-        amount_wei = chain_interface.web3.to_wei(amount_eth, "ether")
 
         token_address = self.get_token_address(token_address_or_name, chain_interface)
         if not token_address:
             return
 
         erc20 = ERC20Contract(token_address, chain_name)
+
+        allowance_wei = self.get_erc20_allowance(
+            owner_address_or_tag,
+            spender_address,
+            token_address_or_name,
+            chain_name,
+        )
+        if allowance_wei is not None and allowance_wei >= amount_wei:
+            logger.info("Current allowance is sufficient. No need to approve.")
+            return
+
         transaction = erc20.prepare_approve_tx(
             from_address=owner_account.address,
             spender=spender_address,
@@ -289,8 +318,11 @@ class Wallet:
             return
 
         is_safe = isinstance(owner_account, StoredSafeAccount)
+        amount_eth = chain_interface.web3.from_wei(amount_wei, "ether")
 
-        logger.info("Approving ERC20 allowance")
+        logger.info(
+            f"Approving {spender_address} to spend {amount_eth:.4f} {token_address_or_name} from {owner_address_or_tag}"
+        )
 
         if is_safe:
             safe = SafeMultisig(owner_account, chain_name)
@@ -309,7 +341,7 @@ class Wallet:
         sender_address_or_tag: str,
         recipient_address_or_tag: str,
         token_address_or_name: str,
-        amount: int,
+        amount_wei: int,
         chain_name: str = "gnosis",
     ):
         """TransferFrom ERC20 tokens"""
@@ -325,7 +357,6 @@ class Wallet:
             return None
 
         chain_interface = ChainInterfaces().get(chain_name)
-        amount_wei = chain_interface.web3.to_wei(amount, "ether")
 
         token_address = self.get_token_address(token_address_or_name, chain_interface)
         if not token_address:
@@ -359,35 +390,65 @@ class Wallet:
     async def swap_tokens(
         self,
         account_address_or_tag: str,
-        amount_eth: float,
+        amount_eth: Optional[float],
         sell_token_name: str,
         buy_token_name: str,
         chain_name: str = "gnosis",
-    ):
+        fixed_buy_amount: bool = False,
+    ) -> bool:
         """Swap ERC-20 tokens on CowSwap."""
+
+        if amount_eth is None:
+            if fixed_buy_amount:
+                raise ValueError("Amount must be specified for fixed buy amount swaps.")
+
+            logger.info(f"Swapping entire {sell_token_name} balance to {buy_token_name}")
+            amount_wei = self.get_erc20_balance_wei(
+                account_address_or_tag, sell_token_name, chain_name
+            )
+        else:
+            amount_wei = Web3.to_wei(amount_eth, "ether")
 
         chain = ChainInterfaces().get(chain_name).chain
         account = self.key_storage.get_account(account_address_or_tag)
 
-        self.approve_erc20(
-            owner_address_or_tag=account.address,
-            spender_address=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
-            token_address_or_name=chain.get_token_address(sell_token_name),
-            amount_eth=1,
-            chain_name="gnosis",
-        )
+        retries = 1
+        MAX_RETRIES = 3
+        while retries < MAX_RETRIES + 1:
+            cow = CowSwap(
+                private_key=account.key,
+                chain=chain,
+            )
 
-        cow = CowSwap(
-            private_key=account.key,
-            chain=chain,
-        )
+            approval_amount_wei = (
+                amount_wei
+                if not fixed_buy_amount
+                else cow.get_max_sell_amount_wei(
+                    amount_wei,
+                    sell_token_name,
+                    buy_token_name,
+                )
+            )
 
-        success = await cow.swap_tokens(
-            amount_eth=amount_eth,
-            sell_token_name=sell_token_name,
-            buy_token_name=buy_token_name,
-        )
-        if success:
-            logger.info("Swap successful")
-        else:
-            logger.error("Swap failed")
+            self.approve_erc20(
+                owner_address_or_tag=account_address_or_tag,
+                spender_address_or_tag=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
+                token_address_or_name=sell_token_name,
+                amount_wei=approval_amount_wei,
+                chain_name="gnosis",
+            )
+
+            success = await cow.swap_tokens(
+                amount_wei=amount_wei,
+                sell_token_name=sell_token_name,
+                buy_token_name=buy_token_name,
+                fixed_buy_amount=fixed_buy_amount,
+            )
+            if success:
+                logger.info("Swap successful")
+                return True
+
+            logger.error(f"Swap try {retries}/{MAX_RETRIES}] failed")
+            retries += 1
+
+        logger.error("Max swap retries reached. Swap failed.")

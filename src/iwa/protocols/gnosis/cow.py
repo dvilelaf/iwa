@@ -21,18 +21,34 @@ from cowdao_cowpy.common.chains import Chain
 from cowdao_cowpy.common.chains import SupportedChainId
 from iwa.core.utils import configure_logger
 from pydantic import BaseModel
-from cowdao_cowpy.cow.swap import CompletedOrder, swap_tokens
+from cowdao_cowpy.cow.swap import (
+    CompletedOrder,
+    swap_tokens,
+    get_order_quote,
+    sign_order,
+    post_order,
+)
 from web3.types import Wei
 from eth_typing.evm import ChecksumAddress
 from web3 import Web3
 from iwa.core.contracts.ERC20 import ERC20Contract
 from iwa.core.chain import SupportedChain
 import warnings
+from eth_account.signers.local import LocalAccount
+from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
+from cowdao_cowpy.contracts.sign import (
+    EcdsaSignature,
+    SigningScheme,
+    PreSignSignature,
+    Signature,
+)
+from cowdao_cowpy.contracts.order import Order
 
 warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
 logger = configure_logger()
 
 COW_API_URLS = {100: "https://api.cow.fi/xdai"}
+ORDER_ENDPOINT_URL = "/api/v1/orders/"
 COW_EXPLORER_URL = "https://explorer.cow.fi/gc/orders/"
 HTTP_OK = 200
 
@@ -85,6 +101,11 @@ class CowSwap:
                 continue
 
             order_data = response.json()
+            status = order_data.get("status", "unknown")
+            if status == "expired":
+                logger.error("Order has expired.")
+                return False
+
             executed_sell = int(order_data.get("executedSellAmount", "0"))
             executed_buy = int(order_data.get("executedBuyAmount", "0"))
 
@@ -111,23 +132,32 @@ class CowSwap:
 
     async def swap_tokens(
         self,
-        amount_eth: float,
+        amount_wei: Wei,
         sell_token_name: str,
         buy_token_name: str,
         safe_address: ChecksumAddress | None = None,
+        fixed_buy_amount: bool = False,
     ) -> bool:
         """Swap tokens."""
 
-        amount_wei = Web3.to_wei(amount_eth, "ether")
+        amount_eth = Web3.from_wei(amount_wei, "ether")
 
-        logger.info(
-            f"Swapping {amount_eth} {sell_token_name} to {buy_token_name} on {self.chain.name}..."
-        )
+        if fixed_buy_amount:
+            logger.info(
+                f"Swapping {sell_token_name} to {amount_eth:.4f} {buy_token_name} on {self.chain.name}..."
+            )
+
+        else:
+            logger.info(
+                f"Swapping {amount_eth:.4f} {sell_token_name} to {buy_token_name} on {self.chain.name}..."
+            )
 
         valid_to = int(time.time()) + 3 * 60  # Order valid for 3 minutes
 
+        swap_function = self.swap_tokens_to_exact_tokens if fixed_buy_amount else swap_tokens
+
         try:
-            order = await swap_tokens(
+            order = await swap_function(
                 amount=amount_wei,
                 account=self.account,
                 chain=self.cow_chain,
@@ -147,3 +177,106 @@ class CowSwap:
         except Exception as e:
             logger.error(f"Error during token swap: {e}")
             return False
+
+    async def get_max_sell_amount_wei(
+        self,
+        amount_wei: Wei,
+        sell_token: ChecksumAddress,
+        buy_token: ChecksumAddress,
+        safe_address: ChecksumAddress | None = None,
+        app_data: str = DEFAULT_APP_DATA_HASH,
+        env: Envs = "prod",
+        slippage_tolerance: float = 0.005,
+    ) -> int:
+        """Calculate the maximum sell amount needed to buy a fixed amount of tokens."""
+        chain_id = SupportedChainId(self.chain.value[0])
+        order_book_api = OrderBookApi(OrderBookAPIConfigFactory.get_config(env, chain_id))
+
+        order_quote_request = OrderQuoteRequest(
+            sellToken=sell_token,
+            buyToken=buy_token,
+            from_=safe_address if safe_address is not None else self.account._address,
+            appData=app_data,
+        )
+
+        order_side = OrderQuoteSide3(
+            kind=OrderQuoteSideKindBuy.buy,
+            buyAmountAfterFee=TokenAmount(str(amount_wei)),
+        )
+
+        order_quote = await get_order_quote(order_quote_request, order_side, order_book_api)
+
+        sell_amount_wei = int(int(order_quote.quote.sellAmount.root) * (1.0 + slippage_tolerance))
+        return sell_amount_wei
+
+    @staticmethod
+    async def swap_tokens_to_exact_tokens(
+        amount: Wei,
+        account: LocalAccount,
+        chain: Chain,
+        sell_token: ChecksumAddress,
+        buy_token: ChecksumAddress,
+        safe_address: ChecksumAddress | None = None,
+        app_data: str = DEFAULT_APP_DATA_HASH,
+        valid_to: int | None = None,
+        env: Envs = "prod",
+        slippage_tolerance: float = 0.005,
+        partially_fillable: bool = False,
+    ) -> CompletedOrder:
+        """
+        A modified version of cowdao_cowpy.cow.swap.swap_tokens to allow swapping to exact tokens.
+        """
+        chain_id = SupportedChainId(chain.value[0])
+        order_book_api = OrderBookApi(OrderBookAPIConfigFactory.get_config(env, chain_id))
+
+        order_quote_request = OrderQuoteRequest(
+            sellToken=sell_token,
+            buyToken=buy_token,
+            from_=safe_address if safe_address is not None else account._address,  # type: ignore # pyright doesn't recognize `populate_by_name=True`.
+            appData=app_data,
+        )
+
+        # This is one of the changes
+        order_side = OrderQuoteSide3(
+            kind=OrderQuoteSideKindBuy.buy,
+            buyAmountAfterFee=TokenAmount(str(amount)),
+        )
+
+        order_quote = await get_order_quote(order_quote_request, order_side, order_book_api)
+
+        sell_amount_wei = int(int(order_quote.quote.sellAmount.root) * (1.0 + slippage_tolerance))
+
+        min_valid_to = (
+            order_quote.quote.validTo
+            if valid_to is None
+            else min(order_quote.quote.validTo, valid_to)
+        )
+
+        order = Order(
+            sell_token=sell_token,
+            buy_token=buy_token,
+            receiver=safe_address if safe_address is not None else account.address,
+            valid_to=min_valid_to,
+            app_data=app_data,
+            sell_amount=str(sell_amount_wei),
+            buy_amount=str(
+                amount
+            ),  # Since it is a buy order, the buyAmountBeforeFee is the same as the buyAmount.
+            fee_amount="0",  # CoW Swap does not charge fees.
+            kind=OrderQuoteSideKindBuy.buy.value,  # This is another change
+            sell_token_balance="erc20",
+            buy_token_balance="erc20",
+            partially_fillable=partially_fillable,
+        )
+
+        signature = (
+            PreSignSignature(
+                scheme=SigningScheme.PRESIGN,
+                data=safe_address,
+            )
+            if safe_address is not None
+            else sign_order(chain, account, order)
+        )
+        order_uid = await post_order(account, safe_address, order, signature, order_book_api)
+        order_link = order_book_api.get_order_link(order_uid)
+        return CompletedOrder(uid=order_uid, url=order_link)
