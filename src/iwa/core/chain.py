@@ -5,6 +5,7 @@ from eth_account import Account
 from iwa.core.utils import configure_logger
 from pydantic import BaseModel
 from web3 import Web3
+from web3 import exceptions as web3_exceptions
 
 from iwa.core.models import EthereumAddress, Secrets
 from iwa.core.utils import singleton
@@ -100,14 +101,48 @@ class ChainInterface:
 
     def sign_and_send_transaction(self, transaction: dict, private_key: str) -> Tuple[bool, Dict]:
         """Sign and send a transaction."""
-        signed_txn = self.web3.eth.account.sign_transaction(transaction, private_key=private_key)
-        txn_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-        receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
-        if receipt.status == 1:
-            self.wait_for_no_pending_tx(transaction["from"])
-            logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
-            return True, receipt
-        logger.error("Transaction failed.")
+        max_retries = 3
+        tx = dict(transaction)
+
+        def _is_gas_too_low_error(err_text: str) -> bool:
+            low_gas_signals = [
+                "FeeTooLow",
+            ]
+            text = (err_text or "").lower()
+            return any(sig in text for sig in low_gas_signals)
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                signed_txn = self.web3.eth.account.sign_transaction(tx, private_key=private_key)
+                txn_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+                receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
+                if receipt and getattr(receipt, "status", None) == 1:
+                    self.wait_for_no_pending_tx(transaction["from"])
+                    logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                    return True, receipt
+
+                logger.error("Transaction failed.")
+                return False, {}
+
+            except web3_exceptions.Web3RPCError as e:
+                err_text = str(e)
+                if _is_gas_too_low_error(err_text) and attempt < max_retries:
+                    logger.warning(
+                        f"Gas too low error detected. Retrying with increased gas (Attempt {attempt}/{max_retries})..."
+                    )
+                    current_gas = int(tx.get("gas", 30_000))
+                    tx["gas"] = int(current_gas * 1.5)
+                    time.sleep(0.5 * attempt)  # backoff
+                    continue
+                else:
+                    logger.exception(f"Error sending transaction: {e}")
+                    return False, {}
+
+            except Exception as e:
+                logger.exception(f"Unexpected error sending transaction: {e}")
+                return False, {}
+
+        logger.error(f"Failed to send transaction after {max_retries} attempts.")
         return False, {}
 
     def estimate_gas(self, built_method, tx_params) -> int:
