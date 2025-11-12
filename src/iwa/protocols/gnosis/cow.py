@@ -10,6 +10,8 @@ warnings.filterwarnings(
     "ignore", message="This AsyncLimiter instance is being re-used across loops.*"
 )
 
+from enum import Enum
+
 import requests
 from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
 from cowdao_cowpy.common.chains import Chain, SupportedChainId
@@ -51,6 +53,13 @@ HTTP_OK = 200
 
 COWSWAP_GPV2_VAULT_RELAYER_ADDRESS = "0xC92E8bdf79f0507f65a392b0ab4667716BFE0110"
 MAX_APPROVAL = 2**256 - 1
+
+
+class OrderType(Enum):
+    """Order types."""
+
+    SELL = "sell"
+    BUY = "buy"
 
 
 class CowSwap:
@@ -127,18 +136,18 @@ class CowSwap:
         logger.error("Max retries reached. Could not verify the order.")
         return False
 
-    async def swap_tokens(
+    async def swap(
         self,
         amount_wei: Wei,
         sell_token_name: str,
         buy_token_name: str,
         safe_address: ChecksumAddress | None = None,
-        fixed_buy_amount: bool = False,
+        order_type: OrderType = OrderType.SELL,
     ) -> bool:
         """Swap tokens."""
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
-        if fixed_buy_amount:
+        if order_type == OrderType.BUY:
             logger.info(
                 f"Swapping {sell_token_name} to {amount_eth:.4f} {buy_token_name} on {self.chain.name}..."
             )
@@ -150,7 +159,9 @@ class CowSwap:
 
         valid_to = int(time.time()) + 3 * 60  # Order valid for 3 minutes
 
-        swap_function = self.swap_tokens_to_exact_tokens if fixed_buy_amount else swap_tokens
+        swap_function = (
+            self.swap_tokens_to_exact_tokens if order_type == OrderType.BUY else swap_tokens
+        )
 
         try:
             order = await swap_function(

@@ -10,7 +10,7 @@ class ERC20Contract(ContractInstance):
     """Class to interact with ERC20 contracts."""
 
     name = "erc20"
-    abi_path = ABI_PATH / "ERC20.json"
+    abi_path = ABI_PATH / "erc20.json"
 
     def __init__(self, address: str, chain_name: str = "gnosis"):
         """Initialize ERC20 contract instance."""

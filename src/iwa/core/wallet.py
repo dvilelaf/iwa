@@ -18,7 +18,7 @@ from iwa.core.keys import KeyStorage
 from iwa.core.models import EthereumAddress, StoredSafeAccount
 from iwa.core.tables import list_accounts
 from iwa.core.utils import configure_logger
-from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap
+from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap, OrderType
 from iwa.protocols.gnosis.safe import SafeMultisig
 
 logger = configure_logger()
@@ -30,6 +30,11 @@ class Wallet:
     def __init__(self):
         """Initialize wallet."""
         self.key_storage = KeyStorage()
+
+    @property
+    def master_account(self) -> Optional[StoredSafeAccount]:
+        """Get master account"""
+        return self.key_storage.master_account
 
     def get_token_address(
         self, token_address_or_name: str, chain: SupportedChain
@@ -69,6 +74,19 @@ class Wallet:
 
         list_accounts(self.key_storage.accounts, chain_interface, token_names, token_balances)
 
+    def sign_and_send_transaction(
+        self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
+    ) -> bool:
+        """Sign and send transaction"""
+        account = self.key_storage.get_account(signer_address_or_tag)
+        if not account:
+            logger.error(f"Account '{signer_address_or_tag}' not found in wallet.")
+            return False
+
+        chain_interface = ChainInterfaces().get(chain_name)
+        success, _ = chain_interface.sign_and_send_transaction(transaction, account.key)
+        return success
+
     def send(
         self,
         from_address_or_tag: str,
@@ -107,10 +125,10 @@ class Wallet:
                 )
 
             else:
-                chain_interface.send_native_transaction(
-                    from_account,
-                    to_address,
-                    amount_wei,
+                chain_interface.send_native_transfer(
+                    from_account=from_account,
+                    to_address=to_address,
+                    value_wei=amount_wei,
                 )
             return
 
@@ -137,7 +155,7 @@ class Wallet:
                 data=transaction["data"],
             )
         else:
-            chain_interface.sign_and_send_transaction(transaction, from_account.key)
+            self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)
 
     def multi_send(
         self,
@@ -220,7 +238,7 @@ class Wallet:
                 operation=SafeOperationEnum.DELEGATE_CALL.value,
             )
         else:
-            chain_interface.sign_and_send_transaction(transaction, from_account.key)
+            self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)
 
     def get_native_balance_eth(
         self, account_address: str, chain_name: str = "gnosis"
@@ -350,7 +368,7 @@ class Wallet:
                 data=transaction["data"],
             )
         else:
-            chain_interface.sign_and_send_transaction(transaction, owner_account.key)
+            self.sign_and_send_transaction(transaction, owner_address_or_tag, chain_name)
 
     def transfer_from_erc20(
         self,
@@ -402,21 +420,21 @@ class Wallet:
                 data=transaction["data"],
             )
         else:
-            chain_interface.sign_and_send_transaction(transaction, from_account.key)
+            self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)
 
-    async def swap_tokens(
+    async def swap(
         self,
         account_address_or_tag: str,
         amount_eth: Optional[float],
         sell_token_name: str,
         buy_token_name: str,
         chain_name: str = "gnosis",
-        fixed_buy_amount: bool = False,
+        order_type: OrderType = OrderType.SELL,
     ) -> bool:
         """Swap ERC-20 tokens on CowSwap."""
         if amount_eth is None:
-            if fixed_buy_amount:
-                raise ValueError("Amount must be specified for fixed buy amount swaps.")
+            if order_type == OrderType.BUY:
+                raise ValueError("Amount must be specified for buy orders.")
 
             logger.info(f"Swapping entire {sell_token_name} balance to {buy_token_name}")
             amount_wei = self.get_erc20_balance_wei(
@@ -438,7 +456,7 @@ class Wallet:
 
             approval_amount_wei = (
                 amount_wei
-                if not fixed_buy_amount
+                if order_type == OrderType.SELL
                 else cow.get_max_sell_amount_wei(
                     amount_wei,
                     sell_token_name,
@@ -454,11 +472,11 @@ class Wallet:
                 chain_name="gnosis",
             )
 
-            success = await cow.swap_tokens(
+            success = await cow.swap(
                 amount_wei=amount_wei,
                 sell_token_name=sell_token_name,
                 buy_token_name=buy_token_name,
-                fixed_buy_amount=fixed_buy_amount,
+                order_type=order_type,
             )
             if success:
                 logger.info("Swap successful")

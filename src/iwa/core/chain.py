@@ -23,9 +23,22 @@ class SupportedChain(BaseModel):
     native_currency: str
     tokens: Dict[str, EthereumAddress] = {}
 
-    def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
-        """Get token address by name"""
-        return self.tokens.get(token_name.upper(), None)
+    def get_token_address(self, token_address_or_name: str) -> Optional[EthereumAddress]:
+        """Get token address"""
+        try:
+            address = EthereumAddress(token_address_or_name)
+        except Exception:
+            address = None
+
+        # If a valid address is provided and it exists in the supported tokens, return it
+        if address and address in self.tokens.values():
+            return address
+
+        # If a token name is provided, return the corresponding address
+        if address is None:
+            return self.tokens.get(token_address_or_name, None)
+
+        return None
 
 
 @singleton
@@ -190,17 +203,17 @@ class ChainInterface:
 
         return False
 
-    def send_native_transaction(
+    def send_native_transfer(
         self,
         from_account: Account,
         to_address: EthereumAddress,
-        amount_wei: int,
+        value_wei: int,
     ) -> bool:
         """Send native currency transaction"""
         tx = {
             "from": from_account.address,
             "to": to_address,
-            "value": amount_wei,
+            "value": value_wei,
             "nonce": self.web3.eth.get_transaction_count(from_account.address),
             "chainId": self.chain.chain_id,
         }
@@ -208,7 +221,7 @@ class ChainInterface:
         balance_wei = self.get_native_balance_wei(from_account.address)
         gas_price = self.web3.eth.gas_price
         gas_estimate = self.web3.eth.estimate_gas(tx)
-        required_wei = amount_wei + (gas_estimate * gas_price)
+        required_wei = value_wei + (gas_estimate * gas_price)
 
         if balance_wei < required_wei:
             logger.error(

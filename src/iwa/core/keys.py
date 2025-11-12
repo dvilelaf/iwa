@@ -93,8 +93,11 @@ class KeyStorage(BaseModel):
 
     @property
     def master_account(self) -> EncryptedAccount:
-        """Get the master account, which is the first account in the wallet."""
-        return list(self.accounts.values())[0]
+        """Get the master account"""
+        master_account = self.get_account("master")
+
+        if not master_account:
+            return list(self.accounts.values())[0]
 
     def save(self):
         """Save"""
@@ -246,3 +249,17 @@ class KeyStorage(BaseModel):
 
                     return Account.from_key(self.get_private_key(account.address))
             return None
+
+    def get_tag_by_address(self, address: EthereumAddress) -> Optional[str]:
+        """Get tag by address"""
+        account = self.accounts.get(EthereumAddress(address))
+        if account:
+            return account.tag
+        return None
+
+    def get_address_by_tag(self, tag: str) -> Optional[EthereumAddress]:
+        """Get address by tag"""
+        for account in self.accounts.values():
+            if account.tag == tag:
+                return EthereumAddress(account.address)
+        return None
