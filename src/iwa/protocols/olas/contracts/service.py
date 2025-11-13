@@ -4,13 +4,14 @@ import time
 from enum import Enum
 from typing import Dict, Optional
 
-from iwa.protocols.olas.contracts.base import ContractInstance
 from web3 import Web3
 
-from iwa.core.constants import MULTISIG_IMPLEMENTATION_ADDRESS
+from iwa.core.constants import ABI_PATH
+from iwa.core.contracts.contract import ContractInstance
 from iwa.protocols.olas.constants import (
     DEFAULT_DEPLOY_PAYLOAD,
     DEFAULT_FALLBACK_HANDLER,
+    MULTISIG_IMPLEMENTATION_ADDRESS,
 )
 
 
@@ -39,6 +40,7 @@ class ServiceRegistryContract(ContractInstance):
     """Class to interact with the service registry contract."""
 
     name = "service_registry"
+    abi_path = ABI_PATH / "service_registry.json"
 
     def get_service(self, service_id: int) -> Dict:
         """Get the IDs of all registered services."""
@@ -67,16 +69,14 @@ class ServiceRegistryContract(ContractInstance):
         self,
         from_address: str,
         spender: str,
-        id: int,
+        id_: int,
     ) -> Dict:
         """Approve."""
-        tx = self.prepare_transaction(
-            "approve",
-            from_address=from_address,
-            spender=spender,
-            id=id,
+        return self.prepare_transaction(
+            method_name="approve",
+            method_kwargs={"spender": spender, "id": id_},
+            tx_params={"from": from_address},
         )
-        return tx
 
 
 class ServiceManagerContract(ContractInstance):
@@ -95,17 +95,18 @@ class ServiceManagerContract(ContractInstance):
         threshold: int,
     ) -> Dict:
         """Create a new service."""
-        tx = self.prepare_transaction(
-            "create",
-            from_address=from_address,
-            serviceOwner=service_owner,
-            tokenAddress=token_address,
-            configHash=config_hash,
-            agentIds=agent_ids,
-            agentParams=agent_params,
-            threshold=threshold,
+        return self.prepare_transaction(
+            method_name="create",
+            method_kwargs={
+                "serviceOwner": service_owner,
+                "tokenAddress": token_address,
+                "configHash": config_hash,
+                "agentIds": agent_ids,
+                "agentParams": agent_params,
+                "threshold": threshold,
+            },
+            tx_params={"from": from_address},
         )
-        return tx
 
     def prepare_activate_registration_tx(
         self,
@@ -114,10 +115,12 @@ class ServiceManagerContract(ContractInstance):
     ) -> Dict:
         """Activate registration for a service."""
         tx = self.prepare_transaction(
-            "activateRegistration",
-            from_address=from_address,
-            serviceId=service_id,
-            value=Web3.to_wei(1, "wei"),
+            method_name="activateRegistration",
+            method_kwargs={
+                "serviceId": service_id,
+                "value": Web3.to_wei(1, "wei"),
+            },
+            tx_params={"from": from_address},
         )
         return tx
 
@@ -130,12 +133,14 @@ class ServiceManagerContract(ContractInstance):
     ) -> Dict:
         """Register agents for a service."""
         tx = self.prepare_transaction(
-            "registerAgents",
-            from_address=from_address,
-            serviceId=service_id,
-            agentInstances=agent_instances,
-            agentIds=agent_ids,
-            value=Web3.to_wei(1, "wei"),
+            method_name="registerAgents",
+            method_kwargs={
+                "serviceId": service_id,
+                "agentInstances": agent_instances,
+                "agentIds": agent_ids,
+                "value": Web3.to_wei(1, "wei"),
+            },
+            tx_params={"from": from_address},
         )
         return tx
 
@@ -148,11 +153,13 @@ class ServiceManagerContract(ContractInstance):
     ) -> Dict:
         """Deploy a service."""
         tx = self.prepare_transaction(
-            "deploy",
-            from_address=from_address,
-            serviceId=service_id,
-            multisigImplementationAddress=multisig_implementation_address,
-            data=data or get_deployment_payload(),
+            method_name="deploy",
+            method_kwargs={
+                "serviceId": service_id,
+                "multisigImplementationAddress": multisig_implementation_address,
+                "data": data or get_deployment_payload(),
+            },
+            tx_params={"from": from_address},
         )
         return tx
 
@@ -163,9 +170,11 @@ class ServiceManagerContract(ContractInstance):
     ) -> Dict:
         """Terminate a service."""
         tx = self.prepare_transaction(
-            "terminate",
-            from_address=from_address,
-            serviceId=service_id,
+            method_name="terminate",
+            method_kwargs={
+                "serviceId": service_id,
+            },
+            tx_params={"from": from_address},
         )
         return tx
 
@@ -176,8 +185,10 @@ class ServiceManagerContract(ContractInstance):
     ) -> Dict:
         """Terminate a service."""
         tx = self.prepare_transaction(
-            "unbond",
-            from_address=from_address,
-            serviceId=service_id,
+            method_name="unbond",
+            method_kwargs={
+                "serviceId": service_id,
+            },
+            tx_params={"from": from_address},
         )
         return tx

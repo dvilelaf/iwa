@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List
 
-from iwa.protocols.olas.contracts.base import ContractInstance
-
+from iwa.core.constants import ABI_PATH
+from iwa.core.contracts.contract import ContractInstance
 from iwa.protocols.olas.contracts.activity_checker import ActivityCheckerContract
 
 
@@ -23,6 +23,7 @@ class StakingContract(ContractInstance):
     """Class to interact with the staking contract."""
 
     name = "staking"
+    abi_path = ABI_PATH / "staking.json"
 
     def __init__(self, address: str):
         """Initialize StakingContract."""
@@ -115,9 +116,11 @@ class StakingContract(ContractInstance):
     ) -> Dict:
         """Stake a service."""
         tx = self.prepare_transaction(
-            "stake",
-            from_address=from_address,
-            serviceId=service_id,
+            method_name="stake",
+            method_kwargs={
+                "serviceId": service_id,
+            },
+            tx_params={"from": from_address},
         )
         return tx
 
@@ -128,8 +131,10 @@ class StakingContract(ContractInstance):
     ) -> Dict:
         """Unstake a service."""
         tx = self.prepare_transaction(
-            "unstake",
-            from_address=from_address,
-            serviceId=service_id,
+            method_name="unstake",
+            method_kwargs={
+                "serviceId": service_id,
+            },
+            tx_params={"from": from_address},
         )
         return tx

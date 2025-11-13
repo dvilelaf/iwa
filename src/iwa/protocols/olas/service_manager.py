@@ -1,13 +1,14 @@
 """Olas service manager."""
 
-import logging
 from typing import Dict, Optional
 
-from triton.key_storage import TritonWallet
-from triton.models import ServiceConfig
 from web3 import Web3
 
-from iwa.core.constants import (
+from iwa.core.chain import ChainInterfaces
+from iwa.core.contracts.erc20 import ERC20Contract
+from iwa.core.utils import configure_logger
+from iwa.core.wallet import Wallet
+from iwa.protocols.olas.constants import (
     DEFAULT_TOKEN_ADDRESS,
     SERVICE_MANAGER_ADDRESS_GNOSIS,
     SERVICE_REGISTRY_ADDRESS_GNOSIS,
@@ -15,7 +16,6 @@ from iwa.core.constants import (
     TRADER_AGENT_ID,
     TRADER_CONFIG_HASH,
 )
-from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.protocols.olas.contracts.service import (
     ServiceManagerContract,
     ServiceRegistryContract,
@@ -23,35 +23,53 @@ from iwa.protocols.olas.contracts.service import (
 )
 from iwa.protocols.olas.contracts.staking import StakingState
 
-logger = logging.getLogger("service")
+logger = configure_logger()
 
 
 class ServiceManager:
     """ServiceManager"""
 
-    def __init__(self, config: ServiceConfig):
+    def __init__(self, wallet: Wallet):
         """Initialize ServiceManager."""
-        self.config = config
+        self.wallet = wallet
+        self.services = config.olas.services
         self.registry = ServiceRegistryContract(SERVICE_REGISTRY_ADDRESS_GNOSIS)
         self.manager = ServiceManagerContract(SERVICE_MANAGER_ADDRESS_GNOSIS)
-        self.wallet = TritonWallet()
 
     def get(self) -> Optional[Dict]:
         """Get service details by ID."""
-        return self.registry.get_service(self.config.service_id)
+        return self.registry.get_service(self.services.service_id)
 
-    def create(self, erc20_contract=None, bond_amount: int = 1) -> Optional[int]:
+    def create(
+        self,
+        chain_name: str = "gnosis",
+        service_owner_address_or_tag: Optional[str] = None,
+        token_address_or_tag: Optional[str] = None,
+        bond_amount: int = 1,
+    ) -> Optional[int]:
         """Create a new service."""
+        service_owner_account = (
+            self.wallet.key_storage.get_account(service_owner_address_or_tag)
+            if service_owner_address_or_tag
+            else self.wallet.master_account
+        )
+        chain = ChainInterfaces().get(chain_name).chain
+        token_address = chain.get_token_address(token_address_or_tag)
+
         create_tx = self.manager.prepare_create_tx(
             from_address=self.wallet.master_account.address,
-            service_owner=self.wallet.master_account.address,
-            token_address=erc20_contract.address if erc20_contract else DEFAULT_TOKEN_ADDRESS,
+            service_owner=service_owner_account.address,
+            token_address=token_address if token_address else DEFAULT_TOKEN_ADDRESS,
             config_hash=bytes.fromhex(TRADER_CONFIG_HASH),
             agent_ids=[25],
             agent_params=[[1, bond_amount]],
             threshold=1,
         )
-        success, receipt = self.wallet.master_account.send_transaction(create_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=create_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to create service")
@@ -74,15 +92,25 @@ class ServiceManager:
 
         self.config.service_id = service_id
 
-        # Approve the service registry token utility contract to move OLAS
+        # If no token address is provided, skip approving staking tokens
+        if not token_address:
+            return service_id
+
+        erc20_contract = ERC20Contract(token_address)
+
+        # Approve the service registry token utility contract to spend the staking tokens
         approve_tx = erc20_contract.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=SERVICE_REGISTRY_TOKEN_UTILITY_ADDRESS_GNOSIS,
-            amount=2 * bond_amount,
+            amount_wei=2 * bond_amount,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(approve_tx)
         logger.info("Approving OLAS token for staking contract")
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=approve_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to approve staking contract [ERC20]")
