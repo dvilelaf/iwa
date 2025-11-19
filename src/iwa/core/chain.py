@@ -98,6 +98,10 @@ class ChainInterface:
             chain: SupportedChain = getattr(SupportedChains(), chain.lower())
 
         self.chain = chain
+
+        if self.chain.rpc and self.chain.rpc.startswith("http://"):
+            logger.warning(f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS.")
+
         self.web3 = Web3(Web3.HTTPProvider(self.chain.rpc))
 
     def is_contract(self, address: str) -> bool:

@@ -84,12 +84,16 @@ class KeyStorage(BaseModel):
         self._password = password or Secrets().wallet_password.get_secret_value()
 
         if os.path.exists(path):
-            with open(path, "r") as f:
-                data = json.load(f)
-                self.accounts = {
-                    k: EncryptedAccount(**v) if "signers" not in v else StoredSafeAccount(**v)
-                    for k, v in data.get("accounts", {}).items()
-                }
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                    self.accounts = {
+                        k: EncryptedAccount(**v) if "signers" not in v else StoredSafeAccount(**v)
+                        for k, v in data.get("accounts", {}).items()
+                    }
+            except json.JSONDecodeError:
+                logger.error(f"Failed to load wallet from {path}: File is corrupted.")
+                self.accounts = {}
 
     @property
     def master_account(self) -> EncryptedAccount:
@@ -101,8 +105,14 @@ class KeyStorage(BaseModel):
 
     def save(self):
         """Save"""
+        # Ensure directory exists
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(self._path, "w", encoding="utf-8") as f:
             json.dump(self.model_dump(), f, indent=4)
+
+        # Enforce read/write only for the owner
+        os.chmod(self._path, 0o600)
 
     def create_account(self, tag: str) -> EncryptedAccount:
         """Create account"""
