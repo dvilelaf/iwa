@@ -16,3 +16,5 @@ wheels/
 wallet.json
 
 tenderly.yaml
+
+.coverage

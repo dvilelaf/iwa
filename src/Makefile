@@ -18,3 +18,8 @@ publish:
 .PHONY: gemini
 gemini:
 	npx https://github.com/google-gemini/gemini-cli
+
+
+.PHONY: test
+test:
+	uv run pytest --cov=src/iwa --cov-report=term-missing src/tests
