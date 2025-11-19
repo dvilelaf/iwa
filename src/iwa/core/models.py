@@ -224,6 +224,7 @@ class Config(StorableModel):
     """Config"""
 
     core: Optional[CoreConfig] = None
+    plugins: Optional[Dict[str, BaseModel]] = None
 
 
 class TokenAmount(BaseModel):
