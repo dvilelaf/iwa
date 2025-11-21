@@ -54,7 +54,7 @@ class EncryptedMnemonic(BaseModel):
     def derive_key(self, password: bytes) -> bytes:
         """Derive a key from a password and salt using scrypt."""
         kdf = Scrypt(
-            salt=self.kdf_salt,
+            salt=base64.b64decode(self.kdf_salt),
             length=self.kdf_len,
             n=self.kdf_n,
             r=self.kdf_r,
@@ -70,19 +70,11 @@ class EncryptedMnemonic(BaseModel):
         if self.cypher != "aesgcm":
             raise ValueError("Unsupported cipher, expected 'aesgcm'")
 
-        salt = base64.b64decode(self.kdf.kdf_salt)
         nonce = base64.b64decode(self.nonce)
         ct = base64.b64decode(self.ciphertext)
 
         # derive key using the parameters from the file
-        key = self.derive_key(
-            password.encode("utf-8"),
-            salt,
-            n=self.kdf_n,
-            r=self.kdf_r,
-            p=self.kdf_p,
-            length=self.kdf_len,
-        )
+        key = self.derive_key(password.encode("utf-8"))
         aesgcm = AESGCM(key)
         pt = aesgcm.decrypt(nonce, ct, None)
         return pt.decode("utf-8")
@@ -91,18 +83,31 @@ class EncryptedMnemonic(BaseModel):
     def encrypt(cls, mnemonic: str, password: str) -> dict:
         """Encrypt a mnemonic with AES-GCM using a scrypt-derived key."""
         password_b = password.encode("utf-8")
-        salt = os.urandom(cls.salt_len)
-        key = cls.derive_key(password_b, salt)
+        salt = os.urandom(SALT_LEN)
+        # Create a temporary instance to use derive_key or use the class method if refactored
+        # But derive_key is an instance method using instance attributes.
+        # We should probably just use Scrypt directly here or refactor derive_key.
+        # Since derive_key uses self.kdf_n etc, we can use the constants.
+
+        kdf = Scrypt(
+            salt=salt,
+            length=SCRYPT_LEN,
+            n=SCRYPT_N,
+            r=SCRYPT_R,
+            p=SCRYPT_P,
+        )
+        key = kdf.derive(password_b)
+
         aesgcm = AESGCM(key)
-        nonce = os.urandom(cls.aes_nonce_len)
+        nonce = os.urandom(AES_NONCE_LEN)
         ct = aesgcm.encrypt(nonce, mnemonic.encode("utf-8"), None)
         return {
             "kdf": "scrypt",
             "kdf_salt": base64.b64encode(salt).decode(),
-            "kdf_n": cls.scrypt_n,
-            "kdf_r": cls.scrypt_r,
-            "kdf_p": cls.scrypt_p,
-            "kdf_len": cls.scrypt_len,
+            "kdf_n": SCRYPT_N,
+            "kdf_r": SCRYPT_R,
+            "kdf_p": SCRYPT_P,
+            "kdf_len": SCRYPT_LEN,
             "cipher": "aesgcm",
             "nonce": base64.b64encode(nonce).decode(),
             "ciphertext": base64.b64encode(ct).decode(),
@@ -488,5 +493,5 @@ def main():
         print(f"  index {a['index']:>2} -> {a['address']}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

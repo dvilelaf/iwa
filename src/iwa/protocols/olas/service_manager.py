@@ -131,7 +131,11 @@ class ServiceManager:
         activate_tx = self.manager.prepare_activate_registration_tx(
             from_address=self.wallet.master_account.address, service_id=self.config.service_id
         )
-        success, receipt = self.wallet.master_account.send_transaction(activate_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=activate_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to activate registration")
@@ -171,7 +175,11 @@ class ServiceManager:
             agent_instances=[agent_account.address],
             agent_ids=[TRADER_AGENT_ID],
         )
-        success, receipt = self.wallet.master_account.send_transaction(register_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=register_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to register agent")
@@ -201,7 +209,11 @@ class ServiceManager:
             service_id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(deploy_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=deploy_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to deploy service")
@@ -249,7 +261,11 @@ class ServiceManager:
             service_id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(terminate_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=terminate_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to terminate service")
@@ -279,7 +295,11 @@ class ServiceManager:
             service_id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(unbond_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=unbond_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to unbond service")
@@ -328,7 +348,11 @@ class ServiceManager:
             id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(approve_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=approve_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
         logger.info("Approving service token for staking contract")
 
         if not success:
@@ -343,7 +367,11 @@ class ServiceManager:
             service_id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(stake_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=stake_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to stake service")
@@ -382,7 +410,11 @@ class ServiceManager:
             service_id=self.config.service_id,
         )
 
-        success, receipt = self.wallet.master_account.send_transaction(unstake_tx)
+        success, receipt = self.wallet.sign_and_send_transaction(
+            transaction=unstake_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.config.chain_name,
+        )
 
         if not success:
             logger.error("Failed to unstake service")

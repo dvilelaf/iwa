@@ -23,5 +23,5 @@ async def main():
     service_manager.create()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(main())

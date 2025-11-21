@@ -126,7 +126,7 @@ class ChainInterface:
 
         def _is_gas_too_low_error(err_text: str) -> bool:
             low_gas_signals = [
-                "FeeTooLow",
+                "feetoolow",
             ]
             text = (err_text or "").lower()
             return any(sig in text for sig in low_gas_signals)
@@ -162,8 +162,7 @@ class ChainInterface:
                 logger.exception(f"Unexpected error sending transaction: {e}")
                 return False, {}
 
-        logger.error(f"Failed to send transaction after {max_retries} attempts.")
-        return False, {}
+
 
     def estimate_gas(self, built_method, tx_params) -> int:
         """Estimate gas for a contract function call."""

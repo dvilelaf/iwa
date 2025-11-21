@@ -187,7 +187,7 @@ class StorableModel(BaseModel):
     def load_toml(cls: Type[T], path: str | Path) -> T:
         """Load from TOML file"""
         path = Path(path)
-        with path.open("r", encoding="utf-8") as f:
+        with path.open("rb") as f:
             data = tomli.load(f)
         obj = cls(**data)
         obj._storage_format = "toml"

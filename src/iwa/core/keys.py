@@ -94,6 +94,8 @@ class KeyStorage(BaseModel):
             except json.JSONDecodeError:
                 logger.error(f"Failed to load wallet from {path}: File is corrupted.")
                 self.accounts = {}
+        else:
+            self.accounts = {}
 
     @property
     def master_account(self) -> EncryptedAccount:
@@ -102,6 +104,8 @@ class KeyStorage(BaseModel):
 
         if not master_account:
             return list(self.accounts.values())[0]
+
+        return master_account
 
     def save(self):
         """Save"""
@@ -128,6 +132,31 @@ class KeyStorage(BaseModel):
         self.accounts[acct.address] = encrypted
         self.save()
         return encrypted
+
+    # ... (create_safe omitted for brevity, but I should log there too if needed)
+
+    def get_account(self, address_or_tag) -> Optional[Union[Account, StoredSafeAccount]]:
+        """Get account"""
+        try:
+            address = EthereumAddress(address_or_tag)
+            account = self.accounts.get(address)
+
+            if isinstance(account, StoredSafeAccount):
+                return account
+
+            if account is None:
+                return None
+
+            return Account.from_key(self.get_private_key(address))
+
+        except ValueError:
+            for account in self.accounts.values():
+                if address_or_tag == account.tag:
+                    if isinstance(account, StoredSafeAccount):
+                        return account
+
+                    return Account.from_key(self.get_private_key(account.address))
+            return None
 
     def create_safe(
         self,
@@ -237,28 +266,7 @@ class KeyStorage(BaseModel):
 
         return signer_pkeys
 
-    def get_account(self, address_or_tag) -> Optional[Union[Account, StoredSafeAccount]]:
-        """Get account"""
-        try:
-            address = EthereumAddress(address_or_tag)
-            account = self.accounts.get(address)
 
-            if isinstance(account, StoredSafeAccount):
-                return account
-
-            if account is None:
-                return None
-
-            return Account.from_key(self.get_private_key(address))
-
-        except ValueError:
-            for account in self.accounts.values():
-                if address_or_tag == account.tag:
-                    if isinstance(account, StoredSafeAccount):
-                        return account
-
-                    return Account.from_key(self.get_private_key(account.address))
-            return None
 
     def get_tag_by_address(self, address: EthereumAddress) -> Optional[str]:
         """Get tag by address"""

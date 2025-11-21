@@ -196,7 +196,7 @@ class CowSwap:
         slippage_tolerance: float = 0.005,
     ) -> int:
         """Calculate the maximum sell amount needed to buy a fixed amount of tokens."""
-        chain_id = SupportedChainId(self.chain.value[0])
+        chain_id = SupportedChainId(self.cow_chain.value[0])
         order_book_api = OrderBookApi(OrderBookAPIConfigFactory.get_config(env, chain_id))
 
         order_quote_request = OrderQuoteRequest(
