@@ -1,7 +1,8 @@
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 import sys
-import importlib
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 
 @pytest.mark.asyncio
 async def test_main():
@@ -39,11 +40,12 @@ async def test_main():
         # But importing it triggers cowdao_cowpy import.
         # Since we patched sys.modules, it should use our mocks.
         if "iwa.core.wallet" not in sys.modules:
-            import iwa.core.wallet
+            pass
 
-        with patch("iwa.core.wallet.Wallet") as MockWallet, \
-             patch("iwa.core.test.ServiceManager") as mock_service_manager:
-
+        with (
+            patch("iwa.core.wallet.Wallet"),
+            patch("iwa.core.test.ServiceManager") as mock_service_manager,
+        ):
             # Import main here
             from iwa.core.test import main
 

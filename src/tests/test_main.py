@@ -1,7 +1,7 @@
+import runpy
 import sys
 from unittest.mock import patch
-import runpy
-import pytest
+
 
 def test_main_execution():
     """Test that python -m iwa executes the CLI."""

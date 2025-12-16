@@ -101,6 +101,8 @@ def update_rpc_variables(tenderly_config: TenderlyConfig) -> None:
                 flags=re.MULTILINE,
             )
         else:
+            if content and not content.endswith("\n"):
+                content += "\n"
             content += f"{chain_name.lower()}_rpc={vnet.public_rpc}\n"
 
     with open(SECRETS_PATH, "w", encoding="utf-8") as file:
@@ -112,7 +114,7 @@ def update_rpc_variables(tenderly_config: TenderlyConfig) -> None:
 def _fund_wallet(  # nosec
     admin_rpc: str,
     wallet_addresses: List[str],
-    amount: int,
+    amount: float,
     native_or_token_address: str = "native",
 ) -> None:
     if native_or_token_address == "native":  # nosec
@@ -147,11 +149,11 @@ def _fund_wallet(  # nosec
         print(response.status_code)
         try:
             print(response.json())
-        except requests.exceptions.JSONDecodeError:
+        except requests.exceptions.JSONDecodeError:  # type: ignore
             pass
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
     """Main"""
     print("Recreating Tenderly Networks")
 
@@ -159,19 +161,24 @@ def main() -> None:
     project_slug = os.getenv("tenderly_project_slug")
     tenderly_access_key = os.getenv("tenderly_access_key")
 
+    if not account_slug or not project_slug or not tenderly_access_key:
+        print("Missing Tenderly environment variables")
+        return
+
     tenderly_config = TenderlyConfig.load(TENDERLY_CONFIG_PATH)
 
     for vnet_name, vnet in tenderly_config.vnets.items():
         # Delete existing vnets
-        _delete_vnet(
-            tenderly_access_key=tenderly_access_key,
-            account_slug=account_slug,
-            project_slug=project_slug,
-            vnet_id=vnet.vnet_id,
-        )
+        if vnet.vnet_id:
+            _delete_vnet(
+                tenderly_access_key=tenderly_access_key,
+                account_slug=account_slug,
+                project_slug=project_slug,
+                vnet_id=vnet.vnet_id,
+            )
 
         # Create new network
-        vnet_slug = _generate_vnet_slug(preffix=vnet_name)
+        vnet_slug = _generate_vnet_slug(preffix=vnet_name.lower())
 
         vnet_id, admin_rpc, public_rpc = _create_vnet(
             tenderly_access_key=tenderly_access_key,
@@ -182,6 +189,10 @@ def main() -> None:
             vnet_slug=vnet_slug,
             vnet_display_name=vnet_slug,
         )
+
+        if not vnet_id or not admin_rpc or not public_rpc:
+            print(f"Failed to create valid vnet for {vnet_name}")
+            continue
 
         vnet.vnet_id = vnet_id
         vnet.admin_rpc = admin_rpc
@@ -196,11 +207,17 @@ def main() -> None:
 
         for account_tags, requirement in vnet.funds_requirements.items():
             tags = account_tags.split(",")
-            addresses = (
-                [keys.get_account(tag).address for tag in tags]
-                if account_tags != "all"
-                else list(keys.accounts.keys())
-            )
+            if account_tags != "all":
+                addresses = []
+                for tag in tags:
+                    if acc := keys.get_account(tag):
+                        addresses.append(acc.address)
+            else:
+                addresses = list(keys.accounts.keys())
+
+            if not addresses:
+                continue
+
             if requirement.native > 0:
                 _fund_wallet(
                     admin_rpc=vnet.admin_rpc,
@@ -220,7 +237,8 @@ def main() -> None:
                 print(f"Funded {tags} with {token.amount} {token.symbol}")
 
         # Redeploy safes
-        keys.redeploy_safes()
+        if vnet_name == "Gnosis":
+            keys.redeploy_safes()
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -1,6 +1,6 @@
 """Wallet module."""
 
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 from safe_eth.safe import SafeOperationEnum
 from web3 import Web3
@@ -14,12 +14,14 @@ from iwa.core.contracts.multisend import (
     MultiSendCallOnlyContract,
     MultiSendContract,
 )
+from iwa.core.db import init_db, log_transaction
 from iwa.core.keys import KeyStorage
-from iwa.core.models import EthereumAddress, StoredSafeAccount
+from iwa.core.managers import TransactionManager
+from iwa.core.models import Config, EthereumAddress, StoredSafeAccount
 from iwa.core.tables import list_accounts
 from iwa.core.utils import configure_logger
-from iwa.protocols.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap, OrderType
-from iwa.protocols.gnosis.safe import SafeMultisig
+from iwa.plugins.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap, OrderType
+from iwa.plugins.gnosis.safe import SafeMultisig
 
 logger = configure_logger()
 
@@ -30,6 +32,8 @@ class Wallet:
     def __init__(self):
         """Initialize wallet."""
         self.key_storage = KeyStorage()
+        self.transaction_manager = TransactionManager(self.key_storage)
+        init_db()
 
     @property
     def master_account(self) -> Optional[StoredSafeAccount]:
@@ -76,25 +80,20 @@ class Wallet:
 
     def sign_and_send_transaction(
         self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
-    ) -> bool:
+    ) -> Tuple[bool, Dict]:
         """Sign and send transaction"""
-        account = self.key_storage.get_account(signer_address_or_tag)
-        if not account:
-            logger.error(f"Account '{signer_address_or_tag}' not found in wallet.")
-            return False
+        return self.transaction_manager.sign_and_send(
+            transaction, signer_address_or_tag, chain_name
+        )
 
-        chain_interface = ChainInterfaces().get(chain_name)
-        success, _ = chain_interface.sign_and_send_transaction(transaction, account.key)
-        return success
-
-    def send(
+    def send(  # noqa: C901
         self,
         from_address_or_tag: str,
         to_address_or_tag: str,
         token_address_or_name: str,
         amount_wei: int,
         chain_name: str = "gnosis",
-    ):
+    ) -> str:
         """Send native currency or ERC20 tokens to an address"""
         from_account = self.key_storage.get_account(from_address_or_tag)
         to_account = self.key_storage.get_account(to_address_or_tag)
@@ -104,11 +103,58 @@ class Wallet:
             logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
             return
 
+        # Whitelist Check
+        config = Config()
+        if config.core and config.core.whitelist:
+            # Check if to_address is one of the whitelisted addresses
+            is_allowed = False
+            try:
+                target_addr = EthereumAddress(to_address)
+                if target_addr in config.core.whitelist.values():
+                    is_allowed = True
+            except ValueError:
+                pass
+
+            if not is_allowed:
+                logger.error(
+                    f"Address '{to_address}' is not in the whitelist. Transaction blocked."
+                )
+                return
+
         chain_interface = ChainInterfaces().get(chain_name)
 
         token_address = self.get_token_address(token_address_or_name, chain_interface.chain)
         if not token_address:
             return
+
+        # Resolve tags and symbols for logging
+        from_tag = self.key_storage.get_tag_by_address(from_account.address)
+
+        to_tag = getattr(to_account, "tag", None)
+        if not to_tag:
+            try:
+                # Check whitelist
+                if config.core and config.core.whitelist:
+                    target_addr = EthereumAddress(to_address)
+                    for name, addr in config.core.whitelist.items():
+                        if addr == target_addr:
+                            to_tag = name
+                            break
+            except ValueError:
+                pass
+
+        token_symbol = None
+        if token_address == NATIVE_CURRENCY_ADDRESS:
+            token_symbol = chain_interface.chain.native_currency
+        else:
+            if not token_address_or_name.startswith("0x"):
+                token_symbol = token_address_or_name
+            else:
+                # Try reverse lookup
+                for name, addr in chain_interface.tokens.items():
+                    if addr == token_address:
+                        token_symbol = name
+                        break
 
         is_safe = isinstance(from_account, StoredSafeAccount)
 
@@ -118,19 +164,44 @@ class Wallet:
             )
             if is_safe:
                 safe = SafeMultisig(from_account, chain_name)
-                safe.send_tx(
+                tx_hash = safe.send_tx(
                     to=to_address,
                     value=amount_wei,
                     signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
                 )
+                log_transaction(
+                    tx_hash,
+                    from_account.address,
+                    to_address,
+                    token_symbol,
+                    amount_wei,
+                    chain_name,
+                    from_tag,
+                    to_tag,
+                    token_symbol,
+                )
+                return tx_hash
 
             else:
-                chain_interface.send_native_transfer(
+                success, tx_hash = chain_interface.send_native_transfer(
                     from_account=from_account,
                     to_address=to_address,
                     value_wei=amount_wei,
                 )
-            return
+                if success and tx_hash:
+                    log_transaction(
+                        tx_hash,
+                        from_account.address,
+                        to_address,
+                        token_symbol,
+                        amount_wei,
+                        chain_name,
+                        from_tag,
+                        to_tag,
+                        token_symbol,
+                    )
+                    return tx_hash
+            return None
 
         erc20 = ERC20Contract(token_address)
         transaction = erc20.prepare_transfer_tx(
@@ -148,14 +219,42 @@ class Wallet:
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
-            safe.send_tx(
+            tx_hash = safe.send_tx(
                 to=erc20.address,
                 value=0,
                 signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
                 data=transaction["data"],
             )
+            log_transaction(
+                tx_hash,
+                from_account.address,
+                to_address,
+                token_address_or_name,
+                amount_wei,
+                chain_name,
+                from_tag,
+                to_tag,
+                token_symbol,
+            )
+            return tx_hash
         else:
-            self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)
+            success, receipt = self.sign_and_send_transaction(
+                transaction, from_address_or_tag, chain_name
+            )
+            if success and receipt:
+                tx_hash = receipt["transactionHash"].hex()
+                log_transaction(
+                    tx_hash,
+                    from_account.address,
+                    to_address,
+                    token_address_or_name,
+                    amount_wei,
+                    chain_name,
+                    from_tag,
+                    to_tag,
+                    token_symbol,
+                )
+                return tx_hash
 
     def multi_send(
         self,
@@ -449,8 +548,14 @@ class Wallet:
         retries = 1
         max_retries = 3
         while retries < max_retries + 1:
+            # CowSwap SDK requires private key. Using unsafe access as per requirements.
+            unsafe_key = self.key_storage.get_private_key_unsafe(account.address)
+            if not unsafe_key:
+                logger.error(f"Could not retrieve private key for {account_address_or_tag}")
+                return False
+
             cow = CowSwap(
-                private_key=account.key,
+                private_key=unsafe_key,
                 chain=chain,
             )
 

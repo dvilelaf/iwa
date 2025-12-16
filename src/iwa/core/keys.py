@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Union
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from eth_account import Account
+from eth_account.datastructures import SignedTransaction
+from eth_account.messages import encode_defunct
 from pydantic import BaseModel, PrivateAttr
 from safe_eth.eth import EthereumClient
 from safe_eth.safe import Safe
@@ -147,7 +149,12 @@ class KeyStorage(BaseModel):
             if account is None:
                 return None
 
-            return Account.from_key(self.get_private_key(address))
+            if account is None:
+                return None
+
+            # WARNING: This returns an Account object which contains the private key in memory.
+            # Prefer using sign_transaction instead.
+            return Account.from_key(self._get_private_key(address))
 
         except ValueError:
             for account in self.accounts.values():
@@ -155,7 +162,7 @@ class KeyStorage(BaseModel):
                     if isinstance(account, StoredSafeAccount):
                         return account
 
-                    return Account.from_key(self.get_private_key(account.address))
+                    return Account.from_key(self._get_private_key(account.address))
             return None
 
     def create_safe(
@@ -235,8 +242,8 @@ class KeyStorage(BaseModel):
             return
         del self.accounts[address]
 
-    def get_private_key(self, address: str) -> Optional[str]:
-        """Get all pkeys"""
+    def _get_private_key(self, address: str) -> Optional[str]:
+        """Internal method to get private key. Do not use outside of this class."""
         if address not in self.accounts:
             return None
 
@@ -247,6 +254,51 @@ class KeyStorage(BaseModel):
 
         return account.decrypt_private_key(self._password)
 
+    def get_private_key_unsafe(self, address: str) -> Optional[str]:
+        """Get private key. WARNING: This exposes the private key.
+
+        Only use when absolutely necessary (e.g. CowSwap SDK).
+        """
+        logger.warning(f"Exposing private key for {address} via unsafe method!")
+        return self._get_private_key(address)
+
+    def sign_transaction(self, transaction: dict, address_or_tag: str) -> SignedTransaction:
+        """Sign a transaction without exposing the private key."""
+        account = self.get_account(address_or_tag)
+        if not account:
+            raise ValueError(f"Account '{address_or_tag}' not found.")
+
+        address = account.address
+        private_key = self._get_private_key(address)
+        if not private_key:
+            raise ValueError(f"Could not retrieve private key for {address}")
+
+        # Account.sign_transaction handles the signing
+        try:
+            return Account.sign_transaction(transaction, private_key)
+        finally:
+            # Best effort to clear variable, though Python's GC is non-deterministic
+            del private_key
+
+    def sign_message(self, message: Union[str, bytes], address_or_tag: str) -> SignedTransaction:
+        """Sign a message."""
+        account = self.get_account(address_or_tag)
+        if not account:
+            raise ValueError(f"Account '{address_or_tag}' not found.")
+
+        address = account.address
+        private_key = self._get_private_key(address)
+
+        if isinstance(message, str):
+            signable_message = encode_defunct(text=message)
+        else:
+            signable_message = encode_defunct(primitive=message)
+
+        try:
+            return Account.sign_message(signable_message, private_key)
+        finally:
+            del private_key
+
     def get_safe_signer_keys(self, safe_address_or_tag: str) -> List[str]:
         """Get all signer private keys for a safe"""
         safe_account = self.get_account(safe_address_or_tag)
@@ -255,7 +307,7 @@ class KeyStorage(BaseModel):
 
         signer_pkeys = []
         for signer_address in safe_account.signers:
-            pkey = self.get_private_key(signer_address)
+            pkey = self._get_private_key(signer_address)
             if pkey:
                 signer_pkeys.append(pkey)
 
@@ -265,8 +317,6 @@ class KeyStorage(BaseModel):
             )
 
         return signer_pkeys
-
-
 
     def get_tag_by_address(self, address: EthereumAddress) -> Optional[str]:
         """Get tag by address"""

@@ -18,3 +18,7 @@ wallet.json
 tenderly.yaml
 
 .coverage
+
+*.log
+
+activity.db

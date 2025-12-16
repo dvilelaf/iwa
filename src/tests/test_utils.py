@@ -1,6 +1,9 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
+
 from iwa.core.utils import get_safe_master_copy_address, singleton
+
 
 def test_get_safe_master_copy_address_found():
     mock_master_copies = {
@@ -10,12 +13,15 @@ def test_get_safe_master_copy_address_found():
         ]
     }
 
-    with patch("iwa.core.utils.MASTER_COPIES", mock_master_copies), \
-         patch("iwa.core.utils.EthereumNetwork") as mock_network:
+    with (
+        patch("iwa.core.utils.MASTER_COPIES", mock_master_copies),
+        patch("iwa.core.utils.EthereumNetwork") as mock_network,
+    ):
         mock_network.MAINNET = "mainnet"
 
         address = get_safe_master_copy_address("1.4.1")
         assert address == "0xAddress2"
+
 
 def test_get_safe_master_copy_address_not_found():
     mock_master_copies = {
@@ -24,12 +30,15 @@ def test_get_safe_master_copy_address_not_found():
         ]
     }
 
-    with patch("iwa.core.utils.MASTER_COPIES", mock_master_copies), \
-         patch("iwa.core.utils.EthereumNetwork") as mock_network:
+    with (
+        patch("iwa.core.utils.MASTER_COPIES", mock_master_copies),
+        patch("iwa.core.utils.EthereumNetwork") as mock_network,
+    ):
         mock_network.MAINNET = "mainnet"
 
         with pytest.raises(ValueError, match="Did not find master copy"):
             get_safe_master_copy_address("1.0.0")
+
 
 def test_singleton():
     @singleton

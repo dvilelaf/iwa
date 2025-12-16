@@ -1,1 +1,0 @@
-"""iwa.protocols.gnosis package."""

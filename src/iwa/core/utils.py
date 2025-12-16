@@ -1,7 +1,5 @@
 """Utility functions"""
 
-import sys
-
 from loguru import logger
 from safe_eth.eth import EthereumNetwork
 from safe_eth.safe.addresses import MASTER_COPIES
@@ -29,20 +27,20 @@ def get_safe_master_copy_address(target_version: str = "1.4.1") -> str:
 
 def configure_logger():
     """Configure the logger for the application."""
+    if hasattr(configure_logger, "configured"):
+        return logger
+
     logger.remove()
 
     logger.add(
-        sys.stderr,
+        "iwa.log",
+        rotation="10 MB",
         level="INFO",
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | {message}",
-        colorize=True,
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
     )
+    # Also keep stderr for console if needed, but Textual captures it?
+    # Textual usually captures stderr. Writing to file is safer for debugging.
+    # Users previous logs show stdout format?
 
-    logger.add(
-        sys.stderr,
-        level="WARNING",
-        format="<yellow>{time:YYYY-MM-DD HH:mm:ss}</yellow> | <level>{level}</level> | {module}:{function}:{line} | {message}",
-        colorize=True,
-    )
-
+    configure_logger.configured = True
     return logger

@@ -1,0 +1,9 @@
+services:
+  iwa:
+    build: .
+    volumes:
+      - ./wallet.json:/app/wallet.json
+      - ./secrets.env:/app/secrets.env
+    env_file:
+      - .env
+    command: [ "--help" ]

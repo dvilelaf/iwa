@@ -3,7 +3,7 @@
 import asyncio
 
 from iwa.core.wallet import Wallet
-from iwa.protocols.olas.service_manager import ServiceManager
+from iwa.plugins.olas.service_manager import ServiceManager
 
 wallet = Wallet()
 

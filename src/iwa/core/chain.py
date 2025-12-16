@@ -1,14 +1,14 @@
 """Chain interaction helpers."""
 
 import time
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from eth_account import Account
 from pydantic import BaseModel
 from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
-from iwa.core.models import EthereumAddress, Secrets
+from iwa.core.models import Config, EthereumAddress, Secrets
 from iwa.core.utils import configure_logger, singleton
 
 logger = configure_logger()
@@ -18,10 +18,15 @@ class SupportedChain(BaseModel):
     """SupportedChain"""
 
     name: str
-    rpc: str
+    rpcs: List[str]
     chain_id: int
     native_currency: str
     tokens: Dict[str, EthereumAddress] = {}
+
+    @property
+    def rpc(self) -> str:
+        """Get the first RPC (primary)."""
+        return self.rpcs[0] if self.rpcs else ""
 
     def get_token_address(self, token_address_or_name: str) -> Optional[EthereumAddress]:
         """Get token address"""
@@ -46,7 +51,9 @@ class Gnosis(SupportedChain):
     """Gnosis Chain"""
 
     name: str = "Gnosis"
-    rpc: str = Secrets().gnosis_rpc.get_secret_value() if Secrets().gnosis_rpc else None
+    rpcs: List[str] = (
+        Secrets().gnosis_rpc.get_secret_value().split(",") if Secrets().gnosis_rpc else []
+    )
     chain_id: int = 100
     native_currency: str = "xDAI"
     tokens: Dict[str, EthereumAddress] = {
@@ -63,9 +70,14 @@ class Ethereum(SupportedChain):
     """Ethereum Mainnet"""
 
     name: str = "Ethereum"
-    rpc: str = Secrets().ethereum_rpc.get_secret_value() if Secrets().ethereum_rpc else None
+    rpcs: List[str] = (
+        Secrets().ethereum_rpc.get_secret_value().split(",") if Secrets().ethereum_rpc else []
+    )
     chain_id: int = 1
     native_currency: str = "ETH"
+    tokens: Dict[str, EthereumAddress] = {
+        "OLAS": EthereumAddress("0x0001A500A6B18995B03f44bb040A5fFc28E45CB0"),
+    }
 
 
 @singleton
@@ -73,9 +85,12 @@ class Base(SupportedChain):
     """Base"""
 
     name: str = "Base"
-    rpc: str = Secrets().base_rpc.get_secret_value() if Secrets().base_rpc else None
+    rpcs: List[str] = Secrets().base_rpc.get_secret_value().split(",") if Secrets().base_rpc else []
     chain_id: int = 8453
     native_currency: str = "ETH"
+    tokens: Dict[str, EthereumAddress] = {
+        "OLAS": EthereumAddress("0x54330d28ca3357F294334BDC454a032e7f353416"),
+    }
 
 
 @singleton
@@ -100,14 +115,45 @@ class ChainInterface:
         self.chain = chain
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
-            logger.warning(f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS.")
+            logger.warning(
+                f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS."
+            )
 
-        self.web3 = Web3(Web3.HTTPProvider(self.chain.rpc))
+        self.web3 = Web3(Web3.HTTPProvider(self.chain.rpc, request_kwargs={"timeout": 3}))
+        self._current_rpc_index = 0
+
+    def rotate_rpc(self) -> bool:
+        """Rotate to the next available RPC."""
+        if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
+            return False
+
+        self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
+        new_rpc = self.chain.rpcs[self._current_rpc_index]
+        logger.info(f"Rotating RPC for {self.chain.name} to {new_rpc}")
+        self.web3 = Web3(Web3.HTTPProvider(new_rpc, request_kwargs={"timeout": 3}))
+        return True
 
     def is_contract(self, address: str) -> bool:
         """Check if address is a contract"""
         code = self.web3.eth.get_code(address)
         return code != b""
+
+    @property
+    def tokens(self) -> Dict[str, EthereumAddress]:
+        """Get all tokens for this chain (default + custom)."""
+        defaults = self.chain.tokens.copy()
+
+        config = Config()
+        if config.core and config.core.custom_tokens:
+            # Look for chain name (case insensitive match?)
+            # Config keys usually string.
+            custom = config.core.custom_tokens.get(self.chain.name.lower(), {})
+            if not custom:
+                custom = config.core.custom_tokens.get(self.chain.name, {})
+
+            defaults.update(custom)
+
+        return defaults
 
     def get_native_balance_wei(self, address: str):
         """Get the native balance in wei"""
@@ -162,8 +208,6 @@ class ChainInterface:
                 logger.exception(f"Unexpected error sending transaction: {e}")
                 return False, {}
 
-
-
     def estimate_gas(self, built_method, tx_params) -> int:
         """Estimate gas for a contract function call."""
         from_address = tx_params["from"]
@@ -211,7 +255,7 @@ class ChainInterface:
         from_account: Account,
         to_address: EthereumAddress,
         value_wei: int,
-    ) -> bool:
+    ) -> Tuple[bool, Optional[str]]:
         """Send native currency transaction"""
         tx = {
             "from": from_account.address,
@@ -230,13 +274,13 @@ class ChainInterface:
             logger.error(
                 f"Insufficient balance to cover amount and gas fees.\nBalance: {self.web3.from_wei(balance_wei, 'ether'):.2f} {self.chain.native_currency}, Required: {self.web3.from_wei(required_wei, 'ether'):.2f} {self.chain.native_currency}"
             )
-            return False
+            return False, None
 
         tx["gas"] = gas_estimate
         tx["gasPrice"] = gas_price
 
         success, receipt = self.sign_and_send_transaction(tx, from_account.key)
-        return success
+        return success, receipt["transactionHash"].hex() if success and receipt else None
 
     def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
         """Get token address by name"""

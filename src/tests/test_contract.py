@@ -1,7 +1,11 @@
+from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
-from iwa.core.contracts.contract import ContractInstance
 from web3.exceptions import ContractCustomError
+
+from iwa.core.contracts.contract import ContractInstance
+
 
 @pytest.fixture
 def mock_chain_interface():
@@ -10,21 +14,25 @@ def mock_chain_interface():
         mock_ci.web3.eth.contract.return_value = MagicMock()
         yield mock_ci
 
+
 @pytest.fixture
 def mock_abi_file():
     abi_content = '[{"type": "function", "name": "testFunc", "inputs": []}, {"type": "error", "name": "CustomError", "inputs": [{"type": "uint256", "name": "code"}]}, {"type": "event", "name": "TestEvent", "inputs": []}]'
     with patch("builtins.open", mock_open(read_data=abi_content)):
         yield
 
+
 class MockContract(ContractInstance):
     name = "test_contract"
-    abi_path = "test.json"
+    abi_path = Path("test.json")
+
 
 def test_init(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     assert contract.address == "0xAddress"
     assert contract.abi is not None
-    assert "0x" in str(contract.error_selectors.keys()) # Check if selector generated
+    assert "0x" in str(contract.error_selectors.keys())  # Check if selector generated
+
 
 def test_init_abi_dict(mock_chain_interface):
     abi_content = '{"abi": [{"type": "function", "name": "testFunc"}]}'
@@ -32,41 +40,52 @@ def test_init_abi_dict(mock_chain_interface):
         contract = MockContract("0xAddress", "gnosis")
         assert contract.abi == [{"type": "function", "name": "testFunc"}]
 
+
 def test_call(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     contract.contract.functions.testFunc.return_value.call.return_value = "result"
     assert contract.call("testFunc") == "result"
 
+
 def test_prepare_transaction_success(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     mock_chain_interface.calculate_transaction_params.return_value = {"gas": 100}
-    contract.contract.functions.testFunc.return_value.build_transaction.return_value = {"data": "0x"}
+    contract.contract.functions.testFunc.return_value.build_transaction.return_value = {
+        "data": "0x"
+    }
 
     tx = contract.prepare_transaction("testFunc", {}, {})
     assert tx == {"data": "0x"}
+
 
 def test_prepare_transaction_custom_error_known(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     # Selector for CustomError(uint256)
     # We need to calculate it or capture what load_error_selectors produced
-    selector = list(contract.error_selectors.keys())[0] # 0x...
+    selector = list(contract.error_selectors.keys())[0]  # 0x...
     # Encode args: uint256(123)
-    encoded_args = "0" * 62 + "7b" # 123 hex
+    encoded_args = "0" * 62 + "7b"  # 123 hex
     error_data = f"{selector}{encoded_args}"
 
-    contract.contract.functions.testFunc.return_value.build_transaction.side_effect = ContractCustomError(error_data)
+    contract.contract.functions.testFunc.return_value.build_transaction.side_effect = (
+        ContractCustomError(error_data)
+    )
 
     with pytest.raises(Exception, match="CustomError in 'test_contract'"):
         contract.prepare_transaction("testFunc", {}, {})
 
+
 def test_prepare_transaction_custom_error_unknown(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
-    error_data = "0x12345678" # Unknown selector
+    error_data = "0x12345678"  # Unknown selector
 
-    contract.contract.functions.testFunc.return_value.build_transaction.side_effect = ContractCustomError(error_data)
+    contract.contract.functions.testFunc.return_value.build_transaction.side_effect = (
+        ContractCustomError(error_data)
+    )
 
     with pytest.raises(Exception, match="Unknown custom error"):
         contract.prepare_transaction("testFunc", {}, {})
+
 
 def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
@@ -81,6 +100,7 @@ def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
         assert tx is None
         mock_logger.error.assert_called_with("Error preparing transaction: Error")
 
+
 def test_prepare_transaction_other_exception(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     # The code expects e.args[1] to exist, so we must provide it
@@ -91,6 +111,7 @@ def test_prepare_transaction_other_exception(mock_chain_interface, mock_abi_file
         tx = contract.prepare_transaction("testFunc", {}, {})
         assert tx is None
         mock_logger.error.assert_called()
+
 
 def test_extract_events(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
@@ -123,6 +144,7 @@ def test_extract_events(mock_chain_interface, mock_abi_file):
     events = contract.extract_events(receipt)
     assert len(events) == 1
     assert events[0]["name"] == "TestEvent"
+
 
 def test_extract_events_edge_cases(mock_chain_interface):
     # Custom ABI with multiple event types to test different paths

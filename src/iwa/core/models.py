@@ -65,6 +65,8 @@ class CoreConfig(BaseModel):
 
     manual_claim_enabled: bool = False
     request_activity_alert_enabled: bool = True
+    whitelist: Dict[str, EthereumAddress] = Field(default_factory=dict)
+    custom_tokens: Dict[str, Dict[str, EthereumAddress]] = Field(default_factory=dict)
 
 
 class Secrets(BaseSettings):
@@ -245,13 +247,13 @@ class FundRequirements(BaseModel):
 class VirtualNet(BaseModel):
     """VirtualNet"""
 
-    vnet_id: str
+    vnet_id: Optional[str] = None
     chain_id: int
-    vnet_slug: str
-    vnet_display_name: str
+    vnet_slug: Optional[str] = None
+    vnet_display_name: Optional[str] = None
     funds_requirements: Dict[str, FundRequirements]
-    admin_rpc: str
-    public_rpc: str
+    admin_rpc: Optional[str] = None
+    public_rpc: Optional[str] = None
 
 
 class TenderlyConfig(StorableModel):

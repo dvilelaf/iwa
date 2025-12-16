@@ -7,6 +7,7 @@ from web3 import Web3
 
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.keys import KeyStorage
+from iwa.core.plugins import PluginLoader
 from iwa.core.wallet import Wallet
 
 iwa_cli = typer.Typer(help="iwa command line interface")
@@ -28,49 +29,6 @@ def account_create(
     key_storage = KeyStorage()
     try:
         key_storage.create_account(tag)
-    except ValueError as e:
-        typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1) from e
-
-
-@wallet_cli.command("create-multisig")
-def create_safe(
-    tag: Optional[str] = typer.Option(
-        None,
-        "--tag",
-        "-t",
-        help="Tag for this account",
-    ),
-    owners: str = typer.Option(
-        ...,
-        "--owners",
-        "-o",
-        help="Comma-separated list of owner addresses or tags.",
-    ),
-    threshold: int = typer.Option(
-        ...,
-        "--threshold",
-        "-h",
-        help="Number of required confirmations.",
-    ),
-    chain_name: str = typer.Option(
-        "gnosis",
-        "--chain",
-        "-c",
-        help="Chain to deploy the multisig on.",
-    ),
-):
-    """Create a new multisig account (Safe)"""
-    key_storage = KeyStorage()
-    owner_list = [owner.strip() for owner in owners.split(",")]
-    try:
-        key_storage.create_safe(
-            deployer_tag_or_address="master",
-            owner_tags_or_addresses=owner_list,
-            threshold=threshold,
-            chain_name=chain_name,
-            tag=tag,
-        )
     except ValueError as e:
         typer.echo(f"Error: {e}")
         raise typer.Exit(code=1) from e
@@ -180,6 +138,15 @@ def erc20_approve(
     )
 
 
+@iwa_cli.command("tui")
+def tui():
+    """Start Terminal User Interface."""
+    from iwa.tui.app import IwaApp
+
+    app = IwaApp()
+    app.run()
+
+
 @wallet_cli.command("drain")
 def drain_wallet(
     from_address_or_tag: str = typer.Option(..., "--from", "-f", help="From address or tag"),
@@ -199,6 +166,18 @@ def drain_wallet(
         chain_name=chain_name,
     )
 
+
+# Load Plugins
+plugin_loader = PluginLoader()
+plugins = plugin_loader.load_plugins()
+
+for plugin_name, plugin in plugins.items():
+    commands = plugin.get_cli_commands()
+    if commands:
+        plugin_app = typer.Typer(help=f"{plugin_name} commands")
+        for cmd_name, cmd_func in commands.items():
+            plugin_app.command(name=cmd_name)(cmd_func)
+        iwa_cli.add_typer(plugin_app, name=plugin_name)
 
 if __name__ == "__main__":  # pragma: no cover
     iwa_cli()
