@@ -155,6 +155,30 @@ class ChainInterface:
 
         return defaults
 
+    def get_token_symbol(self, address: str) -> str:
+        """Get token symbol for an address."""
+        # 1. Check known tokens in Chain model
+        for symbol, addr in self.chain.tokens.items():
+            if addr.lower() == address.lower():
+                return symbol
+
+        # 2. Try to fetch from chain
+        try:
+            from iwa.core.contracts.erc20 import ERC20Contract
+            erc20 = ERC20Contract(address, self.chain.name.lower())
+            return erc20.symbol or address[:6] + "..." + address[-4:]
+        except Exception:
+            return address[:6] + "..." + address[-4:]
+
+    def get_token_decimals(self, address: str) -> int:
+        """Get token decimals for an address."""
+        try:
+            from iwa.core.contracts.erc20 import ERC20Contract
+            erc20 = ERC20Contract(address, self.chain.name.lower())
+            return erc20.decimals if erc20.decimals is not None else 18
+        except Exception:
+            return 18
+
     def get_native_balance_wei(self, address: str):
         """Get the native balance in wei"""
         return self.web3.eth.get_balance(address)
@@ -303,3 +327,8 @@ class ChainInterfaces:
             raise ValueError(f"Unsupported chain: {chain_name}")
 
         return getattr(self, chain_name)
+    def items(self):
+        """Iterate over all chain interfaces."""
+        yield "gnosis", self.gnosis
+        yield "ethereum", self.ethereum
+        yield "base", self.base

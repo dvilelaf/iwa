@@ -44,7 +44,7 @@ class TransactionManager:
                 signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
 
                 # Send
-                txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+                txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
                 # Wait
                 receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)

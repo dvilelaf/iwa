@@ -156,6 +156,9 @@ class Wallet:
                         token_symbol = name
                         break
 
+        if not token_symbol:
+            token_symbol = token_address_or_name
+
         is_safe = isinstance(from_account, StoredSafeAccount)
 
         if token_address == NATIVE_CURRENCY_ADDRESS:
@@ -170,15 +173,15 @@ class Wallet:
                     signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
                 )
                 log_transaction(
-                    tx_hash,
-                    from_account.address,
-                    to_address,
-                    token_symbol,
-                    amount_wei,
-                    chain_name,
-                    from_tag,
-                    to_tag,
-                    token_symbol,
+                    tx_hash=tx_hash,
+                    from_addr=from_account.address,
+                    to_addr=to_address,
+                    token=token_symbol,
+                    amount_wei=amount_wei,
+                    chain=chain_name,
+                    from_tag=from_tag,
+                    to_tag=to_tag,
+                    tags=["native-transfer", "safe-transaction"],
                 )
                 return tx_hash
 
@@ -190,15 +193,15 @@ class Wallet:
                 )
                 if success and tx_hash:
                     log_transaction(
-                        tx_hash,
-                        from_account.address,
-                        to_address,
-                        token_symbol,
-                        amount_wei,
-                        chain_name,
-                        from_tag,
-                        to_tag,
-                        token_symbol,
+                        tx_hash=tx_hash,
+                        from_addr=from_account.address,
+                        to_addr=to_address,
+                        token=token_symbol,
+                        amount_wei=amount_wei,
+                        chain=chain_name,
+                        from_tag=from_tag,
+                        to_tag=to_tag,
+                        tags=["native-transfer"],
                     )
                     return tx_hash
             return None
@@ -226,15 +229,15 @@ class Wallet:
                 data=transaction["data"],
             )
             log_transaction(
-                tx_hash,
-                from_account.address,
-                to_address,
-                token_address_or_name,
-                amount_wei,
-                chain_name,
-                from_tag,
-                to_tag,
-                token_symbol,
+                tx_hash=tx_hash,
+                from_addr=from_account.address,
+                to_addr=to_address,
+                token=token_symbol,
+                amount_wei=amount_wei,
+                chain=chain_name,
+                from_tag=from_tag,
+                to_tag=to_tag,
+                tags=["erc20-transfer", "safe-transaction"],
             )
             return tx_hash
         else:
@@ -244,15 +247,15 @@ class Wallet:
             if success and receipt:
                 tx_hash = receipt["transactionHash"].hex()
                 log_transaction(
-                    tx_hash,
-                    from_account.address,
-                    to_address,
-                    token_address_or_name,
-                    amount_wei,
-                    chain_name,
-                    from_tag,
-                    to_tag,
-                    token_symbol,
+                    tx_hash=tx_hash,
+                    from_addr=from_account.address,
+                    to_addr=to_address,
+                    token=token_symbol,
+                    amount_wei=amount_wei,
+                    chain=chain_name,
+                    from_tag=from_tag,
+                    to_tag=to_tag,
+                    tags=["erc20-transfer"],
                 )
                 return tx_hash
 

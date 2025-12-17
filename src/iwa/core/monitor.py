@@ -18,6 +18,7 @@ class EventMonitor:
         self, addresses: List[str], callback: Callable, chain_name: str = "gnosis"
     ) -> None:
         """Initialize events monitor."""
+        self.chain_name = chain_name
         self.addresses = [Web3.to_checksum_address(addr) for addr in addresses]
         self.callback = callback
         self.chain_interface = ChainInterfaces().get(chain_name)
@@ -112,6 +113,7 @@ class EventMonitor:
                                 "value": tx.get("value", 0),
                                 "token": "NATIVE",
                                 "timestamp": block.timestamp,
+                                "chain": self.chain_name,
                             }
                         )
             except Exception as e:
@@ -170,9 +172,11 @@ class EventMonitor:
                             "hash": log["transactionHash"].hex(),
                             "from": Web3.to_checksum_address(t_from),
                             "to": Web3.to_checksum_address(t_to),
-                            "value": 0,
+                            "value": int(log["data"].hex() if isinstance(log["data"], bytes) else log["data"], 16) if log.get("data") else 0,
                             "token": "TOKEN",
+                            "contract_address": log["address"],
                             "timestamp": 0,  # Would require block fetch
+                            "chain": self.chain_name,
                         }
                     )
 

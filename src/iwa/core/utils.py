@@ -2,7 +2,7 @@
 
 from loguru import logger
 from safe_eth.eth import EthereumNetwork
-from safe_eth.safe.addresses import MASTER_COPIES
+from safe_eth.safe.addresses import MASTER_COPIES, PROXY_FACTORIES
 
 
 def singleton(cls):
@@ -23,6 +23,19 @@ def get_safe_master_copy_address(target_version: str = "1.4.1") -> str:
         if version == target_version:
             return address
     raise ValueError(f"Did not find master copy for version {target_version}")
+
+
+def get_safe_proxy_factory_address(target_version: str = "1.4.1") -> str:
+    """Get Safe proxy factory address by version"""
+    # PROXY_FACTORIES values are (address, block_number) without version
+    # converting 1.4.1 address manually if needed, or returning the one found.
+    # The address 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67 is for 1.4.1
+    if target_version == "1.4.1":
+        return "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67"
+
+    for address, _ in PROXY_FACTORIES[EthereumNetwork.MAINNET]:
+        return address
+    raise ValueError(f"Did not find proxy factory for version {target_version}")
 
 
 def configure_logger():

@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
@@ -17,7 +17,7 @@ from safe_eth.safe import Safe
 
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, Secrets, StoredAccount, StoredSafeAccount
-from iwa.core.utils import configure_logger, get_safe_master_copy_address
+from iwa.core.utils import configure_logger, get_safe_master_copy_address, get_safe_proxy_factory_address
 
 logger = configure_logger()
 
@@ -172,8 +172,11 @@ class KeyStorage(BaseModel):
         threshold: int,
         chain_name: str,
         tag: Optional[str] = None,
-    ) -> StoredSafeAccount:
+        salt_nonce: Optional[int] = None,
+    ) -> Tuple[StoredSafeAccount, str]:
         """Add a Safe to the KeyStorage"""
+        from safe_eth.safe.proxy_factory import ProxyFactory
+
         deployer_account = self.get_account(deployer_tag_or_address)
         if not deployer_account:
             raise ValueError(f"Deployer account '{deployer_tag_or_address}' not found in wallet.")
@@ -186,30 +189,99 @@ class KeyStorage(BaseModel):
             owner_addresses.append(owner_account.address)
 
         rpc_secret = getattr(Secrets(), f"{chain_name}_rpc")
+        ethereum_client = EthereumClient(rpc_secret.get_secret_value())
 
-        create_tx = Safe.create(
-            ethereum_client=EthereumClient(rpc_secret.get_secret_value()),
-            deployer_account=deployer_account,
-            master_copy_address=get_safe_master_copy_address("1.4.1"),
-            owners=owner_addresses,
-            threshold=threshold,
-        )
+        master_copy = get_safe_master_copy_address("1.4.1")
+        proxy_factory_address = get_safe_proxy_factory_address("1.4.1")
 
-        tx_hash = create_tx.tx_hash.hex()
+        if salt_nonce is not None:
+            # Use ProxyFactory directly to enforce salt
+            proxy_factory = ProxyFactory(proxy_factory_address, ethereum_client)
+
+            # Encoded setup data
+            # owners, threshold, to, data, fallbackHandler, paymentToken, payment, paymentReceiver
+            empty_safe = Safe(master_copy, ethereum_client)
+            setup_data = empty_safe.contract.functions.setup(
+                    owner_addresses,
+                    threshold,
+                    "0x0000000000000000000000000000000000000000",
+                    b"",
+                    "0x0000000000000000000000000000000000000000", # Using 0x0 as per standard default
+                    "0x0000000000000000000000000000000000000000",
+                    0,
+                    "0x0000000000000000000000000000000000000000"
+            ).build_transaction({"gas": 0, "gasPrice": 0})["data"]
+
+            gas_price = ethereum_client.w3.eth.gas_price
+            tx_sent = proxy_factory.deploy_proxy_contract_with_nonce(
+                deployer_account,
+                master_copy,
+                initializer=bytes.fromhex(setup_data[2:]) if setup_data.startswith("0x") else bytes.fromhex(setup_data),
+                nonce=salt_nonce,
+                gas=5_000_000,
+                gas_price=gas_price
+            )
+            contract_address = tx_sent.contract_address
+            tx_hash = tx_sent.tx_hash.hex()
+
+        else:
+            # Standard random salt via Safe.create
+            create_tx = Safe.create(
+                ethereum_client=ethereum_client,
+                deployer_account=deployer_account,
+                master_copy_address=master_copy,
+                owners=owner_addresses,
+                threshold=threshold,
+                proxy_factory_address=proxy_factory_address,
+            )
+            contract_address = create_tx.contract_address
+            tx_hash = create_tx.tx_hash.hex()
+
         logger.info(
-            f"Safe {tag} [{create_tx.contract_address}] deployed on {chain_name} on transaction: {tx_hash}"
+            f"Safe {tag} [{contract_address}] deployed on {chain_name} on transaction: {tx_hash}"
+        )
+        # Try to resolve tag for deployer
+        resolved_from_tag = None
+        if deployer_tag_or_address in self.accounts:
+            resolved_from_tag = self.accounts[deployer_tag_or_address].tag
+        else:
+            # Maybe it was already an address, try lookup
+            for acc in self.accounts.values():
+                if str(acc.address).lower() == str(deployer_account.address).lower():
+                    resolved_from_tag = acc.tag
+                    break
+
+        from iwa.core.db import log_transaction
+        log_transaction(
+            tx_hash=tx_hash,
+            from_addr=deployer_account.address,
+            to_addr=contract_address,
+            token="Native", # or chain native currency
+            amount_wei=0, # Deployment might Have value, but usually 0 for this helper
+            chain=chain_name,
+            from_tag=resolved_from_tag or deployer_tag_or_address,
+            to_tag=tag,
+            tags=["safe-deployment"]
         )
 
-        safe_account = StoredSafeAccount(
-            address=create_tx.contract_address,
-            tag=tag,
-            signers=owner_addresses,
-            threshold=threshold,
-            chains=[chain_name],
-        )
-        self.accounts[safe_account.address] = safe_account
+        # Check if already exists
+        if contract_address in self.accounts and isinstance(self.accounts[contract_address], StoredSafeAccount):
+            safe_account = self.accounts[contract_address]
+            if chain_name not in safe_account.chains:
+                safe_account.chains.append(chain_name)
+            # Update other fields if needed? Tag should match usually.
+        else:
+            safe_account = StoredSafeAccount(
+                tag=tag or f"Safe {contract_address[:6]}",
+                address=contract_address,
+                chains=[chain_name],  # Start with just this chain
+                threshold=threshold,
+                signers=owner_addresses,
+            )
+            self.accounts[contract_address] = safe_account
+
         self.save()
-        return safe_account
+        return safe_account, tx_hash
 
     def redeploy_safes(self):
         """Redeploy all safes to ensure they exist on all chains"""

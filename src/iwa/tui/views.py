@@ -1,19 +1,16 @@
 """TUI Views for the IWA application."""
 
 import datetime
+import json
 import threading
+import time
 from typing import List, Tuple
 
-try:
-    with open("debug_trace.txt", "w") as f:
-        f.write("MODULE_LOADED\n")
-except Exception:
-    pass
-
+from rich.markup import escape
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Center, Horizontal, HorizontalScroll, Vertical
+from textual.containers import Center, Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
@@ -21,12 +18,13 @@ from textual.widgets import (
     DataTable,
     Input,
     Label,
-    RadioButton,
-    RadioSet,
     Select,
+    SelectionList,
+    # Selection,
 )
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.db import SentTransaction
 from iwa.core.models import Config, StoredSafeAccount
 from iwa.core.monitor import EventMonitor
 from iwa.core.pricing import PriceService
@@ -37,13 +35,8 @@ logger = configure_logger()
 
 
 def trace(msg):
-    """Write a debug trace message to a file."""
-    try:
-        with open("debug_trace.txt", "a") as f:
-            ts = datetime.datetime.now().strftime("%H:%M:%S.%f")
-            f.write(f"[{ts}] {msg}\n")
-    except Exception:
-        pass
+    """No-op trace."""
+    pass
 
 
 def run_monitor_thread(monitor: EventMonitor):
@@ -53,11 +46,11 @@ def run_monitor_thread(monitor: EventMonitor):
     return t
 
 
-class CreateAddressModal(ModalScreen):
-    """Modal screen for creating a new wallet/address."""
+class CreateEOAModal(ModalScreen):
+    """Modal screen for creating a new EOA wallet."""
 
     CSS = """
-    CreateAddressModal {
+    CreateEOAModal {
         align: center middle;
     }
     #dialog {
@@ -80,18 +73,10 @@ class CreateAddressModal(ModalScreen):
         width: 100%;
         margin-bottom: 2;
     }
-    #type_radio {
-        width: 100%;
-        margin-bottom: 2;
-    }
     #btn_row {
         height: 3;
         width: 100%;
         align: center middle;
-    }
-    RadioButton {
-        width: 100%;
-        padding-left: 1;
     }
     Button {
         margin: 0 1;
@@ -101,34 +86,119 @@ class CreateAddressModal(ModalScreen):
     def compose(self) -> ComposeResult:
         """Compose the modal UI."""
         with Vertical(id="dialog"):
-            yield Label("Create New Wallet", classes="header")
-
-            # Tag Input
+            yield Label("Create New EOA Wallet", classes="header")
             yield Label("Tag (Name):")
-            yield Input(placeholder="e.g. My Wallet", id="tag_input")
-
-            # Type Selection
-            yield Label("Type:")
-            with RadioSet(id="type_radio"):
-                yield RadioButton("Standard (EOA)", value=True, id="eoa")
-                yield RadioButton("Safe (Multisig)", id="safe")
-
-            # Buttons
+            yield Input(placeholder="e.g. My My EOA", id="tag_input")
             with Horizontal(id="btn_row"):
                 yield Button("Cancel", id="cancel")
                 yield Button("Create", variant="primary", id="create")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press in modal."""
+        """Handle button press."""
         if event.button.id == "create":
             tag = self.query_one("#tag_input").value
-            is_safe = self.query_one("#safe").value
-            self.dismiss((tag, is_safe))
+            self.dismiss(tag)
         elif event.button.id == "cancel":
             self.dismiss(None)
 
 
-class WalletsView(Vertical):
+class CreateSafeModal(ModalScreen):
+    """Modal screen for creating a new Safe wallet."""
+
+    CSS = """
+    CreateSafeModal {
+        align: center middle;
+    }
+    #dialog {
+        padding: 1 2;
+        width: 70;
+        height: auto;
+        max-height: 90%;
+        border: thick $background 80%;
+        background: $surface;
+        overflow-y: auto;
+    }
+    #dialog Label {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    .header {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 2;
+    }
+    #tag_input {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    #threshold_input {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    SelectionList {
+        height: 8;
+        margin-bottom: 2;
+        border: solid $secondary;
+    }
+    #btn_row {
+        height: 3;
+        width: 100%;
+        align: center middle;
+    }
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, existing_accounts: List[Tuple[str, str]]):
+        """Init with list of (tag, address) tuples."""
+        super().__init__()
+        self.existing_accounts = existing_accounts
+
+    def compose(self) -> ComposeResult:
+        """Compose the modal UI."""
+        with Vertical(id="dialog"):
+            yield Label("Create New Safe Wallet", classes="header")
+
+            yield Label("Tag (Name):")
+            yield Input(placeholder="e.g. My Safe", id="tag_input")
+
+            yield Label("Threshold (Min signatures):")
+            yield Input(placeholder="1", id="threshold_input", type="integer")
+
+            yield Label("Owners (select multiple):")
+            # Using SelectionList for multi-selection
+            options = [(f"{tag} ({addr})", addr) for tag, addr in self.existing_accounts]
+            yield SelectionList[str](*options, id="owners_list")
+
+            yield Label("Chains (select multiple):")
+            from iwa.core.chain import ChainInterfaces
+            chain_options = [(name.title(), name) for name, _ in ChainInterfaces().items()]
+            yield SelectionList[str](*chain_options, id="chains_list")
+
+            with Horizontal(id="btn_row"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Create", variant="primary", id="create")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "create":
+            tag = self.query_one("#tag_input").value
+            threshold_str = self.query_one("#threshold_input").value
+            owners = self.query_one("#owners_list").selected
+            chains = self.query_one("#chains_list").selected
+
+            try:
+                threshold = int(threshold_str)
+            except ValueError:
+                threshold = 1
+
+            self.dismiss({"tag": tag, "threshold": threshold, "owners": owners, "chains": chains})
+        elif event.button.id == "cancel":
+            self.dismiss(None)
+
+
+class WalletsView(VerticalScroll):
     """View for managing wallets."""
 
     BINDINGS = [
@@ -141,7 +211,7 @@ class WalletsView(Vertical):
         super().__init__()
         self.wallet = wallet
         self.active_chain = "gnosis"
-        self.monitor = None
+        self.monitors = []
         # Stores set of checked tokens (names) per chain
         self.chain_token_states: dict[str, set[str]] = {
             "gnosis": set(),
@@ -156,16 +226,11 @@ class WalletsView(Vertical):
         """Called when view is mounted."""
         # Initialize UI state
         await self.refresh_ui_for_chain()
+        self.refresh_accounts()
         self.start_monitor()
 
-        # Setup Tx Table
-        tx_table = self.query_one("#tx_table", DataTable)
-        tx_table.add_column("Time", width=22)
-        tx_table.add_column("From", width=20)
-        tx_table.add_column("To", width=20)
-        tx_table.add_column("Token", width=10)
-        tx_table.add_column("Amount", width=12)
-        tx_table.add_column("Status", width=12)
+        # Initial column setup
+        self.setup_tx_table_columns()
 
         # Load recent txs
         self.load_recent_txs()
@@ -212,13 +277,22 @@ class WalletsView(Vertical):
 
             # Accounts Table
             yield DataTable(id="accounts_table")
-            # Button for creating new wallets
+            # Buttons for creating new wallets
             with Center():
-                yield Button(
-                    "Create Wallet",
-                    id="create_address_btn",
-                    variant="primary",
-                    classes="create-btn",
+                yield Horizontal(
+                    Button(
+                        "Create EOA",
+                        id="create_eoa_btn",
+                        variant="primary",
+                        classes="create-btn",
+                    ),
+                    Button(
+                        "Create Safe",
+                        id="create_safe_btn",
+                        variant="warning",
+                        classes="create-btn",
+                    ),
+                    classes="btn-group",
                 )
             trace("COMPOSE finished yielding")
         except Exception as e:
@@ -236,6 +310,26 @@ class WalletsView(Vertical):
         yield Label("Recent Transactions", classes="header")
         yield DataTable(id="tx_table")
 
+    def setup_tx_table_columns(self) -> None:
+        """Ensure the transaction table has the correct columns."""
+        try:
+            table = self.query_one("#tx_table", DataTable)
+            if not table.columns:
+                table.add_column("Time", width=22)
+                table.add_column("Chain", width=10)
+                table.add_column("From", width=20)
+                table.add_column("To", width=20)
+                table.add_column("Token", width=10)
+                table.add_column("Amount", width=12)
+                table.add_column("Value (€)", width=12)
+                table.add_column("Status", width=12)
+                table.add_column("Hash", width=22)
+                table.add_column("Gas (wei)", width=12)
+                table.add_column("Gas (€)", width=10)
+                table.add_column("Tags", width=20)
+        except Exception as e:
+            logger.error(f"Failed to setup tx table columns: {e}")
+
     def action_refresh(self) -> None:
         """Manual refresh action."""
         self.notify("Refreshing accounts...", severity="info")
@@ -251,11 +345,9 @@ class WalletsView(Vertical):
         self.refresh_table_structure_and_data()
 
         # Update Recent Transactions
-        tx_table = self.query_one("#tx_table", DataTable)
-        tx_table.clear()
-
-        for tx in reversed(self.tx_history):
-            tx_table.add_row(*tx)
+        # Update Recent Transactions
+        # Reload from DB instead of using memory history to persist across chain switches
+        self.load_recent_txs()
 
     def refresh_table_structure_and_data(self) -> None:  # noqa: C901
         """Rebuild the accounts table structure and data."""
@@ -266,13 +358,13 @@ class WalletsView(Vertical):
         table.add_column("Tag", width=12)
         table.add_column("Address", width=44)
         table.add_column("Type", width=6)
-        table.add_column(native_symbol.upper(), width=12)
+        table.add_column(Text(native_symbol.upper(), justify="center"), width=12)
 
         # Add all token columns available on this chain
         token_names = []
         if chain_interface:
             for token_name in chain_interface.tokens.keys():
-                table.add_column(f"{token_name.upper()}", width=12)
+                table.add_column(Text(f"{token_name.upper()}", justify="center"), width=12)
                 token_names.append(token_name)
 
         # Populate Rows
@@ -286,37 +378,45 @@ class WalletsView(Vertical):
         needs_fetch = False
 
         for account in self.wallet.key_storage.accounts.values():
-            acct_type = "Safe" if isinstance(account, StoredSafeAccount) else "EOA"
-            row_key = account.address
-
-            # Ensure cache exists for this address
-            if account.address not in self.balance_cache[current_chain]:
-                self.balance_cache[current_chain][account.address] = {}
-
-            # 1. Native Balance
-            cached_native = self.balance_cache[current_chain][account.address].get("NATIVE")
-            if cached_native:
-                native_cell = cached_native
-            else:
-                native_cell = "Loading..."
-                needs_fetch = True
-
-            cells = [Text(account.tag, style="green"), account.address, acct_type, native_cell]
-
-            # 2. Token Balances
-            for _i, token in enumerate(token_names):
-                if token in self.chain_token_states.get(current_chain, set()):
-                    cached_token = self.balance_cache[current_chain][account.address].get(token)
-                    if cached_token:
-                        cells.append(cached_token)
-                    else:
-                        cells.append("Loading...")
-                        # If a token is visible but not cached, we need a fetch
-                        needs_fetch = True
+            try:
+                if isinstance(account, StoredSafeAccount):
+                    if current_chain not in account.chains:
+                        continue
+                    acct_type = "Safe"
                 else:
-                    cells.append("")
+                    acct_type = "EOA"
+                row_key = account.address
 
-            table.add_row(*cells, key=row_key)
+                # Ensure cache exists for this address
+                if account.address not in self.balance_cache[current_chain]:
+                    self.balance_cache[current_chain][account.address] = {}
+
+                # 1. Native Balance
+                cached_native = self.balance_cache[current_chain][account.address].get("NATIVE")
+                if cached_native:
+                    native_cell = cached_native
+                else:
+                    native_cell = "Loading..."
+                    needs_fetch = True
+
+                cells = [Text(account.tag, style="green"), escape(account.address), acct_type, native_cell]
+
+                # 2. Token Balances
+                for _i, token in enumerate(token_names):
+                    if token in self.chain_token_states.get(current_chain, set()):
+                        cached_token = self.balance_cache[current_chain][account.address].get(token)
+                        if cached_token:
+                            cells.append(cached_token)
+                        else:
+                            cells.append("Loading...")
+                            # If a token is visible but not cached, we need a fetch
+                            needs_fetch = True
+                    else:
+                        cells.append("")
+
+                table.add_row(*cells, key=row_key)
+            except Exception as e:
+                logger.error(f"Error processing account {account.address}: {e}")
 
         if needs_fetch:
             # Trigger the single sequential worker
@@ -378,12 +478,15 @@ class WalletsView(Vertical):
 
     # --- Async Fetchers ---
     @work(exclusive=False, thread=True)
-    def fetch_all_balances(self, chain_name: str, token_names: List[str]) -> None:  # noqa: C901
-        """Fetch all balances for the chain sequentially."""
+    def fetch_all_balances(self, chain_name: str, token_names: List[str]) -> None:
+        """Fetch all balances for the chain sequentially (Worker wrapper)."""
+        self._fetch_all_balances_impl(chain_name, token_names)
+
+    def _fetch_all_balances_impl(self, chain_name: str, token_names: List[str]) -> None:  # noqa: C901
+        """Fetch all balances for the chain sequentially (Implementation)."""
         trace(f"WORKER START: {chain_name}")
 
         logger.info(f"WORKER START: Fetching all balances for {chain_name}")
-        import time
 
         # We iterate over a snapshot of accounts to avoid modification issues
         accounts = list(self.wallet.key_storage.accounts.values())
@@ -445,12 +548,22 @@ class WalletsView(Vertical):
             )
 
             # --- Token Balances ---
+            # Retrieve full list of tokens for this chain to determine correct column index
+            chain_interface = ChainInterfaces().get(chain_name)
+            all_chain_tokens = list(chain_interface.tokens.keys()) if chain_interface else []
+
             for i, token in enumerate(token_names):
                 # Check if this token is enabled
                 if token not in self.chain_token_states.get(chain_name, set()):
                     continue
 
-                col_idx = 4 + i
+                # Determine correct column index based on full list
+                try:
+                    token_idx = all_chain_tokens.index(token)
+                    col_idx = 4 + token_idx
+                except ValueError:
+                    logger.error(f"Token {token} not found in chain {chain_name} tokens")
+                    continue
 
                 # Check cache
                 cached_token = self.balance_cache.get(chain_name, {}).get(address, {}).get(token)
@@ -485,7 +598,7 @@ class WalletsView(Vertical):
                             logger.error(f"[{chain_name}] Failed token {token} {address}: {e}")
                             if "429" in str(e):
                                 self.app.call_from_thread(
-                                    self.notify, f"Rate Limit {token}", severity="error"
+                                    self.notify, f"Rate Limit {escape(token)}", severity="error"
                                 )
                         else:
                             self.app.call_from_thread(
@@ -513,14 +626,18 @@ class WalletsView(Vertical):
         """Start the background transaction monitor."""
         self.stop_monitor()
         addresses = [acc.address for acc in self.wallet.key_storage.accounts.values()]
-        self.monitor = EventMonitor(addresses, self.monitor_callback, self.active_chain)
-        self.monitor_worker = run_monitor_thread(self.monitor)
+
+        for chain_name, interface in ChainInterfaces().items():
+            if interface.chain.rpc:
+                monitor = EventMonitor(addresses, self.monitor_callback, chain_name)
+                run_monitor_thread(monitor)
+                self.monitors.append(monitor)
 
     def stop_monitor(self) -> None:
         """Stop the background transaction monitor."""
-        if self.monitor:
-            self.monitor.stop()
-            self.monitor = None
+        for monitor in self.monitors:
+            monitor.stop()
+        self.monitors.clear()
 
     def monitor_callback(self, txs: List[dict]) -> None:
         """Handle new transactions from the monitor thread."""
@@ -528,34 +645,68 @@ class WalletsView(Vertical):
 
     def handle_new_txs(self, txs: List[dict]) -> None:
         """Process new transactions on the main thread."""
-        self.refresh_accounts()  # Fetch new balances
+        try:
+            self.refresh_accounts()  # Fetch new balances
+            self.setup_tx_table_columns()
+            table = self.query_one("#tx_table", DataTable)
 
-        table = self.query_one("#tx_table", DataTable)
-        import datetime
+            for tx in txs:
+                # Format Time
+                if tx.get("timestamp"):
+                    ts = datetime.datetime.fromtimestamp(tx["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    ts = "Recent"
 
-        for tx in txs:
-            # Format Time
-            if tx.get("timestamp"):
-                ts = datetime.datetime.fromtimestamp(tx["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                ts = "Recent"
+                # Resolve Names
+                chain_str = tx.get("chain", "?").title()
+                from_str = self.resolve_tag(tx["from"])
+                to_str = self.resolve_tag(tx["to"])
+                token_str = tx["token"]
 
-            # Resolve Names
-            from_str = self.resolve_tag(tx["from"])
-            to_str = self.resolve_tag(tx["to"])
-            token_str = tx["token"]
+                # Amount
+                val = tx["value"]
+                if val > 0 and token_str == "NATIVE":
+                    amount_str = f"{val / 10**18:.4f}"
+                else:
+                    amount_str = "?"  # hard to say for tokens without decimals
 
-            # Amount
-            val = tx["value"]
-            if val > 0 and token_str == "NATIVE":
-                amount_str = f"{val / 10**18:.4f}"
-            else:
-                amount_str = "?"  # hard to say for tokens without decimals
+                status = "[green]Detected[/green]"
 
-            status = "[green]Detected[/green]"
+                # Normalize Hash
+                tx_hash = tx["hash"]
+                if not tx_hash.startswith("0x"):
+                    tx_hash = "0x" + tx_hash
 
-            table.add_row(ts, from_str, to_str, token_str, amount_str, status, key=tx["hash"])
-            self.notify(f"New transaction detected! {tx['hash'][:6]}...", severity="info")
+                if tx_hash in table.rows:
+                    continue
+
+                table.add_row(
+                    ts,
+                    chain_str,
+                    from_str,
+                    to_str,
+                    token_str,
+                    amount_str,
+                    "",  # Value
+                    status,
+                    tx_hash[:10] + "...",
+                    "?",  # Gas
+                    "?",  # Gas Val
+                    "",  # Tags - will be enriched later
+                    key=tx_hash
+                )
+                # Only notify for incoming transactions (not from our own accounts)
+                is_outgoing = False
+                for acc in self.wallet.key_storage.accounts.values():
+                    if acc.address.lower() == str(tx["from"]).lower():
+                        is_outgoing = True
+                        break
+
+                if not is_outgoing:
+                    self.notify(f"New transaction detected! {tx['hash'][:6]}...", severity="info")
+
+        except Exception as e:
+            logger.error(f"Error handling new transactions: {e}")
 
         self.enrich_and_log_txs(txs)
 
@@ -575,32 +726,109 @@ class WalletsView(Vertical):
         return f"{address[:6]}...{address[-4:]}"
 
     @on(Button.Pressed)
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:  # noqa: C901
         """Handle button presses in the WalletsView."""
-        if event.button.id == "create_address_btn":
+        if event.button.id == "create_eoa_btn":
 
-            def create_handler(result):
-                if result:
-                    tag, is_safe = result
+            def create_eoa_handler(result_tag):
+                if result_tag is not None:
+                    # Tag can be empty string, in which case we auto-gen
+                    tag = result_tag
                     if not tag:
                         tag = f"Account {len(self.wallet.key_storage.accounts) + 1}"
 
-                    if is_safe:
-                        self.notify(
-                            "Safe creation requires more config (signers). Created EOA for now.",
-                            severity="warning",
-                        )
-                        self.wallet.key_storage.create_account(tag)
-                    else:
-                        self.wallet.key_storage.create_account(tag)
+                    self.wallet.key_storage.create_account(tag)
+                    self.notify(f"Created new EOA: {escape(tag)}")
 
-                    self.notify(f"Created new account: {tag}")
-                    self.refresh_accounts()
+            self.app.push_screen(CreateEOAModal(), create_eoa_handler)
 
-            self.app.push_screen(CreateAddressModal(), create_handler)
+        elif event.button.id == "create_safe_btn":
+            # Pass existing accounts to modal
+            accounts_list = [
+                (acc.tag, acc.address) for acc in self.wallet.key_storage.accounts.values()
+            ]
+
+            def create_safe_handler(result_dict):
+                if result_dict:
+                    tag = result_dict.get("tag")
+                    threshold = result_dict.get("threshold", 1)
+                    owners = result_dict.get("owners", [])
+                    chains = result_dict.get("chains", [])
+
+                    if not tag:
+                        tag = f"Safe {len(self.wallet.key_storage.accounts) + 1}"
+
+                    if not owners:
+                        self.notify("Safe creation failed: No owners selected.", severity="error")
+                        return
+
+                    if not chains:
+                        self.notify("Safe creation failed: No chains selected.", severity="error")
+                        return
+
+                    self.create_safe_worker(tag, threshold, owners, chains)
+
+            self.app.push_screen(CreateSafeModal(accounts_list), create_safe_handler)
 
         elif event.button.id == "send_btn":
             self.send_transaction()
+
+    @work(exclusive=False, thread=True)
+    def create_safe_worker(self, tag: str, threshold: int, owners: List[str], chains: List[str]) -> None:
+        """Background worker to create a Safe."""
+        import time
+        salt_nonce = int(time.time() * 1000)
+
+        # Iterate over selected chains
+        from iwa.core.chain import ChainInterfaces
+
+        for chain_name in chains:
+            try:
+                interface = ChainInterfaces().get(chain_name)
+            except ValueError:
+                continue
+
+            if not interface.chain.rpc:
+                logger.warning(f"Skipping Safe deployment on {chain_name} (No RPC)")
+                self.app.call_from_thread(
+                    self.notify, f"Skipping {escape(chain_name)}: No RPC", severity="warning"
+                )
+                continue
+
+            try:
+                self.app.call_from_thread(
+                    self.notify,
+                    f"Deploying Safe '{escape(tag)}' on {escape(chain_name)}...",
+                    severity="info",
+                )
+
+                # Use 'master' as deployer as per requirements
+                deployer = "master"
+
+                # Call KeyStorage.create_safe
+                safe_account, tx_hash = self.wallet.key_storage.create_safe(
+                    deployer_tag_or_address=deployer,
+                    owner_tags_or_addresses=owners,
+                    threshold=threshold,
+                    chain_name=chain_name,
+                    tag=tag,
+                    salt_nonce=salt_nonce,
+                )
+
+
+                self.app.call_from_thread(
+                    self.notify,
+                    f"Safe '{escape(tag)}' successfully created on {escape(chain_name)}!",
+                    severity="success",
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to create Safe on {chain_name}: {e}")
+                self.app.call_from_thread(
+                    self.notify, f"Error creating Safe on {escape(chain_name)}: {escape(str(e))}", severity="error"
+                )
+
+        self.app.call_from_thread(self.refresh_accounts)
 
     @on(Select.Changed, "#chain_select")
     async def on_chain_changed(self, event: Select.Changed) -> None:
@@ -624,6 +852,9 @@ class WalletsView(Vertical):
         self.query_one("#accounts_header", Label).update(
             f"Accounts ({self.active_chain.capitalize()})"
         )
+
+        # Refresh table structure (columns) and data for the new chain
+        self.refresh_accounts()
 
         # 1. Rebuild Token Toggles
         scroll = self.query_one("#token_toggles", Horizontal)
@@ -750,6 +981,28 @@ class WalletsView(Vertical):
                 self.app.copy_to_clipboard(event.value)
                 self.notify("Copied address to clipboard (Textual)")
 
+    @on(DataTable.CellSelected, "#tx_table")
+    def on_tx_cell_selected(self, event: DataTable.CellSelected) -> None:
+        """Handle click on transaction table cell (copy hash)."""
+        # Try to find which column we clicked by label
+        try:
+            columns = list(event.data_table.columns.values())
+            col_label = str(columns[event.coordinate.column].label)
+        except Exception:
+            col_label = ""
+
+        if "Hash" in col_label:
+            # The full hash is stored as the row key
+            full_hash = str(event.cell_key.row_key.value)
+            try:
+                import pyperclip
+                pyperclip.copy(full_hash)
+                self.notify(f"Copied hash: {full_hash[:6]}...", severity="info")
+            except Exception as e:
+                logger.error(f"Clipboard copy failed: {e}")
+                self.app.copy_to_clipboard(full_hash)
+                self.notify(f"Copied hash (Textual): {full_hash[:6]}...", severity="info")
+
     def send_transaction(self) -> None:
         """Handle send button press to trigger transaction."""
         try:
@@ -769,7 +1022,11 @@ class WalletsView(Vertical):
 
     @work(exclusive=True, thread=True)
     def send_tx_worker(self, f, t, token, amount) -> None:
-        """Execute transaction sending in background thread."""
+        """Execute transaction sending (Worker wrapper)."""
+        self._send_tx_worker_impl(f, t, token, amount)
+
+    def _send_tx_worker_impl(self, f, t, token, amount) -> None:
+        """Execute transaction sending in background thread (Implementation)."""
         try:
             chain = self.active_chain
             # Convert amount to wei (assuming 18 decimals for now)
@@ -784,19 +1041,32 @@ class WalletsView(Vertical):
                 chain_name=chain,
             )
 
-            self.app.call_from_thread(self.notify, f"Sent! Hash: {tx_hash}")
-            self.app.call_from_thread(self.add_tx_history_row, f, t, token, amount, "Pending")
+            self.app.call_from_thread(self.notify, "Transaction sent successfully!", severity="success")
+            self.app.call_from_thread(self.add_tx_history_row, f, t, token, amount, "Pending", tx_hash)
         except Exception as e:
-            self.app.call_from_thread(self.notify, f"Error: {e}", severity="error")
+            self.app.call_from_thread(
+                self.notify, f"Error: {escape(str(e))}", severity="error"
+            )
             self.app.call_from_thread(self.update_last_tx_status, "[red]Failed[/red]")
 
-    def add_tx_history_row(self, f, t, token, amt, status):
+    async def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
         """Add a new row to the transaction history table directly."""
-        import datetime
-
         ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            self.query_one("#tx_table", DataTable).add_row(ts, f, t, token, amt, status)
+            self.query_one("#tx_table", DataTable).add_row(
+                ts,
+                self.active_chain.capitalize(),
+                f,
+                t,
+                token,
+                amount,
+                "",  # Value - placeholder
+                status,
+                (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..." if tx_hash else "",
+                "?",  # Gas
+                "?",  # Gas Val
+                "",   # Tags - will be updated from DB or enrichment
+            )
         except Exception:
             pass
 
@@ -816,10 +1086,11 @@ class WalletsView(Vertical):
 
             from iwa.core.db import SentTransaction
 
+            self.setup_tx_table_columns()
+
             cutoff = dt.datetime.now() - dt.timedelta(hours=24)
 
-            # Simple query - we might need to filter by chain if SentTx has chain info
-            # Assuming SentTransaction stores values compatible
+            # Query all transactions ordered by time
             recent = (
                 SentTransaction.select()
                 .where(SentTransaction.timestamp > cutoff)
@@ -831,11 +1102,54 @@ class WalletsView(Vertical):
 
             for tx in recent:
                 ts = tx.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                f = tx.from_address
-                t = tx.to_address
-                amt = f"€{tx.value_eur:.2f}"
-                status = "Confirmed"  # Valid assumption for historic DB txs
-                table.add_row(ts, f, t, tx.token_symbol or "UNK", amt, status, key=tx.tx_hash)
+                # Prefer tags over addresses
+                f = tx.from_tag or tx.from_address
+                t = tx.to_tag or tx.to_address
+
+                # Token Symbol: If it says Native/NATIVE, get the actual symbol for the chain
+                token_symbol = tx.token
+                if token_symbol and token_symbol.upper() in ["NATIVE", "NATIVE CURRENCY"]:
+                    chain_interface = ChainInterfaces().get(tx.chain)
+                    token_symbol = chain_interface.chain.native_currency if chain_interface else "Native"
+
+                # Format Amount (assuming 18 decimals for simplicity or raw string)
+                try:
+                    amt_val = float(tx.amount_wei) / 10**18
+                    amt_str = f"{amt_val:.4f}"
+                except (ValueError, TypeError):
+                    amt_str = tx.amount_wei or "?"
+
+                val_eur = f"€{(tx.value_eur or 0.0):.2f}"
+                status = "[green]Confirmed[/green]"
+
+                # Gas in wei
+                gas_str = str(tx.gas_cost or "0")
+
+                if tx.gas_value_eur is not None:
+                    if tx.gas_value_eur < 0.0001 and tx.gas_value_eur > 0:
+                        gas_eur = f"€{tx.gas_value_eur:.8f}"
+                    elif tx.gas_value_eur < 0.01 and tx.gas_value_eur > 0:
+                        gas_eur = f"€{tx.gas_value_eur:.6f}"
+                    else:
+                        gas_eur = f"€{tx.gas_value_eur:.4f}"
+                else:
+                    gas_eur = "?"
+
+                table.add_row(
+                    ts,
+                    escape(str(tx.chain).capitalize()),
+                    escape(f) if f else "",
+                    escape(t) if t else "",
+                    escape(token_symbol or "UNK"),
+                    escape(amt_str),
+                    escape(val_eur),
+                    status,
+                    escape((tx.tx_hash if tx.tx_hash.startswith("0x") else f"0x{tx.tx_hash}")[:10] + "..."),
+                    escape(gas_str),
+                    escape(gas_eur),
+                    escape(", ".join(json.loads(tx.tags)) if tx.tags else ""),
+                    key=tx.tx_hash if tx.tx_hash.startswith("0x") else f"0x{tx.tx_hash}",
+                )
         except Exception as e:
             logger.error(f"Failed to load recent txs: {e}")
             print(f"DEBUG: Failed to load recent txs: {e}")
@@ -849,51 +1163,102 @@ class WalletsView(Vertical):
         # Mapping for CoinGecko
         cg_ids = {
             "ethereum": "ethereum",
-            "gnosis": "gnosis",
+            "gnosis": "dai",  # Use DAI/xDAI price for Gnosis native
             "base": "ethereum",
         }
-        cg_id = cg_ids.get(self.active_chain, "ethereum")
 
-        price = self.price_service.get_token_price(cg_id, "eur")
-        interface = ChainInterfaces().get(self.active_chain)
+        # Cache prices for this batch to minimize API calls if there are many txs same chain
+        price_cache = {}
 
         for tx in txs:
             try:
+                tx_hash = tx.get("hash")
+                tx_chain = tx.get("chain", self.active_chain)
+                interface = ChainInterfaces().get(tx_chain)
+                if not interface:
+                    logger.warning(f"No interface for chain {tx_chain}, skipping enrichment for {tx_hash}")
+                    continue
+
+                cg_id = cg_ids.get(tx_chain, "ethereum")
+                if cg_id not in price_cache:
+                    price_cache[cg_id] = self.price_service.get_token_price(cg_id, "eur")
+
+                price = price_cache[cg_id]
+
                 # Basic enrichment
                 value_wei = int(tx.get("value", 0))
-                value_eur = 0.0
-                token_val = "Native"
+                value_eur = None
+                token_val = tx.get("token", "NATIVE")
 
-                # Check if it's a token transfer (ERC20)
-                # In a real monitor, we'd parse logs or input data.
-                # Here we assume native for simplicity or use what Monitor provided?
-                # Monitor provided raw tx dict?
-                # Let's assume native for now if 'token' key not set
-                if "token" in tx:
-                    token_val = tx["token"]
+                # If generic monitor token, try to resolve symbol and value
+                if token_val == "TOKEN" and tx.get("contract_address"):
+                    contract_addr = tx["contract_address"]
+                    token_val = interface.get_token_symbol(contract_addr)
 
-                if token_val == "Native" or token_val == interface.chain.native_currency:
-                    value_eth = value_wei / 10**18
-                    value_eur = value_eth * price
+                    # Decimals for correct value calculation
+                    decimals = interface.get_token_decimals(contract_addr)
+                    value_token = value_wei / (10**decimals)
+                else:
+                    value_token = value_wei / 10**18
 
-                # Gas
-                gas_cost_wei = int(tx.get("gasPrice", 0)) * int(tx.get("gasUsed", 0))
+                if token_val.upper() in ["NATIVE", "NATIVE CURRENCY"] or token_val == interface.chain.native_currency:
+                    # Enforce symbol usage (e.g. xDAI, ETH)
+                    token_val = interface.chain.native_currency
+                    if price is not None:
+                        value_eur = value_token * price
+                else:
+                    # Resolve token-specific price
+                    token_cg_ids = {
+                        "OLAS": "autonolas",
+                        "USDC": "usd-coin",
+                        "DAI": "dai",
+                        "WXDAI": "dai",
+                        "SDAI": "dai",
+                    }
+                    t_cg_id = token_cg_ids.get(token_val.upper())
+                    if t_cg_id:
+                        t_price = self.price_service.get_token_price(t_cg_id, "eur")
+                        if t_price:
+                            price = t_price # Update the price used for log_transaction
+                            value_eur = value_token * t_price
 
-                tx_hash = tx.get("hash")
+                # Gas Calculation via Receipt for accuracy
+                try:
+                    receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+                    gas_used = receipt.get("gasUsed", 0)
+                    effective_gas_price = receipt.get("effectiveGasPrice", tx.get("gasPrice", 0))
+                    gas_cost_wei = int(effective_gas_price) * int(gas_used)
+                except Exception:
+                    # Fallback to estimation from tx data
+                    gas_cost_wei = int(tx.get("gasPrice", 0)) * int(tx.get("gasUsed", 0))
+
+                gas_eth = gas_cost_wei / 10**18
+                gas_value_eur = gas_eth * price if price is not None else None
+
+                # Resolve tags
+                from_tag = self.resolve_tag(tx["from"])
+                to_tag = self.resolve_tag(tx["to"])
+
                 log_transaction(
                     tx_hash=tx_hash,
                     from_addr=tx["from"],
+                    from_tag=from_tag,
                     to_addr=tx["to"],
+                    to_tag=to_tag,
                     token=token_val,
                     amount_wei=str(value_wei),
-                    chain=self.active_chain,
+                    chain=tx_chain,
                     price_eur=price,
                     value_eur=value_eur,
                     gas_cost=str(gas_cost_wei),
+                    gas_value_eur=gas_value_eur,
                 )
-                logger.info(f"Logged enriched tx {tx_hash}")
+                logger.info(f"Logged enriched tx {tx_hash} on {tx_chain}")
             except Exception as e:
                 logger.error(f"Failed to enrich/log tx {tx.get('hash')}: {e}")
+
+        # Refresh the UI table to show new enriched data
+        self.app.call_from_thread(self.load_recent_txs)
 
 
 def map_column_index_to_key(table: DataTable, index: int):

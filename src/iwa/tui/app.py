@@ -1,5 +1,7 @@
 """Main TUI Application module."""
 
+import datetime
+
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -15,8 +17,6 @@ def trace(msg):
     """Write debug trace."""
     try:
         with open("debug_trace.txt", "a") as f:
-            import datetime
-
             ts = datetime.datetime.now().strftime("%H:%M:%S.%f")
             f.write(f"[APP] [{ts}] {msg}\n")
     except Exception:
@@ -78,15 +78,28 @@ class IwaApp(App):
         margin: 0 0;
     }
     #accounts_table {
-        margin-top: 0;
+        margin-top: 1;
+        height: 1fr;
+        min-height: 10;
+    }
+    #tx_table {
+        height: 10;
     }
     Tab {
         width: 20;
     }
+    .btn-group {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
     .create-btn {
+        margin-left: 1;
+        margin-right: 1;
         width: auto;
         min-width: 20;
-        height: 3;
     }
     """
 

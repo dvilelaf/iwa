@@ -9,6 +9,7 @@ from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.keys import KeyStorage
 from iwa.core.plugins import PluginLoader
 from iwa.core.wallet import Wallet
+from iwa.tui.app import IwaApp
 
 iwa_cli = typer.Typer(help="iwa command line interface")
 wallet_cli = typer.Typer(help="Manage wallet")
@@ -141,8 +142,6 @@ def erc20_approve(
 @iwa_cli.command("tui")
 def tui():
     """Start Terminal User Interface."""
-    from iwa.tui.app import IwaApp
-
     app = IwaApp()
     app.run()
 

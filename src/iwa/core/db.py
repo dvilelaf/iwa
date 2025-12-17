@@ -1,5 +1,6 @@
 """Database models and utilities."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from peewee import (
     Model,
     SqliteDatabase,
 )
+from loguru import logger
+from playhouse.migrate import SqliteMigrator, migrate
 
 from iwa.core.constants import WALLET_PATH
 
@@ -18,8 +21,17 @@ from iwa.core.constants import WALLET_PATH
 # DB will be ~/.iwa/activity.db
 DB_PATH = Path(WALLET_PATH).parent / "activity.db"
 
-db = SqliteDatabase(str(DB_PATH))
-
+db = SqliteDatabase(
+    str(DB_PATH),
+    pragmas={
+        "journal_mode": "wal",
+        "cache_size": -1 * 64000,
+        "foreign_keys": 1,
+        "ignore_check_constraints": 0,
+        "synchronous": 0,
+        "busy_timeout": 5000,
+    }
+)
 
 class BaseModel(Model):
     """Base Peewee model."""
@@ -39,15 +51,16 @@ class SentTransaction(BaseModel):
     to_address = CharField(index=True)
     to_tag = CharField(null=True)
     token = CharField()  # Contract Address (ERC20) or Symbol (Native)
-    token_symbol = CharField(null=True)
     amount_wei = CharField()  # Store as string to avoid precision loss
     chain = CharField()
     timestamp = DateTimeField(default=datetime.now)
+    status = CharField(default="Pending")
     # Pricing info
     price_eur = FloatField(null=True)
     value_eur = FloatField(null=True)
     gas_cost = CharField(null=True)  # Wei
     gas_value_eur = FloatField(null=True)
+    tags = CharField(null=True)  # JSON-encoded list of strings
 
 
 def init_db():
@@ -58,10 +71,17 @@ def init_db():
     # Simple migration: check if columns exist, if not add them
     # This prevents errors if the DB was already created without these columns
     columns = [c.name for c in db.get_columns("senttransaction")]
+
+    # Deprecated column cleanup
+    if "token_symbol" in columns:
+        try:
+           migrator = SqliteMigrator(db)
+           migrate(migrator.drop_column("senttransaction", "token_symbol"))
+        except Exception as e:
+            print(f"Migration (drop token_symbol) failed: {e}")
+
     if "from_tag" not in columns:
         try:
-            from playhouse.migrate import SqliteMigrator, migrate
-
             migrator = SqliteMigrator(db)
             migrate(
                 migrator.add_column("senttransaction", "from_tag", CharField(null=True)),
@@ -75,11 +95,7 @@ def init_db():
         try:
             # Re-init migrator if needed or reuse
             if "migrator" not in locals():
-                from playhouse.migrate import SqliteMigrator, migrate
-
                 migrator = SqliteMigrator(db)
-            if "migrate" not in locals():
-                from playhouse.migrate import migrate
 
             migrate(
                 migrator.add_column("senttransaction", "price_eur", FloatField(null=True)),
@@ -89,6 +105,14 @@ def init_db():
             )
         except Exception as e:
             print(f"Migration (pricing) failed: {e}")
+
+    if "tags" not in columns:
+        try:
+            if "migrator" not in locals():
+                migrator = SqliteMigrator(db)
+            migrate(migrator.add_column("senttransaction", "tags", CharField(null=True)))
+        except Exception as e:
+            print(f"Migration (tags) failed: {e}")
 
     db.close()
 
@@ -102,28 +126,58 @@ def log_transaction(  # noqa: D103
     chain,
     from_tag=None,
     to_tag=None,
-    token_symbol=None,
     price_eur=None,
     value_eur=None,
     gas_cost=None,
     gas_value_eur=None,
+    tags=None,
 ):
     try:
+        if tx_hash and not tx_hash.startswith("0x"):
+            tx_hash = "0x" + tx_hash
+
         with db:
-            SentTransaction.create(
-                tx_hash=tx_hash,
-                from_address=from_addr,
-                from_tag=from_tag,
-                to_address=to_addr,
-                to_tag=to_tag,
-                token=token,
-                token_symbol=token_symbol,
-                amount_wei=str(amount_wei),
-                chain=chain,
-                price_eur=price_eur,
-                value_eur=value_eur,
-                gas_cost=gas_cost,
-                gas_value_eur=gas_value_eur,
-            )
+            # Try to get existing transaction to preserve tags
+            existing = SentTransaction.get_or_none(SentTransaction.tx_hash == tx_hash)
+            existing_tags = []
+            if existing and existing.tags:
+                try:
+                    existing_tags = json.loads(existing.tags)
+                except Exception:
+                    existing_tags = []
+
+            # Merge tags
+            new_tags = list(tags) if tags else []
+            merged_tags = list(set(existing_tags + new_tags))
+
+            # Smart token resolution: don't let 0-value "NATIVE" update overwrite a real token
+            final_token = token
+            final_amount_wei = str(amount_wei)
+
+            if existing and existing.token and existing.token not in ["TOKEN", "NATIVE"]:
+                # If we have a real token already, and the new one is native with 0 value
+                if token in ["TOKEN", "NATIVE", "xDAI", "ETH"] and int(amount_wei) == 0:
+                    final_token = existing.token
+                    final_amount_wei = existing.amount_wei
+
+            data = {
+                "tx_hash": tx_hash,
+                "from_address": from_addr,
+                "from_tag": from_tag or (existing.from_tag if existing else None),
+                "to_address": to_addr,
+                "to_tag": to_tag or (existing.to_tag if existing else None),
+                "token": final_token,
+                "status": "Confirmed",
+                "amount_wei": final_amount_wei,
+                "chain": chain,
+                "price_eur": price_eur if price_eur is not None else (existing.price_eur if existing else None),
+                "value_eur": value_eur if value_eur is not None else (existing.value_eur if existing else None),
+                "gas_cost": str(gas_cost) if gas_cost is not None else (existing.gas_cost if existing else None),
+                "gas_value_eur": gas_value_eur if gas_value_eur is not None else (existing.gas_value_eur if existing else None),
+                "tags": json.dumps(merged_tags) if merged_tags else (existing.tags if existing else None),
+            }
+
+            SentTransaction.insert(**data).on_conflict_replace().execute()
+
     except Exception as e:
         print(f"Failed to log transaction: {e}")
