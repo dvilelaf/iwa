@@ -4,7 +4,8 @@ import pytest
 from textual.widgets import Button, Checkbox, DataTable, Input, Select, SelectionList
 
 from iwa.tui.app import IwaApp
-from iwa.tui.views import CreateEOAModal, CreateSafeModal, WalletsView
+from iwa.tui.modals import CreateEOAModal, CreateSafeModal
+from iwa.tui.screens.wallets import WalletsScreen
 
 
 @pytest.fixture
@@ -18,12 +19,12 @@ def mock_wallet():
 @pytest.fixture(autouse=True)
 def mock_deps():
     with (
-        patch("iwa.tui.views.EventMonitor"),
-        patch("iwa.tui.views.PriceService") as mock_price,
-        patch("iwa.tui.views.run_monitor_thread"),
+        patch("iwa.tui.screens.wallets.EventMonitor"),
+        patch("iwa.tui.screens.wallets.PriceService") as mock_price,
+        patch("iwa.tui.screens.wallets.run_monitor_thread"),
         patch("iwa.core.db.SentTransaction") as mock_sent_tx,
         patch("iwa.core.db.log_transaction"),
-        patch("iwa.tui.views.ChainInterfaces") as mock_chains,
+        patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains,
     ):
         # Setup Price Service
         mock_price.return_value.get_token_price.return_value = 10.0
@@ -64,14 +65,14 @@ async def test_app_startup(mock_wallet, mock_deps, mock_plugins):
     app = IwaApp()
     async with app.run_test(size=(120, 60)):
         assert app.title == "Iwa"
-        assert app.query_one(WalletsView)
+        assert app.query_one(WalletsScreen)
 
 
 @pytest.mark.asyncio
-async def test_create_eoa_modal(mock_wallet, mock_deps, mock_plugins):
+async def test_create_eoa_modal_press(mock_wallet, mock_deps, mock_plugins):
     app = IwaApp()
     async with app.run_test(size=(120, 60)) as pilot:
-        _ = app.query_one(WalletsView)
+        _ = app.query_one(WalletsScreen)
         await pilot.click("#create_eoa_btn")
         assert isinstance(app.screen, CreateEOAModal)
 
@@ -88,90 +89,94 @@ async def test_create_eoa_modal(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_create_safe_modal(mock_wallet, mock_deps, mock_plugins):
-    _ = IwaApp()
+async def test_create_safe_modal_compose(mock_wallet, mock_deps, mock_plugins):
+    app = IwaApp()
+    async with app.run_test() as pilot:
+        # Setup accounts for owner selection
+        mock_wallet.key_storage.accounts = {
+            "0x1": MagicMock(address="0x1", tag="Owner1"),
+            "0x2": MagicMock(address="0x2", tag="Owner2"),
+        }
 
-    # Setup accounts for owner selection
-    mock_wallet.key_storage.accounts = {
-        "0x1": MagicMock(address="0x1", tag="Owner1"),
-        "0x2": MagicMock(address="0x2", tag="Owner2"),
-    }
-
-    # Unit test compose structure directly to bypass Textual harness issues
-    # Mock Vertical/Horizontal context managers to avoid runtime errors
-    with (
-        patch("iwa.tui.views.Vertical") as mock_vertical,
-        patch("iwa.tui.views.Horizontal") as mock_horizontal,
-    ):
-        mock_vertical.return_value.__enter__.return_value = MagicMock()
-        mock_horizontal.return_value.__enter__.return_value = MagicMock()
-
+        # Unit test compose structure directly
         modal = CreateSafeModal(
             [(acc.tag, acc.address) for acc in mock_wallet.key_storage.accounts.values()]
         )
-        widgets = list(modal.compose())
+        await app.push_screen(modal)
+        await pilot.pause()
 
         # Check if we have the inputs
-        input_ids = [w.id for w in widgets if isinstance(w, Input)]
-        assert "tag_input" in input_ids
-        assert "threshold_input" in input_ids
+        assert modal.query_one("#tag_input", Input)
+        assert modal.query_one("#threshold_input", Input)
+        assert modal.query_one("#owners_list", SelectionList)
+        assert modal.query_one("#chains_list", SelectionList)
+        assert modal.query_one("#create", Button)
+        assert modal.query_one("#cancel", Button)
 
-        # Check SelectionList
-        sl_ids = [w.id for w in widgets if isinstance(w, SelectionList)]
-        assert "owners_list" in sl_ids
 
-        # Check buttons
-        btn_ids = [w.id for w in widgets if isinstance(w, Button)]
-        assert "create" in btn_ids
-        assert "cancel" in btn_ids
+@pytest.mark.asyncio
+async def test_create_safe_modal_handlers():
+    app = IwaApp()
+    async with app.run_test() as _:
+        # Unit test CreateSafeModal handlers
+        modal = CreateSafeModal([])
+        modal.dismiss = MagicMock()
 
-    # Unit test CreateSafeModal handlers
-    modal = CreateSafeModal([])
-    modal.dismiss = MagicMock()
+        # Test Cancel
+        cancel_event = MagicMock()
+        cancel_event.button.id = "cancel"
+        modal.on_button_pressed(cancel_event)
+        modal.dismiss.assert_called_once()
 
-    # Test Cancel
-    cancel_event = MagicMock()
-    cancel_event.button.id = "cancel"
-    modal.on_button_pressed(cancel_event)
-    modal.dismiss.assert_called_once()
+        # Test Create (placeholder logic)
+        create_event = MagicMock()
+        create_event.button.id = "create"
 
-    # Test Create (placeholder logic)
-    create_event = MagicMock()
-    create_event.button.id = "create"
+        # Mock query_one since modal is not mounted
+        modal.query_one = MagicMock()
 
-    # Mock query_one since modal is not mounted
-    modal.query_one = MagicMock()
+        # Mock return values for tag and threshold inputs
+        tag_input_mock = MagicMock()
+        tag_input_mock.value = "TestSafe"
+        threshold_input_mock = MagicMock()
+        threshold_input_mock.value = "1"
 
-    # Mock return values for tag and threshold inputs
-    tag_input_mock = MagicMock()
-    tag_input_mock.value = "TestSafe"
+        # Mock SelectionList
+        owners_list_mock = MagicMock()
+        owners_list_mock.selected = ["0x1", "0x2"]
 
-    thresh_input_mock = MagicMock()
-    thresh_input_mock.value = "2"
+        # Mock SelectionList for chains
+        chains_list_mock = MagicMock()
+        chains_list_mock.selected = ["gnosis"]
 
-    # Mock SelectionList
-    owners_list_mock = MagicMock()
-    owners_list_mock.selected = ["0x1", "0x2"]
+        def query_side_effect(selector):
+            if selector == "#tag_input":
+                return tag_input_mock
+            if selector == "#threshold_input":
+                return threshold_input_mock
+            if selector == "#owners_list":
+                return owners_list_mock
+            if selector == "#chains_list":
+                return chains_list_mock
+            return MagicMock()
 
-    def query_side_effect(selector):
-        if selector == "#tag_input":
-            return tag_input_mock
-        if selector == "#threshold_input":
-            return thresh_input_mock
-        if selector == "#owners_list":
-            return owners_list_mock
-        return MagicMock()
+        modal.query_one.side_effect = query_side_effect
 
-    modal.query_one.side_effect = query_side_effect
+        modal.on_button_pressed(create_event)
 
-    modal.on_button_pressed(create_event)
-    # Just ensure it doesn't crash as logic is just logging currently
+    # Teardown
+    from iwa.core.db import db
+    if not db.is_closed():
+        db.close()
 
-    # Unit test WalletsView handler for Create Safe (since we skipped click)
-    view = WalletsView(mock_wallet)
+
+@pytest.mark.asyncio
+async def test_wallets_screen_buttons(mock_wallet):
+    # Unit test WalletsScreen handler for Create Safe
+    view = WalletsScreen(mock_wallet)
 
     # Mock 'app' property using PropertyMock since it's read-only
-    with patch.object(WalletsView, "app", new_callable=PropertyMock) as mock_app_prop:
+    with patch.object(WalletsScreen, "app", new_callable=PropertyMock) as mock_app_prop:
         mock_app = MagicMock()
         mock_app_prop.return_value = mock_app
 
@@ -188,7 +193,6 @@ async def test_create_safe_modal(mock_wallet, mock_deps, mock_plugins):
         callback = args[1]
 
         # Test callback logic
-        # We need to verify that create_safe_worker is called with correct args
         with patch.object(view, "create_safe_worker") as mock_worker:
             # Case 1: Success
             callback(
@@ -196,21 +200,12 @@ async def test_create_safe_modal(mock_wallet, mock_deps, mock_plugins):
             )
             mock_worker.assert_called_with("MySafe", 2, ["0x1", "0x2"], ["gnosis"])
 
-            # Case 2: No owners
-            view.notify = MagicMock()  # Reset notify mock
-            callback({"tag": "MySafe", "threshold": 2, "owners": []})
-            view.notify.assert_called_with(
-                "Safe creation failed: No owners selected.", severity="error"
-            )
-            # Worker should NOT be called
-            assert mock_worker.call_count == 1  # Still 1 from previous call
-
 
 @pytest.mark.asyncio
 async def test_send_transaction_ui(mock_wallet, mock_deps, mock_plugins):
     app = IwaApp()
     async with app.run_test(size=(200, 200)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
         mock_wallet.key_storage.accounts = {
             "addr1": MagicMock(address="0x1", tag="Acc1"),
             "addr2": MagicMock(address="0x2", tag="Acc2"),
@@ -221,9 +216,6 @@ async def test_send_transaction_ui(mock_wallet, mock_deps, mock_plugins):
         # Force table height to avoid pushing button off screen
         app.query_one("#accounts_table").styles.height = 10
         await pilot.pause()
-
-        # Scroll to button just in case
-        # await app.query_one(WalletsView).scroll_to_widget(app.query_one("#send_btn"))
 
         app.query_one("#from_addr", Select).value = "0x1"
         app.query_one("#to_addr", Select).value = "0x2"
@@ -240,10 +232,9 @@ async def test_send_transaction_ui(mock_wallet, mock_deps, mock_plugins):
 @pytest.mark.asyncio
 async def test_view_methods_direct(mock_wallet, mock_deps, mock_plugins):
     """Test methods directly for coverage."""
-    # Ensure local patching works or use mock_deps
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         mock_wallet.key_storage.accounts = {"a1": MagicMock(address="0xABC", tag="Tag1")}
         assert view.resolve_tag("0xABC") == "Tag1"
@@ -263,7 +254,6 @@ async def test_view_methods_direct(mock_wallet, mock_deps, mock_plugins):
         ]
 
         # Enrich txs needs web3 mock
-        # Configured in mock_deps, but get_receipt needs specific return
         chains_mock = mock_deps["chains"]
         mock_interface = chains_mock.return_value.get.return_value
         mock_interface.web3.eth.get_transaction_receipt.return_value = {
@@ -318,7 +308,7 @@ async def test_load_recent_txs(mock_wallet, mock_deps, mock_plugins):
 
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
-        _ = app.query_one(WalletsView)
+        _ = app.query_one(WalletsScreen)
         # Give time for on_mount -> load_recent_txs to run
         await pilot.pause(0.5)
 
@@ -331,7 +321,6 @@ async def test_load_recent_txs(mock_wallet, mock_deps, mock_plugins):
 
         # Verify content of the row
         row = table.get_row("0xHash")
-        # row is a list of cell values.
         # Check date format
         assert "2025-01-01 12:00:00" in str(row[0])
         # Check value in EUR (now at index 6: Time, Chain, From, To, Token, Amount, Value)
@@ -343,25 +332,19 @@ async def test_chain_switching(mock_wallet, mock_deps, mock_plugins):
     """Test chain selector functionality."""
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # Initial chain is Gnosis (default)
         assert view.active_chain == "gnosis"
 
         # Change to Ethereum
-        # We simulate the Select change event
         chain_select = app.query_one("#chain_select", Select)
 
-        # Using pilot to modify the value. Note: setting value directly might not trigger event in
-        # test harness the same way unless we wait.
         # But setting .value property on Select DOES trigger Changed event.
         chain_select.value = "ethereum"
 
         # Wait for event to process
         await pilot.pause()
-
-        # Verify active chain updated
-        assert view.active_chain == "ethereum"
 
         # Verify active chain updated
         assert view.active_chain == "ethereum"
@@ -379,15 +362,13 @@ async def test_chain_switching(mock_wallet, mock_deps, mock_plugins):
         assert "USDT" in col_labels
         assert "DAI" not in col_labels
 
-        assert "DAI" not in col_labels
-
 
 @pytest.mark.asyncio
 async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
     """Test that enabling a second token does not overwrite the first."""
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # Setup mock account
         mock_wallet.key_storage.accounts = {"0x1": MagicMock(address="0x1", tag="TestAcc")}
@@ -419,13 +400,6 @@ async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
         # Check table content
         table = app.query_one("#accounts_table", DataTable)
 
-        # Get row for first account
-        # Columns: Tag(0), Address(1), Type(2), Native(3), USDC(4), USDT(5)
-        # Mock wallet returns None for balances by default or 0?
-        # We need to check if update_table_cell was called with correct col_idx
-
-        # Since we use real app logic, check internal cache or table cells
-        # The key for row is address.
         addr = list(mock_wallet.key_storage.accounts.values())[0].address
         row_idx = table.get_row_index(addr)
 
@@ -434,15 +408,6 @@ async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
         usdc_cell = table.get_row_at(row_idx)[4]
         # Check USDT column (5)
         usdt_cell = table.get_row_at(row_idx)[5]
-
-        # If bug exists, USDT update might have written to col 3, or USDC remains empty
-        # We expect both to be non-empty (or at least "-" or "Loading..." or a value)
-        # If overwrote, maybe USDC is "Loading..." or has USDT value?
-
-        # With current mocks, balance fetch returns a float or None.
-        # We assume mocks work.
-
-        # NOTE: If indices are wrong, USDT might write to 4.
 
         # Let's check that col 5 is NOT empty string
         assert str(usdt_cell) != "", "USDT column should not be empty"

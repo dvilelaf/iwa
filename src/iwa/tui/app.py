@@ -10,7 +10,7 @@ from textual.widgets import Footer, Header, TabbedContent, TabPane
 from iwa.core.plugins import PluginLoader
 from iwa.core.wallet import Wallet
 from iwa.tui.rpc import RPCView
-from iwa.tui.views import WalletsView
+from iwa.tui.screens.wallets import WalletsScreen
 
 
 def trace(msg):
@@ -131,8 +131,8 @@ class IwaApp(App):
 
         with TabbedContent():
             with TabPane("Wallets"):
-                trace("App COMPOSE: Yielding WalletsView")
-                yield WalletsView(self.wallet)
+                trace("App COMPOSE: Yielding WalletsScreen")
+                yield WalletsScreen(self.wallet)
 
             with TabPane("RPC Status"):
                 yield RPCView()
@@ -151,8 +151,8 @@ class IwaApp(App):
         # Ideally, propagate refresh to active tab
         # For now, just refresh wallets view explicitly if it's there
         try:
-            wallets_view = self.query_one(WalletsView)
-            wallets_view.refresh_accounts()
+            wallets_screen = self.query_one(WalletsScreen)
+            wallets_screen.refresh_accounts()
         except Exception:
             pass
 

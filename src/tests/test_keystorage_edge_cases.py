@@ -4,7 +4,8 @@ import pytest
 
 from iwa.core.keys import KeyStorage
 from iwa.tui.app import IwaApp
-from iwa.tui.views import CreateSafeModal, WalletsView
+from iwa.tui.modals import CreateSafeModal
+from iwa.tui.screens.wallets import WalletsScreen
 
 # --- KeyStorage Tests ---
 
@@ -43,7 +44,7 @@ def test_key_storage_edge_cases(tmp_path):
         storage.sign_transaction({}, "0xUnknown")
 
 
-# --- WalletsView Tests ---
+# --- WalletsScreen Tests ---
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ async def test_wallets_view_actions():
         app = IwaApp()
         # Use run_test context
         async with app.run_test() as _:
-            view = app.query_one(WalletsView)
+            view = app.query_one(WalletsScreen)
 
             # Test action_refresh
             with patch.object(view, "refresh_accounts") as mock_refresh:
@@ -84,7 +85,7 @@ async def test_wallets_view_actions():
 @pytest.mark.asyncio
 async def test_wallets_view_resolve_tag(mock_wallet):
     # Instantiate view directly to use mock wallet easily
-    view = WalletsView(mock_wallet)
+    view = WalletsScreen(mock_wallet)
 
     # resolve_tag iterates wallet.key_storage.accounts.values()
     mock_acc = MagicMock()

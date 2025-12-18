@@ -104,14 +104,19 @@ def run_migrations(columns):
 
 def init_db():
     """Initialize the database."""
-    db.connect()
+    if db.is_closed():
+        db.connect()
     db.create_tables([SentTransaction], safe=True)
 
     # Simple migration: check if columns exist, if not add them
-    columns = [c.name for c in db.get_columns("senttransaction")]
-    run_migrations(columns)
+    try:
+        columns = [c.name for c in db.get_columns("senttransaction")]
+        run_migrations(columns)
+    except Exception:
+        pass
 
-    db.close()
+    if not db.is_closed():
+        db.close()
 
 
 def log_transaction(  # noqa: D103

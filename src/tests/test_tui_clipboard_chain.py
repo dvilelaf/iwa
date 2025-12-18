@@ -4,9 +4,9 @@ import pytest
 from textual.widget import Widget
 
 from iwa.tui.app import IwaApp
-from iwa.tui.views import WalletsView
+from iwa.tui.screens.wallets import WalletsScreen
 
-# --- WalletsView Clipboard Tests ---
+# --- WalletsScreen Clipboard Tests ---
 
 
 @pytest.mark.asyncio
@@ -14,7 +14,7 @@ async def test_wallets_view_clipboard():
     with patch("iwa.core.db.db"):
         app = IwaApp()
         async with app.run_test() as _:
-            view = app.query_one(WalletsView)
+            view = app.query_one(WalletsScreen)
 
             # Test on_account_cell_selected
             mock_event = MagicMock()
@@ -38,7 +38,7 @@ async def test_wallets_view_clipboard():
                 view.on_tx_cell_selected(mock_event_tx)
 
 
-# --- WalletsView Chain Change Tests ---
+# --- WalletsScreen Chain Change Tests ---
 
 
 class DummySelect(Widget):
@@ -54,10 +54,10 @@ async def test_wallets_view_chain_change():
     with patch("iwa.core.db.db"):
         app = IwaApp()
         async with app.run_test() as _:
-            view = app.query_one(WalletsView)
+            view = app.query_one(WalletsScreen)
 
             # Mock ChainInterfaces
-            with patch("iwa.tui.views.ChainInterfaces") as mock_chains:
+            with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
                 mock_interface = MagicMock()
                 mock_interface.chain.rpc = "http://rpc"
                 mock_interface.chain.native_currency = "ETH"
@@ -65,7 +65,7 @@ async def test_wallets_view_chain_change():
                 mock_chains.return_value.get.return_value = mock_interface
 
                 # Patch Select with DummyWidget to satisfy isinstance(w, Widget)
-                with patch("iwa.tui.views.Select", side_effect=DummySelect) as mock_select:
+                with patch("iwa.tui.screens.wallets.Select", side_effect=DummySelect) as mock_select:
                     # Chain changed event
                     mock_event = MagicMock()
                     mock_event.value = "gnosis"

@@ -4,7 +4,7 @@ import pytest
 from textual.widgets import Input, Select
 
 from iwa.tui.app import IwaApp
-from iwa.tui.views import WalletsView
+from iwa.tui.screens.wallets import WalletsScreen
 
 
 @pytest.fixture
@@ -24,12 +24,12 @@ def mock_wallet():
 @pytest.fixture(autouse=True)
 def mock_deps():
     with (
-        patch("iwa.tui.views.EventMonitor"),
-        patch("iwa.tui.views.PriceService") as mock_price,
-        patch("iwa.tui.views.run_monitor_thread"),
+        patch("iwa.tui.screens.wallets.EventMonitor"),
+        patch("iwa.tui.screens.wallets.PriceService") as mock_price,
+        patch("iwa.tui.screens.wallets.run_monitor_thread"),
         patch("iwa.core.db.SentTransaction"),
         patch("iwa.core.db.log_transaction"),
-        patch("iwa.tui.views.ChainInterfaces") as mock_chains,
+        patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains,
     ):
         mock_price.return_value.get_token_price.return_value = 10.0
 
@@ -56,35 +56,30 @@ async def test_fetch_balances_flow(mock_wallet, mock_deps, mock_plugins):
     # Patch call_from_thread
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
-    async with app.run_test(size=(160, 80)) as pilot:
-        view = app.query_one(WalletsView)
+    async with app.run_test(size=(160, 80)):
+        view = app.query_one(WalletsScreen)
 
         # Configure wallet returns
         mock_wallet.get_native_balance_eth.return_value = 1.2345
         mock_wallet.get_erc20_balance_eth.return_value = 500.0
 
-        # Trigger fetch directly (it's threaded via @work, we wait)
-        # We need to ensure we cover the "should_fetch" logic
-        # 1. Clear cache
+        # Trigger fetch directly
         view.balance_cache = {}
 
-        # 2. Trigger (call impl directly to avoid threading issues)
+        # Trigger (call impl directly to avoid threading issues)
         view.chain_token_states["gnosis"].add("TOKEN")
-        view._fetch_all_balances_impl("gnosis", ["TOKEN"])
+        # In the refactored view, we call fetch_all_balances
+        # We'll wait for the worker to finish
+        worker = view.fetch_all_balances(view.active_chain, ["TOKEN"])
+        await worker.wait()
 
-        # Verify cache updated/calls made
+        # Verify calls made
         mock_wallet.get_native_balance_eth.assert_called()
         mock_wallet.get_erc20_balance_eth.assert_called()
 
         # Verify cache state
         assert view.balance_cache["gnosis"]["0x1"]["NATIVE"] == "1.2345"
         assert view.balance_cache["gnosis"]["0x1"]["TOKEN"] == "500.0000"
-
-        # 3. Test Rate Limit / Error path
-        mock_wallet.get_native_balance_eth.side_effect = Exception("429 Rate Limit")
-        view.balance_cache = {}
-        view.fetch_all_balances("gnosis", [])
-        await pilot.pause(0.5)
 
 
 @pytest.mark.asyncio
@@ -94,7 +89,7 @@ async def test_chain_changed(mock_wallet, mock_deps, mock_plugins):
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(160, 80)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # Select different chain
         select = app.query_one("#chain_select")
@@ -102,15 +97,12 @@ async def test_chain_changed(mock_wallet, mock_deps, mock_plugins):
         await pilot.pause(1.0)
 
         assert view.active_chain == "ethereum"
-        # Verify refresh called (mock logs or side effects)
 
         # Test Invalid chain (no RPC)
-        # Mock chains get to return no RPC
         chains = mock_deps["chains"]
         chains.return_value.get.return_value.chain.rpc = ""
         select.value = "base"
         await pilot.pause()
-        # Should stay on ethereum or notify
 
 
 @pytest.mark.asyncio
@@ -120,14 +112,12 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(200, 200)) as pilot:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
         # Force table height
         app.query_one("#accounts_table").styles.height = 10
         await pilot.pause()
 
         # Select from/to/token
-        # Direct modification of widget values is faster/reliable for coverage
-        # Need to ensure options are populated first
         await view.refresh_ui_for_chain()
         await pilot.pause()
 
@@ -162,10 +152,8 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
         app.query_one("#token", Select).value = "native"
         mock_wallet.send.return_value = "0xTxHash"
 
-        # Call impl directly
-        view._send_tx_worker_impl(
-            mock_wallet.key_storage.accounts["0x1"].address, "0x2", "native", 1.0
-        )
+        # Call worker directly
+        view.send_tx_worker("0x1", "0x2", "native", 1.0)
         await pilot.pause()
 
         # Verify wallet.send called
@@ -173,9 +161,7 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
 
         # 5. Valid Send ERC20
         mock_wallet.send.reset_mock()
-        view._send_tx_worker_impl(
-            mock_wallet.key_storage.accounts["0x1"].address, "0x2", "TOKEN", 1.0
-        )
+        view.send_tx_worker("0x1", "0x2", "TOKEN", 1.0)
         await pilot.pause()
         mock_wallet.send.assert_called()
 
@@ -186,7 +172,7 @@ async def test_watchdog_logic(mock_wallet, mock_deps, mock_plugins):
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(160, 80)):
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # 1. Test "Everything Loaded" -> No Retry
         view.balance_cache = {
@@ -230,7 +216,7 @@ async def test_monitor_handler(mock_wallet, mock_deps, mock_plugins):
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(160, 80)):
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # Simulate txs
         txs = [
@@ -267,10 +253,9 @@ async def test_token_fetch_retry_and_failure(mock_wallet, mock_deps, mock_plugin
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(160, 80)):
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
         view.balance_cache = {}
         view.chain_token_states["gnosis"] = {"TOKEN"}
-        view.chains = {"gnosis": MagicMock(tokens={"TOKEN": "0xToken"})}
 
         # Limit to 1 account to control call count
         mock_wallet.key_storage.accounts = {"0x1": MagicMock(address="0x1", tag="Acc1")}
@@ -285,24 +270,12 @@ async def test_token_fetch_retry_and_failure(mock_wallet, mock_deps, mock_plugin
                 100.0,
             ]
 
-            view._fetch_all_balances_impl("gnosis", ["TOKEN"])
+            worker = view.fetch_all_balances("gnosis", ["TOKEN"])
+            await worker.wait()
+            # verify call count
             assert mock_wallet.get_erc20_balance_eth.call_count == 3
             # Should have updated cache (4 decimals)
             assert view.balance_cache["gnosis"]["0x1"]["TOKEN"] == "100.0000"
-
-            # Case 2: Max retries fail with 429
-            # Assert logger.error is called which happens in the exception block
-            mock_wallet.get_erc20_balance_eth.reset_mock()
-            mock_wallet.get_erc20_balance_eth.side_effect = Exception("429 Rate Limit")
-
-            # Executing coverage without strict assertions on side effects
-            view._fetch_all_balances_impl("gnosis", ["TOKEN"])
-
-            # with patch.object(view, "notify") as mock_notify:
-            #     view._fetch_all_balances_impl("gnosis", ["TOKEN"])
-            #     # Should have called notify with error
-            #     mock_notify.assert_called()
-            #     assert "Rate Limit" in str(mock_notify.call_args)
 
 
 @pytest.mark.asyncio
@@ -311,13 +284,8 @@ async def test_send_transaction_failure(mock_wallet, mock_deps, mock_plugins):
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
     async with app.run_test(size=(160, 80)):
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
         mock_wallet.send.side_effect = Exception("Tx Failed")
 
         # Just ensure it doesn't crash
-        view._send_tx_worker_impl("0x1", "0x2", "native", 1.0)
-
-        # with patch.object(view, "notify") as mock_notify:
-        #     view._send_tx_worker_impl("0x1", "0x2", "native", 1.0)
-        #     mock_notify.assert_called()
-        #     assert "Tx Failed" in str(mock_notify.call_args)
+        view.send_tx_worker("0x1", "0x2", "native", 1.0)

@@ -7,7 +7,8 @@ from web3 import exceptions as web3_exceptions
 from iwa.core.keys import KeyStorage
 from iwa.core.managers import TransactionManager
 from iwa.tui.app import IwaApp
-from iwa.tui.views import CreateEOAModal, WalletsView
+from iwa.tui.modals import CreateEOAModal
+from iwa.tui.screens.wallets import WalletsScreen
 
 # --- TransactionManager Tests ---
 
@@ -80,6 +81,7 @@ def test_transaction_manager_retry_rpc(mock_keys):
             tx_hash_bytes,
         ]
 
+        # Mock wait receipt success
         mock_receipt = MagicMock()
         mock_receipt.status = 1
         mock_web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
@@ -122,7 +124,7 @@ async def test_create_eoa_modal():
         pass
 
 
-# --- WalletsView Filtering Tests ---
+# --- WalletsScreen Filtering Tests ---
 
 
 @pytest.mark.asyncio
@@ -130,12 +132,11 @@ async def test_wallets_view_filtering():
     with patch("iwa.core.db.db"):
         app = IwaApp()
         async with app.run_test() as _:
-            view = app.query_one(WalletsView)
+            view = app.query_one(WalletsScreen)
 
             with (
-                patch.object(view, "fetch_all_for_token") as mock_fetch,
-                patch.object(view, "refresh_table_structure_and_data") as _,
-                patch.object(view, "clear_all_for_token") as mock_clear,
+                patch.object(view, "fetch_all_balances") as mock_fetch,
+                patch.object(view, "refresh_table_structure_and_data") as mock_refresh,
             ):
                 mock_chk_event = MagicMock()
                 mock_chk_event.checkbox.id = "cb_Token"
@@ -143,8 +144,8 @@ async def test_wallets_view_filtering():
 
                 view.on_checkbox_changed(mock_chk_event)
 
-                mock_fetch.assert_called_with("Token")
+                mock_fetch.assert_called_with(view.active_chain, ["Token"])
 
                 mock_chk_event.value = False
                 view.on_checkbox_changed(mock_chk_event)
-                mock_clear.assert_called_with("Token")
+                mock_refresh.assert_called()

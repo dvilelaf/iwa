@@ -5,7 +5,7 @@ from textual.widgets import DataTable
 
 from iwa.core.db import init_db, log_transaction
 from iwa.tui.app import IwaApp
-from iwa.tui.views import WalletsView
+from iwa.tui.screens.wallets import WalletsScreen
 
 # --- DB Tests ---
 
@@ -85,14 +85,14 @@ def mock_wallet():
 
 @pytest.mark.asyncio
 async def test_create_safe_worker_no_rpc(mock_wallet):
-    view = WalletsView(mock_wallet)
+    view = WalletsScreen(mock_wallet)
 
-    with patch.object(WalletsView, "app", new_callable=PropertyMock) as mock_app_prop:
+    with patch.object(WalletsScreen, "app", new_callable=PropertyMock) as mock_app_prop:
         mock_app = MagicMock()
         mock_app_prop.return_value = mock_app
         view.notify = MagicMock()
 
-        with patch("iwa.tui.views.ChainInterfaces") as mock_chains:
+        with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
             mock_interface = MagicMock()
             mock_interface.chain.rpc = None
             mock_chains.return_value.get.return_value = mock_interface
@@ -104,14 +104,14 @@ async def test_create_safe_worker_no_rpc(mock_wallet):
 
 @pytest.mark.asyncio
 async def test_create_safe_worker_exception(mock_wallet):
-    view = WalletsView(mock_wallet)
+    view = WalletsScreen(mock_wallet)
 
-    with patch.object(WalletsView, "app", new_callable=PropertyMock) as mock_app_prop:
+    with patch.object(WalletsScreen, "app", new_callable=PropertyMock) as mock_app_prop:
         mock_app = MagicMock()
         mock_app_prop.return_value = mock_app
         view.notify = MagicMock()
 
-        with patch("iwa.tui.views.ChainInterfaces") as mock_chains:
+        with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
             mock_interface = MagicMock()
             mock_interface.chain.rpc = "http://rpc"
             mock_chains.return_value.get.return_value = mock_interface
@@ -136,7 +136,7 @@ async def test_wallets_view_lifecycle(mock_wallet):
     # Test on_mount / compose implicit coverage
     app = IwaApp()
     async with app.run_test() as _:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
         assert view is not None
         # Check columns setup
         table = view.query_one("#accounts_table", DataTable)
@@ -147,7 +147,7 @@ async def test_wallets_view_lifecycle(mock_wallet):
 async def test_wallets_view_copy_address_fallback(mock_wallet):
     app = IwaApp()
     async with app.run_test() as _:
-        view = app.query_one(WalletsView)
+        view = app.query_one(WalletsScreen)
 
         # Test Account Cell Copy (Column 1)
         mock_event = MagicMock()
@@ -168,17 +168,17 @@ async def test_wallets_view_copy_address_fallback(mock_wallet):
 async def test_enrich_logs_api_failure(mock_wallet):
     app = IwaApp()  # needed for context
     async with app.run_test():
-        view = WalletsView(mock_wallet)
+        view = WalletsScreen(mock_wallet)
         # Manually mount or set app if needed, but context might be enough for property
 
         txs = [{"hash": "0x1", "token": "TOKEN", "chain": "gnosis"}]
 
-        with patch("iwa.tui.views.PriceService") as mock_price:
+        with patch("iwa.tui.screens.wallets.PriceService") as mock_price:
             # Simulate API returning None for price
             mock_price.return_value.get_token_price.return_value = None
 
             with patch("iwa.core.db.log_transaction") as _:
-                with patch("iwa.tui.views.ChainInterfaces"):
+                with patch("iwa.tui.screens.wallets.ChainInterfaces"):
                     # We need to wait for workers or call it.
                     # Textual workers are async.
                     # For test purposes, we can trust it is called.
