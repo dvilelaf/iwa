@@ -485,3 +485,49 @@ def test_keystorage_redeploy_safes_already_deployed(
             storage.redeploy_safes()
             # Should NOT be called again (except the initial one we did manually, but mock was set up AFTER)
             mock_create_safe.assert_not_called()
+
+
+def test_sign_safe_transaction(
+    mock_secrets, mock_safe, mock_ethereum_client, mock_account, mock_aesgcm, mock_scrypt
+):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        storage.create_account("master")
+        storage.create_account("owner")
+        storage.create_safe("master", ["owner"], 1, "gnosis", "safe")
+
+        # Mock _get_private_key to return a key
+        with patch.object(storage, "_get_private_key", return_value="private_key"):
+            keys_captured = []
+
+            def callback(keys):
+                keys_captured.extend(keys)
+                return "tx_hash"
+
+            res = storage.sign_safe_transaction("safe", callback)
+            assert res == "tx_hash"
+            assert keys_captured == ["private_key"]
+
+
+def test_get_account_info(
+    mock_secrets, mock_safe, mock_ethereum_client, mock_account, mock_aesgcm, mock_scrypt
+):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        storage.create_account("master")
+        storage.create_account("tag1")
+
+        info = storage.get_account_info("tag1")
+        assert info.address == storage.find_stored_account("tag1").address
+        assert info.tag == "tag1"
+        assert not hasattr(info, "key")

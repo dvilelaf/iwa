@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, patch
 
 from eth_account import Account
@@ -8,6 +7,7 @@ from iwa.core.chain import ChainInterface, SupportedChains
 # --- Helpers ---
 VALID_ADDR_1 = Account.create().address
 VALID_ADDR_2 = Account.create().address
+
 
 def test_chain_interface_coverage():
     interface = ChainInterface(SupportedChains().gnosis)

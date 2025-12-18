@@ -172,6 +172,7 @@ class CreateSafeModal(ModalScreen):
 
             yield Label("Chains (select multiple):")
             from iwa.core.chain import ChainInterfaces
+
             chain_options = [(name.title(), name) for name, _ in ChainInterfaces().items()]
             yield SelectionList[str](*chain_options, id="chains_list")
 
@@ -398,7 +399,12 @@ class WalletsView(VerticalScroll):
                     native_cell = "Loading..."
                     needs_fetch = True
 
-                cells = [Text(account.tag, style="green"), escape(account.address), acct_type, native_cell]
+                cells = [
+                    Text(account.tag, style="green"),
+                    escape(account.address),
+                    acct_type,
+                    native_cell,
+                ]
 
                 # 2. Token Balances
                 for _i, token in enumerate(token_names):
@@ -652,7 +658,9 @@ class WalletsView(VerticalScroll):
             for tx in txs:
                 # Format Time
                 if tx.get("timestamp"):
-                    ts = datetime.datetime.fromtimestamp(tx["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                    ts = datetime.datetime.fromtimestamp(tx["timestamp"]).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
                 else:
                     ts = "Recent"
 
@@ -692,7 +700,7 @@ class WalletsView(VerticalScroll):
                     "?",  # Gas
                     "?",  # Gas Val
                     "",  # Tags - will be enriched later
-                    key=tx_hash
+                    key=tx_hash,
                 )
                 # Only notify for incoming transactions (not from our own accounts)
                 is_outgoing = False
@@ -773,9 +781,12 @@ class WalletsView(VerticalScroll):
             self.send_transaction()
 
     @work(exclusive=False, thread=True)
-    def create_safe_worker(self, tag: str, threshold: int, owners: List[str], chains: List[str]) -> None:
+    def create_safe_worker(
+        self, tag: str, threshold: int, owners: List[str], chains: List[str]
+    ) -> None:
         """Background worker to create a Safe."""
         import time
+
         salt_nonce = int(time.time() * 1000)
 
         # Iterate over selected chains
@@ -814,7 +825,6 @@ class WalletsView(VerticalScroll):
                     salt_nonce=salt_nonce,
                 )
 
-
                 self.app.call_from_thread(
                     self.notify,
                     f"Safe '{escape(tag)}' successfully created on {escape(chain_name)}!",
@@ -824,7 +834,9 @@ class WalletsView(VerticalScroll):
             except Exception as e:
                 logger.error(f"Failed to create Safe on {chain_name}: {e}")
                 self.app.call_from_thread(
-                    self.notify, f"Error creating Safe on {escape(chain_name)}: {escape(str(e))}", severity="error"
+                    self.notify,
+                    f"Error creating Safe on {escape(chain_name)}: {escape(str(e))}",
+                    severity="error",
                 )
 
         self.app.call_from_thread(self.refresh_accounts)
@@ -995,6 +1007,7 @@ class WalletsView(VerticalScroll):
             full_hash = str(event.cell_key.row_key.value)
             try:
                 import pyperclip
+
                 pyperclip.copy(full_hash)
                 self.notify(f"Copied hash: {full_hash[:6]}...", severity="info")
             except Exception as e:
@@ -1040,12 +1053,14 @@ class WalletsView(VerticalScroll):
                 chain_name=chain,
             )
 
-            self.app.call_from_thread(self.notify, "Transaction sent successfully!", severity="success")
-            self.app.call_from_thread(self.add_tx_history_row, f, t, token, amount, "Pending", tx_hash)
-        except Exception as e:
             self.app.call_from_thread(
-                self.notify, f"Error: {escape(str(e))}", severity="error"
+                self.notify, "Transaction sent successfully!", severity="success"
             )
+            self.app.call_from_thread(
+                self.add_tx_history_row, f, t, token, amount, "Pending", tx_hash
+            )
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error: {escape(str(e))}", severity="error")
             self.app.call_from_thread(self.update_last_tx_status, "[red]Failed[/red]")
 
     def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
@@ -1061,10 +1076,12 @@ class WalletsView(VerticalScroll):
                 amt,
                 "",  # Value - placeholder
                 status,
-                (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..." if tx_hash else "",
+                (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..."
+                if tx_hash
+                else "",
                 "?",  # Gas
                 "?",  # Gas Val
-                "",   # Tags - will be updated from DB or enrichment
+                "",  # Tags - will be updated from DB or enrichment
             )
         except Exception:
             pass
@@ -1109,7 +1126,9 @@ class WalletsView(VerticalScroll):
                 token_symbol = tx.token
                 if token_symbol and token_symbol.upper() in ["NATIVE", "NATIVE CURRENCY"]:
                     chain_interface = ChainInterfaces().get(tx.chain)
-                    token_symbol = chain_interface.chain.native_currency if chain_interface else "Native"
+                    token_symbol = (
+                        chain_interface.chain.native_currency if chain_interface else "Native"
+                    )
 
                 # Format Amount (assuming 18 decimals for simplicity or raw string)
                 try:
@@ -1143,7 +1162,10 @@ class WalletsView(VerticalScroll):
                     escape(amt_str),
                     escape(val_eur),
                     status,
-                    escape((tx.tx_hash if tx.tx_hash.startswith("0x") else f"0x{tx.tx_hash}")[:10] + "..."),
+                    escape(
+                        (tx.tx_hash if tx.tx_hash.startswith("0x") else f"0x{tx.tx_hash}")[:10]
+                        + "..."
+                    ),
                     escape(gas_str),
                     escape(gas_eur),
                     escape(", ".join(json.loads(tx.tags)) if tx.tags else ""),
@@ -1169,7 +1191,10 @@ class WalletsView(VerticalScroll):
         else:
             value_token = value_wei / 10**18
 
-        if token_val.upper() in ["NATIVE", "NATIVE CURRENCY"] or token_val == interface.chain.native_currency:
+        if (
+            token_val.upper() in ["NATIVE", "NATIVE CURRENCY"]
+            or token_val == interface.chain.native_currency
+        ):
             token_val = interface.chain.native_currency
             if final_price is not None:
                 value_eur = value_token * final_price
@@ -1214,7 +1239,9 @@ class WalletsView(VerticalScroll):
                 tx_chain = tx.get("chain", self.active_chain)
                 interface = ChainInterfaces().get(tx_chain)
                 if not interface:
-                    logger.warning(f"No interface for chain {tx_chain}, skipping enrichment for {tx_hash}")
+                    logger.warning(
+                        f"No interface for chain {tx_chain}, skipping enrichment for {tx_hash}"
+                    )
                     continue
 
                 cg_id = cg_ids.get(tx_chain, "ethereum")
@@ -1222,7 +1249,9 @@ class WalletsView(VerticalScroll):
                     price_cache[cg_id] = self.price_service.get_token_price(cg_id, "eur")
 
                 initial_price = price_cache[cg_id]
-                token_val, value_wei, value_eur, final_price = self._resolve_token_info_for_enrichment(tx, interface, initial_price)
+                token_val, value_wei, value_eur, final_price = (
+                    self._resolve_token_info_for_enrichment(tx, interface, initial_price)
+                )
 
                 gas_cost_wei = self._calculate_gas_cost_wei(interface, tx_hash, tx)
                 gas_eth = gas_cost_wei / 10**18

@@ -172,7 +172,14 @@ class EventMonitor:
                             "hash": log["transactionHash"].hex(),
                             "from": Web3.to_checksum_address(t_from),
                             "to": Web3.to_checksum_address(t_to),
-                            "value": int(log["data"].hex() if isinstance(log["data"], bytes) else log["data"], 16) if log.get("data") else 0,
+                            "value": int(
+                                log["data"].hex()
+                                if isinstance(log["data"], bytes)
+                                else log["data"],
+                                16,
+                            )
+                            if log.get("data")
+                            else 0,
                             "token": "TOKEN",
                             "contract_address": log["address"],
                             "timestamp": 0,  # Would require block fetch

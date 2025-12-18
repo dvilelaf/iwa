@@ -58,7 +58,9 @@ class PriceService:
                 response = requests.get(url, params=params, headers=headers, timeout=10)
 
                 if response.status_code == 429:
-                    logger.warning(f"CoinGecko rate limit reached (429) for {token_id}. Attempt {attempt+1}/{max_retries+1}")
+                    logger.warning(
+                        f"CoinGecko rate limit reached (429) for {token_id}. Attempt {attempt + 1}/{max_retries + 1}"
+                    )
                     if attempt < max_retries:
                         time.sleep(2 * (attempt + 1))
                         continue
@@ -81,7 +83,7 @@ class PriceService:
                     return None
 
             except Exception as e:
-                logger.error(f"Failed to fetch price for {token_id} (Attempt {attempt+1}): {e}")
+                logger.error(f"Failed to fetch price for {token_id} (Attempt {attempt + 1}): {e}")
                 if attempt < max_retries:
                     time.sleep(1)
                     continue

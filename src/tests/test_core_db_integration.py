@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -9,6 +8,7 @@ from iwa.tui.app import IwaApp
 from iwa.tui.views import WalletsView
 
 # --- DB Tests ---
+
 
 def test_log_transaction_upsert():
     with patch("iwa.core.db.SentTransaction") as mock_model:
@@ -25,6 +25,7 @@ def test_log_transaction_upsert():
         assert kwargs["chain"] == "gnosis"
 
         mock_upsert.execute.assert_called_once()
+
 
 def test_log_transaction_update_preserve_fields():
     with patch("iwa.core.db.SentTransaction") as mock_model:
@@ -45,21 +46,23 @@ def test_log_transaction_update_preserve_fields():
         assert kwargs["token"] == "DAI"
         assert kwargs["amount_wei"] == "100"
 
+
 def test_log_transaction_error():
-    with patch("iwa.core.db.SentTransaction") as mock_model, \
-         patch("builtins.print") as mock_print:
+    with patch("iwa.core.db.SentTransaction") as mock_model, patch("builtins.print") as mock_print:
         mock_model.get_or_none.side_effect = Exception("DB Error")
 
         log_transaction("0x123", "0xFrom", "0xTo", "DAI", 100, "gnosis")
 
         mock_print.assert_called()
 
-def test_init_db():
-    with patch("iwa.core.db.db") as mock_db, \
-         patch("iwa.core.db.SentTransaction") as mock_model, \
-         patch("iwa.core.db.migrate") as mock_migrate, \
-         patch("iwa.core.db.SqliteMigrator"):
 
+def test_init_db():
+    with (
+        patch("iwa.core.db.db") as mock_db,
+        patch("iwa.core.db.SentTransaction") as mock_model,
+        patch("iwa.core.db.migrate") as mock_migrate,
+        patch("iwa.core.db.SqliteMigrator"),
+    ):
         # Mock get_columns to return empty strings implying missing columns
         mock_db.get_columns.return_value = []
 
@@ -70,12 +73,15 @@ def test_init_db():
         # Should have called migrate for missing columns
         assert mock_migrate.call_count >= 1
 
+
 # --- TUI View Tests ---
+
 
 @pytest.fixture
 def mock_wallet():
     with patch("iwa.tui.app.Wallet") as mock:
         yield mock.return_value
+
 
 @pytest.mark.asyncio
 async def test_create_safe_worker_no_rpc(mock_wallet):
@@ -94,6 +100,7 @@ async def test_create_safe_worker_no_rpc(mock_wallet):
             view.create_safe_worker("Tag", 1, ["0x1"], ["gnosis"])
 
             assert mock_app.call_from_thread.call_count >= 1
+
 
 @pytest.mark.asyncio
 async def test_create_safe_worker_exception(mock_wallet):
@@ -115,12 +122,14 @@ async def test_create_safe_worker_exception(mock_wallet):
 
             assert mock_app.call_from_thread.call_count >= 1
 
+
 @pytest.mark.asyncio
 async def test_action_quit():
     app = IwaApp()
     with patch.object(app, "exit") as mock_exit:
         await app.action_quit()
         mock_exit.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_lifecycle(mock_wallet):
@@ -132,6 +141,7 @@ async def test_wallets_view_lifecycle(mock_wallet):
         # Check columns setup
         table = view.query_one("#accounts_table", DataTable)
         assert len(table.columns) > 0
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_copy_address_fallback(mock_wallet):
@@ -149,16 +159,17 @@ async def test_wallets_view_copy_address_fallback(mock_wallet):
         mock_pyperclip.copy.side_effect = Exception("No clipboard")
 
         with patch.dict("sys.modules", {"pyperclip": mock_pyperclip}):
-             with patch("iwa.tui.app.IwaApp.copy_to_clipboard") as mock_copy:
+            with patch("iwa.tui.app.IwaApp.copy_to_clipboard") as mock_copy:
                 view.on_account_cell_selected(mock_event)
                 mock_copy.assert_called_with("0xAddr")
 
+
 @pytest.mark.asyncio
 async def test_enrich_logs_api_failure(mock_wallet):
-    app = IwaApp() # needed for context
+    app = IwaApp()  # needed for context
     async with app.run_test():
         view = WalletsView(mock_wallet)
-         # Manually mount or set app if needed, but context might be enough for property
+        # Manually mount or set app if needed, but context might be enough for property
 
         txs = [{"hash": "0x1", "token": "TOKEN", "chain": "gnosis"}]
 
@@ -167,15 +178,15 @@ async def test_enrich_logs_api_failure(mock_wallet):
             mock_price.return_value.get_token_price.return_value = None
 
             with patch("iwa.core.db.log_transaction") as _:
-                 with patch("iwa.tui.views.ChainInterfaces"):
-                     # We need to wait for workers or call it.
-                     # Textual workers are async.
-                     # For test purposes, we can trust it is called.
-                     view.enrich_and_log_txs(txs)
+                with patch("iwa.tui.views.ChainInterfaces"):
+                    # We need to wait for workers or call it.
+                    # Textual workers are async.
+                    # For test purposes, we can trust it is called.
+                    view.enrich_and_log_txs(txs)
 
-                     # Wait for worker? It's threaded.
-                     # This might be flaky without joining.
-                     # But let's check if basic call works without error.
-                     # Mocking work decorator would be better, but...
-                     # We can verify it started.
-                     pass
+                    # Wait for worker? It's threaded.
+                    # This might be flaky without joining.
+                    # But let's check if basic call works without error.
+                    # Mocking work decorator would be better, but...
+                    # We can verify it started.
+                    pass

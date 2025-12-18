@@ -55,30 +55,35 @@ MINIMAL_ABI = [
         "inputs": [
             {"name": "currentNonces", "type": "uint256"},
             {"name": "lastNonces", "type": "uint256"},
-            {"name": "timestamp", "type": "uint256"}
+            {"name": "timestamp", "type": "uint256"},
         ],
         "name": "isRatioPass",
         "outputs": [{"name": "", "type": "bool"}],
         "payable": False,
         "stateMutability": "view",
         "type": "function",
-    }
+    },
 ]
+
 
 def side_effect_open(*args, **kwargs):
     """Side effect for open() to return mock ABI content."""
     filename = args[0] if args else kwargs.get("file")
     s_file = str(filename)
 
-    if "service_registry.json" in s_file or \
-       "service_manager.json" in s_file or \
-       "staking.json" in s_file or \
-       "activity_checker.json" in s_file:
+    if (
+        "service_registry.json" in s_file
+        or "service_manager.json" in s_file
+        or "staking.json" in s_file
+        or "activity_checker.json" in s_file
+    ):
         return mock_open(read_data=json.dumps(MINIMAL_ABI))(*args, **kwargs)
 
     return original_open(*args, **kwargs)
 
+
 # --- Contract Tests ---
+
 
 def test_service_contracts():
     """Test ServiceRegistry and ServiceManager contract interactions."""
@@ -87,16 +92,7 @@ def test_service_contracts():
 
         # Test get_service
         with patch.object(registry, "call") as mock_call:
-            mock_call.return_value = (
-                100,
-                VALID_ADDR_2,
-                b"hash",
-                3,
-                4,
-                4,
-                4,
-                [1, 2]
-            )
+            mock_call.return_value = (100, VALID_ADDR_2, b"hash", 3, 4, 4, 4, [1, 2])
             data = registry.get_service(1)
             assert data["state"].name == "DEPLOYED"
             assert data["config_hash"] == b"hash".hex()
@@ -140,26 +136,29 @@ def test_service_contracts():
         payload = get_deployment_payload()
         assert isinstance(payload, str)
 
+
 def test_staking_contract():
     """Test StakingContract logic and integration."""
     with patch("builtins.open", side_effect=side_effect_open):
-         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
-             mock_chain = MagicMock()
-             mock_interfaces.return_value.get.return_value = mock_chain
+        with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
+            mock_chain = MagicMock()
+            mock_interfaces.return_value.get.return_value = mock_chain
 
-             # Mock web3
-             mock_web3 = MagicMock()
-             mock_chain.web3 = mock_web3
+            # Mock web3
+            mock_web3 = MagicMock()
+            mock_chain.web3 = mock_web3
 
-             # Mock contract factory
-             mock_contract = MagicMock()
-             mock_web3.eth.contract.return_value = mock_contract
+            # Mock contract factory
+            mock_contract = MagicMock()
+            mock_web3.eth.contract.return_value = mock_contract
 
-             # Mock function calls (ActivityChecker)
-             mock_contract.functions.agentMech.return_value.call.return_value = VALID_ADDR_2
-             mock_contract.functions.livenessRatio.return_value.call.return_value = 10**18
+            # Mock function calls (ActivityChecker)
+            mock_contract.functions.agentMech.return_value.call.return_value = VALID_ADDR_2
+            mock_contract.functions.livenessRatio.return_value.call.return_value = 10**18
 
-             with patch("iwa.plugins.olas.contracts.staking.ContractInstance.call") as mock_call_base:
+            with patch(
+                "iwa.plugins.olas.contracts.staking.ContractInstance.call"
+            ) as mock_call_base:
                 # Initialization side effect
                 def init_side_effect(method, *args):
                     if method == "activityChecker":
@@ -175,15 +174,15 @@ def test_staking_contract():
                 # Logic side effect
                 def logic_side_effect(method, *args):
                     if method == "getServiceInfo":
-                         return (VALID_ADDR_2, VALID_ADDR_3, [1], 1000, 50, 0)
+                        return (VALID_ADDR_2, VALID_ADDR_3, [1], 1000, 50, 0)
                     if method == "getNextRewardCheckpointTimestamp":
-                         return 4700000000 # Timestamp in future
+                        return 4700000000  # Timestamp in future
                     if method == "calculateStakingLastReward":
-                         return 50
+                        return 50
                     if method == "calculateStakingReward":
-                         return 50
+                        return 50
                     if method == "getStakingState":
-                         return 1
+                        return 1
                     return 0
 
                 mock_call_base.side_effect = logic_side_effect

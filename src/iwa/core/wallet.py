@@ -167,10 +167,13 @@ class Wallet:
             )
             if is_safe:
                 safe = SafeMultisig(from_account, chain_name)
-                tx_hash = safe.send_tx(
-                    to=to_address,
-                    value=amount_wei,
-                    signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
+                tx_hash = self.key_storage.sign_safe_transaction(
+                    from_address_or_tag,
+                    lambda keys: safe.send_tx(
+                        to=to_address,
+                        value=amount_wei,
+                        signers_private_keys=keys,
+                    ),
                 )
                 log_transaction(
                     tx_hash=tx_hash,
@@ -187,9 +190,12 @@ class Wallet:
 
             else:
                 success, tx_hash = chain_interface.send_native_transfer(
-                    from_account=from_account,
+                    from_address=from_account.address,
                     to_address=to_address,
                     value_wei=amount_wei,
+                    sign_callback=lambda tx: self.key_storage.sign_transaction(
+                        tx, from_account.address
+                    ),
                 )
                 if success and tx_hash:
                     log_transaction(
@@ -222,11 +228,14 @@ class Wallet:
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
-            tx_hash = safe.send_tx(
-                to=erc20.address,
-                value=0,
-                signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
-                data=transaction["data"],
+            tx_hash = self.key_storage.sign_safe_transaction(
+                from_address_or_tag,
+                lambda keys: safe.send_tx(
+                    to=erc20.address,
+                    value=0,
+                    signers_private_keys=keys,
+                    data=transaction["data"],
+                ),
             )
             log_transaction(
                 tx_hash=tx_hash,
@@ -332,12 +341,15 @@ class Wallet:
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
-            safe.send_tx(
-                to=multi_send_contract.address,
-                value=transaction["value"],
-                signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
-                data=transaction["data"],
-                operation=SafeOperationEnum.DELEGATE_CALL.value,
+            self.key_storage.sign_safe_transaction(
+                from_address_or_tag,
+                lambda keys: safe.send_tx(
+                    to=multi_send_contract.address,
+                    value=transaction["value"],
+                    signers_private_keys=keys,
+                    data=transaction["data"],
+                    operation=SafeOperationEnum.DELEGATE_CALL.value,
+                ),
             )
         else:
             self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)
@@ -463,11 +475,14 @@ class Wallet:
 
         if is_safe:
             safe = SafeMultisig(owner_account, chain_name)
-            safe.send_tx(
-                to=erc20.address,
-                value=0,
-                signers_private_keys=self.key_storage.get_safe_signer_keys(owner_address_or_tag),
-                data=transaction["data"],
+            self.key_storage.sign_safe_transaction(
+                owner_address_or_tag,
+                lambda keys: safe.send_tx(
+                    to=erc20.address,
+                    value=0,
+                    signers_private_keys=keys,
+                    data=transaction["data"],
+                ),
             )
         else:
             self.sign_and_send_transaction(transaction, owner_address_or_tag, chain_name)
@@ -515,11 +530,14 @@ class Wallet:
 
         if is_safe:
             safe = SafeMultisig(from_account, chain_name)
-            safe.send_tx(
-                to=erc20.address,
-                value=0,
-                signers_private_keys=self.key_storage.get_safe_signer_keys(from_address_or_tag),
-                data=transaction["data"],
+            self.key_storage.sign_safe_transaction(
+                from_address_or_tag,
+                lambda keys: safe.send_tx(
+                    to=erc20.address,
+                    value=0,
+                    signers_private_keys=keys,
+                    data=transaction["data"],
+                ),
             )
         else:
             self.sign_and_send_transaction(transaction, from_address_or_tag, chain_name)

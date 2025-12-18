@@ -448,7 +448,7 @@ def test_send_native_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.from_wei.return_value = 1.0
@@ -463,7 +463,7 @@ def test_send_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -503,7 +503,7 @@ def test_multi_send_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.to_wei.return_value = 1000
@@ -638,7 +638,7 @@ def test_approve_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -704,7 +704,11 @@ def test_transfer_from_erc20_safe(wallet, mock_key_storage, mock_chain_interface
     mock_key_storage.get_account.side_effect = (
         lambda tag: from_account if tag == "safe" else sender_account
     )
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+
+    def side_effect(tag, callback):
+        return callback(["key1"])
+
+    mock_key_storage.sign_safe_transaction.side_effect = side_effect
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -780,7 +784,7 @@ def test_drain_native_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {}
@@ -880,7 +884,7 @@ def test_multi_send_erc20_safe_success(wallet, mock_key_storage, mock_chain_inte
     account = MagicMock(spec=StoredSafeAccount)
     account.address = "0xSafe"
     mock_key_storage.get_account.return_value = account
-    mock_key_storage.get_safe_signer_keys.return_value = ["key1"]
+    mock_key_storage.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.to_wei.return_value = 1000

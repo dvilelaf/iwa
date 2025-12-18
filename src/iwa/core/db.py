@@ -29,8 +29,9 @@ db = SqliteDatabase(
         "ignore_check_constraints": 0,
         "synchronous": 0,
         "busy_timeout": 5000,
-    }
+    },
 )
+
 
 class BaseModel(Model):
     """Base Peewee model."""
@@ -62,8 +63,6 @@ class SentTransaction(BaseModel):
     tags = CharField(null=True)  # JSON-encoded list of strings
 
 
-
-
 def run_migrations(columns):
     """Run database migrations."""
     migrator = SqliteMigrator(db)
@@ -71,7 +70,7 @@ def run_migrations(columns):
     # Deprecated column cleanup
     if "token_symbol" in columns:
         try:
-           migrate(migrator.drop_column("senttransaction", "token_symbol"))
+            migrate(migrator.drop_column("senttransaction", "token_symbol"))
         except Exception as e:
             print(f"Migration (drop token_symbol) failed: {e}")
 
@@ -168,11 +167,21 @@ def log_transaction(  # noqa: D103
                 "status": "Confirmed",
                 "amount_wei": final_amount_wei,
                 "chain": chain,
-                "price_eur": price_eur if price_eur is not None else (existing.price_eur if existing else None),
-                "value_eur": value_eur if value_eur is not None else (existing.value_eur if existing else None),
-                "gas_cost": str(gas_cost) if gas_cost is not None else (existing.gas_cost if existing else None),
-                "gas_value_eur": gas_value_eur if gas_value_eur is not None else (existing.gas_value_eur if existing else None),
-                "tags": json.dumps(merged_tags) if merged_tags else (existing.tags if existing else None),
+                "price_eur": price_eur
+                if price_eur is not None
+                else (existing.price_eur if existing else None),
+                "value_eur": value_eur
+                if value_eur is not None
+                else (existing.value_eur if existing else None),
+                "gas_cost": str(gas_cost)
+                if gas_cost is not None
+                else (existing.gas_cost if existing else None),
+                "gas_value_eur": gas_value_eur
+                if gas_value_eur is not None
+                else (existing.gas_value_eur if existing else None),
+                "tags": json.dumps(merged_tags)
+                if merged_tags
+                else (existing.tags if existing else None),
             }
 
             SentTransaction.insert(**data).on_conflict_replace().execute()

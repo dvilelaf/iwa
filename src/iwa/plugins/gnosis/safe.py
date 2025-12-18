@@ -1,6 +1,6 @@
 """Gnosis Safe interaction."""
 
-from typing import Optional
+from typing import List, Optional
 
 from safe_eth.eth import EthereumClient
 from safe_eth.eth.constants import NULL_ADDRESS
@@ -44,7 +44,7 @@ class SafeMultisig:
         self,
         to: str,
         value: int,
-        signers_private_keys: list,
+        signers_private_keys: List[str],
         data: str = "",
         operation: int = SafeOperationEnum.CALL.value,
         safe_tx_gas: int = 0,
@@ -54,8 +54,8 @@ class SafeMultisig:
         refund_receiver: str = NULL_ADDRESS,
         signatures: str = "",
         safe_nonce: Optional[int] = None,
-    ) -> dict:
-        """Prepare a multisig transaction."""
+    ) -> str:
+        """Prepare and execute a multisig transaction."""
         safe_tx = self.multisig.build_multisig_tx(
             to,
             value,

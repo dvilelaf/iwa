@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,9 +11,11 @@ from iwa.tui.views import CreateEOAModal, WalletsView
 
 # --- TransactionManager Tests ---
 
+
 @pytest.fixture
 def mock_keys():
     return MagicMock(spec=KeyStorage)
+
 
 def test_transaction_manager_retry_gas(mock_keys):
     manager = TransactionManager(mock_keys)
@@ -31,14 +32,12 @@ def test_transaction_manager_retry_gas(mock_keys):
         gas_error = web3_exceptions.Web3RPCError("intrinsic gas too low", rpc_response={})
 
         # Mock tx hash as bytes to support .hex()
-        tx_hash_bytes = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        tx_hash_bytes = HexBytes(
+            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        )
 
         # side_effect for send_raw_transaction
-        mock_web3.eth.send_raw_transaction.side_effect = [
-            gas_error,
-            gas_error,
-            tx_hash_bytes
-        ]
+        mock_web3.eth.send_raw_transaction.side_effect = [gas_error, gas_error, tx_hash_bytes]
 
         # Mock wait receipt success
         mock_receipt = MagicMock()
@@ -52,12 +51,13 @@ def test_transaction_manager_retry_gas(mock_keys):
 
         # Patch internal check to be sure
         with patch.object(manager, "_is_gas_too_low_error", return_value=True):
-             success, receipt = manager.sign_and_send({"to": "0xTo"}, "0xSigner")
+            success, receipt = manager.sign_and_send({"to": "0xTo"}, "0xSigner")
 
         assert success is True
         assert receipt == mock_receipt
         # Verify retries (original + 2 failures = 3 calls)
         assert mock_web3.eth.send_raw_transaction.call_count == 3
+
 
 def test_transaction_manager_retry_rpc(mock_keys):
     manager = TransactionManager(mock_keys)
@@ -71,11 +71,13 @@ def test_transaction_manager_retry_rpc(mock_keys):
 
         mock_interface.rotate_rpc.return_value = True
 
-        tx_hash_bytes = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        tx_hash_bytes = HexBytes(
+            "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        )
 
         mock_web3.eth.send_raw_transaction.side_effect = [
             Exception("Connection Error"),
-            tx_hash_bytes
+            tx_hash_bytes,
         ]
 
         mock_receipt = MagicMock()
@@ -92,6 +94,7 @@ def test_transaction_manager_retry_rpc(mock_keys):
         assert success is True
         assert mock_interface.rotate_rpc.call_count >= 1
 
+
 def test_transaction_manager_signer_not_found(mock_keys):
     manager = TransactionManager(mock_keys)
     mock_keys.get_account.return_value = None
@@ -100,7 +103,9 @@ def test_transaction_manager_signer_not_found(mock_keys):
         success, _ = manager.sign_and_send({}, "0xMissing")
         assert success is False
 
+
 # --- TUI Modal Tests ---
+
 
 @pytest.mark.asyncio
 async def test_create_eoa_modal():
@@ -116,7 +121,9 @@ async def test_create_eoa_modal():
     except Exception:
         pass
 
+
 # --- WalletsView Filtering Tests ---
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_filtering():
@@ -125,10 +132,11 @@ async def test_wallets_view_filtering():
         async with app.run_test() as _:
             view = app.query_one(WalletsView)
 
-            with patch.object(view, "fetch_all_for_token") as mock_fetch, \
-                 patch.object(view, "refresh_table_structure_and_data") as _, \
-                 patch.object(view, "clear_all_for_token") as mock_clear:
-
+            with (
+                patch.object(view, "fetch_all_for_token") as mock_fetch,
+                patch.object(view, "refresh_table_structure_and_data") as _,
+                patch.object(view, "clear_all_for_token") as mock_clear,
+            ):
                 mock_chk_event = MagicMock()
                 mock_chk_event.checkbox.id = "cb_Token"
                 mock_chk_event.value = True

@@ -247,19 +247,28 @@ def test_send_native_transfer(mock_web3):
     ci.web3.eth.get_balance.return_value = 10**18  # plenty
     ci.web3.eth.get_balance.return_value = 10**18  # plenty
     # Valid mock return for success: (True, dict_receipt)
-    # The actual method returns `receipt["transactionHash"].hex()`.
-    # Let's mock sign_and_send to return a receipt with minimal needed structure
-    mock_receipt = {"transactionHash": b"hash"}
-    with patch.object(ci, "sign_and_send_transaction", return_value=(True, mock_receipt)):
-        assert ci.send_native_transfer(account, "0xReceiver", 1000) == (
-            True,
-            "68617368",
-        )  # "hash" hex
+    # The actual method returns tx_hash.hex().
+    mock_signed_tx = MagicMock()
+    mock_signed_tx.raw_transaction = b"raw"
+    mock_receipt = {"transactionHash": b"hash", "status": 1}
+
+    with (
+        patch.object(ci.web3.eth, "send_raw_transaction", return_value=b"hash"),
+        patch.object(ci.web3.eth, "wait_for_transaction_receipt", return_value=mock_receipt),
+        patch.object(ci, "wait_for_no_pending_tx", return_value=True),
+    ):
+        success, tx_hash = ci.send_native_transfer(
+            account.address, "0xReceiver", 1000, sign_callback=lambda tx: mock_signed_tx
+        )
+        assert success is True
+        assert tx_hash == "68617368"
 
     # Insufficient balance
     ci.web3.eth.get_balance.return_value = 0
     ci.web3.from_wei.return_value = 0.0
-    assert ci.send_native_transfer(account, "0xReceiver", 1000) == (False, None)
+    assert ci.send_native_transfer(
+        account.address, "0xReceiver", 1000, sign_callback=lambda tx: mock_signed_tx
+    ) == (False, None)
 
 
 def test_chain_interfaces_get():

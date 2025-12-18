@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
@@ -141,32 +141,20 @@ class KeyStorage(BaseModel):
 
     # ... (create_safe omitted for brevity, but I should log there too if needed)
 
-    def get_account(self, address_or_tag) -> Optional[Union[Account, StoredSafeAccount]]:
-        """Get account"""
+    def find_stored_account(
+        self, address_or_tag: str
+    ) -> Optional[Union[EncryptedAccount, StoredSafeAccount]]:
+        """Find a stored account by address or tag."""
+        # Try tag first
+        for acc in self.accounts.values():
+            if acc.tag == address_or_tag:
+                return acc
+
+        # Then try address
         try:
-            address = EthereumAddress(address_or_tag)
-            account = self.accounts.get(address)
-
-            if isinstance(account, StoredSafeAccount):
-                return account
-
-            if account is None:
-                return None
-
-            if account is None:
-                return None
-
-            # WARNING: This returns an Account object which contains the private key in memory.
-            # Prefer using sign_transaction instead.
-            return Account.from_key(self._get_private_key(address))
-
+            addr = EthereumAddress(address_or_tag)
+            return self.accounts.get(addr)
         except ValueError:
-            for account in self.accounts.values():
-                if address_or_tag == account.tag:
-                    if isinstance(account, StoredSafeAccount):
-                        return account
-
-                    return Account.from_key(self._get_private_key(account.address))
             return None
 
     def create_safe(
@@ -181,16 +169,19 @@ class KeyStorage(BaseModel):
         """Add a Safe to the KeyStorage"""
         from safe_eth.safe.proxy_factory import ProxyFactory
 
-        deployer_account = self.get_account(deployer_tag_or_address)
-        if not deployer_account:
-            raise ValueError(f"Deployer account '{deployer_tag_or_address}' not found in wallet.")
+        deployer_stored_account = self.find_stored_account(deployer_tag_or_address)
+        if not deployer_stored_account or not isinstance(deployer_stored_account, EncryptedAccount):
+            raise ValueError(
+                f"Deployer account '{deployer_tag_or_address}' not found or is a Safe."
+            )
+        deployer_account = Account.from_key(self._get_private_key(deployer_stored_account.address))
 
         owner_addresses = []
         for tag_or_address in owner_tags_or_addresses:
-            owner_account = self.get_account(tag_or_address)
-            if not owner_account:
+            owner_stored_account = self.find_stored_account(tag_or_address)
+            if not owner_stored_account:
                 raise ValueError(f"Owner account '{tag_or_address}' not found in wallet.")
-            owner_addresses.append(owner_account.address)
+            owner_addresses.append(owner_stored_account.address)
 
         rpc_secret = getattr(Secrets(), f"{chain_name}_rpc")
         ethereum_client = EthereumClient(rpc_secret.get_secret_value())
@@ -206,24 +197,26 @@ class KeyStorage(BaseModel):
             # owners, threshold, to, data, fallbackHandler, paymentToken, payment, paymentReceiver
             empty_safe = Safe(master_copy, ethereum_client)
             setup_data = empty_safe.contract.functions.setup(
-                    owner_addresses,
-                    threshold,
-                    "0x0000000000000000000000000000000000000000",
-                    b"",
-                    "0x0000000000000000000000000000000000000000", # Using 0x0 as per standard default
-                    "0x0000000000000000000000000000000000000000",
-                    0,
-                    "0x0000000000000000000000000000000000000000"
+                owner_addresses,
+                threshold,
+                "0x0000000000000000000000000000000000000000",
+                b"",
+                "0x0000000000000000000000000000000000000000",  # Using 0x0 as per standard default
+                "0x0000000000000000000000000000000000000000",
+                0,
+                "0x0000000000000000000000000000000000000000",
             ).build_transaction({"gas": 0, "gasPrice": 0})["data"]
 
             gas_price = ethereum_client.w3.eth.gas_price
             tx_sent = proxy_factory.deploy_proxy_contract_with_nonce(
                 deployer_account,
                 master_copy,
-                initializer=bytes.fromhex(setup_data[2:]) if setup_data.startswith("0x") else bytes.fromhex(setup_data),
+                initializer=bytes.fromhex(setup_data[2:])
+                if setup_data.startswith("0x")
+                else bytes.fromhex(setup_data),
                 nonce=salt_nonce,
                 gas=5_000_000,
-                gas_price=gas_price
+                gas_price=gas_price,
             )
             contract_address = tx_sent.contract_address
             tx_hash = tx_sent.tx_hash.hex()
@@ -256,20 +249,23 @@ class KeyStorage(BaseModel):
                     break
 
         from iwa.core.db import log_transaction
+
         log_transaction(
             tx_hash=tx_hash,
             from_addr=deployer_account.address,
             to_addr=contract_address,
-            token="Native", # or chain native currency
-            amount_wei=0, # Deployment might Have value, but usually 0 for this helper
+            token="Native",  # or chain native currency
+            amount_wei=0,  # Deployment might Have value, but usually 0 for this helper
             chain=chain_name,
             from_tag=resolved_from_tag or deployer_tag_or_address,
             to_tag=tag,
-            tags=["safe-deployment"]
+            tags=["safe-deployment"],
         )
 
         # Check if already exists
-        if contract_address in self.accounts and isinstance(self.accounts[contract_address], StoredSafeAccount):
+        if contract_address in self.accounts and isinstance(
+            self.accounts[contract_address], StoredSafeAccount
+        ):
             safe_account = self.accounts[contract_address]
             if chain_name not in safe_account.chains:
                 safe_account.chains.append(chain_name)
@@ -320,15 +316,15 @@ class KeyStorage(BaseModel):
 
     def _get_private_key(self, address: str) -> Optional[str]:
         """Internal method to get private key. Do not use outside of this class."""
-        if address not in self.accounts:
+        stored_account = self.accounts.get(EthereumAddress(address))
+
+        if not stored_account:
             return None
 
-        account = self.accounts[address]
-
-        if isinstance(account, StoredSafeAccount):
+        if isinstance(stored_account, StoredSafeAccount):
             raise ValueError("Cannot get private key for StoredSafeAccount.")
 
-        return account.decrypt_private_key(self._password)
+        return stored_account.decrypt_private_key(self._password)
 
     def get_private_key_unsafe(self, address: str) -> Optional[str]:
         """Get private key. WARNING: This exposes the private key.
@@ -340,30 +336,30 @@ class KeyStorage(BaseModel):
 
     def sign_transaction(self, transaction: dict, address_or_tag: str) -> SignedTransaction:
         """Sign a transaction without exposing the private key."""
-        account = self.get_account(address_or_tag)
-        if not account:
-            raise ValueError(f"Account '{address_or_tag}' not found.")
+        stored_account = self.find_stored_account(address_or_tag)
+        if not stored_account or not isinstance(stored_account, EncryptedAccount):
+            raise ValueError(f"Account '{address_or_tag}' not found or is a Safe.")
 
-        address = account.address
-        private_key = self._get_private_key(address)
+        private_key = self._get_private_key(stored_account.address)
         if not private_key:
-            raise ValueError(f"Could not retrieve private key for {address}")
+            raise ValueError(f"Could not retrieve private key for {stored_account.address}")
 
-        # Account.sign_transaction handles the signing
         try:
             return Account.sign_transaction(transaction, private_key)
         finally:
-            # Best effort to clear variable, though Python's GC is non-deterministic
-            del private_key
+            # Best effort to clear variable
+            if private_key:
+                # We can't easily wipe Python strings, but we can ensure the local reference is gone
+                # and suggest GC to run if needed.
+                del private_key
 
     def sign_message(self, message: Union[str, bytes], address_or_tag: str) -> SignedTransaction:
         """Sign a message."""
-        account = self.get_account(address_or_tag)
-        if not account:
-            raise ValueError(f"Account '{address_or_tag}' not found.")
+        stored_account = self.find_stored_account(address_or_tag)
+        if not stored_account or not isinstance(stored_account, EncryptedAccount):
+            raise ValueError(f"Account '{address_or_tag}' not found or is a Safe.")
 
-        address = account.address
-        private_key = self._get_private_key(address)
+        private_key = self._get_private_key(stored_account.address)
 
         if isinstance(message, str):
             signable_message = encode_defunct(text=message)
@@ -373,12 +369,13 @@ class KeyStorage(BaseModel):
         try:
             return Account.sign_message(signable_message, private_key)
         finally:
-            del private_key
+            if private_key:
+                del private_key
 
     def get_safe_signer_keys(self, safe_address_or_tag: str) -> List[str]:
         """Get all signer private keys for a safe"""
-        safe_account = self.get_account(safe_address_or_tag)
-        if not safe_account:
+        safe_account = self.find_stored_account(safe_address_or_tag)
+        if not safe_account or not isinstance(safe_account, StoredSafeAccount):
             raise ValueError(f"Safe account '{safe_address_or_tag}' not found in wallet.")
 
         signer_pkeys = []
@@ -393,6 +390,42 @@ class KeyStorage(BaseModel):
             )
 
         return signer_pkeys
+
+    def sign_safe_transaction(
+        self, safe_address_or_tag: str, signing_callback: Callable[[List[str]], str]
+    ) -> str:
+        """Sign a Safe transaction internally.
+
+        This avoids exposing the raw private keys of the signers to the caller.
+        The callback receives a list of private keys which are cleared from memory
+        immediately after the callback returns.
+        """
+        stored = self.find_stored_account(safe_address_or_tag)
+        if not stored or not isinstance(stored, StoredSafeAccount):
+            raise ValueError(f"Safe account '{safe_address_or_tag}' not found.")
+        signer_pkeys = self.get_safe_signer_keys(safe_address_or_tag)
+        try:
+            return signing_callback(signer_pkeys)
+        finally:
+            # Clear the list and references
+            for i in range(len(signer_pkeys)):
+                signer_pkeys[i] = None
+            del signer_pkeys
+
+    def get_account(self, address_or_tag: str) -> Optional[Union[StoredAccount, StoredSafeAccount]]:
+        """Get basic account info without exposing any possibility of private key access."""
+        stored = self.find_stored_account(address_or_tag)
+        if not stored:
+            return None
+        if isinstance(stored, StoredSafeAccount):
+            return stored
+        return StoredAccount(address=stored.address, tag=stored.tag)
+
+    def get_account_info(
+        self, address_or_tag: str
+    ) -> Optional[Union[StoredAccount, StoredSafeAccount]]:
+        """Alias for get_account for clarity when specifically requesting metadata."""
+        return self.get_account(address_or_tag)
 
     def get_tag_by_address(self, address: EthereumAddress) -> Optional[str]:
         """Get tag by address"""

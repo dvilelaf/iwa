@@ -28,3 +28,5 @@ activity.db-shm
 debug_trace.txt
 
 TODO.md
+
+*.db-wal

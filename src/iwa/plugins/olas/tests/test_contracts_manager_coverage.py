@@ -19,6 +19,7 @@ def mock_wallet():
     wallet.send.return_value = (True, {"status": 1})
     return wallet
 
+
 @pytest.fixture
 def mock_config():
     """Mock config for testing."""
@@ -28,11 +29,14 @@ def mock_config():
     config.plugins["olas"].chain_name = "gnosis"
     return config
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
 @patch("iwa.plugins.olas.service_manager.ERC20Contract")
-def test_create_service_success(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_create_service_success(
+    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test successful service creation."""
     # Setup Config
     mock_config_inst = mock_config_cls.return_value
@@ -42,7 +46,9 @@ def test_create_service_success(mock_erc20, mock_sm_contract, mock_registry_cont
 
     # Setup Registry to return event
     mock_registry_inst = mock_registry_contract.return_value
-    mock_registry_inst.extract_events.return_value = [{"name": "CreateService", "args": {"serviceId": 123}}]
+    mock_registry_inst.extract_events.return_value = [
+        {"name": "CreateService", "args": {"serviceId": 123}}
+    ]
 
     # Setup Manager
     manager = ServiceManager(mock_wallet)
@@ -57,11 +63,14 @@ def test_create_service_success(mock_erc20, mock_sm_contract, mock_registry_cont
         assert service_id == 123
         assert mock_olas_config.service_id == 123
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
 @patch("iwa.plugins.olas.service_manager.ERC20Contract")
-def test_create_service_failures(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_create_service_failures(
+    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test service creation failure modes."""
     mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": MagicMock()}
@@ -71,8 +80,8 @@ def test_create_service_failures(mock_erc20, mock_sm_contract, mock_registry_con
     # 1. Transaction fails
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces"):
-         res = manager.create()
-         assert res is None
+        res = manager.create()
+        assert res is None
 
     # Reset wallet
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
@@ -80,14 +89,16 @@ def test_create_service_failures(mock_erc20, mock_sm_contract, mock_registry_con
     # 2. Event missing
     mock_registry_contract.return_value.extract_events.return_value = []
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces"):
-         res = manager.create()
-         # Should effectively return None/False depending on implementation,
-         # code says "if service_id is None: logger.error..." but proceeds to assign None
-         # and returns service_id which is None.
-         assert res is None
+        res = manager.create()
+        # Should effectively return None/False depending on implementation,
+        # code says "if service_id is None: logger.error..." but proceeds to assign None
+        # and returns service_id which is None.
+        assert res is None
 
     # 3. Approval fails
-    mock_registry_contract.return_value.extract_events.return_value = [{"name": "CreateService", "args": {"serviceId": 123}}]
+    mock_registry_contract.return_value.extract_events.return_value = [
+        {"name": "CreateService", "args": {"serviceId": 123}}
+    ]
     # First tx (create) success, Second tx (approve) fails
     mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (False, {})]
 
@@ -100,13 +111,17 @@ def test_create_service_failures(mock_erc20, mock_sm_contract, mock_registry_con
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
 @patch("iwa.plugins.olas.service_manager.ERC20Contract")
-def test_create_service_with_approval(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_create_service_with_approval(
+    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test service creation with token approval."""
     mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": MagicMock()}
 
     mock_registry_inst = mock_registry_contract.return_value
-    mock_registry_inst.extract_events.return_value = [{"name": "CreateService", "args": {"serviceId": 123}}]
+    mock_registry_inst.extract_events.return_value = [
+        {"name": "CreateService", "args": {"serviceId": 123}}
+    ]
 
     manager = ServiceManager(mock_wallet)
 
@@ -117,10 +132,13 @@ def test_create_service_with_approval(mock_erc20, mock_sm_contract, mock_registr
         mock_erc20.return_value.prepare_approve_tx.assert_called()
         assert mock_wallet.sign_and_send_transaction.call_count == 2
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
-def test_activate_registration(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_activate_registration(
+    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test service registration activation."""
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
@@ -150,6 +168,7 @@ def test_activate_registration(mock_sm_contract, mock_registry_contract, mock_co
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     mock_registry_inst.extract_events.return_value = []
     assert manager.activate_registration() is False
+
 
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
@@ -186,6 +205,7 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
     mock_registry_inst.extract_events.return_value = []
     assert manager.register_agent() is False
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
@@ -200,7 +220,7 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     mock_registry_inst.get_service.return_value = {"state": ServiceState.FINISHED_REGISTRATION}
     mock_registry_inst.extract_events.return_value = [
         {"name": "DeployService"},
-        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}}
+        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
     ]
 
     manager = ServiceManager(mock_wallet)
@@ -212,7 +232,7 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     # Failures
     # 1. Wrong state
     mock_registry_inst.get_service.return_value = {"state": ServiceState.PRE_REGISTRATION}
-    assert manager.deploy() is False # returns False or None? Code says False if state wrong
+    assert manager.deploy() is False  # returns False or None? Code says False if state wrong
 
     # 2. Tx fail
     mock_registry_inst.get_service.return_value = {"state": ServiceState.FINISHED_REGISTRATION}
@@ -237,7 +257,7 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_olas_config.service_id = 123
-    mock_olas_config.staking_contract_address = None # Not staked
+    mock_olas_config.staking_contract_address = None  # Not staked
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
@@ -269,10 +289,11 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
     mock_registry_inst.extract_events.return_value = []
     assert manager.terminate() is False
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
-@patch("iwa.plugins.olas.service_manager.ServiceManagerContract") # MUST mock specifically here
-@patch("iwa.plugins.olas.service_manager.ERC20Contract") # For checking balance
+@patch("iwa.plugins.olas.service_manager.ServiceManagerContract")  # MUST mock specifically here
+@patch("iwa.plugins.olas.service_manager.ERC20Contract")  # For checking balance
 def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service staking."""
     mock_config_inst = mock_config_cls.return_value
@@ -290,7 +311,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
     mock_staking = MagicMock()
     mock_staking.staking_token_address = "0xToken"
     mock_staking.address = "0xStaking"
-    mock_staking.get_service_ids.return_value = 0 # Not full
+    mock_staking.get_service_ids.return_value = 0  # Not full
     mock_staking.max_num_services = 10
     mock_staking.min_staking_deposit = 100
     mock_staking.extract_events.return_value = [{"name": "ServiceStaked"}]
@@ -298,7 +319,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
 
     # Mock ERC20 balance check
     mock_erc20_inst = mock_erc20.return_value
-    mock_erc20_inst.balance_of_wei.return_value = 200 # Enough balance
+    mock_erc20_inst.balance_of_wei.return_value = 200  # Enough balance
 
     success = manager.stake(mock_staking)
     assert success is True

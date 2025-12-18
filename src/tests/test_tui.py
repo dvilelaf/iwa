@@ -191,7 +191,9 @@ async def test_create_safe_modal(mock_wallet, mock_deps, mock_plugins):
         # We need to verify that create_safe_worker is called with correct args
         with patch.object(view, "create_safe_worker") as mock_worker:
             # Case 1: Success
-            callback({"tag": "MySafe", "threshold": 2, "owners": ["0x1", "0x2"], "chains": ["gnosis"]})
+            callback(
+                {"tag": "MySafe", "threshold": 2, "owners": ["0x1", "0x2"], "chains": ["gnosis"]}
+            )
             mock_worker.assert_called_with("MySafe", 2, ["0x1", "0x2"], ["gnosis"])
 
             # Case 2: No owners

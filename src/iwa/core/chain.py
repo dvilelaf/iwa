@@ -1,9 +1,9 @@
 """Chain interaction helpers."""
 
 import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from eth_account import Account
+from eth_account.datastructures import SignedTransaction
 from pydantic import BaseModel
 from web3 import Web3
 from web3 import exceptions as web3_exceptions
@@ -165,6 +165,7 @@ class ChainInterface:
         # 2. Try to fetch from chain
         try:
             from iwa.core.contracts.erc20 import ERC20Contract
+
             erc20 = ERC20Contract(address, self.chain.name.lower())
             return erc20.symbol or address[:6] + "..." + address[-4:]
         except Exception:
@@ -174,6 +175,7 @@ class ChainInterface:
         """Get token decimals for an address."""
         try:
             from iwa.core.contracts.erc20 import ERC20Contract
+
             erc20 = ERC20Contract(address, self.chain.name.lower())
             return erc20.decimals if erc20.decimals is not None else 18
         except Exception:
@@ -276,20 +278,21 @@ class ChainInterface:
 
     def send_native_transfer(
         self,
-        from_account: Account,
+        from_address: str,
         to_address: EthereumAddress,
         value_wei: int,
+        sign_callback: Callable[[dict], SignedTransaction],
     ) -> Tuple[bool, Optional[str]]:
         """Send native currency transaction"""
         tx = {
-            "from": from_account.address,
+            "from": from_address,
             "to": to_address,
             "value": value_wei,
-            "nonce": self.web3.eth.get_transaction_count(from_account.address),
+            "nonce": self.web3.eth.get_transaction_count(from_address),
             "chainId": self.chain.chain_id,
         }
 
-        balance_wei = self.get_native_balance_wei(from_account.address)
+        balance_wei = self.get_native_balance_wei(from_address)
         gas_price = self.web3.eth.gas_price
         gas_estimate = self.web3.eth.estimate_gas(tx)
         required_wei = value_wei + (gas_estimate * gas_price)
@@ -303,8 +306,25 @@ class ChainInterface:
         tx["gas"] = gas_estimate
         tx["gasPrice"] = gas_price
 
-        success, receipt = self.sign_and_send_transaction(tx, from_account.key)
-        return success, receipt["transactionHash"].hex() if success and receipt else None
+        signed_tx = sign_callback(tx)
+        try:
+            txn_hash = self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
+            # Use status from receipt, handle both object and dict
+            status = getattr(receipt, "status", None)
+            if status is None and isinstance(receipt, dict):
+                status = receipt.get("status")
+
+            if receipt and status == 1:
+                self.wait_for_no_pending_tx(from_address)
+                logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                return True, receipt["transactionHash"].hex()
+
+            logger.error("Transaction failed.")
+            return False, None
+        except Exception as e:
+            logger.exception(f"Unexpected error sending native transfer: {e}")
+            return False, None
 
     def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
         """Get token address by name"""
@@ -327,6 +347,7 @@ class ChainInterfaces:
             raise ValueError(f"Unsupported chain: {chain_name}")
 
         return getattr(self, chain_name)
+
     def items(self):
         """Iterate over all chain interfaces."""
         yield "gnosis", self.gnosis

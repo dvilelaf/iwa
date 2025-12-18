@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,6 +7,7 @@ from iwa.tui.app import IwaApp
 from iwa.tui.views import CreateSafeModal, WalletsView
 
 # --- KeyStorage Tests ---
+
 
 def test_key_storage_edge_cases(tmp_path):
     # Setup temporary keystore
@@ -42,13 +42,16 @@ def test_key_storage_edge_cases(tmp_path):
     with pytest.raises(ValueError):
         storage.sign_transaction({}, "0xUnknown")
 
+
 # --- WalletsView Tests ---
+
 
 @pytest.fixture
 def mock_wallet():
     with patch("iwa.tui.app.Wallet") as mock:
         mock_inst = mock.return_value
         yield mock_inst
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_actions():
@@ -63,7 +66,7 @@ async def test_wallets_view_actions():
 
             # Test action_refresh
             with patch.object(view, "refresh_accounts") as mock_refresh:
-                view.action_refresh() # Sync call
+                view.action_refresh()  # Sync call
                 mock_refresh.assert_called_with(force=True)
 
             # Test on_unmount
@@ -73,9 +76,10 @@ async def test_wallets_view_actions():
 
             # Test monitor_callback
             with patch.object(view, "handle_new_txs") as _:
-                 with patch.object(app, "call_from_thread") as mock_call:
-                     view.monitor_callback([])
-                     mock_call.assert_called_with(view.handle_new_txs, [])
+                with patch.object(app, "call_from_thread") as mock_call:
+                    view.monitor_callback([])
+                    mock_call.assert_called_with(view.handle_new_txs, [])
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_resolve_tag(mock_wallet):
@@ -101,6 +105,7 @@ async def test_wallets_view_resolve_tag(mock_wallet):
     mock_accounts.values.return_value = []
     tag = view.resolve_tag("0xAddress")
     assert tag == "0xAddr...ress"
+
 
 @pytest.mark.asyncio
 async def test_create_safe_modal():
