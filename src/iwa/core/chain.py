@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
-from iwa.core.models import Config, EthereumAddress, Secrets
+from iwa.core.models import Config, EthereumAddress
+from iwa.core.settings import settings
 from iwa.core.utils import configure_logger, singleton
 
 logger = configure_logger()
@@ -52,7 +53,7 @@ class Gnosis(SupportedChain):
 
     name: str = "Gnosis"
     rpcs: List[str] = (
-        Secrets().gnosis_rpc.get_secret_value().split(",") if Secrets().gnosis_rpc else []
+        settings.gnosis_rpc.get_secret_value().split(",") if settings.gnosis_rpc else []
     )
     chain_id: int = 100
     native_currency: str = "xDAI"
@@ -71,7 +72,7 @@ class Ethereum(SupportedChain):
 
     name: str = "Ethereum"
     rpcs: List[str] = (
-        Secrets().ethereum_rpc.get_secret_value().split(",") if Secrets().ethereum_rpc else []
+        settings.ethereum_rpc.get_secret_value().split(",") if settings.ethereum_rpc else []
     )
     chain_id: int = 1
     native_currency: str = "ETH"
@@ -85,7 +86,7 @@ class Base(SupportedChain):
     """Base"""
 
     name: str = "Base"
-    rpcs: List[str] = Secrets().base_rpc.get_secret_value().split(",") if Secrets().base_rpc else []
+    rpcs: List[str] = settings.base_rpc.get_secret_value().split(",") if settings.base_rpc else []
     chain_id: int = 8453
     native_currency: str = "ETH"
     tokens: Dict[str, EthereumAddress] = {

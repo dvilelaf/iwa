@@ -72,9 +72,13 @@ def test_account_create_error(cli, mock_key_storage):
 
 
 def test_account_list(cli, mock_wallet):
-    result = runner.invoke(cli, ["wallet", "list", "--chain", "gnosis", "--balances", "native"])
-    assert result.exit_code == 0
-    mock_wallet.list_accounts.assert_called_with("gnosis", "native")
+    mock_wallet.get_accounts_balances.return_value = ({}, None)
+    with patch("iwa.core.cli.list_accounts") as mock_list_accounts, \
+         patch("iwa.core.cli.ChainInterfaces"):
+        result = runner.invoke(cli, ["wallet", "list", "--chain", "gnosis", "--balances", "native"])
+        assert result.exit_code == 0
+        mock_wallet.get_accounts_balances.assert_called_with("gnosis", ["native"])
+        mock_list_accounts.assert_called_once()
 
 
 def test_account_send(cli, mock_wallet):

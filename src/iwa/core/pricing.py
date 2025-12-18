@@ -7,7 +7,7 @@ from typing import Dict, Optional
 import requests
 from loguru import logger
 
-from iwa.core.models import Secrets
+from iwa.core.settings import settings
 
 
 class PriceService:
@@ -17,12 +17,12 @@ class PriceService:
 
     def __init__(self, cache_ttl_minutes: int = 5):
         """Initialize PriceService."""
-        self.secrets = Secrets()
+        self.settings = settings
         self.cache: Dict[str, Dict] = {}  # {id_currency: {"price": float, "timestamp": datetime}}
         self.cache_ttl = timedelta(minutes=cache_ttl_minutes)
         self.api_key = (
-            self.secrets.coingecko_api_key.get_secret_value()
-            if self.secrets.coingecko_api_key
+            self.settings.coingecko_api_key.get_secret_value()
+            if self.settings.coingecko_api_key
             else None
         )
 

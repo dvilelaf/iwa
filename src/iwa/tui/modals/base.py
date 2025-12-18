@@ -150,16 +150,10 @@ class CreateSafeModal(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "create":
-            tag = self.query_one("#tag_input").value
-            threshold_str = self.query_one("#threshold_input").value
-            owners = self.query_one("#owners_list").selected
-            chains = self.query_one("#chains_list").selected
-
-            try:
-                threshold = int(threshold_str)
-            except ValueError:
-                threshold = 1
-
+            tag = self.query_one("#tag_input", Input).value
+            threshold = int(self.query_one("#threshold_input", Input).value or "1")
+            owners = self.query_one("#owners_list", SelectionList).selected
+            chains = self.query_one("#chains_list", SelectionList).selected
             self.dismiss({"tag": tag, "threshold": threshold, "owners": owners, "chains": chains})
         elif event.button.id == "cancel":
             self.dismiss(None)

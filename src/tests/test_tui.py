@@ -10,10 +10,20 @@ from iwa.tui.screens.wallets import WalletsScreen
 
 @pytest.fixture
 def mock_wallet():
-    with patch("iwa.tui.app.Wallet") as mock_wallet_cls:
-        wallet = mock_wallet_cls.return_value
-        wallet.key_storage.accounts = {}
-        yield wallet
+    with patch("iwa.tui.app.Wallet") as mock:
+        mock_inst = mock.return_value
+        mock_inst.key_storage = MagicMock()
+        mock_inst.account_service = MagicMock()
+        mock_inst.account_service.accounts = mock_inst.key_storage.accounts
+        mock_inst.account_service.get_account_data.side_effect = lambda: mock_inst.account_service.accounts
+        mock_inst.balance_service = MagicMock()
+        mock_inst.balance_service.get_native_balance_eth.return_value = 0.0
+        mock_inst.balance_service.get_erc20_balance_with_retry.return_value = 0.0
+
+        # Mock PluginService
+        mock_inst.plugin_service = MagicMock()
+        mock_inst.plugin_service.get_all_plugins.return_value = {}
+        yield mock_inst
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +31,6 @@ def mock_deps():
     with (
         patch("iwa.tui.screens.wallets.EventMonitor"),
         patch("iwa.tui.screens.wallets.PriceService") as mock_price,
-        patch("iwa.tui.screens.wallets.run_monitor_thread"),
         patch("iwa.core.db.SentTransaction") as mock_sent_tx,
         patch("iwa.core.db.log_transaction"),
         patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains,
@@ -47,21 +56,19 @@ def mock_deps():
             return gnosis_mock
 
         mock_chains.return_value.get.side_effect = get_chain
+        mock_chains.return_value.items.return_value = [
+            ("gnosis", gnosis_mock),
+            ("ethereum", eth_mock),
+        ]
 
         # Make yield return a dict or object to access specific mocks
         yield {"chains": mock_chains, "pricing": mock_price, "sent_tx": mock_sent_tx}
 
 
-@pytest.fixture
-def mock_plugins():
-    with patch("iwa.tui.app.PluginLoader") as mock_loader:
-        loader = mock_loader.return_value
-        loader.load_plugins.return_value = {}
-        yield loader
 
 
 @pytest.mark.asyncio
-async def test_app_startup(mock_wallet, mock_deps, mock_plugins):
+async def test_app_startup(mock_wallet, mock_deps):
     app = IwaApp()
     async with app.run_test(size=(120, 60)):
         assert app.title == "Iwa"
@@ -69,7 +76,7 @@ async def test_app_startup(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_create_eoa_modal_press(mock_wallet, mock_deps, mock_plugins):
+async def test_create_eoa_modal_press(mock_wallet, mock_deps):
     app = IwaApp()
     async with app.run_test(size=(120, 60)) as pilot:
         _ = app.query_one(WalletsScreen)
@@ -89,7 +96,7 @@ async def test_create_eoa_modal_press(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_create_safe_modal_compose(mock_wallet, mock_deps, mock_plugins):
+async def test_create_safe_modal_compose(mock_wallet, mock_deps):
     app = IwaApp()
     async with app.run_test() as pilot:
         # Setup accounts for owner selection
@@ -97,6 +104,9 @@ async def test_create_safe_modal_compose(mock_wallet, mock_deps, mock_plugins):
             "0x1": MagicMock(address="0x1", tag="Owner1"),
             "0x2": MagicMock(address="0x2", tag="Owner2"),
         }
+        mock_wallet.account_service.accounts = mock_wallet.key_storage.accounts
+        mock_wallet.account_service.get_account_data.return_value = {}
+        mock_wallet.account_service.resolve_account.side_effect = lambda tag: mock_wallet.key_storage.get_account(tag)
 
         # Unit test compose structure directly
         modal = CreateSafeModal(
@@ -149,7 +159,7 @@ async def test_create_safe_modal_handlers():
         chains_list_mock = MagicMock()
         chains_list_mock.selected = ["gnosis"]
 
-        def query_side_effect(selector):
+        def query_side_effect(selector, *args):
             if selector == "#tag_input":
                 return tag_input_mock
             if selector == "#threshold_input":
@@ -202,7 +212,7 @@ async def test_wallets_screen_buttons(mock_wallet):
 
 
 @pytest.mark.asyncio
-async def test_send_transaction_ui(mock_wallet, mock_deps, mock_plugins):
+async def test_send_transaction_ui(mock_wallet, mock_deps):
     app = IwaApp()
     async with app.run_test(size=(200, 200)) as pilot:
         view = app.query_one(WalletsScreen)
@@ -230,13 +240,15 @@ async def test_send_transaction_ui(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_view_methods_direct(mock_wallet, mock_deps, mock_plugins):
+async def test_view_methods_direct(mock_wallet, mock_deps):
     """Test methods directly for coverage."""
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
         view = app.query_one(WalletsScreen)
 
-        mock_wallet.key_storage.accounts = {"a1": MagicMock(address="0xABC", tag="Tag1")}
+        mock_acc = MagicMock(address="0xABC", tag="Tag1")
+        mock_wallet.key_storage.get_account.side_effect = lambda tag: mock_acc if tag == "0xABC" else None
+        mock_wallet.account_service.accounts = {"a1": mock_acc}
         assert view.resolve_tag("0xABC") == "Tag1"
         assert view.resolve_tag("0xXYZ") == "0xXYZ...xXYZ"
 
@@ -276,7 +288,7 @@ async def test_view_methods_direct(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_load_recent_txs(mock_wallet, mock_deps, mock_plugins):
+async def test_load_recent_txs(mock_wallet, mock_deps):
     # Setup Mock SentTransaction from fixture
     mock_sent_tx_cls = mock_deps["sent_tx"]
 
@@ -328,7 +340,7 @@ async def test_load_recent_txs(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_chain_switching(mock_wallet, mock_deps, mock_plugins):
+async def test_chain_switching(mock_wallet, mock_deps):
     """Test chain selector functionality."""
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
@@ -340,11 +352,19 @@ async def test_chain_switching(mock_wallet, mock_deps, mock_plugins):
         # Change to Ethereum
         chain_select = app.query_one("#chain_select", Select)
 
+        # Stop existing monitor workers before switching chain
+        if hasattr(view, "monitor_workers"):
+            for w in view.monitor_workers:
+                w.stop()
+
         # But setting .value property on Select DOES trigger Changed event.
         chain_select.value = "ethereum"
 
         # Wait for event to process
         await pilot.pause()
+        assert len(view.monitor_workers) > 0
+        # worker = view.monitor_workers[0]
+        # assert worker.monitor.chain_interface.chain.name in ["gnosis", "ethereum"]
 
         # Verify active chain updated
         assert view.active_chain == "ethereum"
@@ -364,7 +384,7 @@ async def test_chain_switching(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
+async def test_token_overwrite(mock_wallet, mock_deps):
     """Test that enabling a second token does not overwrite the first."""
     app = IwaApp()
     async with app.run_test(size=(160, 80)) as pilot:
@@ -372,6 +392,7 @@ async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
 
         # Setup mock account
         mock_wallet.key_storage.accounts = {"0x1": MagicMock(address="0x1", tag="TestAcc")}
+        mock_wallet.account_service.accounts = mock_wallet.key_storage.accounts
         view.refresh_accounts(force=True)
 
         # Switch to Ethereum (has USDC, USDT)
@@ -380,7 +401,7 @@ async def test_token_overwrite(mock_wallet, mock_deps, mock_plugins):
         await pilot.pause()
 
         # Configure wallet mock to return balances
-        mock_wallet.get_erc20_balance_eth.return_value = 100.0
+        mock_wallet.balance_service.get_erc20_balance_with_retry.return_value = 100.0
 
         cb_usdc = app.query_one("#cb_USDC", Checkbox)
         cb_usdc.value = True

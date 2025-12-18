@@ -1,17 +1,22 @@
 """Wallets Screen for the IWA TUI."""
 
+import asyncio
 import datetime
 import json
-import threading
 import time
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from loguru import logger
 from rich.markup import escape
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Center, Horizontal, HorizontalScroll, VerticalScroll
+from textual.containers import (
+    Center,
+    Horizontal,
+    HorizontalScroll,
+    VerticalScroll,
+)
 from textual.widgets import (
     Button,
     Checkbox,
@@ -20,6 +25,9 @@ from textual.widgets import (
     Label,
     Select,
 )
+
+if TYPE_CHECKING:
+    from iwa.tui.app import IwaApp
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.models import Config, StoredSafeAccount
@@ -34,11 +42,36 @@ from iwa.tui.widgets import AccountTable, ChainSelector, TransactionTable
 configure_logger()
 
 
-def run_monitor_thread(monitor: EventMonitor):
-    """Start the event monitor in a daemon thread."""
-    t = threading.Thread(target=monitor.start, daemon=True)
-    t.start()
-    return t
+class MonitorWorker:
+    """Worker to run the EventMonitor."""
+
+    def __init__(self, monitor: EventMonitor, app: "IwaApp"):
+        """Initialize MonitorWorker."""
+        self.monitor = monitor
+        self.app = app
+        self._running = False
+
+    async def run(self):
+        """Run the monitor loop."""
+        self._running = True
+        self.monitor.running = True
+        logger.info(f"Starting MonitorWorker for {self.monitor.chain_name}")
+
+        while self._running:
+            try:
+                # Run check_activity in a thread to avoid blocking the async loop
+                # since web3 calls are synchronous
+                await self.app.run_in_thread(self.monitor.check_activity)
+            except Exception as e:
+                logger.error(f"Error in MonitorWorker: {e}")
+
+            # Non-blocking sleep
+            await asyncio.sleep(6)
+
+    def stop(self):
+        """Stop the worker."""
+        self._running = False
+        self.monitor.stop()
 
 
 class WalletsScreen(VerticalScroll):
@@ -53,7 +86,7 @@ class WalletsScreen(VerticalScroll):
         super().__init__()
         self.wallet = wallet
         self.active_chain = "gnosis"
-        self.monitors = []
+        self.monitor_workers = []  # List of MonitorWorker instances
         # Stores set of checked tokens (names) per chain
         self.chain_token_states: dict[str, set[str]] = {
             "gnosis": set(),
@@ -154,7 +187,7 @@ class WalletsScreen(VerticalScroll):
             self.balance_cache[current_chain] = {}
 
         needs_fetch = False
-        for account in self.wallet.key_storage.accounts.values():
+        for account in self.wallet.account_service.get_account_data().values():
             try:
                 if isinstance(account, StoredSafeAccount):
                     if current_chain not in account.chains:
@@ -207,7 +240,7 @@ class WalletsScreen(VerticalScroll):
         needs_retry = False
         active_tokens = self.chain_token_states.get(chain_name_checked, set())
 
-        for account in self.wallet.key_storage.accounts.values():
+        for account in self.wallet.account_service.get_account_data().values():
             addr = account.address
             if chain_name_checked not in self.balance_cache:
                 needs_retry = True
@@ -237,7 +270,7 @@ class WalletsScreen(VerticalScroll):
     @work(exclusive=False, thread=True)
     def fetch_all_balances(self, chain_name: str, token_names: List[str]) -> None:
         """Fetch all balances for the chain sequentially."""
-        accounts = list(self.wallet.key_storage.accounts.values())
+        accounts = list(self.wallet.account_service.get_account_data().values())
         for account in accounts:
             if self.active_chain != chain_name:
                 return
@@ -257,7 +290,7 @@ class WalletsScreen(VerticalScroll):
         val_native = cached_native if not should_fetch_native else "Error"
         if should_fetch_native:
             try:
-                balance = self.wallet.get_native_balance_eth(address, chain_name=chain_name)
+                balance = self.wallet.balance_service.get_native_balance_eth(address, chain_name=chain_name)
                 val_native = f"{balance:.4f}" if balance is not None else "Error"
                 if chain_name not in self.balance_cache:
                     self.balance_cache[chain_name] = {}
@@ -286,25 +319,18 @@ class WalletsScreen(VerticalScroll):
             self.app.call_from_thread(self.update_table_cell, address, col_idx, Text(val_token, justify="right"))
 
     def _fetch_single_token_balance(self, address: str, token: str, chain_name: str) -> str:
-        """Fetch a single token balance with retries."""
-        for attempt in range(3):
-            try:
-                balance = self.wallet.get_erc20_balance_eth(address, token, chain_name=chain_name)
-                val_token = f"{balance:.4f}" if balance is not None else "-"
-                if chain_name not in self.balance_cache:
-                    self.balance_cache[chain_name] = {}
-                if address not in self.balance_cache[chain_name]:
-                    self.balance_cache[chain_name][address] = {}
-                self.balance_cache[chain_name][address][token] = val_token
-                return val_token
-            except Exception as e:
-                if attempt == 2:
-                    from loguru import logger
-                    logger.error(f"Failed token {token} {address} after 3 attempts: {e}")
-                    if "429" in str(e):
-                        self.app.call_from_thread(self.notify, f"Rate limited on {chain_name}!", severity="warning")
-                time.sleep(1)
-        return "-"
+        """Fetch a single token balance using BalanceService."""
+        val_token = self.wallet.balance_service.get_erc20_balance_with_retry(address, token, chain_name)
+        val_token_str = f"{val_token:.4f}" if val_token is not None else "-"
+
+        if val_token is not None:
+            if chain_name not in self.balance_cache:
+                self.balance_cache[chain_name] = {}
+            if address not in self.balance_cache[chain_name]:
+                self.balance_cache[chain_name][address] = {}
+            self.balance_cache[chain_name][address][token] = val_token_str
+
+        return val_token_str
 
     def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
         """Add a new row to the transaction history table."""
@@ -331,14 +357,21 @@ class WalletsScreen(VerticalScroll):
         for chain_name, interface in ChainInterfaces().items():
             if interface.chain.rpc:
                 monitor = EventMonitor(addresses, self.monitor_callback, chain_name)
-                run_monitor_thread(monitor)
-                self.monitors.append(monitor)
+
+                # Worker wrapper
+                worker = MonitorWorker(monitor, self.app)
+                self.monitor_workers.append(worker)
+
+                # Launch as a Textual Worker
+                self.run_worker(worker.run(), group="monitors", thread=False)
 
     def stop_monitor(self) -> None:
         """Stop background transaction monitor."""
-        for monitor in self.monitors:
-            monitor.stop()
-        self.monitors.clear()
+        for worker in self.monitor_workers:
+            worker.stop()
+        self.monitor_workers.clear()
+        # Cancel Textual workers in the 'monitors' group
+        # self.workers.cancel_group("monitors") # Helper not always available, rely on worker.stop() setting flag
 
     def monitor_callback(self, txs: List[dict]) -> None:
         """Handle new transactions."""
@@ -356,13 +389,13 @@ class WalletsScreen(VerticalScroll):
             amt = f"{float(tx.get('value', 0)) / 10**18:.4f}"
             tx_hash = tx["hash"]
             self.add_tx_history_row(f, t, token, amt, "Detected", tx_hash)
-            if not any(acc.address.lower() == str(tx["from"]).lower() for acc in self.wallet.key_storage.accounts.values()):
+            if not any(acc.address.lower() == str(tx["from"]).lower() for acc in self.wallet.account_service.get_account_data().values()):
                 self.notify(f"New transaction detected! {tx['hash'][:6]}...", severity="info")
         self.enrich_and_log_txs(txs)
 
     def resolve_tag(self, address: str) -> str:
         """Resolve address to tag."""
-        for acc in self.wallet.key_storage.accounts.values():
+        for acc in self.wallet.account_service.get_account_data().values():
             if acc.address.lower() == address.lower():
                 return acc.tag
         config = Config()

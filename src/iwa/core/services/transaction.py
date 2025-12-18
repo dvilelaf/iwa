@@ -1,23 +1,23 @@
-"""Managers for transaction and chain interactions."""
+"""Transaction service module."""
 
 import time
 from typing import Dict, Tuple
 
+from loguru import logger
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.keys import KeyStorage
-from iwa.core.utils import configure_logger
-
-logger = configure_logger()
+from iwa.core.services.account import AccountService
 
 
-class TransactionManager:
+class TransactionService:
     """Manages transaction lifecycle: signing, sending, retrying."""
 
-    def __init__(self, key_storage: KeyStorage):
-        """Initialize TransactionManager."""
+    def __init__(self, key_storage: KeyStorage, account_service: AccountService):
+        """Initialize TransactionService."""
         self.key_storage = key_storage
+        self.account_service = account_service
 
     def sign_and_send(  # noqa: C901
         self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
@@ -29,7 +29,7 @@ class TransactionManager:
 
         # Ensure nonce is set if not present
         if "nonce" not in tx:
-            signer_account = self.key_storage.get_account(signer_address_or_tag)
+            signer_account = self.account_service.resolve_account(signer_address_or_tag)
             if not signer_account:
                 logger.error(f"Signer {signer_address_or_tag} not found")
                 return False, {}
@@ -50,7 +50,7 @@ class TransactionManager:
                 receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
 
                 if receipt and getattr(receipt, "status", None) == 1:
-                    signer_account = self.key_storage.get_account(signer_address_or_tag)
+                    signer_account = self.account_service.resolve_account(signer_address_or_tag)
                     chain_interface.wait_for_no_pending_tx(signer_account.address)
                     logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
                     return True, receipt

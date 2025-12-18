@@ -7,7 +7,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
-from iwa.core.plugins import PluginLoader
 from iwa.core.wallet import Wallet
 from iwa.tui.rpc import RPCView
 from iwa.tui.screens.wallets import WalletsScreen
@@ -120,8 +119,8 @@ class IwaApp(App):
         self.wallet = Wallet()
         trace("App INIT: Wallet Loaded")
 
-        self.plugin_loader = PluginLoader()
-        self.plugins = self.plugin_loader.load_plugins()
+        # Use PluginService from wallet
+        self.plugins = self.wallet.plugin_service.get_all_plugins()
         trace("App INIT: Plugins Loaded")
 
     def compose(self) -> ComposeResult:

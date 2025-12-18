@@ -8,8 +8,8 @@ from iwa.core.pricing import PriceService
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.core.pricing.Secrets") as mock:
-        mock.return_value.coingecko_api_key.get_secret_value.return_value = "test_api_key"
+    with patch("iwa.core.pricing.settings") as mock:
+        mock.coingecko_api_key.get_secret_value.return_value = "test_api_key"
         yield mock
 
 

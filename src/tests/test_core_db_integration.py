@@ -182,6 +182,8 @@ async def test_enrich_logs_api_failure(mock_wallet):
                     # We need to wait for workers or call it.
                     # Textual workers are async.
                     # For test purposes, we can trust it is called.
+                    if not view.monitor_workers:
+                         view.start_monitor()
                     view.enrich_and_log_txs(txs)
 
                     # Wait for worker? It's threaded.

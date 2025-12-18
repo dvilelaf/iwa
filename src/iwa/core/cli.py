@@ -5,9 +5,11 @@ from typing import Optional
 import typer
 from web3 import Web3
 
+from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.keys import KeyStorage
-from iwa.core.plugins import PluginLoader
+from iwa.core.services import PluginService
+from iwa.core.tables import list_accounts
 from iwa.core.wallet import Wallet
 from iwa.tui.app import IwaApp
 
@@ -52,7 +54,17 @@ def account_list(
 ):
     """List wallet accounts"""
     wallet = Wallet()
-    wallet.list_accounts(chain_name, balances)
+    chain_interface = ChainInterfaces().get(chain_name)
+    token_names_list = balances.split(",") if balances else []
+
+    accounts_data, token_balances = wallet.get_accounts_balances(chain_name, token_names_list)
+
+    list_accounts(
+        accounts_data,
+        chain_interface,
+        token_names_list,
+        token_balances,
+    )
 
 
 @wallet_cli.command("send")
@@ -167,8 +179,11 @@ def drain_wallet(
 
 
 # Load Plugins
-plugin_loader = PluginLoader()
-plugins = plugin_loader.load_plugins()
+# Load Plugins
+# Removed direct import here, moved to top
+
+plugin_service = PluginService()
+plugins = plugin_service.get_all_plugins()
 
 for plugin_name, plugin in plugins.items():
     commands = plugin.get_cli_commands()

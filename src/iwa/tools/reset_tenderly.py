@@ -1,20 +1,17 @@
 """Recreates Tenderly networks and funds wallets as per configuration."""
 
 import json
-import os
 import random
 import re
 import string
 from typing import List, Optional, Tuple
 
 import requests
-from dotenv import load_dotenv
 
 from iwa.core.constants import SECRETS_PATH, TENDERLY_CONFIG_PATH
 from iwa.core.keys import KeyStorage
 from iwa.core.models import TenderlyConfig
-
-load_dotenv(SECRETS_PATH, override=True)
+from iwa.core.settings import settings
 
 
 def _delete_vnet(
@@ -157,9 +154,9 @@ def main() -> None:  # noqa: C901
     """Main"""
     print("Recreating Tenderly Networks")
 
-    account_slug = os.getenv("tenderly_account_slug")
-    project_slug = os.getenv("tenderly_project_slug")
-    tenderly_access_key = os.getenv("tenderly_access_key")
+    account_slug = settings.tenderly_account_slug.get_secret_value() if settings.tenderly_account_slug else None
+    project_slug = settings.tenderly_project_slug.get_secret_value() if settings.tenderly_project_slug else None
+    tenderly_access_key = settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None
 
     if not account_slug or not project_slug or not tenderly_access_key:
         print("Missing Tenderly environment variables")
@@ -204,6 +201,9 @@ def main() -> None:  # noqa: C901
 
         # Fund wallets
         keys = KeyStorage()
+        from iwa.core.services import AccountService, SafeService
+        account_service = AccountService(keys)
+        safe_service = SafeService(keys, account_service)
 
         for account_tags, requirement in vnet.funds_requirements.items():
             tags = account_tags.split(",")
@@ -232,13 +232,13 @@ def main() -> None:  # noqa: C901
                     admin_rpc=vnet.admin_rpc,
                     wallet_addresses=addresses,
                     amount=token.amount,
-                    native_or_token_address=token.address,
+                    native_or_token_address=str(token.address),
                 )
                 print(f"Funded {tags} with {token.amount} {token.symbol}")
 
         # Redeploy safes
         if vnet_name == "Gnosis":
-            keys.redeploy_safes()
+            safe_service.redeploy_safes()
 
 
 if __name__ == "__main__":  # pragma: no cover

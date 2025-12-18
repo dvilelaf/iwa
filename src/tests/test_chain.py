@@ -22,7 +22,7 @@ def mock_web3():
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.core.chain.Secrets") as mock:
+    with patch("iwa.core.chain.settings") as mock:
         yield mock
 
 
@@ -54,9 +54,9 @@ def test_supported_chain_get_token_address():
 
 
 def test_chain_classes(mock_secrets):
-    mock_secrets.return_value.gnosis_rpc.get_secret_value.return_value = "https://gnosis"
-    mock_secrets.return_value.ethereum_rpc.get_secret_value.return_value = "https://eth"
-    mock_secrets.return_value.base_rpc.get_secret_value.return_value = "https://base"
+    mock_secrets.gnosis_rpc.get_secret_value.return_value = "https://gnosis"
+    mock_secrets.ethereum_rpc.get_secret_value.return_value = "https://eth"
+    mock_secrets.base_rpc.get_secret_value.return_value = "https://base"
 
     # Reset singletons
     Gnosis._instance = None
@@ -69,7 +69,7 @@ def test_chain_classes(mock_secrets):
 
 
 def test_chain_interface_init(mock_web3, mock_secrets):
-    mock_secrets.return_value.gnosis_rpc.get_secret_value.return_value = "https://gnosis"
+    mock_secrets.gnosis_rpc.get_secret_value.return_value = "https://gnosis"
     Gnosis._instance = None
 
     ci = ChainInterface()

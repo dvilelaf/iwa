@@ -33,7 +33,7 @@ def mock_tenderly_config():
     vnet.admin_rpc = "https://admin.rpc.com"
     vnet.funds_requirements = {
         "tag1": FundRequirements(
-            native=1.0, tokens=[TokenAmount(address="0xToken", amount=10.0, symbol="TKN")]
+            native=1.0, tokens=[TokenAmount(address="0x1234567890123456789012345678901234567890", amount=10.0, symbol="TKN")]
         )
     }
     config.vnets = {"Gnosis": vnet}
@@ -179,10 +179,13 @@ def test_main(mock_requests, mock_tenderly_config):
 
                 # Mock update_rpc_variables to avoid file I/O
                 with patch("iwa.tools.reset_tenderly.update_rpc_variables") as mock_update:
-                    main()
+                    # Mock SafeService
+                    with patch("iwa.core.services.SafeService") as mock_safe_service_cls:
+                        main()
 
-                    # Verify interactions
-                    mock_requests.delete.assert_called()  # _delete_vnet
-                    mock_tenderly_config.save.assert_called()
-                    mock_update.assert_called()
-                    mock_keys.redeploy_safes.assert_called()
+                        # Verify interactions
+                        mock_requests.delete.assert_called()  # _delete_vnet
+                        mock_tenderly_config.save.assert_called()
+                        mock_update.assert_called()
+                        # mock_keys.redeploy_safes.assert_called() # Removed
+                        mock_safe_service_cls.return_value.redeploy_safes.assert_called()

@@ -1,7 +1,6 @@
 """BIP-39 mnemonic generator, encrypt/decrypt, ETH account derivation and keystore saving."""
 
 import base64
-import getpass
 import json
 import os
 from pathlib import Path
@@ -20,11 +19,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from eth_account import Account
 from pydantic import BaseModel
-from rich import box
-from rich.align import Align
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, StoredAccount
@@ -279,7 +273,7 @@ class MnemonicManager:
         self,
         password: str,
         out_file: str = None,
-    ) -> None:
+    ) -> str:
         """Generate a BIP-39 mnemonic, encrypt it and save to disk.
 
         Args:
@@ -288,8 +282,7 @@ class MnemonicManager:
                             uses `self.mnemonic_file`.
 
         Returns:
-            str: The plaintext mnemonic (returned so the user can back it
-                 up securely).
+            str: The plaintext mnemonic (returned so data is available).
 
         """
         out_file = out_file or self.mnemonic_file
@@ -299,94 +292,7 @@ class MnemonicManager:
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump(enc, f, indent=2)
         os.chmod(out_file, 0o600)
-        self.display_mnemonic(mnemonic_str)
-        del mnemonic, enc, mnemonic_str  # clean up sensitive data
-
-    def prompt_and_store_mnemonic(self, out_file: str = None, max_attempts: int = 3) -> None:
-        """Prompt for a password twice, verify they match, and store mnemonic.
-
-        This helper asks the user to enter a password twice and checks that
-        both entries match. If they do, it generates, encrypts and stores
-        the mnemonic using `generate_and_store_mnemonic`.
-
-        Args:
-            out_file (str): Optional destination file for the encrypted object.
-            max_attempts (int): Number of attempts allowed for confirmation.
-
-        Returns:
-            str | None: The plaintext mnemonic if successful, otherwise None.
-
-        """
-        if os.path.exists(out_file or self.mnemonic_file):
-            print(f"Mnemonic file '{out_file or self.mnemonic_file}' already exists.")
-            return None
-
-        for _ in range(max_attempts):
-            p1 = getpass.getpass("Enter a strong password to encrypt the mnemonic: ").strip()
-            if not p1:
-                print("Empty password not allowed.")
-                continue
-            p2 = getpass.getpass("Confirm password: ").strip()
-            if p1 != p2:
-                print("Passwords do not match. Please try again.")
-                continue
-            # Passwords match — generate and store mnemonic
-            self.generate_and_store_mnemonic(p1, out_file)
-            return None
-        raise ValueError("Maximum password attempts exceeded.")
-
-    def display_mnemonic(
-        self,
-        mnemonic: str,
-        columns: int = 6,
-        rows: int = 4,
-    ) -> None:
-        """Format and print a mnemonic as a numbered table wrapped in a Panel.
-
-        Args:
-            mnemonic (str): The plaintext mnemonic (space separated words).
-            columns (int): Number of columns per row (default 6).
-            rows (int): Number of rows (default 4).
-
-        """
-        words = mnemonic.split()
-        console = Console()
-        # build table without internal borders; we'll wrap it in a Panel
-        table = Table(
-            show_header=False,
-            box=None,
-            show_lines=False,
-            expand=False,
-        )
-        # add columns
-        for _ in range(columns):
-            table.add_column(justify="left")
-        # warning: advise user to create a paper backup
-        console.print(
-            "[bold yellow]Warning:[/bold yellow] Make a paper backup of "
-            "your mnemonic and store it in a safe place:"
-        )
-        # prepare numbered cells (colored green) with padded indices
-        cells = []
-        for i, w in enumerate(words):
-            cells.append(f"[green]{i + 1:2d}. {w}[/green]")
-        # add rows of `columns` columns
-        for r in range(rows):
-            start = r * columns
-            row = cells[start : start + columns]
-            # if row shorter than columns, pad with empty strings
-            if len(row) < columns:
-                row += [""] * (columns - len(row))
-            table.add_row(*row)
-        # wrap table in a panel to draw only the outer border
-        panel = Panel(
-            table,
-            box=box.ROUNDED,
-            border_style="bright_blue",
-            padding=(0, 1),
-            expand=False,
-        )
-        console.print(Align.center(panel))
+        return mnemonic_str
 
     def load_and_decrypt_mnemonic(
         self,
@@ -410,25 +316,25 @@ class MnemonicManager:
         try:
             mnemonic = self.decrypt_mnemonic(enc, password)
             return mnemonic
-        except InvalidTag:
-            print("Incorrect password")
-            return None
+        except InvalidTag as e:
+            raise ValueError("Incorrect password") from e
 
     def derive_eth_accounts_from_mnemonic(
         self,
+        password: str,
         n_accounts: int = 5,
     ):
         """Derive Ethereum accounts (BIP-44) from a BIP-39 mnemonic.
 
         Args:
-            mnemonic (str): The mnemonic as plain text.
+            password (str): Password to decrypt the mnemonic.
             n_accounts (int): Number of accounts to derive.
 
         Returns:
             list: Dicts with keys 'index', 'address' and 'private_key_hex'.
 
         """
-        mnemonic = self.load_and_decrypt_mnemonic(getpass.getpass("Enter password: "))
+        mnemonic = self.load_and_decrypt_mnemonic(password)
 
         if mnemonic is None:
             return None
@@ -477,21 +383,4 @@ class MnemonicManager:
         return addr_ctx.PrivateKey().Raw().ToHex()
 
 
-def main():
-    """Demosntrate MnemonicManager usage."""
-    mgr = MnemonicManager()
 
-    # mgr.prompt_and_store_mnemonic()
-
-    accounts = mgr.derive_eth_accounts_from_mnemonic()
-
-    if accounts is None:
-        return
-
-    print(f"\nDerived {len(accounts)} accounts:")
-    for a in accounts:
-        print(f"  index {a['index']:>2} -> {a['address']}")
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()

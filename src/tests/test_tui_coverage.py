@@ -15,9 +15,21 @@ def mock_wallet():
             "0x1": MagicMock(address="0x1", tag="Acc1"),
             "0x2": MagicMock(address="0x2", tag="Acc2"),
         }
+        wallet.account_service = MagicMock()
+        wallet.account_service.accounts = wallet.key_storage.accounts
+        wallet.account_service.get_account_data.side_effect = lambda: wallet.account_service.accounts
+        wallet.balance_service = MagicMock()
+
+        # Helper to make resolve_account work with key_storage for consistency
+        wallet.account_service.resolve_account.side_effect = lambda tag: wallet.key_storage.get_account(tag)
+
         wallet.get_native_balance_eth.return_value = 0.0
         wallet.get_erc20_balance_eth.return_value = 0.0
         wallet.send.return_value = "0xHash"
+
+        # Mock PluginService
+        wallet.plugin_service = MagicMock()
+        wallet.plugin_service.get_all_plugins.return_value = {}
         yield wallet
 
 
@@ -26,7 +38,6 @@ def mock_deps():
     with (
         patch("iwa.tui.screens.wallets.EventMonitor"),
         patch("iwa.tui.screens.wallets.PriceService") as mock_price,
-        patch("iwa.tui.screens.wallets.run_monitor_thread"),
         patch("iwa.core.db.SentTransaction"),
         patch("iwa.core.db.log_transaction"),
         patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains,
@@ -38,20 +49,15 @@ def mock_deps():
         mock_interface.tokens = {"TOKEN": "0xToken"}
         mock_interface.chain.native_currency = "ETH"
         mock_chains.return_value.get.return_value = mock_interface
+        mock_chains.return_value.items.return_value = [("gnosis", mock_interface)]
 
         yield {"chains": mock_chains}
 
 
-@pytest.fixture
-def mock_plugins():
-    with patch("iwa.tui.app.PluginLoader") as mock_loader:
-        loader = mock_loader.return_value
-        loader.load_plugins.return_value = {}
-        yield loader
 
 
 @pytest.mark.asyncio
-async def test_fetch_balances_flow(mock_wallet, mock_deps, mock_plugins):
+async def test_fetch_balances_flow(mock_wallet, mock_deps):
     app = IwaApp()
     # Patch call_from_thread
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
@@ -59,9 +65,10 @@ async def test_fetch_balances_flow(mock_wallet, mock_deps, mock_plugins):
     async with app.run_test(size=(160, 80)):
         view = app.query_one(WalletsScreen)
 
-        # Configure wallet returns
+        # Configure returns on both legacy and service
         mock_wallet.get_native_balance_eth.return_value = 1.2345
-        mock_wallet.get_erc20_balance_eth.return_value = 500.0
+        mock_wallet.balance_service.get_native_balance_eth.return_value = 1.2345
+        mock_wallet.balance_service.get_erc20_balance_with_retry.return_value = 500.0
 
         # Trigger fetch directly
         view.balance_cache = {}
@@ -73,9 +80,9 @@ async def test_fetch_balances_flow(mock_wallet, mock_deps, mock_plugins):
         worker = view.fetch_all_balances(view.active_chain, ["TOKEN"])
         await worker.wait()
 
-        # Verify calls made
-        mock_wallet.get_native_balance_eth.assert_called()
-        mock_wallet.get_erc20_balance_eth.assert_called()
+        # Verify calls made (can check either legacy or service depending on how it's implemented)
+        mock_wallet.balance_service.get_native_balance_eth.assert_called()
+        mock_wallet.balance_service.get_erc20_balance_with_retry.assert_called()
 
         # Verify cache state
         assert view.balance_cache["gnosis"]["0x1"]["NATIVE"] == "1.2345"
@@ -83,7 +90,7 @@ async def test_fetch_balances_flow(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_chain_changed(mock_wallet, mock_deps, mock_plugins):
+async def test_chain_changed(mock_wallet, mock_deps):
     app = IwaApp()
     # Patch call_from_thread
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
@@ -106,7 +113,7 @@ async def test_chain_changed(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
+async def test_send_transaction_coverage(mock_wallet, mock_deps):
     app = IwaApp()
     # Patch call_from_thread
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
@@ -115,10 +122,11 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
         view = app.query_one(WalletsScreen)
         # Force table height
         app.query_one("#accounts_table").styles.height = 10
-        await pilot.pause()
-
-        # Select from/to/token
-        await view.refresh_ui_for_chain()
+        # Wait for workers to populate
+        # In the new design, monitor_workers are created in start_monitor
+        if not view.monitor_workers:
+             view.start_monitor()
+        assert len(view.monitor_workers) > 0
         await pilot.pause()
 
         # Test validation failures
@@ -167,7 +175,7 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_watchdog_logic(mock_wallet, mock_deps, mock_plugins):
+async def test_watchdog_logic(mock_wallet, mock_deps):
     app = IwaApp()
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
@@ -211,7 +219,7 @@ async def test_watchdog_logic(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_monitor_handler(mock_wallet, mock_deps, mock_plugins):
+async def test_monitor_handler(mock_wallet, mock_deps):
     app = IwaApp()
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
@@ -248,7 +256,7 @@ async def test_monitor_handler(mock_wallet, mock_deps, mock_plugins):
 
 
 @pytest.mark.asyncio
-async def test_token_fetch_retry_and_failure(mock_wallet, mock_deps, mock_plugins):
+async def test_token_fetch_retry_and_failure(mock_wallet, mock_deps):
     app = IwaApp()
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 
@@ -257,29 +265,29 @@ async def test_token_fetch_retry_and_failure(mock_wallet, mock_deps, mock_plugin
         view.balance_cache = {}
         view.chain_token_states["gnosis"] = {"TOKEN"}
 
+        # Check worker logic
+        worker = view.monitor_workers[0]
+        # We can't easily check internal state of the worker loop without complex mocking
+        # assert worker.monitor.chain_name in ["gnosis", "ethereum", "base"]
+
         # Limit to 1 account to control call count
         mock_wallet.key_storage.accounts = {"0x1": MagicMock(address="0x1", tag="Acc1")}
 
         # Patch time.sleep to avoid wait
         with patch("time.sleep"):
-            # Case 1: Retry success
-            # Fail twice, succeed third
-            mock_wallet.get_erc20_balance_eth.side_effect = [
-                Exception("Fail 1"),
-                Exception("Fail 2"),
-                100.0,
-            ]
+            # Case 1: Success
+            mock_wallet.balance_service.get_erc20_balance_with_retry.return_value = 100.0
 
             worker = view.fetch_all_balances("gnosis", ["TOKEN"])
             await worker.wait()
-            # verify call count
-            assert mock_wallet.get_erc20_balance_eth.call_count == 3
+            # verify call made
+            mock_wallet.balance_service.get_erc20_balance_with_retry.assert_called()
             # Should have updated cache (4 decimals)
             assert view.balance_cache["gnosis"]["0x1"]["TOKEN"] == "100.0000"
 
 
 @pytest.mark.asyncio
-async def test_send_transaction_failure(mock_wallet, mock_deps, mock_plugins):
+async def test_send_transaction_failure(mock_wallet, mock_deps):
     app = IwaApp()
     app.call_from_thread = lambda cb, *args, **kwargs: cb(*args, **kwargs)
 

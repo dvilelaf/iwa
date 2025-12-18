@@ -51,6 +51,11 @@ def test_key_storage_edge_cases(tmp_path):
 def mock_wallet():
     with patch("iwa.tui.app.Wallet") as mock:
         mock_inst = mock.return_value
+        mock_inst.key_storage = MagicMock()
+        mock_inst.account_service = MagicMock()
+        mock_inst.account_service.accounts = mock_inst.key_storage.accounts
+        mock_inst.account_service.get_account_data.side_effect = lambda: mock_inst.account_service.accounts
+        mock_inst.balance_service = MagicMock()
         yield mock_inst
 
 
@@ -71,6 +76,8 @@ async def test_wallets_view_actions():
                 mock_refresh.assert_called_with(force=True)
 
             # Test on_unmount
+            # Need to ensure monitors are populated to test stop_monitor
+            view.start_monitor()
             with patch.object(view, "stop_monitor") as mock_stop:
                 view.on_unmount()
                 mock_stop.assert_called()
@@ -96,8 +103,9 @@ async def test_wallets_view_resolve_tag(mock_wallet):
     mock_accounts = MagicMock()
     mock_accounts.values.return_value = [mock_acc]
 
-    # Assign the Mock object to accounts
+    # Assign to both for compatibility and testing
     mock_wallet.key_storage.accounts = mock_accounts
+    mock_wallet.account_service.accounts = mock_accounts
 
     tag = view.resolve_tag("0xAddress")
     assert tag == "MyTag"

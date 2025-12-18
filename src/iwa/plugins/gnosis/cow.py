@@ -67,9 +67,12 @@ class CowSwap:
 
     env: Envs = "prod"
 
-    def __init__(self, private_key: str, chain: SupportedChain):
+    def __init__(self, private_key_or_signer: str | LocalAccount, chain: SupportedChain):
         """Initialize CowSwap."""
-        self.account = Account.from_key(private_key)
+        if isinstance(private_key_or_signer, str):
+            self.account = Account.from_key(private_key_or_signer)
+        else:
+            self.account = private_key_or_signer
         self.chain = chain
         self.supported_chain_id = SupportedChainId(chain.chain_id)
         self.cow_chain = self.get_chain()

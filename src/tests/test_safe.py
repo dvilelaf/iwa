@@ -15,8 +15,8 @@ from iwa.plugins.gnosis.safe import SafeMultisig
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.plugins.gnosis.safe.Secrets") as mock:
-        mock.return_value.gnosis_rpc.get_secret_value.return_value = "http://rpc"
+    with patch("iwa.plugins.gnosis.safe.settings") as mock:
+        mock.gnosis_rpc.get_secret_value.return_value = "http://rpc"
         yield mock
 
 

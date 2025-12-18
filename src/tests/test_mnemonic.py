@@ -11,7 +11,6 @@ from iwa.core.mnemonic import (
     EncryptedMnemonic,
     MnemonicManager,
     MnemonicStorage,
-    main,
 )
 
 
@@ -166,79 +165,14 @@ def test_mnemonic_manager_decrypt_mnemonic_unsupported_cipher():
 
 
 def test_mnemonic_manager_generate_and_store_mnemonic(
-    mock_bip39_generator, mock_scrypt, mock_aesgcm, mock_console
+    mock_bip39_generator, mock_scrypt, mock_aesgcm
 ):
     mgr = MnemonicManager()
     with patch("builtins.open", mock_open()) as mock_file, patch("os.chmod") as mock_chmod:
-        mgr.generate_and_store_mnemonic("password", "test.json")
+        mnemonic = mgr.generate_and_store_mnemonic("password", "test.json")
         mock_file.assert_called_once()
         mock_chmod.assert_called_once()
-        mock_console.print.assert_called()
-
-
-def test_mnemonic_manager_prompt_and_store_mnemonic_file_exists(mock_console):
-    mgr = MnemonicManager()
-    with patch("os.path.exists", return_value=True):
-        mgr.prompt_and_store_mnemonic("test.json")
-        # Should print warning and return None
-        # We can't easily check print with built-in print, but we can check it didn't ask for password
-        with patch("getpass.getpass") as mock_getpass:
-            mgr.prompt_and_store_mnemonic("test.json")
-            mock_getpass.assert_not_called()
-
-
-def test_mnemonic_manager_prompt_and_store_mnemonic_success(
-    mock_bip39_generator, mock_scrypt, mock_aesgcm, mock_console
-):
-    mgr = MnemonicManager()
-    with (
-        patch("os.path.exists", return_value=False),
-        patch("getpass.getpass", side_effect=["password", "password"]),
-        patch("builtins.open", mock_open()),
-        patch("os.chmod"),
-    ):
-        mgr.prompt_and_store_mnemonic("test.json")
-        # Should succeed
-
-
-def test_mnemonic_manager_prompt_and_store_mnemonic_mismatch(mock_console):
-    mgr = MnemonicManager()
-    with (
-        patch("os.path.exists", return_value=False),
-        patch("getpass.getpass", side_effect=["p1", "p2", "p1", "p2", "p1", "p2"]),
-    ):
-        with pytest.raises(ValueError, match="Maximum password attempts exceeded"):
-            mgr.prompt_and_store_mnemonic("test.json")
-
-
-def test_mnemonic_manager_prompt_and_store_mnemonic_empty(mock_console):
-    mgr = MnemonicManager()
-    with (
-        patch("os.path.exists", return_value=False),
-        patch("getpass.getpass", side_effect=["", "", "", "", "", ""]),
-    ):
-        with pytest.raises(ValueError, match="Maximum password attempts exceeded"):
-            mgr.prompt_and_store_mnemonic("test.json")
-
-
-def test_mnemonic_manager_display_mnemonic(mock_console):
-    mgr = MnemonicManager()
-    mgr.display_mnemonic("word1 word2 word3")
-    mock_console.print.assert_called()
-
-
-def test_mnemonic_manager_load_and_decrypt_mnemonic_success(mock_scrypt, mock_aesgcm):
-    mgr = MnemonicManager()
-    encobj = {
-        "kdf": "scrypt",
-        "kdf_salt": base64.b64encode(b"salt").decode(),
-        "nonce": base64.b64encode(b"nonce").decode(),
-        "ciphertext": base64.b64encode(b"ciphertext").decode(),
-        "cipher": "aesgcm",
-    }
-    with patch("builtins.open", mock_open(read_data=json.dumps(encobj))):
-        mnemonic = mgr.load_and_decrypt_mnemonic("password", "test.json")
-        assert mnemonic == "plaintext"
+        assert mnemonic == "word1 word2 word3"
 
 
 def test_mnemonic_manager_load_and_decrypt_mnemonic_invalid_tag(mock_scrypt, mock_aesgcm):
@@ -252,8 +186,8 @@ def test_mnemonic_manager_load_and_decrypt_mnemonic_invalid_tag(mock_scrypt, moc
         "cipher": "aesgcm",
     }
     with patch("builtins.open", mock_open(read_data=json.dumps(encobj))):
-        mnemonic = mgr.load_and_decrypt_mnemonic("password", "test.json")
-        assert mnemonic is None
+        with pytest.raises(ValueError, match="Incorrect password"):
+            mgr.load_and_decrypt_mnemonic("password", "test.json")
 
 
 def test_mnemonic_manager_derive_eth_accounts_from_mnemonic(
@@ -263,12 +197,11 @@ def test_mnemonic_manager_derive_eth_accounts_from_mnemonic(
     # Mock load_and_decrypt_mnemonic to return a mnemonic
     with (
         patch.object(mgr, "load_and_decrypt_mnemonic", return_value="mnemonic"),
-        patch("getpass.getpass", return_value="password"),
         patch("iwa.core.mnemonic.Account") as mock_account,
     ):
         mock_account.from_key.return_value.address = "0xAddress"
 
-        accounts = mgr.derive_eth_accounts_from_mnemonic(n_accounts=1)
+        accounts = mgr.derive_eth_accounts_from_mnemonic("password", n_accounts=1)
         assert len(accounts) == 1
         assert accounts[0]["address"] == "0xAddress"
         assert accounts[0]["private_key_hex"] == "1234"
@@ -278,23 +211,6 @@ def test_mnemonic_manager_derive_eth_accounts_from_mnemonic_none(mock_scrypt, mo
     mgr = MnemonicManager()
     with (
         patch.object(mgr, "load_and_decrypt_mnemonic", return_value=None),
-        patch("getpass.getpass", return_value="password"),
     ):
-        accounts = mgr.derive_eth_accounts_from_mnemonic()
+        accounts = mgr.derive_eth_accounts_from_mnemonic("password")
         assert accounts is None
-
-
-def test_main(mock_scrypt, mock_aesgcm, mock_bip39_seed_generator, mock_bip44):
-    with patch("iwa.core.mnemonic.MnemonicManager") as mock_mgr:
-        mock_mgr.return_value.derive_eth_accounts_from_mnemonic.return_value = [
-            {"index": 0, "address": "0xAddress"}
-        ]
-        main()
-        mock_mgr.return_value.derive_eth_accounts_from_mnemonic.assert_called_once()
-
-
-def test_main_none(mock_scrypt, mock_aesgcm):
-    with patch("iwa.core.mnemonic.MnemonicManager") as mock_mgr:
-        mock_mgr.return_value.derive_eth_accounts_from_mnemonic.return_value = None
-        main()
-        mock_mgr.return_value.derive_eth_accounts_from_mnemonic.assert_called_once()

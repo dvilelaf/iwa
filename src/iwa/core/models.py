@@ -8,13 +8,10 @@ from typing import Dict, List, Optional, Type, TypeVar
 import tomli
 import tomli_w
 import yaml
-from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SecretStr
+from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_core import core_schema
-from pydantic_settings import BaseSettings
 from web3 import Web3
 
-from iwa.core.constants import SECRETS_PATH
 from iwa.core.utils import singleton
 
 ETHEREUM_ADDRESS_REGEX = r"0x[0-9a-fA-F]{40}"
@@ -69,31 +66,6 @@ class CoreConfig(BaseModel):
     custom_tokens: Dict[str, Dict[str, EthereumAddress]] = Field(default_factory=dict)
 
 
-class Secrets(BaseSettings):
-    """Secrets"""
-
-    gnosis_rpc: Optional[SecretStr] = None
-    base_rpc: Optional[SecretStr] = None
-    ethereum_rpc: Optional[SecretStr] = None
-    gnosisscan_api_key: SecretStr
-    telegram_bot_token: SecretStr
-    telegram_chat_id: int
-    coingecko_api_key: SecretStr
-    wallet_password: SecretStr
-    security_word: SecretStr
-    tenderly_account_slug: SecretStr = None
-    tenderly_project_slug: SecretStr = None
-    tenderly_access_key: SecretStr = None
-
-    model_config = ConfigDict(
-        env_file=str(SECRETS_PATH),
-        env_file_encoding="utf-8",
-    )
-
-    def __init__(self, **values):
-        """Initialize Secrets and load environment variables from secrets.env"""
-        load_dotenv(SECRETS_PATH, override=True)  # Force reload of env vars
-        super().__init__(**values)
 
 
 T = TypeVar("T", bound="StorableModel")
@@ -228,10 +200,19 @@ class Config(StorableModel):
     plugins: Optional[Dict[str, BaseModel]] = None
 
 
+class Token(BaseModel):
+    """Token model for defined tokens."""
+
+    symbol: str
+    address: EthereumAddress
+    decimals: int = 18
+    name: Optional[str] = None
+
+
 class TokenAmount(BaseModel):
     """TokenAmount"""
 
-    address: str
+    address: EthereumAddress
     symbol: str
     amount: float
 
@@ -253,6 +234,23 @@ class VirtualNet(BaseModel):
     funds_requirements: Dict[str, FundRequirements]
     admin_rpc: Optional[str] = None
     public_rpc: Optional[str] = None
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source, _handler):
+        """Get the Pydantic core schema for VirtualNet."""
+        return core_schema.with_info_after_validator_function(
+            cls.validate,
+            _handler(_source),
+        )
+
+    @classmethod
+    def validate(cls, value: "VirtualNet", _info) -> "VirtualNet":
+        """Validate RPC URLs."""
+        if value.admin_rpc and not (value.admin_rpc.startswith("http://") or value.admin_rpc.startswith("https://")):
+             raise ValueError(f"Invalid admin_rpc URL: {value.admin_rpc}")
+        if value.public_rpc and not (value.public_rpc.startswith("http://") or value.public_rpc.startswith("https://")):
+             raise ValueError(f"Invalid public_rpc URL: {value.public_rpc}")
+        return value
 
 
 class TenderlyConfig(StorableModel):

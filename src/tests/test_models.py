@@ -3,7 +3,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-from iwa.core.models import EthereumAddress, Secrets, StorableModel
+from iwa.core.models import EthereumAddress, StorableModel
 
 
 def test_ethereum_address_valid():
@@ -120,23 +120,6 @@ def test_storable_model_load_auto():
         assert model.name == "test"
 
 
-def test_secrets_init():
-    with patch("iwa.core.models.load_dotenv") as mock_load:
-        # Mock env vars
-        with patch.dict(
-            "os.environ",
-            {
-                "GNOSISSCAN_API_KEY": "key",
-                "TELEGRAM_BOT_TOKEN": "token",
-                "TELEGRAM_CHAT_ID": "123",
-                "COINGECKO_API_KEY": "key",
-                "WALLET_PASSWORD": "pass",
-                "SECURITY_WORD": "word",
-            },
-        ):
-            secrets = Secrets()
-            mock_load.assert_called()
-            assert secrets.gnosisscan_api_key.get_secret_value() == "key"
 
 
 def test_ethereum_address_validate_method():

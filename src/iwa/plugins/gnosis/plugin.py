@@ -48,10 +48,14 @@ class GnosisPlugin(Plugin):
         ),
     ):
         """Create a new multisig account (Safe)"""
+        from iwa.core.services import AccountService, SafeService
         key_storage = KeyStorage()
+        account_service = AccountService(key_storage)
+        safe_service = SafeService(key_storage, account_service)
+
         owner_list = [owner.strip() for owner in owners.split(",")]
         try:
-            key_storage.create_safe(
+            safe_service.create_safe(
                 deployer_tag_or_address="master",
                 owner_tags_or_addresses=owner_list,
                 threshold=threshold,
