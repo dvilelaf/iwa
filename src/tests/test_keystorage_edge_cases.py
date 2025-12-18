@@ -34,9 +34,9 @@ def test_key_storage_edge_cases(tmp_path):
     assert storage.get_account(encrypted_acc.address) is None
     assert storage.get_account("acc1") is None
 
-    # Get private key unsafe
+    # Get private key via internal method (get_private_key_unsafe was removed)
     encrypted_acc2 = storage.create_account("acc2")
-    pk = storage.get_private_key_unsafe(encrypted_acc2.address)
+    pk = storage._get_private_key(encrypted_acc2.address)
     assert pk is not None
 
     # Sign transaction unknown account

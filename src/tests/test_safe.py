@@ -73,15 +73,23 @@ def test_retrieve_all_info(mock_safe_account, mock_secrets, mock_safe_lib):
     assert safe.retrieve_all_info() == {"owners": []}
 
 
-def test_send_tx(mock_safe_account, mock_secrets, mock_safe_lib):
+
+
+def test_send_tx_with_callback(mock_safe_account, mock_secrets, mock_safe_lib):
+    """Test the new send_tx method with callback."""
     safe = SafeMultisig(mock_safe_account, "gnosis")
     mock_tx = MagicMock()
     safe.multisig.build_multisig_tx.return_value = mock_tx
-    mock_tx.tx_hash.hex.return_value = "0xHash"
 
-    safe.send_tx(to="0xTo", value=100, signers_private_keys=["key1", "key2"], data="0x1234")
+    def sign_callback(safe_tx):
+        return "0xCallbackHash"
 
+    result = safe.send_tx(
+        to="0xTo",
+        value=100,
+        sign_and_execute_callback=sign_callback,
+        data="0x1234",
+    )
+
+    assert result == "0xCallbackHash"
     safe.multisig.build_multisig_tx.assert_called()
-    assert mock_tx.sign.call_count == 2
-    mock_tx.call.assert_called_once()
-    mock_tx.execute.assert_called_with("key1")

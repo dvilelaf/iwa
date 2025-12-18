@@ -82,6 +82,7 @@ def test_chain_interface_init(mock_web3, mock_secrets):
 
 def test_chain_interface_insecure_rpc_warning(mock_web3, caplog):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     chain.name = "Insecure"
     chain.rpcs = ["http://insecure"]
 
@@ -94,6 +95,7 @@ def test_chain_interface_insecure_rpc_warning(mock_web3, caplog):
 
 def test_is_contract(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_code.return_value = b"code"
@@ -105,6 +107,7 @@ def test_is_contract(mock_web3):
 
 def test_get_native_balance(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_balance.return_value = 10**18
@@ -114,67 +117,15 @@ def test_get_native_balance(mock_web3):
     assert ci.get_native_balance_eth("0xAddress") == 1.0
 
 
-def test_sign_and_send_transaction_success(mock_web3):
-    chain = MagicMock(spec=SupportedChain)
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    ci.web3.eth.account.sign_transaction.return_value = MagicMock(raw_transaction=b"raw")
-    ci.web3.eth.send_raw_transaction.return_value = b"hash"
-    receipt = MagicMock(status=1)
-    ci.web3.eth.wait_for_transaction_receipt.return_value = receipt
 
-    # Mock wait_for_no_pending_tx to return immediately
-    with patch.object(ci, "wait_for_no_pending_tx", return_value=True):
-        success, res = ci.sign_and_send_transaction({"from": "0xSender"}, "key")
-        assert success is True
-        assert res == receipt
-
-
-def test_sign_and_send_transaction_failure(mock_web3):
-    chain = MagicMock(spec=SupportedChain)
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    ci.web3.eth.account.sign_transaction.return_value = MagicMock(raw_transaction=b"raw")
-    ci.web3.eth.send_raw_transaction.return_value = b"hash"
-    receipt = MagicMock(status=0)
-    ci.web3.eth.wait_for_transaction_receipt.return_value = receipt
-
-    success, res = ci.sign_and_send_transaction({"from": "0xSender"}, "key")
-    assert success is False
-
-
-def test_sign_and_send_transaction_gas_retry(mock_web3):
-    chain = MagicMock(spec=SupportedChain)
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    ci.web3.eth.account.sign_transaction.return_value = MagicMock(raw_transaction=b"raw")
-
-    # First attempt raises RPC error with "FeeTooLow"
-    # Second attempt succeeds
-    error = web3_exceptions.Web3RPCError("FeeTooLow", 123)
-    ci.web3.eth.send_raw_transaction.side_effect = [error, b"hash"]
-    receipt = MagicMock(status=1)
-    ci.web3.eth.wait_for_transaction_receipt.return_value = receipt
-
-    with patch.object(ci, "wait_for_no_pending_tx", return_value=True):
-        with patch("time.sleep"):  # speed up test
-            success, res = ci.sign_and_send_transaction({"from": "0xSender", "gas": 10000}, "key")
-            assert success is True
-            assert ci.web3.eth.send_raw_transaction.call_count == 2
-
-
-def test_sign_and_send_transaction_exception(mock_web3):
-    chain = MagicMock(spec=SupportedChain)
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    ci.web3.eth.account.sign_transaction.side_effect = Exception("Error")
-
-    success, res = ci.sign_and_send_transaction({"from": "0xSender"}, "key")
-    assert success is False
+# NOTE: Tests for sign_and_send_transaction were removed because the method was removed
+# from ChainInterface for security reasons. Transaction signing is now handled exclusively
+# through TransactionService.sign_and_send() which uses KeyStorage internally.
 
 
 def test_estimate_gas(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     built_method = MagicMock()
@@ -191,6 +142,7 @@ def test_estimate_gas(mock_web3):
 
 def test_calculate_transaction_params(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_transaction_count.return_value = 5
@@ -205,6 +157,7 @@ def test_calculate_transaction_params(mock_web3):
 
 def test_wait_for_no_pending_tx(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
 
@@ -235,6 +188,7 @@ def test_wait_for_no_pending_tx(mock_web3):
 
 def test_send_native_transfer(mock_web3):
     chain = MagicMock(spec=SupportedChain, rpcs=["https://rpc"], chain_id=1, native_currency="ETH")
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     account = MagicMock(address="0xSender", key="key")
@@ -280,22 +234,12 @@ def test_chain_interfaces_get():
         interfaces.get("invalid")
 
 
-def test_sign_and_send_transaction_rpc_error_not_gas(mock_web3):
-    chain = MagicMock(spec=SupportedChain)
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    ci.web3.eth.account.sign_transaction.return_value = MagicMock(raw_transaction=b"raw")
 
-    # RPC error NOT gas related
-    error = web3_exceptions.Web3RPCError("OtherError", 123)
-    ci.web3.eth.send_raw_transaction.side_effect = error
-
-    success, res = ci.sign_and_send_transaction({"from": "0xSender"}, "key")
-    assert success is False
 
 
 def test_chain_interface_get_token_address(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     chain.get_token_address.return_value = "0xToken"
     ci = ChainInterface(chain)
@@ -306,6 +250,7 @@ def test_chain_interface_get_token_address(mock_web3):
 
 def test_rotate_rpc(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     chain.rpcs = ["http://rpc1", "http://rpc2", "http://rpc3"]
     chain.name = "TestChain"
     # Needs to return property value for rpc if accessed, but here access is via index
@@ -332,6 +277,7 @@ def test_rotate_rpc(mock_web3):
 
 def test_rotate_rpc_no_rpcs(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     chain.rpcs = []
     chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="")
@@ -341,6 +287,7 @@ def test_rotate_rpc_no_rpcs(mock_web3):
 
 def test_rotate_rpc_single_rpc(mock_web3):
     chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
     chain.rpcs = ["http://rpc1"]
     chain.name = "TestChain"
     type(chain).rpc = PropertyMock(return_value="http://rpc1")

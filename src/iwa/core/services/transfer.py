@@ -17,7 +17,6 @@ from iwa.core.contracts.multisend import (
 from iwa.core.db import log_transaction
 from iwa.core.models import Config, EthereumAddress, StoredSafeAccount
 from iwa.plugins.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap, OrderType
-from iwa.plugins.gnosis.safe import SafeMultisig
 
 if TYPE_CHECKING:
     from iwa.core.keys import KeyStorage
@@ -45,162 +44,128 @@ class TransferService:
         self.safe_service = safe_service
         self.transaction_service = transaction_service
 
-    def send(  # noqa: C901
-        self,
-        from_address_or_tag: str,
-        to_address_or_tag: str,
-        amount_wei: int,
-        token_address_or_name: str = "native",
-        chain_name: str = "gnosis",
-    ) -> Optional[str]:
-        """Send native currency or ERC20 token."""
-        from_account = self.account_service.resolve_account(from_address_or_tag)
+    def _resolve_destination(
+        self, to_address_or_tag: str
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Resolve destination address and tag.
+
+        Returns:
+            Tuple of (address, tag) or (None, None) if invalid.
+        """
         to_account = self.account_service.resolve_account(to_address_or_tag)
-
-        # Resolve destination address
         if to_account:
-            to_address = to_account.address
-        else:
-            try:
-                to_address = EthereumAddress(to_address_or_tag)
-            except ValueError:
-                logger.error(f"Invalid destination address: {to_address_or_tag}")
-                return None
+            return to_account.address, getattr(to_account, "tag", None)
 
-        if not from_account:
-            logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
-            return
+        try:
+            to_address = EthereumAddress(to_address_or_tag)
+            # Try to find tag in whitelist
+            to_tag = self._resolve_whitelist_tag(to_address)
+            return to_address, to_tag
+        except ValueError:
+            logger.error(f"Invalid destination address: {to_address_or_tag}")
+            return None, None
 
-        # Whitelist Check
+    def _resolve_whitelist_tag(self, address: str) -> Optional[str]:
+        """Resolve tag from whitelist for an address."""
         config = Config()
         if config.core and config.core.whitelist:
-            is_allowed = False
             try:
-                target_addr = EthereumAddress(to_address)
-                if target_addr in config.core.whitelist.values():
-                    is_allowed = True
+                target_addr = EthereumAddress(address)
+                for name, addr in config.core.whitelist.items():
+                    if addr == target_addr:
+                        return name
             except ValueError:
                 pass
+        return None
 
-            if not is_allowed:
-                logger.error(
-                    f"Address '{to_address}' is not in the whitelist. Transaction blocked."
-                )
-                return
+    def _check_whitelist(self, to_address: str) -> bool:
+        """Check if address is in whitelist.
 
-        chain_interface = ChainInterfaces().get(chain_name)
-        token_address = self.account_service.get_token_address(token_address_or_name, chain_interface.chain)
-        if not token_address:
-            return
+        Returns:
+            True if allowed (no whitelist or address is in it), False otherwise.
+        """
+        config = Config()
+        if not (config.core and config.core.whitelist):
+            return True
 
-        # Resolve tags and symbols for logging
-        from_tag = self.account_service.get_tag_by_address(from_account.address)
-        to_tag = getattr(to_account, "tag", None)
-        if not to_tag:
-            try:
-                if config.core and config.core.whitelist:
-                    target_addr = EthereumAddress(to_address)
-                    for name, addr in config.core.whitelist.items():
-                        if addr == target_addr:
-                            to_tag = name
-                            break
-            except ValueError:
-                pass
+        try:
+            target_addr = EthereumAddress(to_address)
+            if target_addr in config.core.whitelist.values():
+                return True
+        except ValueError:
+            pass
 
-        token_symbol = None
+        logger.error(f"Address '{to_address}' is not in the whitelist. Transaction blocked.")
+        return False
+
+    def _resolve_token_symbol(
+        self, token_address: str, token_address_or_name: str, chain_interface
+    ) -> str:
+        """Resolve token symbol for logging."""
         if token_address == NATIVE_CURRENCY_ADDRESS:
-            token_symbol = chain_interface.chain.native_currency
-        else:
-            if not token_address_or_name.startswith("0x"):
-                token_symbol = token_address_or_name
-            else:
-                for name, addr in chain_interface.tokens.items():
-                    if addr == token_address:
-                        token_symbol = name
-                        break
-        if not token_symbol:
-            token_symbol = token_address_or_name
+            return chain_interface.chain.native_currency
 
-        is_safe = isinstance(from_account, StoredSafeAccount)
+        if not token_address_or_name.startswith("0x"):
+            return token_address_or_name
 
-        if token_address == NATIVE_CURRENCY_ADDRESS:
-            amount_eth_log = float(chain_interface.web3.from_wei(amount_wei, "ether"))
-            logger.info(
-                f"Sending {amount_eth_log:.4f} {chain_interface.chain.native_currency} from {from_address_or_tag} to {to_address_or_tag}"
-            )
-            if is_safe:
-                safe = SafeMultisig(from_account, chain_name)
-                tx_hash = self.safe_service.sign_safe_transaction(
-                    from_address_or_tag,
-                    lambda keys: safe.send_tx(
-                        to=to_address,
-                        value=amount_wei,
-                        signers_private_keys=keys,
-                    ),
-                )
-                log_transaction(
-                    tx_hash=tx_hash,
-                    from_addr=from_account.address,
-                    to_addr=to_address,
-                    token=token_symbol,
-                    amount_wei=amount_wei,
-                    chain=chain_name,
-                    from_tag=from_tag,
-                    to_tag=to_tag,
-                    tags=["native-transfer", "safe-transaction"],
-                )
-                return tx_hash
+        for name, addr in chain_interface.tokens.items():
+            if addr == token_address:
+                return name
 
-            else:
-                success, tx_hash = chain_interface.send_native_transfer(
-                    from_address=from_account.address,
-                    to_address=to_address,
-                    value_wei=amount_wei,
-                    sign_callback=lambda tx: self.key_storage.sign_transaction(
-                        tx, from_account.address
-                    ),
-                )
-                if success and tx_hash:
-                    log_transaction(
-                        tx_hash=tx_hash,
-                        from_addr=from_account.address,
-                        to_addr=to_address,
-                        token=token_symbol,
-                        amount_wei=amount_wei,
-                        chain=chain_name,
-                        from_tag=from_tag,
-                        to_tag=to_tag,
-                        tags=["native-transfer"],
-                    )
-                    return tx_hash
-            return None
+        return token_address_or_name
 
-        # ERC20 Transfer
-        erc20 = ERC20Contract(token_address)
-        transaction = erc20.prepare_transfer_tx(
-            from_account.address,
-            to_address,
-            amount_wei,
+    def _send_native_via_safe(
+        self,
+        from_account: StoredSafeAccount,
+        from_address_or_tag: str,
+        to_address: str,
+        amount_wei: int,
+        chain_name: str,
+        from_tag: Optional[str],
+        to_tag: Optional[str],
+        token_symbol: str,
+    ) -> str:
+        """Send native currency via Safe multisig."""
+        tx_hash = self.safe_service.execute_safe_transaction(
+            safe_address_or_tag=from_address_or_tag,
+            to=to_address,
+            value=amount_wei,
+            chain_name=chain_name,
         )
-        if not transaction:
-            return
-
-        amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
-        logger.info(
-            f"Sending {amount_eth:.4f} {token_address_or_name} from {from_address_or_tag} to {to_address_or_tag}"
+        log_transaction(
+            tx_hash=tx_hash,
+            from_addr=from_account.address,
+            to_addr=to_address,
+            token=token_symbol,
+            amount_wei=amount_wei,
+            chain=chain_name,
+            from_tag=from_tag,
+            to_tag=to_tag,
+            tags=["native-transfer", "safe-transaction"],
         )
+        return tx_hash
 
-        if is_safe:
-            safe = SafeMultisig(from_account, chain_name)
-            tx_hash = self.safe_service.sign_safe_transaction(
-                from_address_or_tag,
-                lambda keys: safe.send_tx(
-                    to=erc20.address,
-                    value=0,
-                    signers_private_keys=keys,
-                    data=transaction["data"],
-                ),
-            )
+    def _send_native_via_eoa(
+        self,
+        from_account,
+        to_address: str,
+        amount_wei: int,
+        chain_name: str,
+        chain_interface,
+        from_tag: Optional[str],
+        to_tag: Optional[str],
+        token_symbol: str,
+    ) -> Optional[str]:
+        """Send native currency via EOA (externally owned account)."""
+        success, tx_hash = chain_interface.send_native_transfer(
+            from_address=from_account.address,
+            to_address=to_address,
+            value_wei=amount_wei,
+            sign_callback=lambda tx: self.key_storage.sign_transaction(
+                tx, from_account.address
+            ),
+        )
+        if success and tx_hash:
             log_transaction(
                 tx_hash=tx_hash,
                 from_addr=from_account.address,
@@ -210,28 +175,164 @@ class TransferService:
                 chain=chain_name,
                 from_tag=from_tag,
                 to_tag=to_tag,
-                tags=["erc20-transfer", "safe-transaction"],
+                tags=["native-transfer"],
             )
             return tx_hash
-        else:
-            success, receipt = self.transaction_service.sign_and_send(
-                transaction, from_address_or_tag, chain_name
-            )
-            if success and receipt:
-                tx_hash = receipt["transactionHash"].hex()
-                log_transaction(
-                    tx_hash=tx_hash,
-                    from_addr=from_account.address,
-                    to_addr=to_address,
-                    token=token_symbol,
-                    amount_wei=amount_wei,
-                    chain=chain_name,
-                    from_tag=from_tag,
-                    to_tag=to_tag,
-                    tags=["erc20-transfer"],
-                )
-                return tx_hash
         return None
+
+    def _send_erc20_via_safe(
+        self,
+        from_account: StoredSafeAccount,
+        from_address_or_tag: str,
+        to_address: str,
+        amount_wei: int,
+        chain_name: str,
+        erc20: ERC20Contract,
+        transaction: dict,
+        from_tag: Optional[str],
+        to_tag: Optional[str],
+        token_symbol: str,
+    ) -> str:
+        """Send ERC20 token via Safe multisig."""
+        tx_hash = self.safe_service.execute_safe_transaction(
+            safe_address_or_tag=from_address_or_tag,
+            to=erc20.address,
+            value=0,
+            chain_name=chain_name,
+            data=transaction["data"],
+        )
+        log_transaction(
+            tx_hash=tx_hash,
+            from_addr=from_account.address,
+            to_addr=to_address,
+            token=token_symbol,
+            amount_wei=amount_wei,
+            chain=chain_name,
+            from_tag=from_tag,
+            to_tag=to_tag,
+            tags=["erc20-transfer", "safe-transaction"],
+        )
+        return tx_hash
+
+    def _send_erc20_via_eoa(
+        self,
+        from_account,
+        from_address_or_tag: str,
+        to_address: str,
+        amount_wei: int,
+        chain_name: str,
+        transaction: dict,
+        from_tag: Optional[str],
+        to_tag: Optional[str],
+        token_symbol: str,
+    ) -> Optional[str]:
+        """Send ERC20 token via EOA (externally owned account)."""
+        success, receipt = self.transaction_service.sign_and_send(
+            transaction, from_address_or_tag, chain_name
+        )
+        if success and receipt:
+            tx_hash = receipt["transactionHash"].hex()
+            log_transaction(
+                tx_hash=tx_hash,
+                from_addr=from_account.address,
+                to_addr=to_address,
+                token=token_symbol,
+                amount_wei=amount_wei,
+                chain=chain_name,
+                from_tag=from_tag,
+                to_tag=to_tag,
+                tags=["erc20-transfer"],
+            )
+            return tx_hash
+        return None
+
+    def send(
+        self,
+        from_address_or_tag: str,
+        to_address_or_tag: str,
+        amount_wei: int,
+        token_address_or_name: str = "native",
+        chain_name: str = "gnosis",
+    ) -> Optional[str]:
+        """Send native currency or ERC20 token.
+
+        Args:
+            from_address_or_tag: Source account address or tag
+            to_address_or_tag: Destination address or tag
+            amount_wei: Amount in wei
+            token_address_or_name: Token address, name, or "native"
+            chain_name: Chain name (default: "gnosis")
+
+        Returns:
+            Transaction hash if successful, None otherwise.
+        """
+        # Resolve accounts
+        from_account = self.account_service.resolve_account(from_address_or_tag)
+        if not from_account:
+            logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
+            return None
+
+        to_address, to_tag = self._resolve_destination(to_address_or_tag)
+        if not to_address:
+            return None
+
+        # Whitelist check
+        if not self._check_whitelist(to_address):
+            return None
+
+        # Resolve chain and token
+        chain_interface = ChainInterfaces().get(chain_name)
+        token_address = self.account_service.get_token_address(
+            token_address_or_name, chain_interface.chain
+        )
+        if not token_address:
+            return None
+
+        # Resolve tags and symbols for logging
+        from_tag = self.account_service.get_tag_by_address(from_account.address)
+        token_symbol = self._resolve_token_symbol(
+            token_address, token_address_or_name, chain_interface
+        )
+        is_safe = isinstance(from_account, StoredSafeAccount)
+
+        # Native currency transfer
+        if token_address == NATIVE_CURRENCY_ADDRESS:
+            amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
+            logger.info(
+                f"Sending {amount_eth:.4f} {chain_interface.chain.native_currency} "
+                f"from {from_address_or_tag} to {to_address_or_tag}"
+            )
+            if is_safe:
+                return self._send_native_via_safe(
+                    from_account, from_address_or_tag, to_address, amount_wei,
+                    chain_name, from_tag, to_tag, token_symbol
+                )
+            return self._send_native_via_eoa(
+                from_account, to_address, amount_wei, chain_name,
+                chain_interface, from_tag, to_tag, token_symbol
+            )
+
+        # ERC20 token transfer
+        erc20 = ERC20Contract(token_address)
+        transaction = erc20.prepare_transfer_tx(from_account.address, to_address, amount_wei)
+        if not transaction:
+            return None
+
+        amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
+        logger.info(
+            f"Sending {amount_eth:.4f} {token_address_or_name} "
+            f"from {from_address_or_tag} to {to_address_or_tag}"
+        )
+
+        if is_safe:
+            return self._send_erc20_via_safe(
+                from_account, from_address_or_tag, to_address, amount_wei,
+                chain_name, erc20, transaction, from_tag, to_tag, token_symbol
+            )
+        return self._send_erc20_via_eoa(
+            from_account, from_address_or_tag, to_address, amount_wei,
+            chain_name, transaction, from_tag, to_tag, token_symbol
+        )
 
     def multi_send(
         self,
@@ -305,16 +406,13 @@ class TransferService:
         logger.info("Sending multisend transaction")
 
         if is_safe:
-            safe = SafeMultisig(from_account, chain_name)
-            self.safe_service.sign_safe_transaction(
-                from_address_or_tag,
-                lambda keys: safe.send_tx(
-                    to=multi_send_contract.address,
-                    value=transaction["value"],
-                    signers_private_keys=keys,
-                    data=transaction["data"],
-                    operation=SafeOperationEnum.DELEGATE_CALL.value,
-                ),
+            self.safe_service.execute_safe_transaction(
+                safe_address_or_tag=from_address_or_tag,
+                to=multi_send_contract.address,
+                value=transaction["value"],
+                chain_name=chain_name,
+                data=transaction["data"],
+                operation=SafeOperationEnum.DELEGATE_CALL.value,
             )
         else:
             self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)
@@ -391,15 +489,12 @@ class TransferService:
         )
 
         if is_safe:
-            safe = SafeMultisig(owner_account, chain_name)
-            self.safe_service.sign_safe_transaction(
-                owner_address_or_tag,
-                lambda keys: safe.send_tx(
-                    to=erc20.address,
-                    value=0,
-                    signers_private_keys=keys,
-                    data=transaction["data"],
-                ),
+            self.safe_service.execute_safe_transaction(
+                safe_address_or_tag=owner_address_or_tag,
+                to=erc20.address,
+                value=0,
+                chain_name=chain_name,
+                data=transaction["data"],
             )
         else:
             self.transaction_service.sign_and_send(transaction, owner_address_or_tag, chain_name)
@@ -446,15 +541,12 @@ class TransferService:
         logger.info("Transferring ERC20 tokens via TransferFrom")
 
         if is_safe:
-            safe = SafeMultisig(from_account, chain_name)
-            self.safe_service.sign_safe_transaction(
-                from_address_or_tag,
-                lambda keys: safe.send_tx(
-                    to=erc20.address,
-                    value=0,
-                    signers_private_keys=keys,
-                    data=transaction["data"],
-                ),
+            self.safe_service.execute_safe_transaction(
+                safe_address_or_tag=from_address_or_tag,
+                to=erc20.address,
+                value=0,
+                chain_name=chain_name,
+                data=transaction["data"],
             )
         else:
             self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)

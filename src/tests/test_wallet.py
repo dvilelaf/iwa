@@ -113,10 +113,10 @@ def mock_balance_service(mock_key_storage, mock_account_service):
         yield instance
 
 
-@pytest.fixture(autouse=True)
-def mock_safe_multisig_global():
-    with patch("iwa.core.services.transfer.SafeMultisig") as mock:
-        yield mock
+
+# NOTE: mock_safe_multisig_global was removed because SafeMultisig is no longer
+# imported in TransferService. Safe transactions now go through SafeService.execute_safe_transaction().
+
 
 
 @pytest.fixture(autouse=True)
@@ -521,30 +521,18 @@ def test_send_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.from_wei.return_value = 1.0
     mock_balance_service.get_native_balance_wei.return_value = 2000000000000000000  # Enough balance
 
-    # We mock SafeMultisig at the source
-    # Since we can't easily know where it is imported in TransferService without peeking,
-    # we patch it where wallet.py might look for it, or globally if we knew where.
-    # Assuming standard usage:
-    with patch("iwa.core.services.transfer.SafeMultisig"): # Try standard location
-        pass
 
-    # Actually, we mocked the safe_service on the wallet instance.
-    # The wallet.send calls transfer_service.send...
-    # The TransferService.send calls self.safe_service.sign_safe_transaction(...)
-    # Our test checks `wallet.safe_service.sign_safe_transaction.assert_called_once()`.
-    # This proves the delegation works. We don't need to assert internal TransferService behavior (like SafeMultisig usage)
-    # UNLESS TransferService crashes because SafeMultisig is not mocked.
-    # If TransferService instantiates SafeMultisig, we need to patch it.
-
+    # NOTE: SafeMultisig is no longer used directly in TransferService.
+    # Safe transactions now go through SafeService.execute_safe_transaction().
     # Let's just assert the delegation happened.
     wallet.send("safe", "recipient", amount_wei=1000, token_address_or_name="native")
-    wallet.safe_service.sign_safe_transaction.assert_called_once()
+    wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 def test_send_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service):
@@ -554,7 +542,7 @@ def test_send_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_b
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -570,7 +558,7 @@ def test_send_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_b
         erc20_instance.prepare_transfer_tx.return_value = {"data": b"data"}
 
         wallet.send("safe", "recipient", amount_wei=1000, token_address_or_name="TEST")
-        wallet.safe_service.sign_safe_transaction.assert_called_once()
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 def test_multi_send_invalid_from_account(wallet, mock_key_storage):
@@ -596,7 +584,7 @@ def test_multi_send_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.to_wei.return_value = 1000
@@ -618,7 +606,7 @@ def test_multi_send_safe(wallet, mock_key_storage, mock_chain_interfaces):
         ]
         wallet.multi_send("safe", transactions)
 
-        wallet.safe_service.sign_safe_transaction.assert_called_once()
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 def test_get_erc20_balance_eth_success(wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service):
@@ -720,7 +708,7 @@ def test_approve_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces):
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -732,7 +720,7 @@ def test_approve_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces):
         erc20_instance.prepare_approve_tx.return_value = {"data": b"data"}
 
         wallet.approve_erc20("safe", "spender", "TEST", 1000)
-        wallet.safe_service.sign_safe_transaction.assert_called_once()
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 def test_transfer_from_erc20_sender_not_found(wallet, mock_key_storage):
@@ -785,10 +773,8 @@ def test_transfer_from_erc20_safe(wallet, mock_key_storage, mock_chain_interface
         lambda tag: from_account if tag == "safe" else sender_account
     )
 
-    def side_effect(tag, callback):
-        return callback(["key1"])
 
-    wallet.safe_service.sign_safe_transaction.side_effect = side_effect
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xToken"}
@@ -798,7 +784,7 @@ def test_transfer_from_erc20_safe(wallet, mock_key_storage, mock_chain_interface
         erc20_instance.prepare_transfer_from_tx.return_value = {"data": b"data"}
 
         wallet.transfer_from_erc20("safe", "sender", "recipient", "TEST", 1000)
-        wallet.safe_service.sign_safe_transaction.assert_called_once()
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -859,7 +845,7 @@ def test_drain_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {}
@@ -867,7 +853,7 @@ def test_drain_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock
     chain_interface.web3.from_wei.return_value = 2.0
 
     wallet.drain("safe")
-    wallet.safe_service.sign_safe_transaction.assert_called_once()
+    wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 
@@ -970,7 +956,7 @@ def test_multi_send_erc20_safe_success(wallet, mock_key_storage, mock_chain_inte
     account.signers = [VALID_ADDR_2]
     account.threshold = 1
     mock_key_storage.get_account.return_value = account
-    wallet.safe_service.sign_safe_transaction.side_effect = lambda tag, callback: callback(["key1"])
+    wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.to_wei.return_value = 1000
@@ -994,5 +980,5 @@ def test_multi_send_erc20_safe_success(wallet, mock_key_storage, mock_chain_inte
         transactions = [{"to": VALID_ADDR_2, "amount": 1.0, "token": "TEST"}]
         wallet.multi_send("safe", transactions)
 
-        wallet.safe_service.sign_safe_transaction.assert_called_once()
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
         erc20_instance.prepare_transfer_tx.assert_called_once()

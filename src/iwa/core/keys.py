@@ -161,15 +161,66 @@ class KeyStorage(BaseModel):
 
         return account.decrypt_private_key(self._password)
 
-    def get_private_key_unsafe(self, address: str) -> Optional[str]:
-        """Get private key (UNSAFE - only for specific use cases like CowSwap)"""
-        logger.warning(
-            f"Unsafe private key access requested for {address}. Ensure this is intended."
-        )
-        return self._get_private_key(address)
+    # NOTE: get_private_key_unsafe() was removed for security reasons.
+    # Use sign_transaction(), sign_message(), or get_signer() instead.
+
+    def sign_message(self, message: bytes, signer_address_or_tag: str) -> bytes:
+        """Sign a message internally without exposing the private key.
+
+        Args:
+            message: The message bytes to sign
+            signer_address_or_tag: The address or tag of the signer
+
+        Returns:
+            The signature bytes
+        """
+        signer_account = self.find_stored_account(signer_address_or_tag)
+        if not signer_account:
+            raise ValueError(f"Signer account '{signer_address_or_tag}' not found.")
+
+        if isinstance(signer_account, StoredSafeAccount):
+            raise ValueError("Direct message signing not supported for Safe accounts.")
+
+        private_key = self._get_private_key(signer_account.address)
+        if not private_key:
+            raise ValueError(f"Private key not found for {signer_address_or_tag}")
+
+        from eth_account.messages import encode_defunct
+        message_hash = encode_defunct(primitive=message)
+        signed = Account.sign_message(message_hash, private_key=private_key)
+        return signed.signature
+
+    def sign_typed_data(self, typed_data: dict, signer_address_or_tag: str) -> bytes:
+        """Sign EIP-712 typed data internally without exposing the private key.
+
+        Args:
+            typed_data: EIP-712 typed data dictionary
+            signer_address_or_tag: The address or tag of the signer
+
+        Returns:
+            The signature bytes
+        """
+        signer_account = self.find_stored_account(signer_address_or_tag)
+        if not signer_account:
+            raise ValueError(f"Signer account '{signer_address_or_tag}' not found.")
+
+        if isinstance(signer_account, StoredSafeAccount):
+            raise ValueError("Direct message signing not supported for Safe accounts.")
+
+        private_key = self._get_private_key(signer_account.address)
+        if not private_key:
+            raise ValueError(f"Private key not found for {signer_address_or_tag}")
+
+        signed = Account.sign_typed_data(private_key=private_key, full_message=typed_data)
+        return signed.signature
 
     def get_signer(self, address_or_tag: str) -> Optional[LocalAccount]:
-        """Get a LocalAccount signer for the address or tag."""
+        """Get a LocalAccount signer for the address or tag.
+
+        Note: This method returns a LocalAccount which encapsulates the private key.
+        It's used for APIs that require a signer object (e.g., CowSwap).
+        Prefer sign_transaction() or sign_message() when possible.
+        """
         account = self.find_stored_account(address_or_tag)
         if not account:
             return None

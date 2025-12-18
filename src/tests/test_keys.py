@@ -171,12 +171,20 @@ def test_keystorage_get_private_key(mock_secrets, mock_account, mock_aesgcm, moc
         assert pkey == "private_key"
 
 
-def test_keystorage_get_private_key_unsafe(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+
+def test_keystorage_sign_message(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+    """Test sign_message method signs messages without exposing private key."""
     storage = KeyStorage(Path("wallet.json"))
     with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
         storage.create_account("tag")
-        pkey = storage.get_private_key_unsafe("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4")
-        assert pkey == "private_key"
+
+        # Mock the sign_message on Account
+        mock_signed_msg = MagicMock()
+        mock_signed_msg.signature = b"signature"
+        mock_account.sign_message.return_value = mock_signed_msg
+
+        result = storage.sign_message(b"test message", "tag")
+        assert result == b"signature"
 
 
 def test_keystorage_sign_transaction(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):

@@ -102,15 +102,18 @@ def test_create_safe_success(mock_settings, mock_safe_cls, mock_eth_client, safe
     assert "0x617F2E2fD72FD9D5503197092aC168c91465E7f2" in mock_key_storage.accounts
 
 
-def test_get_safe_signer_keys_not_safe(safe_service, mock_key_storage):
-    """Test get_safe_signer_keys when target is not a safe."""
-    mock_key_storage.find_stored_account.return_value = MagicMock(spec=EncryptedAccount)
-    with pytest.raises(ValueError, match="not found in wallet"):
-        safe_service.get_safe_signer_keys("not_safe")
+
+def test_get_signer_keys_not_safe(safe_service, mock_key_storage):
+    """Test _get_signer_keys when target is not a safe."""
+    # _get_signer_keys now takes a StoredSafeAccount directly
+    non_safe = MagicMock(spec=EncryptedAccount)
+    # Should raise TypeError since method expects StoredSafeAccount
+    with pytest.raises(AttributeError):
+        safe_service._get_signer_keys(non_safe)
 
 
-def test_get_safe_signer_keys_not_enough_signers(safe_service, mock_key_storage):
-    """Test get_safe_signer_keys when not enough keys available."""
+def test_get_signer_keys_not_enough_signers(safe_service, mock_key_storage):
+    """Test _get_signer_keys when not enough keys available."""
     valid_addr_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
     valid_addr_2 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
     valid_addr_3 = "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
@@ -118,17 +121,17 @@ def test_get_safe_signer_keys_not_enough_signers(safe_service, mock_key_storage)
     safe = StoredSafeAccount(
         tag="safe", address=valid_addr_1, chains=["gnosis"], threshold=2, signers=[valid_addr_2, valid_addr_3]
     )
-    mock_key_storage.find_stored_account.return_value = safe
 
     # Only one key available
     mock_key_storage._get_private_key.side_effect = lambda addr: "0xKey1" if addr == valid_addr_2 else None
 
     with pytest.raises(ValueError, match="Not enough signer private keys"):
-        safe_service.get_safe_signer_keys("safe")
+        safe_service._get_signer_keys(safe)
 
 
-def test_sign_safe_transaction_success(safe_service, mock_key_storage):
-    """Test sign_safe_transaction success."""
+@patch("iwa.plugins.gnosis.safe.SafeMultisig")
+def test_execute_safe_transaction_success(mock_safe_multisig, safe_service, mock_key_storage):
+    """Test execute_safe_transaction success."""
     valid_addr_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
     valid_addr_2 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 
@@ -138,14 +141,22 @@ def test_sign_safe_transaction_success(safe_service, mock_key_storage):
     mock_key_storage.find_stored_account.return_value = safe
     mock_key_storage._get_private_key.return_value = "0xKey1"
 
-    captured_args = []
-    def side_effect(keys):
-        captured_args.extend(keys)
-        return "0xSignedTx"
+    # Mock SafeMultisig and its methods
+    mock_safe_instance = MagicMock()
+    mock_safe_multisig.return_value = mock_safe_instance
+    mock_safe_tx = MagicMock()
+    mock_safe_tx.tx_hash.hex.return_value = "0xTxHash123"
+    mock_safe_instance.build_tx.return_value = mock_safe_tx
 
-    callback = MagicMock(side_effect=side_effect)
-    result = safe_service.sign_safe_transaction("safe", callback)
+    result = safe_service.execute_safe_transaction(
+        safe_address_or_tag="safe",
+        to="0x0000000000000000000000000000000000000001",
+        value=1000,
+        chain_name="gnosis",
+    )
 
-    assert result == "0xSignedTx"
-    callback.assert_called_once()
-    assert captured_args == ["0xKey1"]
+    assert result == "0xTxHash123"
+    mock_safe_instance.build_tx.assert_called_once()
+    mock_safe_tx.sign.assert_called_with("0xKey1")
+    mock_safe_tx.call.assert_called_once()
+    mock_safe_tx.execute.assert_called_with("0xKey1")

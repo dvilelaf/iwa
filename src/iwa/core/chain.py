@@ -1,5 +1,6 @@
 """Chain interaction helpers."""
 
+import threading
 import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -13,6 +14,115 @@ from iwa.core.settings import settings
 from iwa.core.utils import configure_logger, singleton
 
 logger = configure_logger()
+
+
+class RPCRateLimiter:
+    """Token bucket rate limiter for RPC calls.
+
+    Uses a token bucket algorithm that allows bursts while maintaining
+    a maximum average rate over time.
+    """
+
+    # Default: 25 requests per second (conservative for public RPCs)
+    DEFAULT_RATE = 25.0
+    DEFAULT_BURST = 50  # Allow burst of up to 50 requests
+
+    def __init__(
+        self,
+        rate: float = DEFAULT_RATE,
+        burst: int = DEFAULT_BURST,
+    ):
+        """Initialize rate limiter.
+
+        Args:
+            rate: Maximum requests per second (refill rate)
+            burst: Maximum tokens (bucket size)
+        """
+        self.rate = rate
+        self.burst = burst
+        self.tokens = float(burst)
+        self.last_update = time.monotonic()
+        self._lock = threading.Lock()
+        self._backoff_until = 0.0  # Timestamp until which we're in backoff
+
+    def acquire(self, timeout: float = 30.0) -> bool:
+        """Acquire a token, blocking if necessary.
+
+        Args:
+            timeout: Maximum time to wait for a token
+
+        Returns:
+            True if token acquired, False if timeout
+        """
+        deadline = time.monotonic() + timeout
+
+        while True:
+            with self._lock:
+                now = time.monotonic()
+
+                # Check if we're in backoff
+                if now < self._backoff_until:
+                    wait_time = self._backoff_until - now
+                    if now + wait_time > deadline:
+                        return False
+                else:
+                    # Refill tokens based on elapsed time
+                    elapsed = now - self.last_update
+                    self.tokens = min(self.burst, self.tokens + elapsed * self.rate)
+                    self.last_update = now
+
+                    if self.tokens >= 1.0:
+                        self.tokens -= 1.0
+                        return True
+
+                    # Calculate wait time for next token
+                    wait_time = (1.0 - self.tokens) / self.rate
+                    if now + wait_time > deadline:
+                        return False
+
+            # Wait outside the lock
+            time.sleep(min(wait_time, 0.1))
+
+    def trigger_backoff(self, seconds: float = 5.0):
+        """Trigger rate limit backoff.
+
+        Called when a 429/rate limit error is detected.
+        """
+        with self._lock:
+            self._backoff_until = time.monotonic() + seconds
+            # Also reduce tokens to prevent immediate retry
+            self.tokens = 0
+            logger.warning(f"RPC rate limit triggered, backing off for {seconds}s")
+
+    def get_status(self) -> dict:
+        """Get current rate limiter status."""
+        with self._lock:
+            now = time.monotonic()
+            in_backoff = now < self._backoff_until
+            return {
+                "tokens": self.tokens,
+                "rate": self.rate,
+                "burst": self.burst,
+                "in_backoff": in_backoff,
+                "backoff_remaining": max(0, self._backoff_until - now) if in_backoff else 0,
+            }
+
+
+# Global rate limiters per chain
+_rate_limiters: Dict[str, RPCRateLimiter] = {}
+_rate_limiters_lock = threading.Lock()
+
+
+def get_rate_limiter(chain_name: str, rate: float = None, burst: int = None) -> RPCRateLimiter:
+    """Get or create a rate limiter for a chain."""
+    with _rate_limiters_lock:
+        if chain_name not in _rate_limiters:
+            _rate_limiters[chain_name] = RPCRateLimiter(
+                rate=rate or RPCRateLimiter.DEFAULT_RATE,
+                burst=burst or RPCRateLimiter.DEFAULT_BURST,
+            )
+        return _rate_limiters[chain_name]
+
 
 
 class SupportedChain(BaseModel):
@@ -104,7 +214,7 @@ class SupportedChains:
 
 
 class ChainInterface:
-    """ChainInterface"""
+    """ChainInterface with rate limiting support."""
 
     def __init__(self, chain: Union[SupportedChain, str] = None):
         """ChainInterface"""
@@ -114,6 +224,7 @@ class ChainInterface:
             chain: SupportedChain = getattr(SupportedChains(), chain.lower())
 
         self.chain = chain
+        self._rate_limiter = get_rate_limiter(chain.name)
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
             logger.warning(
@@ -122,6 +233,25 @@ class ChainInterface:
 
         self.web3 = Web3(Web3.HTTPProvider(self.chain.rpc, request_kwargs={"timeout": 3}))
         self._current_rpc_index = 0
+
+    def _acquire_rate_limit(self, timeout: float = 30.0) -> bool:
+        """Acquire rate limit token before making RPC call."""
+        return self._rate_limiter.acquire(timeout)
+
+    def _handle_rpc_error(self, error: Exception) -> bool:
+        """Handle RPC errors, detecting rate limiting.
+
+        Returns:
+            True if error was a rate limit (backoff triggered)
+        """
+        err_text = str(error).lower()
+        rate_limit_signals = ["429", "rate limit", "too many requests", "ratelimit"]
+
+        if any(signal in err_text for signal in rate_limit_signals):
+            self._rate_limiter.trigger_backoff(seconds=5.0)
+            return True
+        return False
+
 
     def rotate_rpc(self) -> bool:
         """Rotate to the next available RPC."""
@@ -192,48 +322,9 @@ class ChainInterface:
         balance_ether = self.web3.from_wei(balance_wei, "ether")
         return balance_ether
 
-    def sign_and_send_transaction(self, transaction: dict, private_key: str) -> Tuple[bool, Dict]:
-        """Sign and send a transaction."""
-        max_retries = 3
-        tx = dict(transaction)
-
-        def _is_gas_too_low_error(err_text: str) -> bool:
-            low_gas_signals = [
-                "feetoolow",
-            ]
-            text = (err_text or "").lower()
-            return any(sig in text for sig in low_gas_signals)
-
-        for attempt in range(1, max_retries + 1):
-            try:
-                signed_txn = self.web3.eth.account.sign_transaction(tx, private_key=private_key)
-                txn_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-                receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
-                if receipt and getattr(receipt, "status", None) == 1:
-                    self.wait_for_no_pending_tx(transaction["from"])
-                    logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
-                    return True, receipt
-
-                logger.error("Transaction failed.")
-                return False, {}
-
-            except web3_exceptions.Web3RPCError as e:
-                err_text = str(e)
-                if _is_gas_too_low_error(err_text) and attempt < max_retries:
-                    logger.warning(
-                        f"Gas too low error detected. Retrying with increased gas (Attempt {attempt}/{max_retries})..."
-                    )
-                    current_gas = int(tx.get("gas", 30_000))
-                    tx["gas"] = int(current_gas * 1.5)
-                    time.sleep(0.5 * attempt)  # backoff
-                    continue
-                else:
-                    logger.exception(f"Error sending transaction: {e}")
-                    return False, {}
-
-            except Exception as e:
-                logger.exception(f"Unexpected error sending transaction: {e}")
-                return False, {}
+    # NOTE: sign_and_send_transaction was removed for security reasons.
+    # Use TransactionService.sign_and_send() instead, which handles signing internally
+    # without exposing private keys.
 
     def estimate_gas(self, built_method, tx_params) -> int:
         """Estimate gas for a contract function call."""
@@ -284,7 +375,12 @@ class ChainInterface:
         value_wei: int,
         sign_callback: Callable[[dict], SignedTransaction],
     ) -> Tuple[bool, Optional[str]]:
-        """Send native currency transaction"""
+        """Send native currency transaction with rate limiting."""
+        # Acquire rate limit token before RPC calls
+        if not self._acquire_rate_limit():
+            logger.error("Rate limit timeout waiting to send transaction")
+            return False, None
+
         tx = {
             "from": from_address,
             "to": to_address,
@@ -324,6 +420,8 @@ class ChainInterface:
             logger.error("Transaction failed.")
             return False, None
         except Exception as e:
+            # Check if it's a rate limit error and handle accordingly
+            self._handle_rpc_error(e)
             logger.exception(f"Unexpected error sending native transfer: {e}")
             return False, None
 

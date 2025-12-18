@@ -1,0 +1,144 @@
+"""Tests for RPC rate limiting."""
+
+import threading
+import time
+from unittest.mock import patch
+
+import pytest
+
+from iwa.core.chain import RPCRateLimiter, get_rate_limiter
+
+
+class TestRPCRateLimiter:
+    """Test cases for RPCRateLimiter."""
+
+    def test_init_defaults(self):
+        """Test default initialization."""
+        limiter = RPCRateLimiter()
+        assert limiter.rate == RPCRateLimiter.DEFAULT_RATE
+        assert limiter.burst == RPCRateLimiter.DEFAULT_BURST
+        assert limiter.tokens == float(limiter.burst)
+
+    def test_init_custom_values(self):
+        """Test custom initialization."""
+        limiter = RPCRateLimiter(rate=10.0, burst=20)
+        assert limiter.rate == 10.0
+        assert limiter.burst == 20
+
+    def test_acquire_success(self):
+        """Test successful token acquisition."""
+        limiter = RPCRateLimiter(rate=100.0, burst=10)
+        assert limiter.acquire(timeout=1.0) is True
+        assert limiter.tokens == 9.0
+
+    def test_acquire_multiple(self):
+        """Test acquiring multiple tokens."""
+        limiter = RPCRateLimiter(rate=100.0, burst=10)
+        for _ in range(5):
+            assert limiter.acquire(timeout=1.0) is True
+        # Allow small floating point variance due to time passage
+        assert 4.9 <= limiter.tokens <= 5.1
+
+    def test_acquire_exhausted_waits(self):
+        """Test that acquire waits when tokens exhausted."""
+        limiter = RPCRateLimiter(rate=100.0, burst=2)
+        # Exhaust tokens
+        limiter.tokens = 0.0
+        limiter.last_update = time.monotonic()
+
+        start = time.monotonic()
+        result = limiter.acquire(timeout=1.0)
+        elapsed = time.monotonic() - start
+
+        assert result is True
+        # Should have waited a bit for token refill
+        assert elapsed >= 0.005  # At least some wait
+
+    def test_acquire_timeout(self):
+        """Test that acquire times out."""
+        limiter = RPCRateLimiter(rate=0.1, burst=1)  # Very slow refill
+        limiter.tokens = 0.0
+        limiter.last_update = time.monotonic()
+
+        result = limiter.acquire(timeout=0.01)
+        assert result is False
+
+    def test_trigger_backoff(self):
+        """Test backoff triggering."""
+        limiter = RPCRateLimiter()
+        initial_tokens = limiter.tokens
+
+        limiter.trigger_backoff(seconds=1.0)
+
+        assert limiter.tokens == 0
+        status = limiter.get_status()
+        assert status["in_backoff"] is True
+        assert status["backoff_remaining"] > 0
+
+    def test_backoff_blocks_acquire(self):
+        """Test that backoff blocks acquire."""
+        limiter = RPCRateLimiter(rate=100.0, burst=50)
+        limiter.trigger_backoff(seconds=10.0)
+
+        # Should timeout waiting for backoff
+        result = limiter.acquire(timeout=0.01)
+        assert result is False
+
+    def test_get_status(self):
+        """Test status reporting."""
+        limiter = RPCRateLimiter(rate=25.0, burst=50)
+        status = limiter.get_status()
+
+        assert "tokens" in status
+        assert "rate" in status
+        assert "burst" in status
+        assert "in_backoff" in status
+        assert status["rate"] == 25.0
+        assert status["burst"] == 50
+
+    def test_thread_safety(self):
+        """Test that rate limiter is thread-safe."""
+        limiter = RPCRateLimiter(rate=1000.0, burst=100)
+        acquired = []
+
+        def acquire_tokens():
+            for _ in range(10):
+                if limiter.acquire(timeout=1.0):
+                    acquired.append(1)
+
+        threads = [threading.Thread(target=acquire_tokens) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All should have acquired
+        assert len(acquired) == 50
+
+
+class TestGetRateLimiter:
+    """Test get_rate_limiter function."""
+
+    def test_creates_new_limiter(self):
+        """Test creating a new rate limiter."""
+        # Use unique chain name to avoid interference
+        limiter = get_rate_limiter("test_chain_unique_1")
+        assert isinstance(limiter, RPCRateLimiter)
+
+    def test_returns_same_limiter(self):
+        """Test that same chain returns same limiter."""
+        limiter1 = get_rate_limiter("test_chain_unique_2")
+        limiter2 = get_rate_limiter("test_chain_unique_2")
+        assert limiter1 is limiter2
+
+    def test_different_chains_different_limiters(self):
+        """Test that different chains get different limiters."""
+        limiter1 = get_rate_limiter("chain_a")
+        limiter2 = get_rate_limiter("chain_b")
+        assert limiter1 is not limiter2
+
+    def test_custom_rate(self):
+        """Test creating limiter with custom rate."""
+        limiter = get_rate_limiter("test_chain_unique_3", rate=50.0, burst=100)
+        assert limiter.rate == 50.0
+        assert limiter.burst == 100

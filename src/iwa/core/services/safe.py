@@ -1,10 +1,11 @@
 """Safe service module."""
-from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from loguru import logger
 from safe_eth.eth import EthereumClient
-from safe_eth.safe import Safe
+from safe_eth.safe import Safe, SafeOperationEnum
 from safe_eth.safe.proxy_factory import ProxyFactory
+from safe_eth.safe.safe_tx import SafeTx
 
 from iwa.core.db import log_transaction
 from iwa.core.models import StoredSafeAccount
@@ -49,19 +50,8 @@ class SafeService:
             raise ValueError(
                 f"Deployer account '{deployer_tag_or_address}' not found or is a Safe."
             )
-        # Using internal method _get_private_key via a public accessor check or just access protected member
-        # Since SafeService is core, accessing protected _get_private_key is acceptable if we friend it,
-        # but KeyStorage doesn't expose it. We should use a method that provides the key or refactor KeyStorage.
-        # KeyStorage has get_private_key_unsafe. Let's use that for now or add a friend-like method.
-        # Ideally KeyStorage should handle signing deploy tx, but safe-eth-py wants an account object or key.
         from eth_account import Account
 
-        # Accessing protected member is not ideal but KeyStorage is passed in.
-        # For now, let's assume we can use _get_private_key or get_private_key_unsafe which logs a warning.
-        # But wait, we don't want to log warning for legitimate internal use.
-        # Let's use _get_private_key and suppress the "protected member" lint if needed, or better,
-        # moving this logic OUT of KeyStorage suggests KeyStorage should expose a "get_signer" or similar.
-        # Currently clean usage: accessing private key to create Account object for safe-eth-py.
         deployer_private_key = self.key_storage._get_private_key(deployer_stored_account.address)
         if not deployer_private_key:
              raise ValueError("Deployer private key not available.")
@@ -189,12 +179,12 @@ class SafeService:
                     tag=account.tag,
                 )
 
-    def get_safe_signer_keys(self, safe_address_or_tag: str) -> List[str]:
-        """Get all signer private keys for a safe."""
-        safe_account = self.key_storage.find_stored_account(safe_address_or_tag)
-        if not safe_account or not isinstance(safe_account, StoredSafeAccount):
-            raise ValueError(f"Safe account '{safe_address_or_tag}' not found in wallet.")
+    def _get_signer_keys(self, safe_account: StoredSafeAccount) -> List[str]:
+        """Get signer private keys for a safe (INTERNAL USE ONLY).
 
+        This method is private and should never be called from outside SafeService.
+        Keys are used only within execute_safe_transaction and cleared immediately after.
+        """
         signer_pkeys = []
         for signer_address in safe_account.signers:
             pkey = self.key_storage._get_private_key(signer_address)
@@ -208,19 +198,102 @@ class SafeService:
 
         return signer_pkeys
 
-    def sign_safe_transaction(
-        self, safe_address_or_tag: str, signing_callback: Callable[[List[str]], str]
+    def _sign_and_execute_safe_tx(
+        self, safe_tx: SafeTx, signer_keys: List[str]
     ) -> str:
-        """Sign a Safe transaction internally."""
-        stored = self.key_storage.find_stored_account(safe_address_or_tag)
-        if not stored or not isinstance(stored, StoredSafeAccount):
+        """Sign and execute a SafeTx internally (INTERNAL USE ONLY).
+
+        This method handles the signing and execution of a Safe transaction,
+        keeping private keys internal to SafeService.
+        """
+        # Sign with all available signers
+        for pk in signer_keys:
+            safe_tx.sign(pk)
+
+        # Verify the transaction will succeed
+        safe_tx.call()
+
+        # Execute using the first signer
+        safe_tx.execute(signer_keys[0])
+
+        return safe_tx.tx_hash.hex()
+
+    def execute_safe_transaction(
+        self,
+        safe_address_or_tag: str,
+        to: str,
+        value: int,
+        chain_name: str,
+        data: str = "",
+        operation: int = SafeOperationEnum.CALL.value,
+    ) -> str:
+        """Execute a Safe transaction with internal signing.
+
+        This is the preferred method for executing Safe transactions as it
+        handles all signing internally without exposing private keys.
+
+        Args:
+            safe_address_or_tag: The Safe account address or tag
+            to: Destination address
+            value: Amount in wei
+            chain_name: Chain name (e.g., 'gnosis')
+            data: Transaction data (hex string or empty)
+            operation: Safe operation type (CALL or DELEGATE_CALL)
+
+        Returns:
+            Transaction hash as hex string
+        """
+        from iwa.plugins.gnosis.safe import SafeMultisig
+
+        safe_account = self.key_storage.find_stored_account(safe_address_or_tag)
+        if not safe_account or not isinstance(safe_account, StoredSafeAccount):
             raise ValueError(f"Safe account '{safe_address_or_tag}' not found.")
 
-        signer_pkeys = self.get_safe_signer_keys(safe_address_or_tag)
+        safe = SafeMultisig(safe_account, chain_name)
+        safe_tx = safe.build_tx(
+            to=to,
+            value=value,
+            data=data,
+            operation=operation,
+        )
+
+        # Get signer keys, execute, and immediately clear
+        signer_keys = self._get_signer_keys(safe_account)
         try:
-            return signing_callback(signer_pkeys)
+            tx_hash = self._sign_and_execute_safe_tx(safe_tx, signer_keys)
+            logger.info(f"Safe transaction executed. Tx Hash: {tx_hash}")
+            return tx_hash
         finally:
-            # Clear the list and references
-            for i in range(len(signer_pkeys)):
-                signer_pkeys[i] = None
-            del signer_pkeys
+            # Clear keys from memory (best effort)
+            for i in range(len(signer_keys)):
+                signer_keys[i] = None
+            del signer_keys
+
+    def get_sign_and_execute_callback(
+        self, safe_address_or_tag: str
+    ):
+        """Get a callback function that signs and executes a SafeTx.
+
+        This method returns a callback that can be passed to SafeMultisig.send_tx().
+        The callback handles all signing internally.
+
+        Args:
+            safe_address_or_tag: The Safe account address or tag
+
+        Returns:
+            A callable that takes a SafeTx and returns the transaction hash
+        """
+        safe_account = self.key_storage.find_stored_account(safe_address_or_tag)
+        if not safe_account or not isinstance(safe_account, StoredSafeAccount):
+            raise ValueError(f"Safe account '{safe_address_or_tag}' not found.")
+
+        def _sign_and_execute(safe_tx: SafeTx) -> str:
+            signer_keys = self._get_signer_keys(safe_account)
+            try:
+                return self._sign_and_execute_safe_tx(safe_tx, signer_keys)
+            finally:
+                for i in range(len(signer_keys)):
+                    signer_keys[i] = None
+                del signer_keys
+
+        return _sign_and_execute
