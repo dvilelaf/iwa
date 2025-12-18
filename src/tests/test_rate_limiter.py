@@ -142,3 +142,54 @@ class TestGetRateLimiter:
         limiter = get_rate_limiter("test_chain_unique_3", rate=50.0, burst=100)
         assert limiter.rate == 50.0
         assert limiter.burst == 100
+
+
+class TestRateLimitRotationInterplay:
+    """Test interaction between rate limiting and RPC rotation."""
+
+    def test_rate_limit_triggers_rotation_first(self):
+        """Test that rate limit error triggers RPC rotation before backoff."""
+        from unittest.mock import MagicMock, PropertyMock, patch
+        from iwa.core.chain import ChainInterface, SupportedChain
+
+        # Create a mock chain with multiple RPCs
+        with patch("iwa.core.chain.Web3"):
+            chain = MagicMock(spec=SupportedChain)
+            chain.name = "TestChain"
+            chain.rpcs = ["https://rpc1", "https://rpc2", "https://rpc3"]
+            type(chain).rpc = PropertyMock(return_value="https://rpc1")
+
+            ci = ChainInterface(chain)
+            original_index = ci._current_rpc_index
+
+            # Simulate rate limit error
+            rate_limit_error = Exception("Error 429: Too Many Requests")
+            result = ci._handle_rpc_error(rate_limit_error)
+
+            # Should have rotated
+            assert result is True
+            assert ci._current_rpc_index != original_index
+            # Backoff should NOT be triggered since rotation succeeded
+            assert ci._rate_limiter.get_status()["in_backoff"] is False
+
+    def test_rate_limit_triggers_backoff_when_no_rotation(self):
+        """Test that rate limit triggers backoff when no other RPCs available."""
+        from unittest.mock import MagicMock, PropertyMock, patch
+        from iwa.core.chain import ChainInterface, SupportedChain
+
+        # Create a mock chain with single RPC (can't rotate)
+        with patch("iwa.core.chain.Web3"):
+            chain = MagicMock(spec=SupportedChain)
+            chain.name = "TestChainSingle"
+            chain.rpcs = ["https://rpc1"]  # Only one RPC
+            type(chain).rpc = PropertyMock(return_value="https://rpc1")
+
+            ci = ChainInterface(chain)
+
+            # Simulate rate limit error
+            rate_limit_error = Exception("Error 429: Too Many Requests")
+            result = ci._handle_rpc_error(rate_limit_error)
+
+            # Should have triggered backoff since can't rotate
+            assert result is True
+            assert ci._rate_limiter.get_status()["in_backoff"] is True

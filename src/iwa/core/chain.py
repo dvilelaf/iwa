@@ -124,6 +124,89 @@ def get_rate_limiter(chain_name: str, rate: float = None, burst: int = None) -> 
         return _rate_limiters[chain_name]
 
 
+class RateLimitedEth:
+    """Wrapper around web3.eth that applies rate limiting transparently.
+
+    All attribute access is delegated to the underlying web3.eth,
+    but RPC-calling methods are wrapped with rate limiting.
+    """
+
+    # Methods that make RPC calls and need rate limiting
+    RPC_METHODS = {
+        "get_balance", "get_code", "get_transaction_count",
+        "estimate_gas", "send_raw_transaction", "wait_for_transaction_receipt",
+        "get_block", "get_transaction", "get_transaction_receipt",
+        "call", "get_logs",
+    }
+
+    def __init__(self, web3_eth, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
+        # Use object.__setattr__ to avoid triggering our __setattr__
+        object.__setattr__(self, '_eth', web3_eth)
+        object.__setattr__(self, '_rate_limiter', rate_limiter)
+        object.__setattr__(self, '_chain_interface', chain_interface)
+
+    def __getattr__(self, name):
+        attr = getattr(self._eth, name)
+
+        # Wrap RPC methods with rate limiting
+        if name in self.RPC_METHODS and callable(attr):
+            return self._wrap_with_rate_limit(attr, name)
+
+        return attr
+
+    def __setattr__(self, name, value):
+        # Delegate setattr to underlying eth for test mocking
+        if name.startswith('_'):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._eth, name, value)
+
+    def __delattr__(self, name):
+        # Delegate delattr to underlying eth for patch.object cleanup
+        if name.startswith('_'):
+            object.__delattr__(self, name)
+        else:
+            delattr(self._eth, name)
+
+    def _wrap_with_rate_limit(self, method, method_name):
+        """Wrap a method with rate limiting and error handling."""
+        def wrapper(*args, **kwargs):
+            if not self._rate_limiter.acquire(timeout=30.0):
+                raise TimeoutError(f"Rate limit timeout waiting for {method_name}")
+
+            try:
+                return method(*args, **kwargs)
+            except Exception as e:
+                self._chain_interface._handle_rpc_error(e)
+                raise
+
+        return wrapper
+
+
+class RateLimitedWeb3:
+    """Wrapper around Web3 instance that applies rate limiting transparently.
+
+    Usage is identical to regular Web3, but all RPC calls go through rate limiting.
+    """
+
+    def __init__(self, web3_instance: Web3, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
+        self._web3 = web3_instance
+        self._rate_limiter = rate_limiter
+        self._chain_interface = chain_interface
+        self._eth_wrapper = None
+
+    @property
+    def eth(self):
+        """Return rate-limited eth interface."""
+        if self._eth_wrapper is None:
+            self._eth_wrapper = RateLimitedEth(self._web3.eth, self._rate_limiter, self._chain_interface)
+        return self._eth_wrapper
+
+    def __getattr__(self, name):
+        # For anything except 'eth', delegate directly
+        return getattr(self._web3, name)
+
+
 
 class SupportedChain(BaseModel):
     """SupportedChain"""
@@ -231,25 +314,41 @@ class ChainInterface:
                 f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS."
             )
 
-        self.web3 = Web3(Web3.HTTPProvider(self.chain.rpc, request_kwargs={"timeout": 3}))
+        # Use rate-limited Web3 wrapper - all RPC calls automatically rate limited
+        raw_web3 = Web3(Web3.HTTPProvider(self.chain.rpc, request_kwargs={"timeout": 3}))
+        self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
         self._current_rpc_index = 0
 
-    def _acquire_rate_limit(self, timeout: float = 30.0) -> bool:
-        """Acquire rate limit token before making RPC call."""
-        return self._rate_limiter.acquire(timeout)
-
-    def _handle_rpc_error(self, error: Exception) -> bool:
-        """Handle RPC errors, detecting rate limiting.
-
-        Returns:
-            True if error was a rate limit (backoff triggered)
-        """
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """Check if error is a rate limit (429) error."""
         err_text = str(error).lower()
         rate_limit_signals = ["429", "rate limit", "too many requests", "ratelimit"]
+        return any(signal in err_text for signal in rate_limit_signals)
 
-        if any(signal in err_text for signal in rate_limit_signals):
+    def _handle_rpc_error(self, error: Exception) -> bool:
+        """Handle RPC errors, with smart rotation on rate limiting.
+
+        When a rate limit is detected:
+        1. First, try to rotate to another RPC
+        2. If rotation succeeds, continue without backoff
+        3. If no other RPCs available, trigger backoff
+
+        Returns:
+            True if error was handled (rotation or backoff triggered)
+        """
+        if self._is_rate_limit_error(error):
+            logger.warning(f"Rate limit error detected: {error}")
+
+            # Try to rotate to another RPC first
+            if self.rotate_rpc():
+                logger.info("Rotated to new RPC to escape rate limit")
+                return True
+
+            # No other RPCs available, must backoff
+            logger.warning("No other RPCs available, triggering backoff")
             self._rate_limiter.trigger_backoff(seconds=5.0)
             return True
+
         return False
 
 
@@ -261,7 +360,8 @@ class ChainInterface:
         self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
         new_rpc = self.chain.rpcs[self._current_rpc_index]
         logger.info(f"Rotating RPC for {self.chain.name} to {new_rpc}")
-        self.web3 = Web3(Web3.HTTPProvider(new_rpc, request_kwargs={"timeout": 3}))
+        raw_web3 = Web3(Web3.HTTPProvider(new_rpc, request_kwargs={"timeout": 3}))
+        self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
         return True
 
     def is_contract(self, address: str) -> bool:
@@ -375,12 +475,10 @@ class ChainInterface:
         value_wei: int,
         sign_callback: Callable[[dict], SignedTransaction],
     ) -> Tuple[bool, Optional[str]]:
-        """Send native currency transaction with rate limiting."""
-        # Acquire rate limit token before RPC calls
-        if not self._acquire_rate_limit():
-            logger.error("Rate limit timeout waiting to send transaction")
-            return False, None
+        """Send native currency transaction.
 
+        Note: Rate limiting is handled transparently by RateLimitedWeb3.
+        """
         tx = {
             "from": from_address,
             "to": to_address,

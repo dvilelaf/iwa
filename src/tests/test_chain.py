@@ -16,8 +16,12 @@ from iwa.core.models import EthereumAddress
 
 @pytest.fixture
 def mock_web3():
-    with patch("iwa.core.chain.Web3") as mock:
-        yield mock
+    """Mock Web3 and RateLimitedWeb3 to bypass rate limiting wrapper in tests."""
+    with patch("iwa.core.chain.Web3") as mock_web3_class, \
+         patch("iwa.core.chain.RateLimitedWeb3") as mock_rl_web3:
+        # Make RateLimitedWeb3 just return the raw web3 instance passed to it
+        mock_rl_web3.side_effect = lambda w3, rl, ci: w3
+        yield mock_web3_class
 
 
 @pytest.fixture
