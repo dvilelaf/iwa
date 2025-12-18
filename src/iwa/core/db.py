@@ -11,7 +11,6 @@ from peewee import (
     Model,
     SqliteDatabase,
 )
-from loguru import logger
 from playhouse.migrate import SqliteMigrator, migrate
 
 from iwa.core.constants import WALLET_PATH
@@ -63,26 +62,21 @@ class SentTransaction(BaseModel):
     tags = CharField(null=True)  # JSON-encoded list of strings
 
 
-def init_db():
-    """Initialize the database."""
-    db.connect()
-    db.create_tables([SentTransaction], safe=True)
 
-    # Simple migration: check if columns exist, if not add them
-    # This prevents errors if the DB was already created without these columns
-    columns = [c.name for c in db.get_columns("senttransaction")]
+
+def run_migrations(columns):
+    """Run database migrations."""
+    migrator = SqliteMigrator(db)
 
     # Deprecated column cleanup
     if "token_symbol" in columns:
         try:
-           migrator = SqliteMigrator(db)
            migrate(migrator.drop_column("senttransaction", "token_symbol"))
         except Exception as e:
             print(f"Migration (drop token_symbol) failed: {e}")
 
     if "from_tag" not in columns:
         try:
-            migrator = SqliteMigrator(db)
             migrate(
                 migrator.add_column("senttransaction", "from_tag", CharField(null=True)),
                 migrator.add_column("senttransaction", "to_tag", CharField(null=True)),
@@ -93,10 +87,6 @@ def init_db():
 
     if "price_eur" not in columns:
         try:
-            # Re-init migrator if needed or reuse
-            if "migrator" not in locals():
-                migrator = SqliteMigrator(db)
-
             migrate(
                 migrator.add_column("senttransaction", "price_eur", FloatField(null=True)),
                 migrator.add_column("senttransaction", "value_eur", FloatField(null=True)),
@@ -108,11 +98,19 @@ def init_db():
 
     if "tags" not in columns:
         try:
-            if "migrator" not in locals():
-                migrator = SqliteMigrator(db)
             migrate(migrator.add_column("senttransaction", "tags", CharField(null=True)))
         except Exception as e:
             print(f"Migration (tags) failed: {e}")
+
+
+def init_db():
+    """Initialize the database."""
+    db.connect()
+    db.create_tables([SentTransaction], safe=True)
+
+    # Simple migration: check if columns exist, if not add them
+    columns = [c.name for c in db.get_columns("senttransaction")]
+    run_migrations(columns)
 
     db.close()
 

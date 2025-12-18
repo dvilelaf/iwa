@@ -68,7 +68,8 @@ def mock_cow_swap():
 
 @pytest.fixture
 def wallet(mock_key_storage, mock_chain_interfaces, mock_cow_swap):
-    return Wallet()
+    with patch("iwa.core.wallet.init_db"):
+        return Wallet()
 
 
 def test_wallet_init(wallet, mock_key_storage):

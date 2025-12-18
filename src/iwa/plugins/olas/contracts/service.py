@@ -83,6 +83,7 @@ class ServiceManagerContract(ContractInstance):
     """Class to interact with the service manager contract."""
 
     name = "service_manager"
+    abi_path = ABI_PATH / "service_manager.json"
 
     def prepare_create_tx(
         self,

@@ -24,7 +24,6 @@ from textual.widgets import (
 )
 
 from iwa.core.chain import ChainInterfaces
-from iwa.core.db import SentTransaction
 from iwa.core.models import Config, StoredSafeAccount
 from iwa.core.monitor import EventMonitor
 from iwa.core.pricing import PriceService
@@ -552,7 +551,7 @@ class WalletsView(VerticalScroll):
             chain_interface = ChainInterfaces().get(chain_name)
             all_chain_tokens = list(chain_interface.tokens.keys()) if chain_interface else []
 
-            for i, token in enumerate(token_names):
+            for _i, token in enumerate(token_names):
                 # Check if this token is enabled
                 if token not in self.chain_token_states.get(chain_name, set()):
                     continue
@@ -1049,7 +1048,7 @@ class WalletsView(VerticalScroll):
             )
             self.app.call_from_thread(self.update_last_tx_status, "[red]Failed[/red]")
 
-    async def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
+    def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
         """Add a new row to the transaction history table directly."""
         ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
@@ -1059,7 +1058,7 @@ class WalletsView(VerticalScroll):
                 f,
                 t,
                 token,
-                amount,
+                amt,
                 "",  # Value - placeholder
                 status,
                 (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..." if tx_hash else "",
@@ -1155,19 +1154,58 @@ class WalletsView(VerticalScroll):
             print(f"DEBUG: Failed to load recent txs: {e}")
             pass
 
+    def _resolve_token_info_for_enrichment(self, tx, interface, price):
+        """Helper to resolve token symbol and value/price for enrichment."""
+        value_wei = int(tx.get("value", 0))
+        token_val = tx.get("token", "NATIVE")
+        value_eur = None
+        final_price = price
+
+        if token_val == "TOKEN" and tx.get("contract_address"):
+            contract_addr = tx["contract_address"]
+            token_val = interface.get_token_symbol(contract_addr)
+            decimals = interface.get_token_decimals(contract_addr)
+            value_token = value_wei / (10**decimals)
+        else:
+            value_token = value_wei / 10**18
+
+        if token_val.upper() in ["NATIVE", "NATIVE CURRENCY"] or token_val == interface.chain.native_currency:
+            token_val = interface.chain.native_currency
+            if final_price is not None:
+                value_eur = value_token * final_price
+        else:
+            token_cg_ids = {
+                "OLAS": "autonolas",
+                "USDC": "usd-coin",
+                "DAI": "dai",
+                "WXDAI": "dai",
+                "SDAI": "dai",
+            }
+            t_cg_id = token_cg_ids.get(token_val.upper())
+            if t_cg_id:
+                t_price = self.price_service.get_token_price(t_cg_id, "eur")
+                if t_price:
+                    final_price = t_price
+                    value_eur = value_token * t_price
+
+        return token_val, value_wei, value_eur, final_price
+
+    def _calculate_gas_cost_wei(self, interface, tx_hash, tx_data):
+        """Helper to calculate gas cost accurately via receipt if possible."""
+        try:
+            receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+            gas_used = receipt.get("gasUsed", 0)
+            effective_gas_price = receipt.get("effectiveGasPrice", tx_data.get("gasPrice", 0))
+            return int(effective_gas_price) * int(gas_used)
+        except Exception:
+            return int(tx_data.get("gasPrice", 0)) * int(tx_data.get("gasUsed", 0))
+
     @work(thread=True)
     def enrich_and_log_txs(self, txs: List[dict]) -> None:
         """Fetch additional details for transactions and log them to DB."""
         from iwa.core.db import log_transaction
 
-        # Mapping for CoinGecko
-        cg_ids = {
-            "ethereum": "ethereum",
-            "gnosis": "dai",  # Use DAI/xDAI price for Gnosis native
-            "base": "ethereum",
-        }
-
-        # Cache prices for this batch to minimize API calls if there are many txs same chain
+        cg_ids = {"ethereum": "ethereum", "gnosis": "dai", "base": "ethereum"}
         price_cache = {}
 
         for tx in txs:
@@ -1183,79 +1221,30 @@ class WalletsView(VerticalScroll):
                 if cg_id not in price_cache:
                     price_cache[cg_id] = self.price_service.get_token_price(cg_id, "eur")
 
-                price = price_cache[cg_id]
+                initial_price = price_cache[cg_id]
+                token_val, value_wei, value_eur, final_price = self._resolve_token_info_for_enrichment(tx, interface, initial_price)
 
-                # Basic enrichment
-                value_wei = int(tx.get("value", 0))
-                value_eur = None
-                token_val = tx.get("token", "NATIVE")
-
-                # If generic monitor token, try to resolve symbol and value
-                if token_val == "TOKEN" and tx.get("contract_address"):
-                    contract_addr = tx["contract_address"]
-                    token_val = interface.get_token_symbol(contract_addr)
-
-                    # Decimals for correct value calculation
-                    decimals = interface.get_token_decimals(contract_addr)
-                    value_token = value_wei / (10**decimals)
-                else:
-                    value_token = value_wei / 10**18
-
-                if token_val.upper() in ["NATIVE", "NATIVE CURRENCY"] or token_val == interface.chain.native_currency:
-                    # Enforce symbol usage (e.g. xDAI, ETH)
-                    token_val = interface.chain.native_currency
-                    if price is not None:
-                        value_eur = value_token * price
-                else:
-                    # Resolve token-specific price
-                    token_cg_ids = {
-                        "OLAS": "autonolas",
-                        "USDC": "usd-coin",
-                        "DAI": "dai",
-                        "WXDAI": "dai",
-                        "SDAI": "dai",
-                    }
-                    t_cg_id = token_cg_ids.get(token_val.upper())
-                    if t_cg_id:
-                        t_price = self.price_service.get_token_price(t_cg_id, "eur")
-                        if t_price:
-                            price = t_price # Update the price used for log_transaction
-                            value_eur = value_token * t_price
-
-                # Gas Calculation via Receipt for accuracy
-                try:
-                    receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
-                    gas_used = receipt.get("gasUsed", 0)
-                    effective_gas_price = receipt.get("effectiveGasPrice", tx.get("gasPrice", 0))
-                    gas_cost_wei = int(effective_gas_price) * int(gas_used)
-                except Exception:
-                    # Fallback to estimation from tx data
-                    gas_cost_wei = int(tx.get("gasPrice", 0)) * int(tx.get("gasUsed", 0))
-
+                gas_cost_wei = self._calculate_gas_cost_wei(interface, tx_hash, tx)
                 gas_eth = gas_cost_wei / 10**18
-                gas_value_eur = gas_eth * price if price is not None else None
-
-                # Resolve tags
-                from_tag = self.resolve_tag(tx["from"])
-                to_tag = self.resolve_tag(tx["to"])
+                gas_value_eur = gas_eth * final_price if final_price is not None else None
 
                 log_transaction(
                     tx_hash=tx_hash,
                     from_addr=tx["from"],
-                    from_tag=from_tag,
+                    from_tag=self.resolve_tag(tx["from"]),
                     to_addr=tx["to"],
-                    to_tag=to_tag,
+                    to_tag=self.resolve_tag(tx["to"]),
                     token=token_val,
                     amount_wei=str(value_wei),
                     chain=tx_chain,
-                    price_eur=price,
+                    price_eur=final_price,
                     value_eur=value_eur,
                     gas_cost=str(gas_cost_wei),
                     gas_value_eur=gas_value_eur,
                 )
                 logger.info(f"Logged enriched tx {tx_hash} on {tx_chain}")
             except Exception as e:
-                logger.error(f"Failed to enrich/log tx {tx.get('hash')}: {e}")
+                logger.error(f"Failed to enrich/log tx {tx.get('hash')} on {tx_chain}: {e}")
 
         # Refresh the UI table to show new enriched data
         self.app.call_from_thread(self.load_recent_txs)

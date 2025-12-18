@@ -17,7 +17,11 @@ from safe_eth.safe import Safe
 
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, Secrets, StoredAccount, StoredSafeAccount
-from iwa.core.utils import configure_logger, get_safe_master_copy_address, get_safe_proxy_factory_address
+from iwa.core.utils import (
+    configure_logger,
+    get_safe_master_copy_address,
+    get_safe_proxy_factory_address,
+)
 
 logger = configure_logger()
 

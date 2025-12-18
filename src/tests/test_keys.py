@@ -179,7 +179,7 @@ def test_keystorage_create_safe(
         storage.create_account("deployer")
         storage.create_account("owner")
 
-        safe = storage.create_safe(
+        safe, _ = storage.create_safe(
             deployer_tag_or_address="deployer",
             owner_tags_or_addresses=["owner"],
             threshold=1,
@@ -344,7 +344,7 @@ def test_keystorage_create_safe_deployer_not_found(mock_secrets):
     with patch("os.path.exists", return_value=False):
         storage = KeyStorage(Path("wallet.json"))
         with pytest.raises(ValueError, match="Deployer account 'deployer' not found"):
-            storage.create_safe("deployer", [], 1, "gnosis")
+            _, _ = storage.create_safe("deployer", [], 1, "gnosis")
 
 
 def test_keystorage_create_safe_owner_not_found(
@@ -360,7 +360,7 @@ def test_keystorage_create_safe_owner_not_found(
         storage.create_account("master")  # Create master first
         storage.create_account("deployer")
         with pytest.raises(ValueError, match="Owner account 'owner' not found"):
-            storage.create_safe("deployer", ["owner"], 1, "gnosis")
+            _, _ = storage.create_safe("deployer", ["owner"], 1, "gnosis")
 
 
 def test_keystorage_remove_account_not_found(mock_secrets):
@@ -417,7 +417,7 @@ def test_keystorage_get_account_safe(
         storage.create_account("master")  # Create master first
         storage.create_account("deployer")
         storage.create_account("owner")
-        safe = storage.create_safe("deployer", ["owner"], 1, "gnosis", "safe")
+        safe, _ = storage.create_safe("deployer", ["owner"], 1, "gnosis", "safe")
 
         # Get by address
         acc = storage.get_account(safe.address)

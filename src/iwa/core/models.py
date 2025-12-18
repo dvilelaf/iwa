@@ -9,7 +9,7 @@ import tomli
 import tomli_w
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, PrivateAttr, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SecretStr
 from pydantic_core import core_schema
 from pydantic_settings import BaseSettings
 from web3 import Web3
@@ -85,11 +85,10 @@ class Secrets(BaseSettings):
     tenderly_project_slug: SecretStr = None
     tenderly_access_key: SecretStr = None
 
-    class Config:
-        """Config"""
-
-        env_file = SECRETS_PATH
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(
+        env_file=str(SECRETS_PATH),
+        env_file_encoding="utf-8",
+    )
 
     def __init__(self, **values):
         """Initialize Secrets and load environment variables from secrets.env"""

@@ -1,6 +1,6 @@
 """Activity checker contract interaction."""
 
-from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
+from iwa.core.constants import ABI_PATH, DEFAULT_MECH_CONTRACT_ADDRESS
 from iwa.plugins.olas.contracts.base import ContractInstance
 
 
@@ -8,6 +8,7 @@ class ActivityCheckerContract(ContractInstance):
     """Class to interact with the activity checker."""
 
     name = "activity_checker"
+    abi_path = ABI_PATH / "activity_checker.json"
 
     def __init__(self, address):
         """Initialize ActivityCheckerContract."""

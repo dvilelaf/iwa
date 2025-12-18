@@ -22,3 +22,9 @@ tenderly.yaml
 *.log
 
 activity.db
+
+activity.db-shm
+
+debug_trace.txt
+
+TODO.md

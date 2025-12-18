@@ -166,7 +166,7 @@ def test_check_activity_logs(mock_chain_interfaces, mock_callback):
 
     # Mock Log matching address
 
-    my_addr = "0x1234567890123456789012345678901234567890"
+    my_addr = "0x1234567890123456789012345678901234567890".lower()
     monitor = EventMonitor([my_addr], mock_callback)
     monitor.last_checked_block = 100
 
@@ -180,7 +180,8 @@ def test_check_activity_logs(mock_chain_interfaces, mock_callback):
             b"\x00" * 32,  # from (don't care)
             padded_addr_bytes,  # to (me) -- This MUST match the padded address logic in monitor.py
         ],
-        "transactionHash": b"loghash",
+        "transactionHash": MagicMock(hex=lambda: "0xloghash"),
+        "address": "0xContractAddr",
     }
 
     chain_interface.web3.eth.get_logs.side_effect = [[], [log]]  # sent, received
