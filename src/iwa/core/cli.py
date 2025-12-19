@@ -158,6 +158,20 @@ def tui():
     app.run()
 
 
+@iwa_cli.command("web")
+def web_server(
+    port: Optional[int] = typer.Option(None, "--port", "-p", help="Port to listen on"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to listen on"),
+):
+    """Start Web Interface."""
+    from iwa.core.settings import settings
+    from iwa.web.server import run_server
+
+    server_port = port or settings.web_port
+    typer.echo(f"Starting web server on http://{host}:{server_port}")
+    run_server(host=host, port=server_port)
+
+
 @wallet_cli.command("drain")
 def drain_wallet(
     from_address_or_tag: str = typer.Option(..., "--from", "-f", help="From address or tag"),

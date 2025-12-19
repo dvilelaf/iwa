@@ -59,5 +59,9 @@ docs-build:
     uv run mkdocs build
 
 # Launch TUI
-iwa:
+tui:
     uv run iwa tui
+
+# Launch Web Server
+web port="8000" host="127.0.0.1":
+    uv run iwa web --port {{port}} --host {{host}}

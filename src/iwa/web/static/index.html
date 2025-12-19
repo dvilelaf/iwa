@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iwa - Web Terminal</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">💠</span>
+                <h1>IWA <span>Terminal</span></h1>
+            </div>
+            <div class="chain-selector">
+                <label for="active-chain">Network</label>
+                <select id="active-chain">
+                    <option value="gnosis">Gnosis</option>
+                    <option value="ethereum">Ethereum</option>
+                    <option value="base">Base</option>
+                </select>
+            </div>
+            <div class="status-indicator" id="global-status">
+                <span class="pulse"></span>
+                <span id="status-text">Connected</span>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+            <button class="tab-btn" data-tab="rpc">RPC Status</button>
+        </nav>
+
+        <main class="tab-content">
+            <!-- Dashboard Tab (Merged Wallets & Transactions) -->
+            <section id="dashboard" class="tab-pane active">
+                <div class="section-header">
+                    <h2>Accounts</h2>
+                    <div class="actions">
+                        <button id="refresh-btn" class="btn-icon" title="Refresh Balances">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                        </button>
+                        <button id="create-eoa-btn" class="btn-primary">Create EOA</button>
+                        <button id="create-safe-btn" class="btn-warning">Create Safe</button>
+                    </div>
+                </div>
+
+                <div class="table-container glass">
+                    <table id="accounts-table">
+                        <thead>
+                            <tr id="accounts-header-row">
+                                <th>Tag</th>
+                                <th>Address</th>
+                                <th>Type</th>
+                                <th class="val">Native</th>
+                                <!-- Token columns will be dynamic -->
+                            </tr>
+                        </thead>
+                        <tbody id="accounts-body">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="tx-form glass mt-2">
+                    <h3>Send Transaction</h3>
+                    <form id="send-tx-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>From</label>
+                                <select id="tx-from" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>To</label>
+                                <input type="text" id="tx-to" placeholder="Address or Tag" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Amount</label>
+                                <input type="number" id="tx-amount" step="0.0001" placeholder="0.00" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Token</label>
+                                <select id="tx-token"></select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-send">Send Assets</button>
+                    </form>
+                </div>
+
+                <div class="section-header mt-2">
+                    <h2>Recent Activity</h2>
+                </div>
+                <div class="table-container glass">
+                    <table id="tx-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Chain</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Token</th>
+                                <th class="val">Amount</th>
+                                <th class="val">Value (EUR)</th>
+                                <th>Status</th>
+                                <th>Hash</th>
+                                <th>Gas Cost</th>
+                                <th>Gas (EUR)</th>
+                                <th>Tags</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tx-body">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- RPC Tab -->
+            <section id="rpc" class="tab-pane">
+                <div class="section-header">
+                    <h2>Node Connectivity</h2>
+                </div>
+                <div class="rpc-grid" id="rpc-cards">
+                    <!-- Cards loaded via JS -->
+                </div>
+            </section>
+        </main>
+
+        <footer style="display: none;"></footer>
+    </div>
+
+    <!-- Modals (minimal implementation for now) -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

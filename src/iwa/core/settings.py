@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     tenderly_account_slug: Optional[SecretStr] = None
     tenderly_project_slug: Optional[SecretStr] = None
     tenderly_access_key: Optional[SecretStr] = None
+    web_enabled: bool = False
+    web_port: int = 8000
+
 
     model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
 
