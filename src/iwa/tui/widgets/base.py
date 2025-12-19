@@ -74,7 +74,7 @@ class TransactionTable(DataTable):
             self.add_column("Amount", width=12)
             self.add_column("Value (€)", width=12)
             self.add_column("Status", width=12)
-            self.add_column("Hash", width=22)
+            self.add_column("Hash", width=14)
             self.add_column("Gas (wei)", width=12)
             self.add_column("Gas (€)", width=10)
             self.add_column("Tags", width=20)

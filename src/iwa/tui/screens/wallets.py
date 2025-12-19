@@ -342,28 +342,31 @@ class WalletsScreen(VerticalScroll):
         return val_token_str
 
     def add_tx_history_row(self, f, t, token, amt, status, tx_hash=""):
-        """Add a new row to the transaction history table."""
+        """Add a new row to the transaction history table at the top."""
+        from_str = self.resolve_tag(f)
+        to_str = self.resolve_tag(t)
+        table = self.query_one(TransactionTable)
+        table.add_row(
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            self.active_chain.capitalize(),
+            from_str,
+            to_str,
+            token,
+            amt,
+            "",  # Value
+            f"[green]{status}[/green]",
+            (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..."
+            if tx_hash
+            else "",
+            "?",  # Gas cost
+            "?",  # Gas value
+            "",  # Tags
+            key=tx_hash,
+        )
         try:
-            from_str = self.resolve_tag(f)
-            to_str = self.resolve_tag(t)
-            self.query_one(TransactionTable).add_row(
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                self.active_chain.capitalize(),
-                from_str,
-                to_str,
-                token,
-                amt,
-                "",
-                f"[green]{status}[/green]",
-                (tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}")[:10] + "..."
-                if tx_hash
-                else "",
-                "?",
-                "?",
-                "",
-                key=tx_hash,
-            )
+            table.sort("Time", reverse=True)
         except Exception:
+            # Table sorting might fail in some contexts if ColumnKey is used internally
             pass
 
     def on_unmount(self) -> None:
@@ -471,7 +474,7 @@ class WalletsScreen(VerticalScroll):
                     f"Deploying Safe '{escape(tag)}' on {chain_name}...",
                     severity="info",
                 )
-                self.wallet.key_storage.create_safe(
+                self.wallet.safe_service.create_safe(
                     "master", owners, threshold, chain_name, tag, salt_nonce
                 )
                 self.app.call_from_thread(
@@ -570,7 +573,9 @@ class WalletsScreen(VerticalScroll):
     def on_account_cell_selected(self, event: DataTable.CellSelected) -> None:
         """Handle account cell selection (copy address)."""
         if event.coordinate.column == 1:
-            self.app.copy_to_clipboard(event.value)
+            # event.value may be a Rich Text object, convert to plain string
+            value = str(event.value.plain) if hasattr(event.value, "plain") else str(event.value)
+            self.app.copy_to_clipboard(value)
             self.notify("Copied address to clipboard")
 
     @on(DataTable.CellSelected, "#tx_table")
@@ -579,9 +584,11 @@ class WalletsScreen(VerticalScroll):
         try:
             columns = list(event.data_table.columns.values())
             if "Hash" in str(columns[event.coordinate.column].label):
+                # The row key contains the full hash
                 full_hash = str(event.cell_key.row_key.value)
-                self.app.copy_to_clipboard(full_hash)
-                self.notify(f"Copied hash: {full_hash[:6]}...")
+                if full_hash and full_hash.startswith("0x"):
+                    self.app.copy_to_clipboard(full_hash)
+                    self.notify("Copied hash to clipboard")
         except Exception:
             pass
 
@@ -603,7 +610,7 @@ class WalletsScreen(VerticalScroll):
     def send_tx_worker(self, f, t, token, amount) -> None:
         """Background worker for sending transactions."""
         try:
-            tx_hash = self.wallet.send(f, t, token, int(amount * 10**18), self.active_chain)
+            tx_hash = self.wallet.send(f, t, int(amount * 10**18), token, self.active_chain)
             self.app.call_from_thread(self.notify, "Transaction sent!", severity="success")
             self.app.call_from_thread(
                 self.add_tx_history_row, f, t, token, amount, "Pending", tx_hash
@@ -621,8 +628,11 @@ class WalletsScreen(VerticalScroll):
             recent = (
                 SentTransaction.select()
                 .where(
-                    SentTransaction.timestamp
-                    > (datetime.datetime.now() - datetime.timedelta(hours=24))
+                    (SentTransaction.chain == self.active_chain)
+                    & (
+                        SentTransaction.timestamp
+                        > (datetime.datetime.now() - datetime.timedelta(hours=24))
+                    )
                 )
                 .order_by(SentTransaction.timestamp.desc())
             )
@@ -679,13 +689,18 @@ class WalletsScreen(VerticalScroll):
                 v_eth = v_wei / 10**18
                 v_eur = v_eth * price_cache[cg_id] if price_cache[cg_id] else None
 
+                # Use the native currency symbol for this chain
+                native_symbol = interface.chain.native_currency
+
+                # Check if we should even send price data (only if we are confident it's a native tx)
+                # Or let log_transaction handle the smart merging
                 log_transaction(
                     tx_hash=tx["hash"],
                     from_addr=tx["from"],
                     from_tag=self.resolve_tag(tx["from"]),
                     to_addr=tx["to"],
                     to_tag=self.resolve_tag(tx["to"]),
-                    token="NATIVE",
+                    token=native_symbol,
                     amount_wei=str(v_wei),
                     chain=tx_chain,
                     price_eur=price_cache[cg_id],

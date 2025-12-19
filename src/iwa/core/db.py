@@ -152,15 +152,24 @@ def log_transaction(  # noqa: D103
             new_tags = list(tags) if tags else []
             merged_tags = list(set(existing_tags + new_tags))
 
-            # Smart token resolution: don't let 0-value "NATIVE" update overwrite a real token
+            # Smart token resolution: don't let native currency updates overwrite ERC20 tokens
             final_token = token
             final_amount_wei = str(amount_wei)
 
-            if existing and existing.token and existing.token not in ["TOKEN", "NATIVE"]:
-                # If we have a real token already, and the new one is native with 0 value
-                if token in ["TOKEN", "NATIVE", "xDAI", "ETH"] and int(amount_wei) == 0:
+            # Native currency names that should not overwrite ERC20 tokens
+            native_tokens = {"TOKEN", "NATIVE", "xDAI", "ETH", "XDAI"}
+
+            if existing and existing.token:
+                # If existing token is a real ERC20 (not native), preserve it
+                if existing.token.upper() not in native_tokens and token.upper() in native_tokens:
                     final_token = existing.token
-                    final_amount_wei = existing.amount_wei
+                    # Force preservation of price and value even if new ones are passed
+                    # (since new ones are likely for the native currency, not the ERC20)
+                    price_eur = existing.price_eur
+                    value_eur = existing.value_eur
+                    # Only preserve amount if the new one is 0
+                    if int(amount_wei) == 0:
+                        final_amount_wei = existing.amount_wei
 
             data = {
                 "tx_hash": tx_hash,

@@ -237,6 +237,7 @@ async def test_monitor_handler(mock_wallet, mock_deps):
                 "to": "0x2",
                 "token": "NATIVE",
                 "value": 10**18,
+                "chain": "gnosis",
             },
             {
                 "hash": "0xHash2",
@@ -245,6 +246,7 @@ async def test_monitor_handler(mock_wallet, mock_deps):
                 "to": "0x4",
                 "token": "DAI",
                 "value": 500,
+                "chain": "gnosis",
             },
         ]
 

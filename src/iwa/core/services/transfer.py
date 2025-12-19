@@ -10,14 +10,32 @@ from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.contracts.multisend import (
-    MULTISEND_ADDRESS_GNOSIS,
-    MULTISEND_CALL_ONLY_ADDRESS_GNOSIS,
+    MULTISEND_ADDRESS,
+    MULTISEND_CALL_ONLY_ADDRESS,
     MultiSendCallOnlyContract,
     MultiSendContract,
 )
 from iwa.core.db import log_transaction
 from iwa.core.models import Config, EthereumAddress, StoredSafeAccount
+from iwa.core.pricing import PriceService
 from iwa.plugins.gnosis.cow import COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, CowSwap, OrderType
+
+# Coingecko IDs for tokens and native currencies
+TOKEN_COINGECKO_IDS = {
+    "XDAI": "xdai",
+    "ETH": "ethereum",
+    "OLAS": "autonolas",
+    "USDC": "usdc",
+    "WXDAI": "xdai",
+    "SDAI": "savings-xdai",
+    "EURE": "monerium-eur-money",
+}
+
+CHAIN_COINGECKO_IDS = {
+    "gnosis": "dai",
+    "ethereum": "ethereum",
+    "base": "ethereum",
+}
 
 if TYPE_CHECKING:
     from iwa.core.keys import KeyStorage
@@ -78,6 +96,88 @@ class TransferService:
                 pass
         return None
 
+    def _calculate_gas_info(
+        self, receipt: Optional[dict], chain_name: str
+    ) -> tuple[Optional[int], Optional[float]]:
+        """Calculate gas cost and gas value in EUR from transaction receipt.
+
+        Args:
+            receipt: Transaction receipt containing gasUsed and effectiveGasPrice.
+            chain_name: Name of the chain for price lookup.
+
+        Returns:
+            Tuple of (gas_cost_wei, gas_value_eur) or (None, None) if unavailable.
+
+        """
+        if not receipt:
+            return None, None
+
+        try:
+            gas_used = receipt.get("gasUsed", 0)
+            effective_gas_price = receipt.get("effectiveGasPrice", 0)
+            gas_cost_wei = gas_used * effective_gas_price
+
+            # Get native token price
+            coingecko_id = CHAIN_COINGECKO_IDS.get(chain_name, "ethereum")
+            price_service = PriceService()
+            native_price_eur = price_service.get_token_price(coingecko_id, "eur")
+
+            gas_value_eur = None
+            if native_price_eur and gas_cost_wei > 0:
+                gas_cost_eth = gas_cost_wei / 10**18
+                gas_value_eur = gas_cost_eth * native_price_eur
+
+            return gas_cost_wei, gas_value_eur
+        except Exception as e:
+            logger.warning(f"Failed to calculate gas info: {e}")
+            return None, None
+
+    def _get_token_price_info(
+        self, token_symbol: str, amount_wei: int, chain_name: str
+    ) -> tuple[Optional[float], Optional[float]]:
+        """Calculate token price and total value in EUR.
+
+        Args:
+            token_symbol: Token symbol (e.g. 'OLAS', 'ETH')
+            amount_wei: Amount in wei
+            chain_name: Chain name
+
+        Returns:
+            Tuple of (price_eur, value_eur) or (None, None) if unavailable.
+
+        """
+        try:
+            # Map symbol to coingecko id
+            symbol_upper = token_symbol.upper()
+            cg_id = TOKEN_COINGECKO_IDS.get(symbol_upper)
+            if not cg_id:
+                # Try name mapping if it's native signal
+                if symbol_upper in ["NATIVE", "TOKEN"]:
+                    cg_id = CHAIN_COINGECKO_IDS.get(chain_name.lower())
+
+            if not cg_id:
+                return None, None
+
+            price_service = PriceService()
+            price_eur = price_service.get_token_price(cg_id, "eur")
+
+            if price_eur is None:
+                return None, None
+
+            # Get decimals for value calculation
+            interface = ChainInterfaces().get(chain_name)
+            decimals = 18
+            if symbol_upper not in ["NATIVE", "TOKEN", "XDAI", "ETH"]:
+                token_address = interface.chain.get_token_address(token_symbol)
+                if token_address:
+                    decimals = interface.get_token_decimals(token_address)
+
+            value_eur = (amount_wei / 10**decimals) * price_eur
+            return price_eur, value_eur
+        except Exception as e:
+            logger.warning(f"Failed to calculate token price info for {token_symbol}: {e}")
+            return None, None
+
     def _check_whitelist(self, to_address: str) -> bool:
         """Check if address is in whitelist.
 
@@ -133,6 +233,17 @@ class TransferService:
             value=amount_wei,
             chain_name=chain_name,
         )
+        # Get receipt for gas calculation
+        receipt = None
+        try:
+            interface = ChainInterfaces().get(chain_name)
+            receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+        except Exception as e:
+            logger.warning(f"Could not get receipt for Safe tx {tx_hash}: {e}")
+
+        gas_cost, gas_value_eur = self._calculate_gas_info(receipt, chain_name)
+        # Get price and value
+        p_eur, v_eur = self._get_token_price_info(token_symbol, amount_wei, chain_name)
         log_transaction(
             tx_hash=tx_hash,
             from_addr=from_account.address,
@@ -142,6 +253,10 @@ class TransferService:
             chain=chain_name,
             from_tag=from_tag,
             to_tag=to_tag,
+            gas_cost=gas_cost,
+            gas_value_eur=gas_value_eur,
+            price_eur=p_eur,
+            value_eur=v_eur,
             tags=["native-transfer", "safe-transaction"],
         )
         return tx_hash
@@ -165,6 +280,15 @@ class TransferService:
             sign_callback=lambda tx: self.key_storage.sign_transaction(tx, from_account.address),
         )
         if success and tx_hash:
+            # Get receipt for gas calculation
+            receipt = None
+            try:
+                receipt = chain_interface.web3.eth.get_transaction_receipt(tx_hash)
+            except Exception as e:
+                logger.warning(f"Could not get receipt for {tx_hash}: {e}")
+
+            gas_cost, gas_value_eur = self._calculate_gas_info(receipt, chain_name)
+            p_eur, v_eur = self._get_token_price_info(token_symbol, amount_wei, chain_name)
             log_transaction(
                 tx_hash=tx_hash,
                 from_addr=from_account.address,
@@ -174,6 +298,10 @@ class TransferService:
                 chain=chain_name,
                 from_tag=from_tag,
                 to_tag=to_tag,
+                gas_cost=gas_cost,
+                gas_value_eur=gas_value_eur,
+                price_eur=p_eur,
+                value_eur=v_eur,
                 tags=["native-transfer"],
             )
             return tx_hash
@@ -200,6 +328,17 @@ class TransferService:
             chain_name=chain_name,
             data=transaction["data"],
         )
+        # Get receipt for gas calculation
+        receipt = None
+        try:
+            interface = ChainInterfaces().get(chain_name)
+            receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+        except Exception as e:
+            logger.warning(f"Could not get receipt for Safe tx {tx_hash}: {e}")
+
+        gas_cost, gas_value_eur = self._calculate_gas_info(receipt, chain_name)
+        # Get price and value
+        p_eur, v_eur = self._get_token_price_info(token_symbol, amount_wei, chain_name)
         log_transaction(
             tx_hash=tx_hash,
             from_addr=from_account.address,
@@ -209,6 +348,10 @@ class TransferService:
             chain=chain_name,
             from_tag=from_tag,
             to_tag=to_tag,
+            gas_cost=gas_cost,
+            gas_value_eur=gas_value_eur,
+            price_eur=p_eur,
+            value_eur=v_eur,
             tags=["erc20-transfer", "safe-transaction"],
         )
         return tx_hash
@@ -231,6 +374,8 @@ class TransferService:
         )
         if success and receipt:
             tx_hash = receipt["transactionHash"].hex()
+            gas_cost, gas_value_eur = self._calculate_gas_info(receipt, chain_name)
+            p_eur, v_eur = self._get_token_price_info(token_symbol, amount_wei, chain_name)
             log_transaction(
                 tx_hash=tx_hash,
                 from_addr=from_account.address,
@@ -240,6 +385,10 @@ class TransferService:
                 chain=chain_name,
                 from_tag=from_tag,
                 to_tag=to_tag,
+                gas_cost=gas_cost,
+                gas_value_eur=gas_value_eur,
+                price_eur=p_eur,
+                value_eur=v_eur,
                 tags=["erc20-transfer"],
             )
             return tx_hash
@@ -325,7 +474,7 @@ class TransferService:
             )
 
         # ERC20 token transfer
-        erc20 = ERC20Contract(token_address)
+        erc20 = ERC20Contract(token_address, chain_name)
         transaction = erc20.prepare_transfer_tx(from_account.address, to_address, amount_wei)
         if not transaction:
             return None
@@ -417,10 +566,10 @@ class TransferService:
                 tx["operation"] = SafeOperationEnum.CALL
 
         multi_send_normal_contract = MultiSendContract(
-            address=MULTISEND_ADDRESS_GNOSIS, chain_name=chain_name
+            address=MULTISEND_ADDRESS, chain_name=chain_name
         )
         multi_send_call_only_contract = MultiSendCallOnlyContract(
-            address=MULTISEND_CALL_ONLY_ADDRESS_GNOSIS, chain_name=chain_name
+            address=MULTISEND_CALL_ONLY_ADDRESS, chain_name=chain_name
         )
 
         multi_send_contract = (

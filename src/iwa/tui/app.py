@@ -155,6 +155,15 @@ class IwaApp(App):
         except Exception:
             pass
 
+    def copy_to_clipboard(self, text: str) -> None:
+        """Copy text to system clipboard using pyperclip."""
+        try:
+            import pyperclip
+
+            pyperclip.copy(str(text))
+        except Exception as e:
+            logger.error(f"Failed to copy to clipboard: {e}")
+
 
 if __name__ == "__main__":
     app = IwaApp()

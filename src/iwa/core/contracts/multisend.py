@@ -8,8 +8,9 @@ from safe_eth.safe import SafeOperationEnum
 from iwa.core.constants import ABI_PATH
 from iwa.core.contracts.contract import ContractInstance
 
-MULTISEND_CALL_ONLY_ADDRESS_GNOSIS = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
-MULTISEND_ADDRESS_GNOSIS = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
+# MultiSend addresses (same across Ethereum, Base, Gnosis via Singleton Factory)
+MULTISEND_CALL_ONLY_ADDRESS = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+MULTISEND_ADDRESS = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
 
 
 class MultiSendCallOnlyContract(ContractInstance):
