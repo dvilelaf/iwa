@@ -4,8 +4,6 @@ import threading
 import time
 from unittest.mock import patch
 
-import pytest
-
 from iwa.core.chain import RPCRateLimiter, get_rate_limiter
 
 
@@ -66,7 +64,7 @@ class TestRPCRateLimiter:
     def test_trigger_backoff(self):
         """Test backoff triggering."""
         limiter = RPCRateLimiter()
-        initial_tokens = limiter.tokens
+        _ = limiter.tokens  # Check tokens exist
 
         limiter.trigger_backoff(seconds=1.0)
 
@@ -149,7 +147,8 @@ class TestRateLimitRotationInterplay:
 
     def test_rate_limit_triggers_rotation_first(self):
         """Test that rate limit error triggers RPC rotation before backoff."""
-        from unittest.mock import MagicMock, PropertyMock, patch
+        from unittest.mock import MagicMock, PropertyMock
+
         from iwa.core.chain import ChainInterface, SupportedChain
 
         # Create a mock chain with multiple RPCs
@@ -174,7 +173,8 @@ class TestRateLimitRotationInterplay:
 
     def test_rate_limit_triggers_backoff_when_no_rotation(self):
         """Test that rate limit triggers backoff when no other RPCs available."""
-        from unittest.mock import MagicMock, PropertyMock, patch
+        from unittest.mock import MagicMock, PropertyMock
+
         from iwa.core.chain import ChainInterface, SupportedChain
 
         # Create a mock chain with single RPC (can't rotate)

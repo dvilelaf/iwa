@@ -1,10 +1,9 @@
 """Tests for PluginService."""
 
 from unittest.mock import MagicMock, patch
-import pytest
 
-from iwa.core.services.plugin import PluginService
 from iwa.core.plugins import Plugin
+from iwa.core.services.plugin import PluginService
 
 
 class MockPlugin(Plugin):
@@ -30,7 +29,10 @@ def test_discover_plugins_import_error():
     with patch.object(PluginService, "_load_plugins"):
         service = PluginService()
 
-    with patch("iwa.core.services.plugin.importlib.import_module", side_effect=ImportError("Module not found")):
+    with patch(
+        "iwa.core.services.plugin.importlib.import_module",
+        side_effect=ImportError("Module not found"),
+    ):
         plugins = service._discover_plugins()
         assert plugins == []
 
@@ -51,9 +53,13 @@ def test_discover_plugins_no_path():
 
 def test_load_plugins_module_error():
     """Test _load_plugins handles module import errors."""
-    with patch.object(PluginService, "_discover_plugins", return_value=["bad_module"]), \
-         patch("iwa.core.services.plugin.importlib.import_module", side_effect=ImportError("Bad module")):
-
+    with (
+        patch.object(PluginService, "_discover_plugins", return_value=["bad_module"]),
+        patch(
+            "iwa.core.services.plugin.importlib.import_module",
+            side_effect=ImportError("Bad module"),
+        ),
+    ):
         # Should not raise, just log error
         service = PluginService()
 

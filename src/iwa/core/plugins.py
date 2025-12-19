@@ -1,6 +1,5 @@
 """Plugin system architecture."""
 
-
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Dict, Optional, Type
 
@@ -44,6 +43,3 @@ class Plugin(ABC):
     def get_tui_view(self) -> Optional["Widget"]:
         """Return a Textual Widget to be displayed in the TUI."""
         return None
-
-
-

@@ -44,9 +44,7 @@ class EncryptedAccount(StoredAccount):
     def decrypt_private_key(self, password: Optional[str] = None) -> str:
         """decrypt_private_key"""
         if not password and not settings.wallet_password:
-            raise ValueError(
-                "Password must be provided or set in secrets.env (WALLET_PASSWORD)"
-            )
+            raise ValueError("Password must be provided or set in secrets.env (WALLET_PASSWORD)")
         if not password:
             password = settings.wallet_password.get_secret_value()
         salt_bytes = base64.b64decode(self.salt)
@@ -173,6 +171,7 @@ class KeyStorage(BaseModel):
 
         Returns:
             The signature bytes
+
         """
         signer_account = self.find_stored_account(signer_address_or_tag)
         if not signer_account:
@@ -186,6 +185,7 @@ class KeyStorage(BaseModel):
             raise ValueError(f"Private key not found for {signer_address_or_tag}")
 
         from eth_account.messages import encode_defunct
+
         message_hash = encode_defunct(primitive=message)
         signed = Account.sign_message(message_hash, private_key=private_key)
         return signed.signature
@@ -199,6 +199,7 @@ class KeyStorage(BaseModel):
 
         Returns:
             The signature bytes
+
         """
         signer_account = self.find_stored_account(signer_address_or_tag)
         if not signer_account:
@@ -268,7 +269,6 @@ class KeyStorage(BaseModel):
             return self.accounts.get(addr)
         except ValueError:
             return None
-
 
     def get_account(self, address_or_tag: str) -> Optional[Union[StoredAccount, StoredSafeAccount]]:
         """Get basic account info without exposing any possibility of private key access."""

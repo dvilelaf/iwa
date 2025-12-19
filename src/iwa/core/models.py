@@ -66,8 +66,6 @@ class CoreConfig(BaseModel):
     custom_tokens: Dict[str, Dict[str, EthereumAddress]] = Field(default_factory=dict)
 
 
-
-
 T = TypeVar("T", bound="StorableModel")
 
 
@@ -246,10 +244,14 @@ class VirtualNet(BaseModel):
     @classmethod
     def validate(cls, value: "VirtualNet", _info) -> "VirtualNet":
         """Validate RPC URLs."""
-        if value.admin_rpc and not (value.admin_rpc.startswith("http://") or value.admin_rpc.startswith("https://")):
-             raise ValueError(f"Invalid admin_rpc URL: {value.admin_rpc}")
-        if value.public_rpc and not (value.public_rpc.startswith("http://") or value.public_rpc.startswith("https://")):
-             raise ValueError(f"Invalid public_rpc URL: {value.public_rpc}")
+        if value.admin_rpc and not (
+            value.admin_rpc.startswith("http://") or value.admin_rpc.startswith("https://")
+        ):
+            raise ValueError(f"Invalid admin_rpc URL: {value.admin_rpc}")
+        if value.public_rpc and not (
+            value.public_rpc.startswith("http://") or value.public_rpc.startswith("https://")
+        ):
+            raise ValueError(f"Invalid public_rpc URL: {value.public_rpc}")
         return value
 
 

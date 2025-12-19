@@ -17,11 +17,15 @@ def mock_wallet():
         }
         wallet.account_service = MagicMock()
         wallet.account_service.accounts = wallet.key_storage.accounts
-        wallet.account_service.get_account_data.side_effect = lambda: wallet.account_service.accounts
+        wallet.account_service.get_account_data.side_effect = (
+            lambda: wallet.account_service.accounts
+        )
         wallet.balance_service = MagicMock()
 
         # Helper to make resolve_account work with key_storage for consistency
-        wallet.account_service.resolve_account.side_effect = lambda tag: wallet.key_storage.get_account(tag)
+        wallet.account_service.resolve_account.side_effect = (
+            lambda tag: wallet.key_storage.get_account(tag)
+        )
 
         wallet.get_native_balance_eth.return_value = 0.0
         wallet.get_erc20_balance_eth.return_value = 0.0
@@ -52,8 +56,6 @@ def mock_deps():
         mock_chains.return_value.items.return_value = [("gnosis", mock_interface)]
 
         yield {"chains": mock_chains}
-
-
 
 
 @pytest.mark.asyncio
@@ -125,7 +127,7 @@ async def test_send_transaction_coverage(mock_wallet, mock_deps):
         # Wait for workers to populate
         # In the new design, monitor_workers are created in start_monitor
         if not view.monitor_workers:
-             view.start_monitor()
+            view.start_monitor()
         assert len(view.monitor_workers) > 0
         await pilot.pause()
 
@@ -335,6 +337,7 @@ from textual.widget import Widget
 
 class DummySelect(Widget):
     """Dummy Select widget for testing chain change."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(id=kwargs.get("id"))
 
@@ -443,6 +446,7 @@ async def test_create_safe_modal_cancel():
 # --- Tests migrated from test_core_db_integration.py ---
 
 from unittest.mock import PropertyMock
+
 from textual.widgets import DataTable
 
 
@@ -543,6 +547,6 @@ async def test_enrich_logs_api_failure(mock_wallet, mock_deps):
             with patch("iwa.core.db.log_transaction") as _:
                 with patch("iwa.tui.screens.wallets.ChainInterfaces"):
                     if not view.monitor_workers:
-                         view.start_monitor()
+                        view.start_monitor()
                     view.enrich_and_log_txs(txs)
                     # Just verify it doesn't crash

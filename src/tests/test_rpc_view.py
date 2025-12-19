@@ -1,6 +1,6 @@
 """Tests for TUI RPC View."""
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

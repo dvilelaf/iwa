@@ -1,4 +1,3 @@
-
 import base64
 import json
 from pathlib import Path
@@ -171,7 +170,6 @@ def test_keystorage_get_private_key(mock_secrets, mock_account, mock_aesgcm, moc
         assert pkey == "private_key"
 
 
-
 def test_keystorage_sign_message(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     """Test sign_message method signs messages without exposing private key."""
     storage = KeyStorage(Path("wallet.json"))
@@ -338,9 +336,7 @@ def test_keystorage_get_account_none(mock_secrets):
         assert storage.get_account("tag") is None
 
 
-def test_get_account_info(
-    mock_secrets, mock_account, mock_aesgcm, mock_scrypt
-):
+def test_get_account_info(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     with (
         patch("os.path.exists", return_value=False),
         patch("builtins.open", mock_open()),
@@ -373,8 +369,11 @@ def test_get_signer(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
 
         # Test safe account (should return None)
         safe = StoredSafeAccount(
-            tag="safe", address="0x61a4f49e9dD1f90EB312889632FA956a21353720",
-            chains=["gnosis"], threshold=1, signers=[]
+            tag="safe",
+            address="0x61a4f49e9dD1f90EB312889632FA956a21353720",
+            chains=["gnosis"],
+            threshold=1,
+            signers=[],
         )
         storage.accounts["0x61a4f49e9dD1f90EB312889632FA956a21353720"] = safe
         assert storage.get_signer("safe") is None

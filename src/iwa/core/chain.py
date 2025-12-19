@@ -7,7 +7,6 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 from eth_account.datastructures import SignedTransaction
 from pydantic import BaseModel
 from web3 import Web3
-from web3 import exceptions as web3_exceptions
 
 from iwa.core.models import Config, EthereumAddress
 from iwa.core.settings import settings
@@ -37,6 +36,7 @@ class RPCRateLimiter:
         Args:
             rate: Maximum requests per second (refill rate)
             burst: Maximum tokens (bucket size)
+
         """
         self.rate = rate
         self.burst = burst
@@ -53,6 +53,7 @@ class RPCRateLimiter:
 
         Returns:
             True if token acquired, False if timeout
+
         """
         deadline = time.monotonic() + timeout
 
@@ -133,19 +134,28 @@ class RateLimitedEth:
 
     # Methods that make RPC calls and need rate limiting
     RPC_METHODS = {
-        "get_balance", "get_code", "get_transaction_count",
-        "estimate_gas", "send_raw_transaction", "wait_for_transaction_receipt",
-        "get_block", "get_transaction", "get_transaction_receipt",
-        "call", "get_logs",
+        "get_balance",
+        "get_code",
+        "get_transaction_count",
+        "estimate_gas",
+        "send_raw_transaction",
+        "wait_for_transaction_receipt",
+        "get_block",
+        "get_transaction",
+        "get_transaction_receipt",
+        "call",
+        "get_logs",
     }
 
     def __init__(self, web3_eth, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
+        """Initialize RateLimitedEth wrapper."""
         # Use object.__setattr__ to avoid triggering our __setattr__
-        object.__setattr__(self, '_eth', web3_eth)
-        object.__setattr__(self, '_rate_limiter', rate_limiter)
-        object.__setattr__(self, '_chain_interface', chain_interface)
+        object.__setattr__(self, "_eth", web3_eth)
+        object.__setattr__(self, "_rate_limiter", rate_limiter)
+        object.__setattr__(self, "_chain_interface", chain_interface)
 
     def __getattr__(self, name):
+        """Get attribute from underlying eth, wrapping RPC methods with rate limiting."""
         attr = getattr(self._eth, name)
 
         # Wrap RPC methods with rate limiting
@@ -155,21 +165,24 @@ class RateLimitedEth:
         return attr
 
     def __setattr__(self, name, value):
+        """Set attribute on underlying eth for test mocking."""
         # Delegate setattr to underlying eth for test mocking
-        if name.startswith('_'):
+        if name.startswith("_"):
             object.__setattr__(self, name, value)
         else:
             setattr(self._eth, name, value)
 
     def __delattr__(self, name):
+        """Delete attribute from underlying eth for patch.object cleanup."""
         # Delegate delattr to underlying eth for patch.object cleanup
-        if name.startswith('_'):
+        if name.startswith("_"):
             object.__delattr__(self, name)
         else:
             delattr(self._eth, name)
 
     def _wrap_with_rate_limit(self, method, method_name):
         """Wrap a method with rate limiting and error handling."""
+
         def wrapper(*args, **kwargs):
             if not self._rate_limiter.acquire(timeout=30.0):
                 raise TimeoutError(f"Rate limit timeout waiting for {method_name}")
@@ -189,7 +202,10 @@ class RateLimitedWeb3:
     Usage is identical to regular Web3, but all RPC calls go through rate limiting.
     """
 
-    def __init__(self, web3_instance: Web3, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
+    def __init__(
+        self, web3_instance: Web3, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"
+    ):
+        """Initialize RateLimitedWeb3 wrapper."""
         self._web3 = web3_instance
         self._rate_limiter = rate_limiter
         self._chain_interface = chain_interface
@@ -199,13 +215,15 @@ class RateLimitedWeb3:
     def eth(self):
         """Return rate-limited eth interface."""
         if self._eth_wrapper is None:
-            self._eth_wrapper = RateLimitedEth(self._web3.eth, self._rate_limiter, self._chain_interface)
+            self._eth_wrapper = RateLimitedEth(
+                self._web3.eth, self._rate_limiter, self._chain_interface
+            )
         return self._eth_wrapper
 
     def __getattr__(self, name):
+        """Delegate attribute access to underlying Web3 instance."""
         # For anything except 'eth', delegate directly
         return getattr(self._web3, name)
-
 
 
 class SupportedChain(BaseModel):
@@ -335,6 +353,7 @@ class ChainInterface:
 
         Returns:
             True if error was handled (rotation or backoff triggered)
+
         """
         if self._is_rate_limit_error(error):
             logger.warning(f"Rate limit error detected: {error}")
@@ -350,7 +369,6 @@ class ChainInterface:
             return True
 
         return False
-
 
     def rotate_rpc(self) -> bool:
         """Rotate to the next available RPC."""

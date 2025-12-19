@@ -100,9 +100,7 @@ def test_run_migrations_drop_token_symbol():
     """Test run_migrations drops deprecated token_symbol column."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator"), \
-         patch("iwa.core.db.migrate") as mock_migrate:
-
+    with patch("iwa.core.db.SqliteMigrator"), patch("iwa.core.db.migrate") as mock_migrate:
         columns = ["token_symbol", "from_tag", "price_eur", "tags"]
 
         run_migrations(columns)
@@ -115,10 +113,11 @@ def test_run_migrations_drop_token_symbol_error():
     """Test run_migrations handles drop_column error."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator") as mock_migrator, \
-         patch("iwa.core.db.migrate", side_effect=Exception("Drop failed")), \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("iwa.core.db.SqliteMigrator"),
+        patch("iwa.core.db.migrate", side_effect=Exception("Drop failed")),
+        patch("builtins.print") as mock_print,
+    ):
         columns = ["token_symbol", "from_tag", "price_eur", "tags"]
 
         run_migrations(columns)
@@ -130,9 +129,7 @@ def test_run_migrations_add_from_tag():
     """Test run_migrations adds from_tag columns."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator"), \
-         patch("iwa.core.db.migrate") as mock_migrate:
-
+    with patch("iwa.core.db.SqliteMigrator"), patch("iwa.core.db.migrate") as mock_migrate:
         columns = ["price_eur", "tags"]  # No from_tag
 
         run_migrations(columns)
@@ -144,10 +141,11 @@ def test_run_migrations_add_from_tag_error():
     """Test run_migrations handles add_column error."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator"), \
-         patch("iwa.core.db.migrate", side_effect=Exception("Add failed")), \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("iwa.core.db.SqliteMigrator"),
+        patch("iwa.core.db.migrate", side_effect=Exception("Add failed")),
+        patch("builtins.print") as mock_print,
+    ):
         columns = []  # No columns - triggers add
 
         run_migrations(columns)
@@ -159,9 +157,7 @@ def test_run_migrations_add_price_eur():
     """Test run_migrations adds price columns."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator"), \
-         patch("iwa.core.db.migrate") as mock_migrate:
-
+    with patch("iwa.core.db.SqliteMigrator"), patch("iwa.core.db.migrate") as mock_migrate:
         columns = ["from_tag", "tags"]  # No price_eur
 
         run_migrations(columns)
@@ -173,9 +169,7 @@ def test_run_migrations_add_tags():
     """Test run_migrations adds tags column."""
     from iwa.core.db import run_migrations
 
-    with patch("iwa.core.db.SqliteMigrator"), \
-         patch("iwa.core.db.migrate") as mock_migrate:
-
+    with patch("iwa.core.db.SqliteMigrator"), patch("iwa.core.db.migrate") as mock_migrate:
         columns = ["from_tag", "price_eur"]  # No tags
 
         run_migrations(columns)

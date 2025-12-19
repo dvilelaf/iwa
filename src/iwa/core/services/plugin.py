@@ -55,7 +55,9 @@ class PluginService:
                             plugin_instance = obj()
                             # Verify unique name
                             if plugin_instance.name in self.loaded_plugins:
-                                logger.warning(f"Plugin name collision: {plugin_instance.name}. Skipping.")
+                                logger.warning(
+                                    f"Plugin name collision: {plugin_instance.name}. Skipping."
+                                )
                                 continue
 
                             self.loaded_plugins[plugin_instance.name] = plugin_instance

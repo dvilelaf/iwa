@@ -1,4 +1,5 @@
 """Transfer service module."""
+
 from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
@@ -44,13 +45,12 @@ class TransferService:
         self.safe_service = safe_service
         self.transaction_service = transaction_service
 
-    def _resolve_destination(
-        self, to_address_or_tag: str
-    ) -> tuple[Optional[str], Optional[str]]:
+    def _resolve_destination(self, to_address_or_tag: str) -> tuple[Optional[str], Optional[str]]:
         """Resolve destination address and tag.
 
         Returns:
             Tuple of (address, tag) or (None, None) if invalid.
+
         """
         to_account = self.account_service.resolve_account(to_address_or_tag)
         if to_account:
@@ -83,6 +83,7 @@ class TransferService:
 
         Returns:
             True if allowed (no whitelist or address is in it), False otherwise.
+
         """
         config = Config()
         if not (config.core and config.core.whitelist):
@@ -161,9 +162,7 @@ class TransferService:
             from_address=from_account.address,
             to_address=to_address,
             value_wei=amount_wei,
-            sign_callback=lambda tx: self.key_storage.sign_transaction(
-                tx, from_account.address
-            ),
+            sign_callback=lambda tx: self.key_storage.sign_transaction(tx, from_account.address),
         )
         if success and tx_hash:
             log_transaction(
@@ -265,6 +264,7 @@ class TransferService:
 
         Returns:
             Transaction hash if successful, None otherwise.
+
         """
         # Resolve accounts
         from_account = self.account_service.resolve_account(from_address_or_tag)
@@ -304,12 +304,24 @@ class TransferService:
             )
             if is_safe:
                 return self._send_native_via_safe(
-                    from_account, from_address_or_tag, to_address, amount_wei,
-                    chain_name, from_tag, to_tag, token_symbol
+                    from_account,
+                    from_address_or_tag,
+                    to_address,
+                    amount_wei,
+                    chain_name,
+                    from_tag,
+                    to_tag,
+                    token_symbol,
                 )
             return self._send_native_via_eoa(
-                from_account, to_address, amount_wei, chain_name,
-                chain_interface, from_tag, to_tag, token_symbol
+                from_account,
+                to_address,
+                amount_wei,
+                chain_name,
+                chain_interface,
+                from_tag,
+                to_tag,
+                token_symbol,
             )
 
         # ERC20 token transfer
@@ -326,12 +338,27 @@ class TransferService:
 
         if is_safe:
             return self._send_erc20_via_safe(
-                from_account, from_address_or_tag, to_address, amount_wei,
-                chain_name, erc20, transaction, from_tag, to_tag, token_symbol
+                from_account,
+                from_address_or_tag,
+                to_address,
+                amount_wei,
+                chain_name,
+                erc20,
+                transaction,
+                from_tag,
+                to_tag,
+                token_symbol,
             )
         return self._send_erc20_via_eoa(
-            from_account, from_address_or_tag, to_address, amount_wei,
-            chain_name, transaction, from_tag, to_tag, token_symbol
+            from_account,
+            from_address_or_tag,
+            to_address,
+            amount_wei,
+            chain_name,
+            transaction,
+            from_tag,
+            to_tag,
+            token_symbol,
         )
 
     def multi_send(
@@ -375,7 +402,9 @@ class TransferService:
                 tx["operation"] = SafeOperationEnum.CALL
 
             else:
-                token_address = self.account_service.get_token_address(token_address_or_tag, chain_interface.chain)
+                token_address = self.account_service.get_token_address(
+                    token_address_or_tag, chain_interface.chain
+                )
                 erc20 = ERC20Contract(token_address, chain_name)
                 transfer_tx = erc20.prepare_transfer_tx(
                     from_address=from_account.address,
@@ -457,7 +486,9 @@ class TransferService:
 
         chain_interface = ChainInterfaces().get(chain_name)
 
-        token_address = self.account_service.get_token_address(token_address_or_name, chain_interface.chain)
+        token_address = self.account_service.get_token_address(
+            token_address_or_name, chain_interface.chain
+        )
         if not token_address:
             return
 
@@ -522,7 +553,9 @@ class TransferService:
 
         chain_interface = ChainInterfaces().get(chain_name)
 
-        token_address = self.account_service.get_token_address(token_address_or_name, chain_interface.chain)
+        token_address = self.account_service.get_token_address(
+            token_address_or_name, chain_interface.chain
+        )
         if not token_address:
             return
 
@@ -640,7 +673,9 @@ class TransferService:
 
         # ERC-20 tokens
         for token_name in chain_interface.chain.tokens.keys():
-            balance_wei = self.balance_service.get_erc20_balance_wei(from_address_or_tag, token_name, chain_name)
+            balance_wei = self.balance_service.get_erc20_balance_wei(
+                from_address_or_tag, token_name, chain_name
+            )
             if balance_wei and balance_wei > 0:
                 self.send(
                     from_address_or_tag=from_address_or_tag,

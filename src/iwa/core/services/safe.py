@@ -1,4 +1,5 @@
 """Safe service module."""
+
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from loguru import logger
@@ -54,7 +55,7 @@ class SafeService:
 
         deployer_private_key = self.key_storage._get_private_key(deployer_stored_account.address)
         if not deployer_private_key:
-             raise ValueError("Deployer private key not available.")
+            raise ValueError("Deployer private key not available.")
         deployer_account = Account.from_key(deployer_private_key)
 
         owner_addresses = []
@@ -198,9 +199,7 @@ class SafeService:
 
         return signer_pkeys
 
-    def _sign_and_execute_safe_tx(
-        self, safe_tx: SafeTx, signer_keys: List[str]
-    ) -> str:
+    def _sign_and_execute_safe_tx(self, safe_tx: SafeTx, signer_keys: List[str]) -> str:
         """Sign and execute a SafeTx internally (INTERNAL USE ONLY).
 
         This method handles the signing and execution of a Safe transaction,
@@ -242,6 +241,7 @@ class SafeService:
 
         Returns:
             Transaction hash as hex string
+
         """
         from iwa.plugins.gnosis.safe import SafeMultisig
 
@@ -269,9 +269,7 @@ class SafeService:
                 signer_keys[i] = None
             del signer_keys
 
-    def get_sign_and_execute_callback(
-        self, safe_address_or_tag: str
-    ):
+    def get_sign_and_execute_callback(self, safe_address_or_tag: str):
         """Get a callback function that signs and executes a SafeTx.
 
         This method returns a callback that can be passed to SafeMultisig.send_tx().
@@ -282,6 +280,7 @@ class SafeService:
 
         Returns:
             A callable that takes a SafeTx and returns the transaction hash
+
         """
         safe_account = self.key_storage.find_stored_account(safe_address_or_tag)
         if not safe_account or not isinstance(safe_account, StoredSafeAccount):

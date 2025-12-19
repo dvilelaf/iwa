@@ -381,6 +381,3 @@ class MnemonicManager:
         ctx = ctx.Change(change)
         addr_ctx = ctx.AddressIndex(index)
         return addr_ctx.PrivateKey().Raw().ToHex()
-
-
-

@@ -1,4 +1,5 @@
 """Account service module."""
+
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from loguru import logger
@@ -39,7 +40,9 @@ class AccountService:
                 return None
             return token_address
 
-    def resolve_account(self, address_or_tag: str) -> Optional[Union[StoredSafeAccount, "EncryptedAccount"]]:
+    def resolve_account(
+        self, address_or_tag: str
+    ) -> Optional[Union[StoredSafeAccount, "EncryptedAccount"]]:
         """Resolve account from address or tag."""
         return self.key_storage.get_account(address_or_tag)
 
@@ -47,6 +50,8 @@ class AccountService:
         """Get tag for a given address."""
         return self.key_storage.get_tag_by_address(address)
 
-    def get_account_data(self) -> Dict[EthereumAddress, Union[StoredSafeAccount, "EncryptedAccount"]]:
+    def get_account_data(
+        self,
+    ) -> Dict[EthereumAddress, Union[StoredSafeAccount, "EncryptedAccount"]]:
         """Get all accounts data."""
         return self.key_storage.accounts

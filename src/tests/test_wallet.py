@@ -1,4 +1,3 @@
-
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,7 +28,6 @@ from iwa.plugins.gnosis.cow import OrderType
 # Use valid addresses
 VALID_ADDR_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
 VALID_ADDR_2 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
-
 
 
 @pytest.fixture
@@ -88,6 +86,7 @@ def mock_account_service(mock_key_storage):
         instance.get_account_data.return_value = {}
         # Delegate to key_storage.get_account for compatibility
         instance.resolve_account.side_effect = lambda tag: mock_key_storage.get_account(tag)
+
         # Default get_token_address to look up in chain tokens
         def get_token_address_side_effect(name, chain):
             if name == "native":
@@ -97,6 +96,7 @@ def mock_account_service(mock_key_storage):
             if chain and hasattr(chain, "tokens") and name in chain.tokens:
                 return chain.tokens[name]
             return None
+
         instance.get_token_address.side_effect = get_token_address_side_effect
         yield instance
 
@@ -113,10 +113,8 @@ def mock_balance_service(mock_key_storage, mock_account_service):
         yield instance
 
 
-
 # NOTE: mock_safe_multisig_global was removed because SafeMultisig is no longer
 # imported in TransferService. Safe transactions now go through SafeService.execute_safe_transaction().
-
 
 
 @pytest.fixture(autouse=True)
@@ -158,7 +156,9 @@ def test_wallet_init(wallet, mock_key_storage):
 
 def test_get_token_address_native(wallet, mock_account_service):
     chain = Gnosis()
-    mock_account_service.get_token_address.return_value = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    mock_account_service.get_token_address.return_value = (
+        "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    )
     addr = wallet.get_token_address("native", chain)
     assert addr == "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 
@@ -182,15 +182,11 @@ def test_get_token_address_invalid(wallet):
     assert addr is None
 
 
-def test_sign_and_send_transaction_account_not_found(
-    wallet, mock_account_service
-):
+def test_sign_and_send_transaction_account_not_found(wallet, mock_account_service):
     mock_account_service.resolve_account.return_value = None
     wallet.transaction_service.sign_and_send.return_value = (False, {})
 
-    success, receipt = wallet.sign_and_send_transaction(
-        {"to": "0x123"}, "unknown-tag", "gnosis"
-    )
+    success, receipt = wallet.sign_and_send_transaction({"to": "0x123"}, "unknown-tag", "gnosis")
 
     assert success is False
     assert receipt == {}
@@ -199,9 +195,7 @@ def test_sign_and_send_transaction_account_not_found(
     )
 
 
-def test_sign_and_send_transaction_success(
-    wallet, mock_key_storage
-):
+def test_sign_and_send_transaction_success(wallet, mock_key_storage):
     tx = {"to": "0x123", "value": 100}
 
     # Setup mocks
@@ -228,9 +222,6 @@ def test_get_accounts_balances(wallet, mock_key_storage, mock_chain_interfaces):
     wallet.balance_service.get_native_balance_eth.assert_called_with("0x123", "gnosis")
 
 
-
-
-
 def test_get_native_balance_eth(wallet, mock_chain_interfaces, mock_balance_service):
     # chain_interface.get_native_balance_eth.return_value = 1.5 # Ignored
     mock_balance_service.get_native_balance_eth.return_value = 1.5
@@ -248,7 +239,9 @@ def test_get_native_balance_wei(wallet, mock_chain_interfaces, mock_balance_serv
     # chain_interface.get_native_balance_wei.assert_called_with(VALID_ADDR_2) # Wrapper verification?
     # If using MockBalanceService, ChainInterface is NOT called.
     # So this assertion should be removed or changed to check BalanceService call.
-    mock_balance_service.get_native_balance_wei.assert_called_with(VALID_ADDR_2, "gnosis") # Defaults to gnosis in test?
+    mock_balance_service.get_native_balance_wei.assert_called_with(
+        VALID_ADDR_2, "gnosis"
+    )  # Defaults to gnosis in test?
     # Wallet.get_native_balance_wei takes (account_tag, chain_name="gnosis").
     # If validation passes.
 
@@ -271,7 +264,9 @@ def test_send_native_success(wallet, mock_key_storage, mock_chain_interfaces, mo
     chain_interface.sign_and_send_transaction.return_value = (True, {})
     chain_interface.send_native_transfer.return_value = (True, "0xHash")
 
-    wallet.send("sender", VALID_ADDR_2, amount_wei=1000000000000000000, token_address_or_name="native")  # 1 ETH
+    wallet.send(
+        "sender", VALID_ADDR_2, amount_wei=1000000000000000000, token_address_or_name="native"
+    )  # 1 ETH
 
     chain_interface.send_native_transfer.assert_called_once()
 
@@ -290,7 +285,10 @@ def test_send_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):
     wallet.balance_service.get_native_balance_wei.return_value = 1000000000000000000
 
     # Mock TransactionService return
-    wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1, "transactionHash": b"hash"})
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     with patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20:
         erc20_instance = mock_erc20.return_value
@@ -314,10 +312,13 @@ def test_approve_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):
     mock_key_storage.get_account.return_value = account
 
     chain_interface = mock_chain_interfaces.get.return_value
-    chain_interface.chain.tokens = {"TEST": "0xTokenAddress"} # Needed for resolution
+    chain_interface.chain.tokens = {"TEST": "0xTokenAddress"}  # Needed for resolution
     chain_interface.web3.from_wei.side_effect = lambda val, unit: float(val) / 10**18
 
-    wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1, "transactionHash": b"hash"})
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     with patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20:
         erc20_instance = mock_erc20.return_value
@@ -357,7 +358,10 @@ def test_multi_send_success(wallet, mock_key_storage, mock_chain_interfaces):
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.web3.to_wei.return_value = 1000
 
-    wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1, "transactionHash": b"hash"})
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     with patch("iwa.core.services.transfer.MultiSendCallOnlyContract") as mock_multisend:
         multisend_instance = mock_multisend.return_value
@@ -381,7 +385,9 @@ def test_multi_send_success(wallet, mock_key_storage, mock_chain_interfaces):
         wallet.transaction_service.sign_and_send.assert_called_once()
 
 
-def test_drain_native_success(wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service):
+def test_drain_native_success(
+    wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service
+):
     account = MagicMock(spec=StoredAccount)
     account.address = VALID_ADDR_1
     mock_key_storage.get_account.return_value = account
@@ -409,7 +415,10 @@ def test_drain_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):
     chain_interface.get_native_balance_wei.return_value = 0
 
     wallet.balance_service.get_erc20_balance_wei.return_value = 1000
-    wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1, "transactionHash": b"hash"})
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     with patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20:
         erc20_instance = mock_erc20.return_value
@@ -474,7 +483,10 @@ def test_transfer_from_erc20_success(wallet, mock_key_storage, mock_chain_interf
     chain_interface = mock_chain_interfaces.get.return_value
     chain_interface.chain.tokens = {"TEST": "0xTokenAddress"}
 
-    wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1, "transactionHash": b"hash"})
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     with patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20:
         erc20_instance = mock_erc20.return_value
@@ -527,7 +539,6 @@ def test_send_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_
     chain_interface.web3.from_wei.return_value = 1.0
     mock_balance_service.get_native_balance_wei.return_value = 2000000000000000000  # Enough balance
 
-
     # NOTE: SafeMultisig is no longer used directly in TransferService.
     # Safe transactions now go through SafeService.execute_safe_transaction().
     # Let's just assert the delegation happened.
@@ -550,7 +561,9 @@ def test_send_erc20_safe(wallet, mock_key_storage, mock_chain_interfaces, mock_b
 
     # Needs balance for check
     mock_balance_service.get_erc20_balance_wei.return_value = 2000
-    mock_balance_service.get_native_balance_wei.return_value = 1000000000000000000 # Enough native for gas
+    mock_balance_service.get_native_balance_wei.return_value = (
+        1000000000000000000  # Enough native for gas
+    )
 
     with patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20:
         erc20_instance = mock_erc20.return_value
@@ -609,7 +622,9 @@ def test_multi_send_safe(wallet, mock_key_storage, mock_chain_interfaces):
         wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
-def test_get_erc20_balance_eth_success(wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service):
+def test_get_erc20_balance_eth_success(
+    wallet, mock_key_storage, mock_chain_interfaces, mock_balance_service
+):
     account = MagicMock(spec=StoredAccount)
     account.address = "0xAccount"
     mock_key_storage.get_account.return_value = account
@@ -773,7 +788,6 @@ def test_transfer_from_erc20_safe(wallet, mock_key_storage, mock_chain_interface
         lambda tag: from_account if tag == "safe" else sender_account
     )
 
-
     wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash123"
 
     chain_interface = mock_chain_interfaces.get.return_value
@@ -824,7 +838,9 @@ def test_drain_from_account_not_found(wallet, mock_key_storage, mock_account_ser
     # Should log error and return
 
 
-def test_drain_no_token_balance(wallet, mock_key_storage, mock_chain_interfaces, mock_account_service, mock_balance_service):
+def test_drain_no_token_balance(
+    wallet, mock_key_storage, mock_chain_interfaces, mock_account_service, mock_balance_service
+):
     account = MagicMock(spec=StoredAccount)
     account.address = VALID_ADDR_1
     mock_account_service.resolve_account.return_value = account
@@ -856,8 +872,9 @@ def test_drain_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock
     wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
-
-def test_drain_not_enough_native_balance(wallet, mock_key_storage, mock_chain_interfaces, mock_account_service, mock_balance_service):
+def test_drain_not_enough_native_balance(
+    wallet, mock_key_storage, mock_chain_interfaces, mock_account_service, mock_balance_service
+):
     account = MagicMock(spec=StoredAccount)
     account.address = VALID_ADDR_1
     mock_account_service.resolve_account.return_value = account
@@ -943,7 +960,6 @@ async def test_swap_entire_balance(wallet, mock_key_storage, mock_chain_interfac
         patch("iwa.core.services.transfer.ERC20Contract", new=erc20_mock),
         patch("iwa.core.services.balance.ERC20Contract", new=erc20_mock),
     ):
-
         await wallet.swap("account", None, "SELL", "BUY")
 
         cow_instance.swap.assert_called_once()
@@ -1022,7 +1038,7 @@ def test_send_zero_amount(wallet, mock_key_storage):
         tag="sender",
     )
 
-    result = wallet.send(
+    wallet.send(
         from_address_or_tag=VALID_ADDR_1,
         to_address_or_tag=VALID_ADDR_2,
         token_address_or_name="native",
@@ -1043,7 +1059,7 @@ def test_send_same_source_destination(wallet, mock_key_storage, mock_balance_ser
     mock_balance_service.get_native_balance_wei.return_value = 10**19
 
     # Self-transfer should work but is unusual
-    result = wallet.send(
+    wallet.send(
         from_address_or_tag=VALID_ADDR_1,
         to_address_or_tag=VALID_ADDR_1,  # Same as source
         token_address_or_name="native",
@@ -1077,6 +1093,6 @@ def test_multi_send_empty_transactions(wallet, mock_key_storage):
     )
 
     # Empty list should be handled gracefully
-    result = wallet.multi_send(VALID_ADDR_1, [])
+    wallet.multi_send(VALID_ADDR_1, [])
 
     # Should not crash

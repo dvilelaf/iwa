@@ -15,7 +15,9 @@ def mock_wallet():
         mock_inst.key_storage = MagicMock()
         mock_inst.account_service = MagicMock()
         mock_inst.account_service.accounts = mock_inst.key_storage.accounts
-        mock_inst.account_service.get_account_data.side_effect = lambda: mock_inst.account_service.accounts
+        mock_inst.account_service.get_account_data.side_effect = (
+            lambda: mock_inst.account_service.accounts
+        )
         mock_inst.balance_service = MagicMock()
         mock_inst.balance_service.get_native_balance_eth.return_value = 0.0
         mock_inst.balance_service.get_erc20_balance_with_retry.return_value = 0.0
@@ -65,8 +67,6 @@ def mock_deps():
         yield {"chains": mock_chains, "pricing": mock_price, "sent_tx": mock_sent_tx}
 
 
-
-
 @pytest.mark.asyncio
 async def test_app_startup(mock_wallet, mock_deps):
     app = IwaApp()
@@ -106,7 +106,9 @@ async def test_create_safe_modal_compose(mock_wallet, mock_deps):
         }
         mock_wallet.account_service.accounts = mock_wallet.key_storage.accounts
         mock_wallet.account_service.get_account_data.return_value = {}
-        mock_wallet.account_service.resolve_account.side_effect = lambda tag: mock_wallet.key_storage.get_account(tag)
+        mock_wallet.account_service.resolve_account.side_effect = (
+            lambda tag: mock_wallet.key_storage.get_account(tag)
+        )
 
         # Unit test compose structure directly
         modal = CreateSafeModal(
@@ -176,6 +178,7 @@ async def test_create_safe_modal_handlers():
 
     # Teardown
     from iwa.core.db import db
+
     if not db.is_closed():
         db.close()
 
@@ -247,7 +250,9 @@ async def test_view_methods_direct(mock_wallet, mock_deps):
         view = app.query_one(WalletsScreen)
 
         mock_acc = MagicMock(address="0xABC", tag="Tag1")
-        mock_wallet.key_storage.get_account.side_effect = lambda tag: mock_acc if tag == "0xABC" else None
+        mock_wallet.key_storage.get_account.side_effect = (
+            lambda tag: mock_acc if tag == "0xABC" else None
+        )
         mock_wallet.account_service.accounts = {"a1": mock_acc}
         assert view.resolve_tag("0xABC") == "Tag1"
         assert view.resolve_tag("0xXYZ") == "0xXYZ...xXYZ"

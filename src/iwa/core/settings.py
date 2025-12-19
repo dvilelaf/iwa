@@ -27,11 +27,7 @@ class Settings(BaseSettings):
     tenderly_project_slug: Optional[SecretStr] = None
     tenderly_access_key: Optional[SecretStr] = None
 
-    model_config = ConfigDict(
-        env_file=str(SECRETS_PATH),
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
 
     def __init__(self, **values):
         """Initialize Settings and load environment variables."""

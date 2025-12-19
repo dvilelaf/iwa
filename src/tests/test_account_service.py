@@ -1,12 +1,12 @@
 """Tests for AccountService."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from iwa.core.services.account import AccountService
-from iwa.core.models import EthereumAddress, StoredSafeAccount
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
+from iwa.core.models import EthereumAddress, StoredSafeAccount
+from iwa.core.services.account import AccountService
 
 
 @pytest.fixture
@@ -65,7 +65,9 @@ def test_get_token_address_valid_address(account_service):
 def test_get_token_address_by_name(account_service):
     """Test get_token_address resolves token name."""
     mock_chain = MagicMock()
-    mock_chain.get_token_address.return_value = EthereumAddress("0x6B175474E89094C44Da98b954EedeAC495271E01")
+    mock_chain.get_token_address.return_value = EthereumAddress(
+        "0x6B175474E89094C44Da98b954EedeAC495271E01"
+    )
 
     result = account_service.get_token_address("DAI", mock_chain)
 

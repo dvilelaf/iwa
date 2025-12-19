@@ -68,9 +68,7 @@ class Wallet:
                         account_address, token_name, chain_name
                     )
                     if token_name != "native"
-                    else self.balance_service.get_native_balance_eth(
-                        account_address, chain_name
-                    )
+                    else self.balance_service.get_native_balance_eth(account_address, chain_name)
                     for token_name in token_names
                 }
                 for account_address in accounts_data.keys()
@@ -147,9 +145,7 @@ class Wallet:
         chain_name: str = "gnosis",
     ):
         """Send multiple transactions in a single multisend transaction"""
-        return self.transfer_service.multi_send(
-            from_address_or_tag, transactions, chain_name
-        )
+        return self.transfer_service.multi_send(from_address_or_tag, transactions, chain_name)
 
     def get_native_balance_eth(
         self, account_address: str, chain_name: str = "gnosis"
@@ -253,6 +249,4 @@ class Wallet:
         chain_name: str = "gnosis",
     ):
         """Drain entire balance of an account to another account"""
-        return self.transfer_service.drain(
-            from_address_or_tag, to_address_or_tag, chain_name
-        )
+        return self.transfer_service.drain(from_address_or_tag, to_address_or_tag, chain_name)

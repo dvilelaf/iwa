@@ -154,9 +154,19 @@ def main() -> None:  # noqa: C901
     """Main"""
     print("Recreating Tenderly Networks")
 
-    account_slug = settings.tenderly_account_slug.get_secret_value() if settings.tenderly_account_slug else None
-    project_slug = settings.tenderly_project_slug.get_secret_value() if settings.tenderly_project_slug else None
-    tenderly_access_key = settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None
+    account_slug = (
+        settings.tenderly_account_slug.get_secret_value()
+        if settings.tenderly_account_slug
+        else None
+    )
+    project_slug = (
+        settings.tenderly_project_slug.get_secret_value()
+        if settings.tenderly_project_slug
+        else None
+    )
+    tenderly_access_key = (
+        settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None
+    )
 
     if not account_slug or not project_slug or not tenderly_access_key:
         print("Missing Tenderly environment variables")
@@ -202,6 +212,7 @@ def main() -> None:  # noqa: C901
         # Fund wallets
         keys = KeyStorage()
         from iwa.core.services import AccountService, SafeService
+
         account_service = AccountService(keys)
         safe_service = SafeService(keys, account_service)
 

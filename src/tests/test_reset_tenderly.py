@@ -33,7 +33,12 @@ def mock_tenderly_config():
     vnet.admin_rpc = "https://admin.rpc.com"
     vnet.funds_requirements = {
         "tag1": FundRequirements(
-            native=1.0, tokens=[TokenAmount(address="0x1234567890123456789012345678901234567890", amount=10.0, symbol="TKN")]
+            native=1.0,
+            tokens=[
+                TokenAmount(
+                    address="0x1234567890123456789012345678901234567890", amount=10.0, symbol="TKN"
+                )
+            ],
         )
     }
     config.vnets = {"Gnosis": vnet}

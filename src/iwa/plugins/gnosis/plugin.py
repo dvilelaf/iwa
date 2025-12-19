@@ -49,6 +49,7 @@ class GnosisPlugin(Plugin):
     ):
         """Create a new multisig account (Safe)"""
         from iwa.core.services import AccountService, SafeService
+
         key_storage = KeyStorage()
         account_service = AccountService(key_storage)
         safe_service = SafeService(key_storage, account_service)

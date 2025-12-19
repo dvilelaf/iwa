@@ -1,6 +1,6 @@
 """Gnosis Safe interaction."""
 
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from safe_eth.eth import EthereumClient
 from safe_eth.eth.constants import NULL_ADDRESS

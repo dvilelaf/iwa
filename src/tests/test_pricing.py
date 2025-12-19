@@ -86,8 +86,7 @@ def test_get_token_price_rate_limit():
 
         service = PriceService()
 
-        with patch("iwa.core.pricing.requests.get") as mock_get, \
-             patch("time.sleep"):
+        with patch("iwa.core.pricing.requests.get") as mock_get, patch("time.sleep"):
             # Return 429 for all attempts
             mock_response = type("Response", (), {"status_code": 429})()
             mock_get.return_value = mock_response
@@ -108,8 +107,7 @@ def test_get_token_price_rate_limit_then_success():
 
         service = PriceService()
 
-        with patch("iwa.core.pricing.requests.get") as mock_get, \
-             patch("time.sleep"):
+        with patch("iwa.core.pricing.requests.get") as mock_get, patch("time.sleep"):
             # First call returns 429, second succeeds
             mock_429 = MagicMock()
             mock_429.status_code = 429
@@ -124,7 +122,6 @@ def test_get_token_price_rate_limit_then_success():
 
             assert price == 1500.0
             assert mock_get.call_count == 2
-
 
 
 def test_get_token_price_no_api_key():

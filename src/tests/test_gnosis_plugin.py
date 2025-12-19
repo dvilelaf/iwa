@@ -1,10 +1,9 @@
 """Tests for Gnosis Plugin."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import typer
-from typer.testing import CliRunner
 
 from iwa.plugins.gnosis.plugin import GnosisPlugin
 
@@ -29,10 +28,11 @@ def test_get_cli_commands(plugin):
 
 def test_create_safe_command_success(plugin):
     """Test create_safe_command with successful creation."""
-    with patch("iwa.core.keys.KeyStorage") as mock_key_storage, \
-         patch("iwa.core.services.AccountService") as mock_account_service, \
-         patch("iwa.core.services.SafeService") as mock_safe_service:
-
+    with (
+        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.core.services.AccountService"),
+        patch("iwa.core.services.SafeService") as mock_safe_service,
+    ):
         mock_safe_service.return_value.create_safe.return_value = "0xSafeAddress"
 
         # Call the command directly
@@ -54,10 +54,11 @@ def test_create_safe_command_success(plugin):
 
 def test_create_safe_command_error(plugin):
     """Test create_safe_command handles ValueError."""
-    with patch("iwa.core.keys.KeyStorage"), \
-         patch("iwa.core.services.AccountService"), \
-         patch("iwa.core.services.SafeService") as mock_safe_service:
-
+    with (
+        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.core.services.AccountService"),
+        patch("iwa.core.services.SafeService") as mock_safe_service,
+    ):
         mock_safe_service.return_value.create_safe.side_effect = ValueError("Owner not found")
 
         with pytest.raises(typer.Exit) as exc_info:
@@ -73,10 +74,11 @@ def test_create_safe_command_error(plugin):
 
 def test_create_safe_command_no_tag(plugin):
     """Test create_safe_command without tag."""
-    with patch("iwa.core.keys.KeyStorage"), \
-         patch("iwa.core.services.AccountService"), \
-         patch("iwa.core.services.SafeService") as mock_safe_service:
-
+    with (
+        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.core.services.AccountService"),
+        patch("iwa.core.services.SafeService") as mock_safe_service,
+    ):
         mock_safe_service.return_value.create_safe.return_value = "0xSafeAddress"
 
         plugin.create_safe_command(
@@ -93,10 +95,11 @@ def test_create_safe_command_no_tag(plugin):
 
 def test_create_safe_command_multiple_owners(plugin):
     """Test create_safe_command with multiple owners."""
-    with patch("iwa.core.keys.KeyStorage"), \
-         patch("iwa.core.services.AccountService"), \
-         patch("iwa.core.services.SafeService") as mock_safe_service:
-
+    with (
+        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.core.services.AccountService"),
+        patch("iwa.core.services.SafeService") as mock_safe_service,
+    ):
         plugin.create_safe_command(
             tag="multi_safe",
             owners="owner1, owner2, owner3",  # With spaces

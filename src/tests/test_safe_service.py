@@ -1,4 +1,5 @@
 """Tests for SafeService."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -71,7 +72,14 @@ def test_create_safe_owner_not_found(safe_service, mock_key_storage):
 @patch("iwa.core.services.safe.EthereumClient")
 @patch("iwa.core.services.safe.Safe")
 @patch("iwa.core.services.safe.settings")
-def test_create_safe_success(mock_settings, mock_safe_cls, mock_eth_client, safe_service, mock_key_storage, mock_account_service):
+def test_create_safe_success(
+    mock_settings,
+    mock_safe_cls,
+    mock_eth_client,
+    safe_service,
+    mock_key_storage,
+    mock_account_service,
+):
     """Test create_safe success path."""
     deployer = MagicMock(spec=EncryptedAccount)
     deployer.address = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
@@ -79,7 +87,9 @@ def test_create_safe_success(mock_settings, mock_safe_cls, mock_eth_client, safe
     owner = MagicMock(spec=EncryptedAccount)
     owner.address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 
-    mock_key_storage.find_stored_account.side_effect = lambda x: deployer if x == "deployer" else owner
+    mock_key_storage.find_stored_account.side_effect = (
+        lambda x: deployer if x == "deployer" else owner
+    )
     mock_key_storage._get_private_key.return_value = Account.create().key.hex()
     mock_key_storage.accounts = {}
 
@@ -91,7 +101,9 @@ def test_create_safe_success(mock_settings, mock_safe_cls, mock_eth_client, safe
 
     mock_account_service.get_tag_by_address.return_value = "deployer_tag"
 
-    safe_account, tx_hash = safe_service.create_safe("deployer", ["owner"], 1, "gnosis", tag="MySafe")
+    safe_account, tx_hash = safe_service.create_safe(
+        "deployer", ["owner"], 1, "gnosis", tag="MySafe"
+    )
 
     assert safe_account.address == "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
     assert safe_account.tag == "MySafe"
@@ -100,7 +112,6 @@ def test_create_safe_success(mock_settings, mock_safe_cls, mock_eth_client, safe
     # Verify save called
     mock_key_storage.save.assert_called_once()
     assert "0x617F2E2fD72FD9D5503197092aC168c91465E7f2" in mock_key_storage.accounts
-
 
 
 def test_get_signer_keys_not_safe(safe_service, mock_key_storage):
@@ -119,11 +130,17 @@ def test_get_signer_keys_not_enough_signers(safe_service, mock_key_storage):
     valid_addr_3 = "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
 
     safe = StoredSafeAccount(
-        tag="safe", address=valid_addr_1, chains=["gnosis"], threshold=2, signers=[valid_addr_2, valid_addr_3]
+        tag="safe",
+        address=valid_addr_1,
+        chains=["gnosis"],
+        threshold=2,
+        signers=[valid_addr_2, valid_addr_3],
     )
 
     # Only one key available
-    mock_key_storage._get_private_key.side_effect = lambda addr: "0xKey1" if addr == valid_addr_2 else None
+    mock_key_storage._get_private_key.side_effect = (
+        lambda addr: "0xKey1" if addr == valid_addr_2 else None
+    )
 
     with pytest.raises(ValueError, match="Not enough signer private keys"):
         safe_service._get_signer_keys(safe)

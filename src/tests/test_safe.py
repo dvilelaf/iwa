@@ -73,8 +73,6 @@ def test_retrieve_all_info(mock_safe_account, mock_secrets, mock_safe_lib):
     assert safe.retrieve_all_info() == {"owners": []}
 
 
-
-
 def test_send_tx_with_callback(mock_safe_account, mock_secrets, mock_safe_lib):
     """Test the new send_tx method with callback."""
     safe = SafeMultisig(mock_safe_account, "gnosis")

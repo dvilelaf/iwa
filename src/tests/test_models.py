@@ -120,8 +120,6 @@ def test_storable_model_load_auto():
         assert model.name == "test"
 
 
-
-
 def test_ethereum_address_validate_method():
     # Test the validate class method directly
     with pytest.raises(ValueError, match="Invalid Ethereum address"):

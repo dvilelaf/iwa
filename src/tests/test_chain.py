@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
-from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import (
     Base,
@@ -17,8 +16,10 @@ from iwa.core.models import EthereumAddress
 @pytest.fixture
 def mock_web3():
     """Mock Web3 and RateLimitedWeb3 to bypass rate limiting wrapper in tests."""
-    with patch("iwa.core.chain.Web3") as mock_web3_class, \
-         patch("iwa.core.chain.RateLimitedWeb3") as mock_rl_web3:
+    with (
+        patch("iwa.core.chain.Web3") as mock_web3_class,
+        patch("iwa.core.chain.RateLimitedWeb3") as mock_rl_web3,
+    ):
         # Make RateLimitedWeb3 just return the raw web3 instance passed to it
         mock_rl_web3.side_effect = lambda w3, rl, ci: w3
         yield mock_web3_class
@@ -119,7 +120,6 @@ def test_get_native_balance(mock_web3):
 
     assert ci.get_native_balance_wei("0xAddress") == 10**18
     assert ci.get_native_balance_eth("0xAddress") == 1.0
-
 
 
 # NOTE: Tests for sign_and_send_transaction were removed because the method was removed
@@ -236,9 +236,6 @@ def test_chain_interfaces_get():
 
     with pytest.raises(ValueError):
         interfaces.get("invalid")
-
-
-
 
 
 def test_chain_interface_get_token_address(mock_web3):

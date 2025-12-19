@@ -8,6 +8,7 @@ from iwa.tui.screens.wallets import WalletsScreen
 
 # --- TUI Modal Tests ---
 
+
 @pytest.mark.asyncio
 async def test_create_eoa_modal():
     modal = CreateEOAModal()
@@ -22,7 +23,9 @@ async def test_create_eoa_modal():
     except Exception:
         pass
 
+
 # --- WalletsScreen Filtering Tests ---
+
 
 @pytest.mark.asyncio
 async def test_wallets_view_filtering():
