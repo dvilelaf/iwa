@@ -297,3 +297,183 @@ def test_rotate_rpc_single_rpc(mock_web3):
     type(chain).rpc = PropertyMock(return_value="http://rpc1")
     ci = ChainInterface(chain)
     assert ci.rotate_rpc() is False
+
+
+# --- Tests migrated from test_chain_interface_coverage.py ---
+
+
+def test_chain_interface_with_real_chains():
+    """Test ChainInterface with real chain configurations."""
+    from eth_account import Account
+
+    valid_addr_1 = Account.create().address
+    valid_addr_2 = Account.create().address
+
+    # Patch RateLimitedWeb3 to bypass rate limiting wrapper
+    with patch("iwa.core.chain.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
+        # Use Gnosis() directly (SupportedChain), not ChainInterfaces().gnosis (ChainInterface)
+        interface = ChainInterface(Gnosis())
+        interface.chain.rpcs = ["http://rpc1", "http://rpc2"]
+        interface.web3 = MagicMock()
+        interface.web3.provider.endpoint_uri = "http://rpc1"
+
+        rotated = interface.rotate_rpc()
+        assert rotated is True
+        assert interface.web3.provider.endpoint_uri == "http://rpc2"
+
+        interface.web3.eth.get_code = MagicMock(return_value=b"code")
+        assert interface.is_contract(valid_addr_1) is True
+
+        interface.web3.eth.get_code.return_value = b""
+        assert interface.is_contract(valid_addr_2) is False
+
+        with patch("iwa.core.contracts.erc20.ERC20Contract") as mock_erc20:
+            instance = mock_erc20.return_value
+            instance.symbol = "SYM"
+            instance.decimals = 18
+
+            interface.web3.eth.get_code.return_value = b"code"
+
+            sym = interface.get_token_symbol(valid_addr_1)
+            assert sym == "SYM"
+
+            dec = interface.get_token_decimals(valid_addr_1)
+            assert dec == 18
+
+
+# --- Negative Tests ---
+
+
+def test_send_native_transfer_insufficient_balance(mock_web3):
+    """Test send_native_transfer fails with insufficient balance."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
+    chain.chain_id = 1
+    chain.native_currency = "ETH"
+    type(chain).rpc = PropertyMock(return_value="https://rpc")
+
+    ci = ChainInterface(chain)
+    ci.web3.eth.get_transaction_count.return_value = 0
+    ci.web3.eth.gas_price = 1000000000  # 1 gwei
+    ci.web3.eth.estimate_gas.return_value = 21000
+    ci.web3.eth.get_balance.return_value = 1000  # Very low balance
+    ci.web3.from_wei.return_value = 0.000001
+
+    sign_callback = MagicMock()
+
+    success, tx_hash = ci.send_native_transfer(
+        from_address="0x1111111111111111111111111111111111111111",
+        to_address="0x2222222222222222222222222222222222222222",
+        value_wei=10**18,  # 1 ETH - more than available
+        sign_callback=sign_callback,
+    )
+
+    assert success is False
+    assert tx_hash is None
+    sign_callback.assert_not_called()
+
+
+def test_send_native_transfer_rpc_error(mock_web3):
+    """Test send_native_transfer handles RPC errors."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
+    chain.chain_id = 1
+    chain.native_currency = "ETH"
+    type(chain).rpc = PropertyMock(return_value="https://rpc")
+
+    ci = ChainInterface(chain)
+    ci.web3.eth.get_transaction_count.return_value = 0
+    ci.web3.eth.gas_price = 1000000000
+    ci.web3.eth.estimate_gas.return_value = 21000
+    ci.web3.eth.get_balance.return_value = 10**19  # Enough balance
+    ci.web3.from_wei.return_value = 10.0
+    ci.web3.eth.send_raw_transaction.side_effect = Exception("Connection refused")
+
+    sign_callback = MagicMock()
+    sign_callback.return_value = MagicMock(raw_transaction=b"signed")
+
+    success, tx_hash = ci.send_native_transfer(
+        from_address="0x1111111111111111111111111111111111111111",
+        to_address="0x2222222222222222222222222222222222222222",
+        value_wei=10**17,
+        sign_callback=sign_callback,
+    )
+
+    assert success is False
+    assert tx_hash is None
+
+
+def test_get_token_symbol_fallback_on_error(mock_web3):
+    """Test get_token_symbol returns truncated address on error."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    chain.tokens = {}
+    type(chain).rpc = PropertyMock(return_value="https://rpc")
+
+    ci = ChainInterface(chain)
+
+    # Patch ERC20Contract to raise error
+    with patch("iwa.core.contracts.erc20.ERC20Contract") as mock_erc20:
+        mock_erc20.side_effect = Exception("Contract not found")
+
+        address = "0x1234567890123456789012345678901234567890"
+        symbol = ci.get_token_symbol(address)
+
+        # Should return truncated address as fallback
+        assert symbol == "0x1234...7890"
+
+
+def test_get_token_decimals_fallback_on_error(mock_web3):
+    """Test get_token_decimals returns 18 on error."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    type(chain).rpc = PropertyMock(return_value="https://rpc")
+
+    ci = ChainInterface(chain)
+
+    with patch("iwa.core.contracts.erc20.ERC20Contract") as mock_erc20:
+        mock_erc20.side_effect = Exception("Contract not found")
+
+        decimals = ci.get_token_decimals("0x1234567890123456789012345678901234567890")
+
+        # Should return default 18 as fallback
+        assert decimals == 18
+
+
+def test_is_rate_limit_error_detection(mock_web3):
+    """Test _is_rate_limit_error detects various rate limit errors."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    type(chain).rpc = PropertyMock(return_value="https://rpc")
+
+    ci = ChainInterface(chain)
+
+    # Should detect rate limit
+    assert ci._is_rate_limit_error(Exception("Error 429")) is True
+    assert ci._is_rate_limit_error(Exception("rate limit exceeded")) is True
+    assert ci._is_rate_limit_error(Exception("Too Many Requests")) is True
+    assert ci._is_rate_limit_error(Exception("ratelimit")) is True
+
+    # Should NOT detect as rate limit
+    assert ci._is_rate_limit_error(Exception("Connection timeout")) is False
+    assert ci._is_rate_limit_error(Exception("Invalid address")) is False
+    assert ci._is_rate_limit_error(Exception("Out of gas")) is False
+
+
+def test_handle_rpc_error_non_rate_limit(mock_web3):
+    """Test _handle_rpc_error returns False for non-rate-limit errors."""
+    chain = MagicMock(spec=SupportedChain)
+    chain.name = "TestChain"
+    chain.rpcs = ["https://rpc1", "https://rpc2"]
+    type(chain).rpc = PropertyMock(return_value="https://rpc1")
+
+    ci = ChainInterface(chain)
+
+    # Non-rate-limit error should return False
+    result = ci._handle_rpc_error(Exception("Connection timeout"))
+    assert result is False
+
+    # RPC index should not have changed
+    assert ci._current_rpc_index == 0

@@ -79,3 +79,81 @@ def test_sign_and_send_retry_on_low_gas(transaction_service, mock_key_storage, m
     # arguments passed to sign_transaction should reflect updated gas
     args, _ = mock_key_storage.sign_transaction.call_args_list[1]
     assert args[0]["gas"] == 15000 # 10000 * 1.5
+
+
+# --- Negative Tests ---
+
+
+def test_sign_and_send_max_retries_exhausted(transaction_service, mock_key_storage, mock_chain_interfaces):
+    """Test sign_and_send fails after max gas retries."""
+    tx = {"to": "0x123", "value": 100, "nonce": 5, "gas": 10000}
+    mock_key_storage.sign_transaction.return_value = MagicMock(raw_transaction=b"raw_tx")
+
+    chain_interface = mock_chain_interfaces.get.return_value
+
+    # Always fail with low gas error
+    from web3 import exceptions
+    chain_interface.web3.eth.send_raw_transaction.side_effect = exceptions.Web3RPCError(
+        "intrinsic gas too low"
+    )
+
+    with patch("time.sleep"):
+        success, receipt = transaction_service.sign_and_send(tx, "signer")
+
+    # Should fail after max retries
+    assert success is False
+    assert receipt == {}  # Returns empty dict on failure
+    # Should have tried 3 times (max_retries)
+    assert chain_interface.web3.eth.send_raw_transaction.call_count == 3
+
+
+def test_sign_and_send_transaction_reverted(transaction_service, mock_key_storage, mock_chain_interfaces):
+    """Test sign_and_send handles reverted transaction."""
+    tx = {"to": "0x123", "value": 100, "nonce": 5, "gas": 21000}
+    mock_key_storage.sign_transaction.return_value = MagicMock(raw_transaction=b"raw_tx")
+
+    chain_interface = mock_chain_interfaces.get.return_value
+    chain_interface.web3.eth.send_raw_transaction.return_value = b"tx_hash"
+    # Transaction mined but reverted (status=0)
+    chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=0)
+
+    success, receipt = transaction_service.sign_and_send(tx, "signer")
+
+    assert success is False
+    assert receipt == {}  # Returns empty dict on reverted tx
+
+
+def test_sign_and_send_rpc_error_triggers_rotation(transaction_service, mock_key_storage, mock_chain_interfaces):
+    """Test sign_and_send rotates RPC on connection error."""
+    tx = {"to": "0x123", "value": 100, "nonce": 5, "gas": 21000}
+    mock_key_storage.sign_transaction.return_value = MagicMock(raw_transaction=b"raw_tx")
+
+    chain_interface = mock_chain_interfaces.get.return_value
+
+    # First call fails with connection error, second succeeds
+    chain_interface.web3.eth.send_raw_transaction.side_effect = [
+        ConnectionError("Connection refused"),
+        b"tx_hash",
+    ]
+    chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+    chain_interface.rotate_rpc.return_value = True
+
+    with patch("time.sleep"):
+        success, receipt = transaction_service.sign_and_send(tx, "signer")
+
+    assert success is True
+    chain_interface.rotate_rpc.assert_called()
+
+
+def test_sign_and_send_signer_not_found(transaction_service, mock_key_storage, mock_chain_interfaces, mock_account_service):
+    """Test sign_and_send fails when signer account not found."""
+    tx = {"to": "0x123", "value": 100, "nonce": 5}
+
+    # Signing raises ValueError for unknown account
+    mock_key_storage.sign_transaction.side_effect = ValueError("Account not found")
+
+    success, receipt = transaction_service.sign_and_send(tx, "unknown_signer")
+
+    assert success is False
+    assert receipt == {}  # Returns empty dict on failure
+

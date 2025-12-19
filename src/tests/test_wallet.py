@@ -982,3 +982,101 @@ def test_multi_send_erc20_safe_success(wallet, mock_key_storage, mock_chain_inte
 
         wallet.safe_service.execute_safe_transaction.assert_called_once()
         erc20_instance.prepare_transfer_tx.assert_called_once()
+
+
+# --- Negative Tests for TransferService ---
+
+
+def test_send_whitelist_rejected(wallet, mock_key_storage):
+    """Test send fails when destination not in whitelist."""
+    from iwa.core.models import Config, CoreConfig, EthereumAddress
+
+    # Mock whitelist that doesn't include destination
+    mock_config = Config()
+    mock_config.core = CoreConfig()
+    mock_config.core.whitelist = {
+        "allowed": EthereumAddress("0x3333333333333333333333333333333333333333")
+    }
+
+    with patch("iwa.core.services.transfer.Config", return_value=mock_config):
+        mock_key_storage.get_account.return_value = MagicMock(
+            address=VALID_ADDR_1,
+            tag="sender",
+        )
+
+        result = wallet.send(
+            from_address_or_tag=VALID_ADDR_1,
+            to_address_or_tag=VALID_ADDR_2,  # Not in whitelist
+            token_address_or_name="native",
+            amount_wei=10**18,
+            chain_name="gnosis",
+        )
+
+        assert result is None  # Should fail due to whitelist
+
+
+def test_send_zero_amount(wallet, mock_key_storage):
+    """Test send with zero amount."""
+    mock_key_storage.get_account.return_value = MagicMock(
+        address=VALID_ADDR_1,
+        tag="sender",
+    )
+
+    result = wallet.send(
+        from_address_or_tag=VALID_ADDR_1,
+        to_address_or_tag=VALID_ADDR_2,
+        token_address_or_name="native",
+        amount_wei=0,
+        chain_name="gnosis",
+    )
+
+    # Zero amount should be handled (may succeed or fail gracefully)
+    # At minimum, should not crash
+
+
+def test_send_same_source_destination(wallet, mock_key_storage, mock_balance_service):
+    """Test send when source equals destination."""
+    mock_key_storage.get_account.return_value = MagicMock(
+        address=VALID_ADDR_1,
+        tag="sender",
+    )
+    mock_balance_service.get_native_balance_wei.return_value = 10**19
+
+    # Self-transfer should work but is unusual
+    result = wallet.send(
+        from_address_or_tag=VALID_ADDR_1,
+        to_address_or_tag=VALID_ADDR_1,  # Same as source
+        token_address_or_name="native",
+        amount_wei=10**18,
+        chain_name="gnosis",
+    )
+
+    # Should not crash
+
+
+def test_send_account_not_found(wallet, mock_key_storage):
+    """Test send fails when from account doesn't exist."""
+    mock_key_storage.get_account.return_value = None
+
+    result = wallet.send(
+        from_address_or_tag="nonexistent_account",
+        to_address_or_tag=VALID_ADDR_2,
+        token_address_or_name="native",
+        amount_wei=10**18,
+        chain_name="gnosis",
+    )
+
+    assert result is None
+
+
+def test_multi_send_empty_transactions(wallet, mock_key_storage):
+    """Test multi_send with empty transaction list."""
+    mock_key_storage.get_account.return_value = MagicMock(
+        address=VALID_ADDR_1,
+        tag="sender",
+    )
+
+    # Empty list should be handled gracefully
+    result = wallet.multi_send(VALID_ADDR_1, [])
+
+    # Should not crash

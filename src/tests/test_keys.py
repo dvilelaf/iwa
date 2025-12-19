@@ -378,3 +378,36 @@ def test_get_signer(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
         )
         storage.accounts["0x61a4f49e9dD1f90EB312889632FA956a21353720"] = safe
         assert storage.get_signer("safe") is None
+
+
+# --- Tests migrated from test_keystorage_edge_cases.py ---
+
+
+def test_keystorage_edge_cases_with_real_storage(tmp_path):
+    """Test KeyStorage edge cases with real file storage."""
+    wallet_path = tmp_path / "wallet.json"
+    storage = KeyStorage(wallet_path, password="password")
+
+    # Create account
+    encrypted_acc = storage.create_account("acc1")
+    assert encrypted_acc is not None
+
+    # Get by address
+    acc_by_addr = storage.get_account(encrypted_acc.address)
+    assert acc_by_addr is not None
+
+    # Remove account
+    storage.remove_account(encrypted_acc.address)
+
+    # Verify removal
+    assert storage.get_account(encrypted_acc.address) is None
+    assert storage.get_account("acc1") is None
+
+    # Get private key via internal method
+    encrypted_acc2 = storage.create_account("acc2")
+    pk = storage._get_private_key(encrypted_acc2.address)
+    assert pk is not None
+
+    # Sign transaction unknown account
+    with pytest.raises(ValueError):
+        storage.sign_transaction({}, "0xUnknown")

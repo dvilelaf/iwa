@@ -297,3 +297,252 @@ async def test_send_transaction_failure(mock_wallet, mock_deps):
 
         # Just ensure it doesn't crash
         view.send_tx_worker("0x1", "0x2", "native", 1.0)
+
+
+# --- Tests migrated from test_tui_clipboard_chain.py ---
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_clipboard(mock_wallet, mock_deps):
+    """Test clipboard functionality for account and transaction cells."""
+    app = IwaApp()
+    async with app.run_test() as _:
+        view = app.query_one(WalletsScreen)
+
+        # Test on_account_cell_selected
+        mock_event = MagicMock()
+        mock_event.coordinate.column = 1
+        mock_event.value = "0xAddress"
+
+        with patch.dict("sys.modules", {"pyperclip": MagicMock()}):
+            view.on_account_cell_selected(mock_event)
+
+        # Test on_tx_cell_selected
+        mock_event_tx = MagicMock()
+        mock_event_tx.coordinate.column = 0
+        mock_event_tx.data_table.columns.values.return_value = [
+            MagicMock(label="Hash"),
+            MagicMock(label="Status"),
+        ]
+        mock_event_tx.cell_key.row_key.value = "0xFullHash"
+
+        with patch.dict("sys.modules", {"pyperclip": MagicMock()}):
+            view.on_tx_cell_selected(mock_event_tx)
+
+
+from textual.widget import Widget
+
+
+class DummySelect(Widget):
+    """Dummy Select widget for testing chain change."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(id=kwargs.get("id"))
+
+    def set_options(self, options):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_chain_change_detailed(mock_wallet, mock_deps):
+    """Test chain change with detailed mocking."""
+    app = IwaApp()
+    async with app.run_test() as _:
+        view = app.query_one(WalletsScreen)
+
+        # Mock ChainInterfaces
+        with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
+            mock_interface = MagicMock()
+            mock_interface.chain.rpc = "http://rpc"
+            mock_interface.chain.native_currency = "ETH"
+            mock_interface.tokens = {"TOKEN": "0xToken"}
+            mock_chains.return_value.get.return_value = mock_interface
+
+            # Patch Select with DummyWidget to satisfy isinstance(w, Widget)
+            with patch("iwa.tui.screens.wallets.Select", side_effect=DummySelect):
+                # Chain changed event
+                mock_event = MagicMock()
+                mock_event.value = "gnosis"
+                mock_event.control.value = "gnosis"
+                view.active_chain = "ethereum"
+
+                # Trigger
+                await view.on_chain_changed(mock_event)
+
+                assert view.active_chain == "gnosis"
+
+
+# --- Tests migrated from test_keystorage_edge_cases.py ---
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_actions():
+    """Test WalletsScreen action methods."""
+    with patch("iwa.core.db.db") as mock_db:
+        mock_db.is_closed.return_value = True
+
+        app = IwaApp()
+        async with app.run_test() as _:
+            view = app.query_one(WalletsScreen)
+
+            # Test action_refresh
+            with patch.object(view, "refresh_accounts") as mock_refresh:
+                view.action_refresh()
+                mock_refresh.assert_called_with(force=True)
+
+            # Test on_unmount
+            view.start_monitor()
+            with patch.object(view, "stop_monitor") as mock_stop:
+                view.on_unmount()
+                mock_stop.assert_called()
+
+            # Test monitor_callback
+            with patch.object(view, "handle_new_txs") as _:
+                with patch.object(app, "call_from_thread") as mock_call:
+                    view.monitor_callback([])
+                    mock_call.assert_called_with(view.handle_new_txs, [])
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_resolve_tag(mock_wallet, mock_deps):
+    """Test resolve_tag method."""
+    view = WalletsScreen(mock_wallet)
+
+    mock_acc = MagicMock()
+    mock_acc.address = "0xAddress"
+    mock_acc.tag = "MyTag"
+
+    mock_accounts = MagicMock()
+    mock_accounts.values.return_value = [mock_acc]
+
+    mock_wallet.key_storage.accounts = mock_accounts
+    mock_wallet.account_service.accounts = mock_accounts
+
+    tag = view.resolve_tag("0xAddress")
+    assert tag == "MyTag"
+
+    # Test fallback
+    mock_accounts.values.return_value = []
+    tag = view.resolve_tag("0xAddress")
+    assert tag == "0xAddr...ress"
+
+
+@pytest.mark.asyncio
+async def test_create_safe_modal_cancel():
+    """Test CreateSafeModal cancel button."""
+    from iwa.tui.modals import CreateSafeModal
+
+    modal = CreateSafeModal([])
+
+    mock_event = MagicMock()
+    mock_event.button.id = "cancel"
+    with patch.object(modal, "dismiss") as mock_dismiss:
+        modal.on_button_pressed(mock_event)
+        mock_dismiss.assert_called()
+
+
+# --- Tests migrated from test_core_db_integration.py ---
+
+from unittest.mock import PropertyMock
+from textual.widgets import DataTable
+
+
+@pytest.mark.asyncio
+async def test_create_safe_worker_no_rpc(mock_wallet, mock_deps):
+    """Test create_safe_worker when no RPC is configured."""
+    view = WalletsScreen(mock_wallet)
+
+    with patch.object(WalletsScreen, "app", new_callable=PropertyMock) as mock_app_prop:
+        mock_app = MagicMock()
+        mock_app_prop.return_value = mock_app
+        view.notify = MagicMock()
+
+        with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
+            mock_interface = MagicMock()
+            mock_interface.chain.rpc = None
+            mock_chains.return_value.get.return_value = mock_interface
+
+            view.create_safe_worker("Tag", 1, ["0x1"], ["gnosis"])
+
+            assert mock_app.call_from_thread.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_create_safe_worker_exception(mock_wallet, mock_deps):
+    """Test create_safe_worker handles exceptions."""
+    view = WalletsScreen(mock_wallet)
+
+    with patch.object(WalletsScreen, "app", new_callable=PropertyMock) as mock_app_prop:
+        mock_app = MagicMock()
+        mock_app_prop.return_value = mock_app
+        view.notify = MagicMock()
+
+        with patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_chains:
+            mock_interface = MagicMock()
+            mock_interface.chain.rpc = "http://rpc"
+            mock_chains.return_value.get.return_value = mock_interface
+
+            mock_wallet.key_storage.create_safe.side_effect = Exception("Create Failed")
+
+            view.create_safe_worker("Tag", 1, ["0x1"], ["gnosis"])
+
+            assert mock_app.call_from_thread.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_action_quit():
+    """Test IwaApp action_quit."""
+    app = IwaApp()
+    with patch.object(app, "exit") as mock_exit:
+        await app.action_quit()
+        mock_exit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_lifecycle(mock_wallet, mock_deps):
+    """Test WalletsScreen lifecycle (on_mount/compose)."""
+    app = IwaApp()
+    async with app.run_test() as _:
+        view = app.query_one(WalletsScreen)
+        assert view is not None
+        table = view.query_one("#accounts_table", DataTable)
+        assert len(table.columns) > 0
+
+
+@pytest.mark.asyncio
+async def test_wallets_view_copy_address_fallback(mock_wallet, mock_deps):
+    """Test clipboard fallback when pyperclip fails."""
+    app = IwaApp()
+    async with app.run_test() as _:
+        view = app.query_one(WalletsScreen)
+
+        mock_event = MagicMock()
+        mock_event.coordinate.column = 1
+        mock_event.value = "0xAddr"
+
+        mock_pyperclip = MagicMock()
+        mock_pyperclip.copy.side_effect = Exception("No clipboard")
+
+        with patch.dict("sys.modules", {"pyperclip": mock_pyperclip}):
+            with patch("iwa.tui.app.IwaApp.copy_to_clipboard") as mock_copy:
+                view.on_account_cell_selected(mock_event)
+                mock_copy.assert_called_with("0xAddr")
+
+
+@pytest.mark.asyncio
+async def test_enrich_logs_api_failure(mock_wallet, mock_deps):
+    """Test enrich_and_log_txs handles API failures."""
+    app = IwaApp()
+    async with app.run_test():
+        view = app.query_one(WalletsScreen)
+
+        txs = [{"hash": "0x1", "token": "TOKEN", "chain": "gnosis"}]
+
+        with patch("iwa.tui.screens.wallets.PriceService") as mock_price:
+            mock_price.return_value.get_token_price.return_value = None
+
+            with patch("iwa.core.db.log_transaction") as _:
+                with patch("iwa.tui.screens.wallets.ChainInterfaces"):
+                    if not view.monitor_workers:
+                         view.start_monitor()
+                    view.enrich_and_log_txs(txs)
+                    # Just verify it doesn't crash
