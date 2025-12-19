@@ -9,8 +9,8 @@ dev:
     uv run python -m iwa
 
 # Reset tenderly
-reset-tenderly:
-    uv run src/iwa/tools/reset_tenderly.py
+reset-tenderly profile="1":
+    uv run src/iwa/tools/reset_tenderly.py --profile {{profile}}
 
 # Format code
 format:

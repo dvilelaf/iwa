@@ -15,8 +15,6 @@ wheels/
 
 wallet.json
 
-tenderly.yaml
-
 .coverage
 
 *.log
@@ -30,3 +28,7 @@ debug_trace.txt
 TODO.md
 
 *.db-wal
+
+tenderly_1.yaml
+
+tenderly_2.yaml

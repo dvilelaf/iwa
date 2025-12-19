@@ -1,5 +1,6 @@
 """Recreates Tenderly networks and funds wallets as per configuration."""
 
+import argparse
 import json
 import random
 import re
@@ -8,10 +9,52 @@ from typing import List, Optional, Tuple
 
 import requests
 
-from iwa.core.constants import SECRETS_PATH, TENDERLY_CONFIG_PATH
+from iwa.core.constants import SECRETS_PATH, get_tenderly_config_path
 from iwa.core.keys import KeyStorage
 from iwa.core.models import TenderlyConfig
 from iwa.core.settings import settings
+
+
+def get_tenderly_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Get Tenderly credentials from settings (based on current profile)."""
+    return (
+        settings.tenderly_account_slug.get_secret_value() if settings.tenderly_account_slug else None,
+        settings.tenderly_project_slug.get_secret_value() if settings.tenderly_project_slug else None,
+        settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None,
+    )
+
+
+def _generate_default_config() -> TenderlyConfig:
+    """Generate a default TenderlyConfig from SupportedChains."""
+    from iwa.core.chain import SupportedChains
+    from iwa.core.models import FundRequirements, TokenAmount, VirtualNet
+
+    vnets = {}
+    chains = SupportedChains()
+
+    for chain_name, chain in [("gnosis", chains.gnosis), ("ethereum", chains.ethereum), ("base", chains.base)]:
+        # Get OLAS token address for this chain
+        olas_address = chain.tokens.get("OLAS")
+
+        tokens = []
+        if olas_address:
+            tokens.append(TokenAmount(
+                address=str(olas_address),
+                symbol="OLAS",
+                amount=settings.tenderly_olas_funds,
+            ))
+
+        vnets[chain_name] = VirtualNet(
+            chain_id=chain.chain_id,
+            funds_requirements={
+                "all": FundRequirements(
+                    native=settings.tenderly_native_funds,
+                    tokens=tokens,
+                )
+            },
+        )
+
+    return TenderlyConfig(vnets=vnets)
 
 
 def _delete_vnet(
@@ -151,28 +194,25 @@ def _fund_wallet(  # nosec
 
 
 def main() -> None:  # noqa: C901
-    """Main"""
-    print("Recreating Tenderly Networks")
+    """Main - uses tenderly_profile from settings."""
+    profile = settings.tenderly_profile
+    print(f"Recreating Tenderly Networks (Profile {profile})")
 
-    account_slug = (
-        settings.tenderly_account_slug.get_secret_value()
-        if settings.tenderly_account_slug
-        else None
-    )
-    project_slug = (
-        settings.tenderly_project_slug.get_secret_value()
-        if settings.tenderly_project_slug
-        else None
-    )
-    tenderly_access_key = (
-        settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None
-    )
+    account_slug, project_slug, tenderly_access_key = get_tenderly_credentials()
 
     if not account_slug or not project_slug or not tenderly_access_key:
-        print("Missing Tenderly environment variables")
+        print(f"Missing Tenderly environment variables for profile {profile}")
         return
 
-    tenderly_config = TenderlyConfig.load(TENDERLY_CONFIG_PATH)
+    config_path = get_tenderly_config_path(profile)
+
+    if not config_path.exists():
+        # Generate new config from scratch
+        print(f"Generating new config file: {config_path}")
+        tenderly_config = _generate_default_config()
+        tenderly_config.save(config_path)
+
+    tenderly_config = TenderlyConfig.load(config_path)
 
     for vnet_name, vnet in tenderly_config.vnets.items():
         # Delete existing vnets
@@ -253,4 +293,30 @@ def main() -> None:  # noqa: C901
 
 
 if __name__ == "__main__":  # pragma: no cover
+    import os
+    import sys
+
+    parser = argparse.ArgumentParser(description="Reset Tenderly networks")
+    parser.add_argument(
+        "--profile",
+        "-p",
+        type=int,
+        default=1,
+        choices=[1, 2],
+        help="Tenderly profile to use (1 or 2)",
+    )
+    args = parser.parse_args()
+
+    # Set profile env var
+    os.environ["TENDERLY_PROFILE"] = str(args.profile)
+
+    # Reset the singleton to reload with new env
+    from iwa.core.settings import Settings
+    Settings._instance = None  # type: ignore
+
+    # Reimport settings to get fresh instance
+    if "iwa.core.settings" in sys.modules:
+        del sys.modules["iwa.core.settings"]
+    from iwa.core.settings import settings  # noqa: F401
+
     main()
