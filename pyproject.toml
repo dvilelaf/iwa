@@ -11,7 +11,6 @@ dependencies = [
     "loguru>=0.7.3",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",
-    "python-telegram-bot>=22.5",
     "rich>=14.2.0",
     "tomli>=2.3.0",
     "tomli-w>=1.2.0",

@@ -11,7 +11,7 @@ Iwa is a Python framework designed for managing crypto wallets and interacting w
   - **RPC Rotation**: Automatically switches RPC providers if one fails or is rate-limited.
   - **Automatic Gas Management**: Retries transactions with increased gas prices upon failure.
   - **Internal Signing**: Transactions are signed within the secure `KeyStorage` module.
-- **CLI & Telegram Integration**: Interact with your wallet via a unified CLI or a Telegram bot.
+- **CLI & TUI Integration**: Interact with your wallet via a unified CLI or a Terminal User Interface.
 - **Modern Tooling**: Managed with `uv`, `Justfile` for automation, and ready for Docker deployment.
 
 ## Architecture & Important Classes
@@ -66,8 +66,6 @@ WALLET_PASSWORD=your_secure_password
 GNOSIS_RPC=https://rpc.gnosis.io
 ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
 BASE_RPC=https://mainnet.base.org
-TELEGRAM_BOT_TOKEN=your_token
-TELEGRAM_ALLOWED_USER_ID=your_id
 ```
 
 ### Running Tests
@@ -90,7 +88,7 @@ just docker-run
 Plugins are located in `src/iwa/plugins`. Currently supported:
 - **Gnosis**: Helpers for Safe and CowSwap.
 - **Olas**: Interaction with Olas registry and services.
-- **Telegram**: Telegram bot interface.
+
 
 ## Documentation
 See `docs/` for more detailed documentation.

@@ -18,8 +18,6 @@ class Settings(BaseSettings):
     base_rpc: Optional[SecretStr] = None
     ethereum_rpc: Optional[SecretStr] = None
     gnosisscan_api_key: Optional[SecretStr] = None
-    telegram_bot_token: Optional[SecretStr] = None
-    telegram_chat_id: Optional[int] = None
     coingecko_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
     security_word: Optional[SecretStr] = None
