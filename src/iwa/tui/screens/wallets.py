@@ -61,7 +61,7 @@ class MonitorWorker:
             try:
                 # Run check_activity in a thread to avoid blocking the async loop
                 # since web3 calls are synchronous
-                await self.app.run_in_thread(self.monitor.check_activity)
+                await asyncio.to_thread(self.monitor.check_activity)
             except Exception as e:
                 logger.error(f"Error in MonitorWorker: {e}")
 

@@ -31,18 +31,32 @@ class BalanceService:
         self.account_service = account_service
 
     def get_native_balance_eth(
-        self, account_address: str, chain_name: str = "gnosis"
+        self, account_address_or_tag: str, chain_name: str = "gnosis"
     ) -> Optional[float]:
         """Get native currency balance in ETH."""
+        account = self.account_service.resolve_account(account_address_or_tag)
+        if not account:
+            # If not found, try to use as raw address
+            address = account_address_or_tag
+        else:
+            address = account.address
+
         chain_interface = ChainInterfaces().get(chain_name)
-        return chain_interface.get_native_balance_eth(account_address)
+        return chain_interface.get_native_balance_eth(address)
 
     def get_native_balance_wei(
-        self, account_address: str, chain_name: str = "gnosis"
+        self, account_address_or_tag: str, chain_name: str = "gnosis"
     ) -> Optional[int]:
         """Get native currency balance in WEI."""
+        account = self.account_service.resolve_account(account_address_or_tag)
+        if not account:
+            # If not found, try to use as raw address
+            address = account_address_or_tag
+        else:
+            address = account.address
+
         chain_interface = ChainInterfaces().get(chain_name)
-        return chain_interface.get_native_balance_wei(account_address)
+        return chain_interface.get_native_balance_wei(address)
 
     def get_erc20_balance_eth(
         self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"

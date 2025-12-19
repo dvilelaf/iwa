@@ -37,20 +37,28 @@ def balance_service(mock_key_storage, mock_account_service):
     return BalanceService(mock_key_storage, mock_account_service)
 
 
-def test_get_native_balance_eth(balance_service, mock_chain_interfaces):
+def test_get_native_balance_eth(balance_service, mock_chain_interfaces, mock_account_service):
     """Test get_native_balance_eth returns correct value."""
     result = balance_service.get_native_balance_eth("0xAccount", "gnosis")
 
     assert result == 1.5
-    mock_chain_interfaces.get.return_value.get_native_balance_eth.assert_called_with("0xAccount")
+    # Now resolves account first, so expects resolved address
+    mock_chain_interfaces.get.return_value.get_native_balance_eth.assert_called_with(
+        "0xAccountAddress"
+    )
+    mock_account_service.resolve_account.assert_called_with("0xAccount")
 
 
-def test_get_native_balance_wei(balance_service, mock_chain_interfaces):
+def test_get_native_balance_wei(balance_service, mock_chain_interfaces, mock_account_service):
     """Test get_native_balance_wei returns correct value."""
     result = balance_service.get_native_balance_wei("0xAccount", "gnosis")
 
     assert result == 1500000000000000000
-    mock_chain_interfaces.get.return_value.get_native_balance_wei.assert_called_with("0xAccount")
+    # Now resolves account first, so expects resolved address
+    mock_chain_interfaces.get.return_value.get_native_balance_wei.assert_called_with(
+        "0xAccountAddress"
+    )
+    mock_account_service.resolve_account.assert_called_with("0xAccount")
 
 
 def test_get_erc20_balance_eth_success(

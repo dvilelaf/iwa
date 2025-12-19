@@ -22,13 +22,13 @@
       show_root_heading: true
       show_source: true
 
-## Transaction Manager
+## Transaction Service
 
-::: iwa.core.managers
+::: iwa.core.services.transaction
     handler: python
     options:
       members:
-        - TransactionManager
+        - TransactionService
       show_root_heading: true
       show_source: true
 
