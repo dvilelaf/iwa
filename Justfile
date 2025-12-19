@@ -62,6 +62,7 @@ docs-build:
 tui:
     uv run iwa tui
 
-# Launch Web Server
-web port="8000" host="127.0.0.1":
+# Launch Web Server (kills any existing process on the port first)
+web port="8080" host="127.0.0.1":
+    -fuser -k {{port}}/tcp 2>/dev/null || true
     uv run iwa web --port {{port}} --host {{host}}

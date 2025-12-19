@@ -122,15 +122,45 @@ class SafeService:
         # Resolve tag for logging
         resolved_from_tag = self.account_service.get_tag_by_address(deployer_account.address)
 
+        # Get receipt and calculate gas info
+        gas_cost = None
+        gas_value_eur = None
+        try:
+            receipt = ethereum_client.w3.eth.get_transaction_receipt(tx_hash)
+            if receipt:
+                gas_used = receipt.get("gasUsed", 0)
+                effective_gas_price = receipt.get("effectiveGasPrice", 0)
+                gas_cost = gas_used * effective_gas_price
+
+                # Get native token price for gas value calculation
+                from iwa.core.pricing import PriceService
+                CHAIN_COINGECKO_IDS = {"gnosis": "dai", "ethereum": "ethereum", "base": "ethereum"}
+                coingecko_id = CHAIN_COINGECKO_IDS.get(chain_name, "ethereum")
+                price_service = PriceService()
+                native_price_eur = price_service.get_token_price(coingecko_id, "eur")
+
+                if native_price_eur and gas_cost > 0:
+                    gas_cost_eth = gas_cost / 10**18
+                    gas_value_eur = gas_cost_eth * native_price_eur
+        except Exception as e:
+            logger.warning(f"Could not calculate gas info for Safe deployment: {e}")
+
+        # Get native currency symbol for this chain
+        from iwa.core.chain import ChainInterfaces
+        chain_interface = ChainInterfaces().get(chain_name)
+        native_symbol = chain_interface.chain.native_currency
+
         log_transaction(
             tx_hash=tx_hash,
             from_addr=deployer_account.address,
             to_addr=contract_address,
-            token="Native",
+            token=native_symbol,
             amount_wei=0,
             chain=chain_name,
             from_tag=resolved_from_tag or deployer_tag_or_address,
             to_tag=tag,
+            gas_cost=gas_cost,
+            gas_value_eur=gas_value_eur,
             tags=["safe-deployment"],
         )
 

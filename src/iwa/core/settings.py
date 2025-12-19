@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     tenderly_olas_funds: float = 100000.0
 
     web_enabled: bool = False
-    web_port: int = 8000
+    web_port: int = 8080
 
     model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
 

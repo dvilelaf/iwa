@@ -1,5 +1,6 @@
 """Wallet module."""
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Tuple
 
 from iwa.core.chain import SupportedChain
@@ -61,21 +62,32 @@ class Wallet:
         accounts_data = self.account_service.get_account_data()
         token_names = token_names or []
 
-        token_balances = (
-            {
-                account_address: {
-                    token_name: self.balance_service.get_erc20_balance_eth(
-                        account_address, token_name, chain_name
-                    )
-                    if token_name != "native"
-                    else self.balance_service.get_native_balance_eth(account_address, chain_name)
-                    for token_name in token_names
-                }
-                for account_address in accounts_data.keys()
-            }
-            if token_names
-            else None
-        )
+        if not token_names:
+            return accounts_data, None
+
+        token_balances = {addr: {} for addr in accounts_data.keys()}
+
+        def fetch_balance(addr, t_name):
+            try:
+                if t_name == "native":
+                    return addr, t_name, self.balance_service.get_native_balance_eth(addr, chain_name)
+                else:
+                    return addr, t_name, self.balance_service.get_erc20_balance_eth(addr, t_name, chain_name)
+            except Exception as e:
+                logger.error(f"Error fetching {t_name} balance for {addr}: {e}")
+                return addr, t_name, 0.0
+
+        # Use ThreadPoolExecutor for parallel balance fetching
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            tasks = []
+            for addr in accounts_data.keys():
+                for t_name in token_names:
+                    tasks.append(executor.submit(fetch_balance, addr, t_name))
+
+            for future in tasks:
+                addr, t_name, bal = future.result()
+                token_balances[addr][t_name] = bal
+
         return accounts_data, token_balances
 
     def send_native_transfer(

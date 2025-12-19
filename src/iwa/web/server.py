@@ -7,9 +7,9 @@ import time
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel, field_validator
@@ -18,16 +18,27 @@ from iwa.core.chain import ChainInterfaces
 from iwa.core.db import SentTransaction
 from iwa.core.wallet import Wallet
 
+WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD")
+
 app = FastAPI(title="Iwa Web Interface")
 
-# CORS middleware - restrict to same origin for security
-# In localhost-only mode this provides basic protection
+async def verify_auth(request: Request):
+    if WEBUI_PASSWORD:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        token = auth_header.split(" ")[1]
+        if token != WEBUI_PASSWORD:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    return True
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows same-origin requests
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -83,11 +94,20 @@ class TransactionRequest(BaseModel):
             raise ValueError("Amount too large")
         return v
 
-    @field_validator("chain", "token")
+    @field_validator("chain")
     @classmethod
-    def validate_chain_token(cls, v: str) -> str:
-        """Validate chain/token is alphanumeric."""
+    def validate_chain(cls, v: str) -> str:
+        """Validate chain is alphanumeric."""
         v = v.strip().lower()
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Must be alphanumeric")
+        return v
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, v: str) -> str:
+        """Validate token is alphanumeric (preserve case for token names)."""
+        v = v.strip()
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Must be alphanumeric")
         return v
@@ -114,8 +134,17 @@ class AccountCreateRequest(BaseModel):
             raise ValueError("Tag too long (max 50 characters)")
         return v
 
+
+class SafeCreateRequest(BaseModel):
+    """Request to create a new Safe."""
+
+    tag: str
+    owners: list[str]
+    threshold: int
+    chains: list[str]
+
 @app.get("/", response_class=HTMLResponse)
-async def read_index():
+def read_index():
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r") as f:
@@ -123,50 +152,73 @@ async def read_index():
     return "<h1>Iwa Web Terminal</h1><p>Static files not found yet.</p>"
 
 @app.get("/api/state")
-async def get_state():
+def get_state():
     chains = [name for name, _ in ChainInterfaces().items()]
     tokens = {}
+    native_currencies = {}
     for chain in chains:
         interface = ChainInterfaces().get(chain)
         if interface:
             tokens[chain] = list(interface.tokens.keys())
+            native_currencies[chain] = interface.chain.native_currency
     return {
         "chains": chains,
         "tokens": tokens,
+        "native_currencies": native_currencies,
         "default_chain": "gnosis"
     }
 
 @app.get("/api/accounts")
-async def get_accounts(chain: str = "gnosis"):
-    # Ensure chain is lowercase
+def get_accounts(chain: str = "gnosis", tokens: str = "", auth: bool = Depends(verify_auth)):
+    """Get accounts with optional token balances.
+
+    Args:
+        chain: Chain name
+        tokens: Comma-separated list of token names to fetch balances for (e.g. "native,OLAS")
+    """
     chain = chain.lower()
 
-    # We need to make sure we fetch balances for tokens
+    # Get chain interface
     interface = ChainInterfaces().get(chain)
-    token_names = list(interface.tokens.keys()) if interface else []
+    requested_tokens = [t.strip() for t in tokens.split(",") if t.strip()] if tokens else []
 
-    # Fetch data from wallet service
-    accounts_data, token_balances = wallet.get_accounts_balances(chain, token_names)
+    # Fetch account data (without balances first)
+    accounts_data = wallet.account_service.get_account_data()
+
+    # Fetch balances only for requested tokens
+    token_balances = None
+    if requested_tokens:
+        _, token_balances = wallet.get_accounts_balances(chain, requested_tokens)
 
     result = []
-    for addr, data in accounts_data.items():
-        acct_balances = {
-            "native": data["native"],
-        }
-        # Safely get token balances
-        for t in token_names:
-            acct_balances[t] = token_balances.get(addr, {}).get(t, "0.0000")
+    for addr, acct in accounts_data.items():
+        if hasattr(acct, "chains"):
+            if chain not in acct.chains:
+                continue
+            acct_type = "Safe"
+        else:
+            acct_type = "EOA"
+
+        acct_balances = {}
+        # Only include balances for requested tokens
+        for t in requested_tokens:
+            if t == "native":
+                bal = wallet.get_native_balance_eth(addr, chain)
+                acct_balances["native"] = f"{bal:.4f}" if bal is not None else None
+            else:
+                bal = token_balances.get(addr, {}).get(t) if token_balances else None
+                acct_balances[t] = f"{bal:.4f}" if bal is not None else None
 
         result.append({
-            "tag": data["tag"],
+            "tag": acct.tag,
             "address": addr,
-            "type": data["type"],
+            "type": acct_type,
             "balances": acct_balances
         })
     return result
 
 @app.get("/api/transactions")
-async def get_transactions(chain: str = "gnosis"):
+def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
     chain = chain.lower()
     recent = (
         SentTransaction.select()
@@ -199,19 +251,18 @@ async def get_transactions(chain: str = "gnosis"):
     return result
 
 @app.get("/api/rpc-status")
-async def get_rpc_status():
+def get_rpc_status(auth: bool = Depends(verify_auth)):
     status = {}
     for chain_name, interface in ChainInterfaces().items():
-        if interface.chain.rpc:
+        if interface.chain.rpcs:
             try:
                 start_time = time.time()
-                block = interface.w3.eth.block_number
+                block = interface.web3.eth.block_number
                 latency = int((time.time() - start_time) * 1000)
                 status[chain_name] = {
                     "status": "online",
                     "block": block,
-                    "latency": f"{latency}ms",
-                    "url": _obscure_url(interface.chain.rpc[0]) if interface.chain.rpc else "N/A"
+                    "latency": f"{latency}ms"
                 }
             except Exception as e:
                 status[chain_name] = {"status": "offline", "error": str(e)}
@@ -220,7 +271,7 @@ async def get_rpc_status():
     return status
 
 @app.post("/api/send")
-async def send_transaction(req: TransactionRequest):
+def send_transaction(req: TransactionRequest, auth: bool = Depends(verify_auth)):
     try:
         tx_hash = wallet.send(
             from_address_or_tag=req.from_address,
@@ -234,13 +285,247 @@ async def send_transaction(req: TransactionRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/accounts/eoa")
-async def create_eoa(req: AccountCreateRequest):
+def create_eoa(req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
     try:
         wallet.key_storage.create_account(req.tag)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-def run_server(host: str = "127.0.0.1", port: int = 8000):
+@app.post("/api/accounts/safe")
+def create_safe(req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
+    try:
+        # We use a timestamp-based salt to avoid collisions
+        import time
+        salt_nonce = int(time.time() * 1000)
+
+        # Deploy on all requested chains
+        for chain_name in req.chains:
+            wallet.safe_service.create_safe(
+                "master", # WebUI uses master as deployer by default
+                req.owners,
+                req.threshold,
+                chain_name,
+                req.tag,
+                salt_nonce
+            )
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error creating Safe: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class SwapRequest(BaseModel):
+    """Request to swap tokens via CowSwap."""
+
+    account: str
+    sell_token: str
+    buy_token: str
+    amount: float
+    order_type: str  # "sell" or "buy"
+    chain: str = "gnosis"
+
+    @field_validator("order_type")
+    @classmethod
+    def validate_order_type(cls, v: str) -> str:
+        """Validate order type."""
+        v = v.strip().lower()
+        if v not in ("sell", "buy"):
+            raise ValueError("Order type must be 'sell' or 'buy'")
+        return v
+
+
+@app.post("/api/swap")
+async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
+    """Execute a token swap via CowSwap."""
+    try:
+        from iwa.plugins.gnosis.cow import OrderType
+
+        order_type = OrderType.SELL if req.order_type == "sell" else OrderType.BUY
+
+        success = await wallet.transfer_service.swap(
+            account_address_or_tag=req.account,
+            amount_eth=req.amount,
+            sell_token_name=req.sell_token,
+            buy_token_name=req.buy_token,
+            chain_name=req.chain,
+            order_type=order_type,
+        )
+
+        if success:
+            return {"status": "success", "message": "Swap order placed and executed"}
+        else:
+            return {"status": "pending", "message": "Swap order placed, waiting for execution"}
+    except Exception as e:
+        logger.error(f"Error swapping tokens: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/swap/quote")
+def get_swap_quote(
+    account: str,
+    sell_token: str,
+    buy_token: str,
+    amount: float,
+    mode: str = "sell",
+    chain: str = "gnosis",
+    auth: bool = Depends(verify_auth)
+):
+    """Get a quote for a swap.
+
+    For sell mode: given sell amount, returns expected buy amount.
+    For buy mode: given buy amount, returns required sell amount.
+    """
+    try:
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        from web3 import Web3
+
+        from iwa.core.chain import ChainInterfaces
+        from iwa.plugins.gnosis.cow import CowSwap
+
+        amount_wei = Web3.to_wei(amount, "ether")
+
+        chain_obj = ChainInterfaces().get(chain).chain
+        account_obj = wallet.account_service.resolve_account(account)
+        signer = wallet.key_storage.get_signer(account_obj.address)
+
+        if not signer:
+            raise HTTPException(status_code=400, detail="Could not get signer for account")
+
+        def run_async_quote():
+            """Run the async CowSwap quote in a new event loop."""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                cow = CowSwap(private_key_or_signer=signer, chain=chain_obj)
+                if mode == "sell":
+                    # Get buy amount for given sell amount
+                    return loop.run_until_complete(
+                        cow.get_max_buy_amount_wei(
+                            amount_wei,
+                            chain_obj.get_token_address(sell_token),
+                            chain_obj.get_token_address(buy_token),
+                        )
+                    )
+                else:
+                    # Get sell amount for given buy amount
+                    return loop.run_until_complete(
+                        cow.get_max_sell_amount_wei(
+                            amount_wei,
+                            chain_obj.get_token_address(sell_token),
+                            chain_obj.get_token_address(buy_token),
+                        )
+                    )
+            finally:
+                loop.close()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_async_quote)
+            result_wei = future.result(timeout=30)
+
+        result_eth = float(Web3.from_wei(result_wei, "ether"))
+        return {"amount": result_eth, "mode": mode}
+
+    except Exception as e:
+        error_msg = str(e)
+        if "NoLiquidity" in error_msg or "no route found" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="No liquidity available for this token pair."
+            )
+        logger.error(f"Error getting swap quote: {e}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+
+@app.get("/api/swap/max-amount")
+def get_swap_max_amount(
+    account: str,
+    sell_token: str,
+    buy_token: str,
+    mode: str = "sell",
+    chain: str = "gnosis",
+    auth: bool = Depends(verify_auth)
+):
+    """Get the maximum amount for a swap.
+
+    For sell mode: returns the account's balance of the sell token.
+    For buy mode: calculates max buy amount using CowSwap quote API.
+    """
+    try:
+        from web3 import Web3
+
+        # Get the sell token balance
+        sell_balance = wallet.balance_service.get_erc20_balance_wei(account, sell_token, chain)
+        if sell_balance is None or sell_balance == 0:
+            return {"max_amount": 0.0, "mode": mode}
+
+        sell_balance_eth = float(Web3.from_wei(sell_balance, "ether"))
+
+        if mode == "sell":
+            return {"max_amount": sell_balance_eth, "mode": "sell"}
+
+        # For buy mode, use CowSwap to get quote in a separate thread
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        from iwa.core.chain import ChainInterfaces
+        from iwa.plugins.gnosis.cow import CowSwap
+
+        chain_obj = ChainInterfaces().get(chain).chain
+        account_obj = wallet.account_service.resolve_account(account)
+        signer = wallet.key_storage.get_signer(account_obj.address)
+
+        if not signer:
+            raise HTTPException(status_code=400, detail="Could not get signer for account")
+
+        def run_async_quote():
+            """Run the async CowSwap quote in a new event loop."""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                cow = CowSwap(private_key_or_signer=signer, chain=chain_obj)
+                return loop.run_until_complete(
+                    cow.get_max_buy_amount_wei(
+                        sell_balance,
+                        chain_obj.get_token_address(sell_token),
+                        chain_obj.get_token_address(buy_token),
+                    )
+                )
+            finally:
+                loop.close()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_async_quote)
+            max_buy_wei = future.result(timeout=30)
+
+        max_buy_eth = float(Web3.from_wei(max_buy_wei, "ether"))
+        return {"max_amount": max_buy_eth, "mode": "buy", "sell_balance": sell_balance_eth}
+
+    except Exception as e:
+        error_msg = str(e)
+        # Handle common CowSwap errors with clearer messages
+        if "NoLiquidity" in error_msg or "no route found" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="No liquidity available for this token pair. Try a different pair."
+            )
+        logger.error(f"Error getting max swap amount: {e}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+def run_server(host: str = "127.0.0.1", port: int = 8080):
+    import signal
+    import sys
+
     import uvicorn
+
+    def signal_handler(sig, frame):
+        """Handle Ctrl+C gracefully."""
+        logger.info("Shutting down server...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     uvicorn.run(app, host=host, port=port)
