@@ -6,13 +6,14 @@ from typing import Dict, Optional
 
 from web3 import Web3
 
-from iwa.core.constants import ABI_PATH
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.constants import (
     DEFAULT_DEPLOY_PAYLOAD,
     DEFAULT_FALLBACK_HANDLER,
     MULTISIG_IMPLEMENTATION_ADDRESS,
 )
+from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
+
 
 
 def get_deployment_payload(fallback_handler: Optional[str] = None) -> str:
@@ -40,7 +41,7 @@ class ServiceRegistryContract(ContractInstance):
     """Class to interact with the service registry contract."""
 
     name = "service_registry"
-    abi_path = ABI_PATH / "service_registry.json"
+    abi_path = OLAS_ABI_PATH / "service_registry.json"
 
     def get_service(self, service_id: int) -> Dict:
         """Get the IDs of all registered services."""
@@ -83,7 +84,7 @@ class ServiceManagerContract(ContractInstance):
     """Class to interact with the service manager contract."""
 
     name = "service_manager"
-    abi_path = ABI_PATH / "service_manager.json"
+    abi_path = OLAS_ABI_PATH / "service_manager.json"
 
     def prepare_create_tx(
         self,
@@ -115,13 +116,13 @@ class ServiceManagerContract(ContractInstance):
         service_id: int,
     ) -> Optional[Dict]:
         """Activate registration for a service."""
+        # Note: activateRegistration is payable; value goes in tx_params
         tx = self.prepare_transaction(
             method_name="activateRegistration",
             method_kwargs={
                 "serviceId": service_id,
-                "value": Web3.to_wei(1, "wei"),
             },
-            tx_params={"from": from_address},
+            tx_params={"from": from_address, "value": Web3.to_wei(1, "wei")},
         )
         return tx
 
@@ -133,15 +134,15 @@ class ServiceManagerContract(ContractInstance):
         agent_ids: list,
     ) -> Optional[Dict]:
         """Register agents for a service."""
+        # Note: registerAgents is payable; value goes in tx_params
         tx = self.prepare_transaction(
             method_name="registerAgents",
             method_kwargs={
                 "serviceId": service_id,
                 "agentInstances": agent_instances,
                 "agentIds": agent_ids,
-                "value": Web3.to_wei(1, "wei"),
             },
-            tx_params={"from": from_address},
+            tx_params={"from": from_address, "value": Web3.to_wei(1, "wei")},
         )
         return tx
 

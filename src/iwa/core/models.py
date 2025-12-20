@@ -98,7 +98,7 @@ class StorableModel(BaseModel):
 
         path = path.with_suffix(".toml")
 
-        with path.open("w", encoding="utf-8") as f:
+        with path.open("wb") as f:
             tomli_w.dump(self.model_dump(exclude_none=True), f)
         self._storage_format = "toml"
         self._path = path
@@ -192,10 +192,98 @@ class StorableModel(BaseModel):
 
 @singleton
 class Config(StorableModel):
-    """Config"""
+    """Config with auto-loading and plugin support."""
 
     core: Optional[CoreConfig] = None
-    plugins: Optional[Dict[str, BaseModel]] = None
+    plugins: Dict[str, BaseModel] = Field(default_factory=dict)
+
+    _initialized: bool = PrivateAttr(default=False)
+    _plugin_models: Dict[str, type] = PrivateAttr(default_factory=dict)
+
+    def model_post_init(self, __context) -> None:
+        """Load config from file after initialization."""
+        if not self._initialized:
+            self._try_load()
+            self._initialized = True
+
+    def _try_load(self) -> None:
+        """Try to load from config.toml if exists."""
+        from iwa.core.constants import CONFIG_PATH
+
+        if CONFIG_PATH.exists():
+            try:
+                with CONFIG_PATH.open("rb") as f:
+                    import tomli
+
+                    data = tomli.load(f)
+
+                # Load core config
+                if "core" in data:
+                    self.core = CoreConfig(**data["core"])
+
+                # Load plugin configs - will be hydrated when plugins register
+                if "plugins" in data:
+                    for plugin_name, plugin_data in data["plugins"].items():
+                        # Store raw data until plugin model is registered
+                        if plugin_name in self._plugin_models:
+                            self.plugins[plugin_name] = self._plugin_models[plugin_name](
+                                **plugin_data
+                            )
+                        else:
+                            # Store as dict temporarily, will hydrate on register
+                            self.plugins[plugin_name] = plugin_data
+
+                self._path = CONFIG_PATH
+                self._storage_format = "toml"
+            except Exception as e:
+                from loguru import logger
+
+                logger.warning(f"Failed to load config from {CONFIG_PATH}: {e}")
+
+    def register_plugin_config(self, plugin_name: str, model_class: type) -> None:
+        """Register a plugin's config model class.
+
+        If raw data was loaded for this plugin, it will be hydrated into the model.
+        """
+        self._plugin_models[plugin_name] = model_class
+
+        # Hydrate any raw data that was loaded
+        if plugin_name in self.plugins:
+            current = self.plugins[plugin_name]
+            if isinstance(current, dict):
+                self.plugins[plugin_name] = model_class(**current)
+        else:
+            # Create default config for plugin
+            self.plugins[plugin_name] = model_class()
+
+    def save_config(self) -> None:
+        """Persist current config to config.toml."""
+        from iwa.core.constants import CONFIG_PATH
+
+        # Convert plugins to serializable format (exclude_none=True for TOML compatibility)
+        data = {"plugins": {}}
+
+        if self.core:
+            data["core"] = self.core.model_dump(exclude_none=True)
+
+        for plugin_name, plugin_config in self.plugins.items():
+            if isinstance(plugin_config, BaseModel):
+                data["plugins"][plugin_name] = plugin_config.model_dump(exclude_none=True)
+            elif isinstance(plugin_config, dict):
+                data["plugins"][plugin_name] = plugin_config
+
+        with CONFIG_PATH.open("wb") as f:
+            import tomli_w
+
+            tomli_w.dump(data, f)
+
+        self._path = CONFIG_PATH
+        self._storage_format = "toml"
+
+    def get_plugin_config(self, plugin_name: str) -> Optional[BaseModel]:
+        """Get a plugin's configuration."""
+        return self.plugins.get(plugin_name)
+
 
 
 class Token(BaseModel):

@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
-from iwa.core.constants import ABI_PATH
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.contracts.activity_checker import ActivityCheckerContract
+from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
 
 class StakingState(Enum):
@@ -23,7 +23,7 @@ class StakingContract(ContractInstance):
     """Class to interact with the staking contract."""
 
     name = "staking"
-    abi_path = ABI_PATH / "staking.json"
+    abi_path = OLAS_ABI_PATH / "staking.json"
 
     def __init__(self, address: str):
         """Initialize StakingContract."""

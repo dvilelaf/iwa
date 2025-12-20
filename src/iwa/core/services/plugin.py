@@ -38,7 +38,10 @@ class PluginService:
 
     def _load_plugins(self) -> None:
         """Load all discovered plugins."""
+        from iwa.core.models import Config
+
         plugin_names = self._discover_plugins()
+        config = Config()
 
         for name in plugin_names:
             if name in self.loaded_plugins:
@@ -59,6 +62,12 @@ class PluginService:
                                     f"Plugin name collision: {plugin_instance.name}. Skipping."
                                 )
                                 continue
+
+                            # Register plugin's config model if it has one
+                            if plugin_instance.config_model:
+                                config.register_plugin_config(
+                                    plugin_instance.name, plugin_instance.config_model
+                                )
 
                             self.loaded_plugins[plugin_instance.name] = plugin_instance
                             plugin_instance.on_load()

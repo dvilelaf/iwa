@@ -13,8 +13,8 @@ from iwa.plugins.olas.service_manager import ServiceManager
 def mock_wallet():
     """Mock wallet for testing."""
     wallet = MagicMock()
-    wallet.master_account.address = "0xMaster"
-    wallet.key_storage.get_account.return_value.address = "0xOwner"
+    wallet.master_account.address = "0x1234567890123456789012345678901234567890"
+    wallet.key_storage.get_account.return_value.address = "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     wallet.sign_and_send_transaction.return_value = (True, {"status": 1})
     wallet.send.return_value = (True, {"status": 1})
     return wallet
@@ -24,10 +24,14 @@ def mock_wallet():
 def mock_config():
     """Mock config for testing."""
     config = MagicMock()
-    config.plugins = {"olas": MagicMock()}
-    config.plugins["olas"].services.service_id = 1
-    config.plugins["olas"].chain_name = "gnosis"
+    olas_config = MagicMock()
+    olas_config.services = {}
+    olas_config.active_service_key = None
+    olas_config.get_active_service.return_value = None
+    config.plugins = {"olas": olas_config}
+    config.save_config = MagicMock()
     return config
+
 
 
 @patch("iwa.plugins.olas.service_manager.Config")
@@ -38,11 +42,14 @@ def test_create_service_success(
     mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test successful service creation."""
-    # Setup Config
+    # Setup Config with new OlasConfig structure
     mock_config_inst = mock_config_cls.return_value
-    mock_config_inst.plugins = {"olas": MagicMock()}
-    mock_olas_config = mock_config_inst.plugins["olas"]
-    mock_olas_config.chain_name = "gnosis"
+    mock_olas_config = MagicMock()
+    mock_olas_config.services = {}
+    mock_olas_config.active_service_key = None
+    mock_olas_config.get_active_service.return_value = None
+    mock_config_inst.plugins = {"olas": mock_olas_config}
+    mock_config_inst.save_config = MagicMock()
 
     # Setup Registry to return event
     mock_registry_inst = mock_registry_contract.return_value
@@ -55,13 +62,16 @@ def test_create_service_success(
 
     # Patch ChainInterfaces
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_chains:
-        mock_chains.return_value.get.return_value.chain.get_token_address.return_value = "0xToken"
+        mock_chains.return_value.get.return_value.chain.get_token_address.return_value = None
 
         # Call create
         service_id = manager.create(bond_amount=10)
 
         assert service_id == 123
-        assert mock_olas_config.service_id == 123
+        # Verify add_service was called
+        mock_olas_config.add_service.assert_called_once()
+        # Verify config was saved
+        mock_config_inst.save_config.assert_called_once()
 
 
 @patch("iwa.plugins.olas.service_manager.Config")
@@ -211,10 +221,18 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
 def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service deployment."""
-    mock_config_inst = mock_config_cls.return_value
+    # Setup mock service
+    mock_service = MagicMock()
+    mock_service.service_id = 123
+    mock_service.chain_name = "gnosis"
+    mock_service.multisig_address = None
+
     mock_olas_config = MagicMock()
-    mock_olas_config.service_id = 123
+    mock_olas_config.get_active_service.return_value = mock_service
+
+    mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
+    mock_config_inst.save_config = MagicMock()
 
     mock_registry_inst = mock_registry_contract.return_value
     mock_registry_inst.get_service.return_value = {"state": ServiceState.FINISHED_REGISTRATION}
@@ -227,7 +245,8 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
 
     multisig = manager.deploy()
     assert multisig == "0xMultisig"
-    assert mock_olas_config.multisig_address == "0xMultisig"
+    assert manager.service.multisig_address == "0xMultisig"
+    mock_config_inst.save_config.assert_called()
 
     # Failures
     # 1. Wrong state
@@ -249,16 +268,24 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     assert manager.deploy() is None
 
 
+
 @patch("iwa.plugins.olas.service_manager.Config")
 @patch("iwa.plugins.olas.service_manager.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.ServiceManagerContract")
 def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service termination."""
-    mock_config_inst = mock_config_cls.return_value
+    # Setup mock service
+    mock_service = MagicMock()
+    mock_service.service_id = 123
+    mock_service.chain_name = "gnosis"
+    mock_service.staking_contract_address = None  # Not staked
+
     mock_olas_config = MagicMock()
-    mock_olas_config.service_id = 123
-    mock_olas_config.staking_contract_address = None  # Not staked
+    mock_olas_config.get_active_service.return_value = mock_service
+
+    mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
+    mock_config_inst.save_config = MagicMock()
 
     mock_registry_inst = mock_registry_contract.return_value
     mock_registry_inst.get_service.return_value = {"state": ServiceState.DEPLOYED}
@@ -276,9 +303,9 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
 
     # 2. Staked
     mock_registry_inst.get_service.return_value = {"state": ServiceState.DEPLOYED}
-    mock_olas_config.staking_contract_address = "0xStaked"
+    manager.service.staking_contract_address = "0xStaked"
     assert manager.terminate() is False
-    mock_olas_config.staking_contract_address = None
+    manager.service.staking_contract_address = None
 
     # 3. Tx fail
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
@@ -296,11 +323,18 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
 @patch("iwa.plugins.olas.service_manager.ERC20Contract")  # For checking balance
 def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service staking."""
-    mock_config_inst = mock_config_cls.return_value
+    # Setup mock service
+    mock_service = MagicMock()
+    mock_service.service_id = 123
+    mock_service.chain_name = "gnosis"
+    mock_service.staking_contract_address = None
+
     mock_olas_config = MagicMock()
-    mock_olas_config.service_id = 123
-    mock_olas_config.chain_name = "gnosis"
+    mock_olas_config.get_active_service.return_value = mock_service
+
+    mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
+    mock_config_inst.save_config = MagicMock()
 
     mock_registry_inst = mock_registry_contract.return_value
     mock_registry_inst.get_service.return_value = {"state": ServiceState.DEPLOYED}
@@ -323,7 +357,8 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
 
     success = manager.stake(mock_staking)
     assert success is True
-    assert mock_olas_config.staking_contract_address == "0xStaking"
+    assert manager.service.staking_contract_address == "0xStaking"
+    mock_config_inst.save_config.assert_called()
 
     # Failures
     # 1. State not deployed
@@ -360,3 +395,4 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
     mock_staking.extract_events.return_value = [{"name": "ServiceStaked"}]
     mock_staking.get_staking_state.return_value = StakingState.NOT_STAKED
     assert manager.stake(mock_staking) is False
+
