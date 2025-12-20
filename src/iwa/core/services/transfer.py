@@ -623,7 +623,7 @@ class TransferService:
         token_address_or_name: str,
         amount_wei: int,
         chain_name: str = "gnosis",
-    ):
+    ) -> bool:
         """Approve ERC20 token allowance."""
         owner_account = self.account_service.resolve_account(owner_address_or_tag)
         spender_account = self.account_service.resolve_account(spender_address_or_tag)
@@ -631,7 +631,7 @@ class TransferService:
 
         if not owner_account:
             logger.error(f"Owner account '{owner_address_or_tag}' not found in wallet.")
-            return None
+            return False
 
         chain_interface = ChainInterfaces().get(chain_name)
 
@@ -639,7 +639,7 @@ class TransferService:
             token_address_or_name, chain_interface.chain
         )
         if not token_address:
-            return
+            return False
 
         erc20 = ERC20Contract(token_address, chain_name)
 
@@ -651,7 +651,7 @@ class TransferService:
         )
         if allowance_wei is not None and allowance_wei >= amount_wei:
             logger.info("Current allowance is sufficient. No need to approve.")
-            return
+            return True
 
         transaction = erc20.prepare_approve_tx(
             from_address=owner_account.address,
@@ -659,7 +659,7 @@ class TransferService:
             amount_wei=amount_wei,
         )
         if not transaction:
-            return
+            return False
 
         is_safe = isinstance(owner_account, StoredSafeAccount)
         amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
@@ -669,15 +669,17 @@ class TransferService:
         )
 
         if is_safe:
-            self.safe_service.execute_safe_transaction(
+            tx_limit = self.safe_service.execute_safe_transaction(
                 safe_address_or_tag=owner_address_or_tag,
                 to=erc20.address,
                 value=0,
                 chain_name=chain_name,
                 data=transaction["data"],
             )
+            return bool(tx_limit)
         else:
-            self.transaction_service.sign_and_send(transaction, owner_address_or_tag, chain_name)
+            success, _ = self.transaction_service.sign_and_send(transaction, owner_address_or_tag, chain_name)
+            return success
 
     def transfer_from_erc20(
         self,

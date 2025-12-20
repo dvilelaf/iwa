@@ -64,6 +64,10 @@ class ServiceRegistryContract(ContractInstance):
             "agent_ids": agent_ids,
         }
 
+    def get_token(self, service_id: int) -> str:
+        """Get the token address for a service."""
+        return self.call("token", service_id)
+
     def prepare_approve_tx(
         self,
         from_address: str,
@@ -112,15 +116,15 @@ class ServiceManagerContract(ContractInstance):
         self,
         from_address: str,
         service_id: int,
+        value: int = 1,
     ) -> Optional[Dict]:
         """Activate registration for a service."""
-        # Note: activateRegistration is payable; value goes in tx_params
         tx = self.prepare_transaction(
             method_name="activateRegistration",
             method_kwargs={
                 "serviceId": service_id,
             },
-            tx_params={"from": from_address, "value": Web3.to_wei(1, "wei")},
+            tx_params={"from": from_address, "value": value},
         )
         return tx
 
@@ -130,9 +134,9 @@ class ServiceManagerContract(ContractInstance):
         service_id: int,
         agent_instances: list,
         agent_ids: list,
+        value: int = 1,
     ) -> Optional[Dict]:
         """Register agents for a service."""
-        # Note: registerAgents is payable; value goes in tx_params
         tx = self.prepare_transaction(
             method_name="registerAgents",
             method_kwargs={
@@ -140,7 +144,7 @@ class ServiceManagerContract(ContractInstance):
                 "agentInstances": agent_instances,
                 "agentIds": agent_ids,
             },
-            tx_params={"from": from_address, "value": Web3.to_wei(1, "wei")},
+            tx_params={"from": from_address, "value": value},
         )
         return tx
 

@@ -12,6 +12,7 @@ from iwa.core.utils import configure_logger
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
+    OLAS_TRADER_STAKING_CONTRACTS,
     TRADER_CONFIG_HASH,
     AgentType,
 )
@@ -20,6 +21,8 @@ from iwa.plugins.olas.contracts.service import (
     ServiceRegistryContract,
     ServiceState,
 )
+from iwa.plugins.olas.contracts.mech import MechContract
+from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 from iwa.plugins.olas.contracts.staking import StakingState
 from iwa.plugins.olas.models import OlasConfig, Service
 
@@ -58,6 +61,9 @@ class ServiceManager:
         chain_name = self.service.chain_name if self.service else "gnosis"
         self._init_contracts(chain_name)
 
+        # Initialize TransferService from wallet
+        self.transfer_service = self.wallet.transfer_service
+
     def _init_contracts(self, chain_name: str) -> None:
         """Initialize contracts for the given chain."""
         chain_interface = ChainInterfaces().get(chain_name)
@@ -72,6 +78,7 @@ class ServiceManager:
 
         self.registry = ServiceRegistryContract(registry_address, chain_name=chain_name)
         self.manager = ServiceManagerContract(manager_address, chain_name=chain_name)
+        self.chain_interface = chain_interface
         self.chain_name = chain_interface.chain.name.lower()
 
     def _save_config(self) -> None:
@@ -126,7 +133,11 @@ class ServiceManager:
         token_address = chain.get_token_address(token_address_or_tag)
 
         # Create agent_params: [[instances_per_agent, bond_amount], ...]
-        agent_params = [[1, bond_amount] for _ in agent_id_values]
+        # agent_params = [[1, bond_amount] for _ in agent_id_values]
+        # Use dictionary for explicit struct encoding
+        agent_params = [{"slots": 1, "bond": bond_amount} for _ in agent_id_values]
+
+        print(f"DEBUG: ServiceManager.create bond_amount={bond_amount} agent_params={agent_params}")
 
         create_tx = self.manager.prepare_create_tx(
             from_address=self.wallet.master_account.address,
@@ -137,6 +148,9 @@ class ServiceManager:
             agent_params=agent_params,
             threshold=1,
         )
+
+        print(f"DEBUG: ServiceManager.create token_address={token_address if token_address else NATIVE_CURRENCY_ADDRESS}")
+        print(f"DEBUG: ServiceManager.create tx_data={create_tx.get('data')}")
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=create_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -159,17 +173,18 @@ class ServiceManager:
                 logger.info(f"Service created with ID: {service_id}")
                 break
 
-        if service_id is None:
-            logger.error("Service creation event not found")
+        if not service_id:
+            logger.error("Service creation event not found or service ID not in event")
             return None
 
-        # Create Service model and add to config
+        # Create service model
         new_service = Service(
             service_name=service_name or f"service_{service_id}",
             chain_name=chain_name,
             service_id=service_id,
-            agent_ids=agent_id_values,
+            agent_ids=[int(a) for a in agent_ids],
             service_owner_address=service_owner_account.address,
+            token_address=token_address,
         )
 
         self.olas_config.add_service(new_service)
@@ -191,41 +206,53 @@ class ServiceManager:
 
         if not utility_address:
             logger.error(f"OLAS Service Registry Token Utility not found for chain: {chain_name}")
-            return False
+            return service_id # Return service_id anyway, but log error (or should we fail?)
 
-        # Approve the token utility to move tokens
-        approve_tx = erc20_contract.prepare_approve_tx(
-            from_address=self.wallet.master_account.address,
-            spender=utility_address,
-            amount_wei=bond_amount,
-        )
-
-        logger.info("Approving OLAS token for staking contract")
-        success, receipt = self.wallet.sign_and_send_transaction(
-            transaction=approve_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+        # Approve the token utility to move tokens (2 * bond amount as per Triton reference)
+        logger.info(f"Approving Token Utility {utility_address} for {2 * bond_amount} tokens")
+        approve_success = self.transfer_service.approve_erc20(
+            owner_address_or_tag=service_owner_account.address,
+            spender_address_or_tag=utility_address,
+            token_address_or_name=token_address,
+            amount_wei=2 * bond_amount,
             chain_name=chain_name,
         )
 
-        if not success:
-            logger.error("Failed to approve staking contract [ERC20]")
-            return False
-
-        logger.info("OLAS token approved for staking contract")
-
+        if not approve_success:
+            logger.error("Failed to approve Token Utility")
+            return service_id
         return service_id
 
 
     def activate_registration(self) -> bool:
         """Activate registration for the service."""
+        service_id = self.service.service_id
         # Check that the service is created
-        service_state = self.registry.get_service(self.service.service_id)["state"]
+        service_info = self.registry.get_service(service_id)
+        service_state = service_info["state"]
         if service_state != ServiceState.PRE_REGISTRATION:
             logger.error("Service is not created, cannot activate registration")
             return False
 
+        token_address = self.service.token_address
+        if not token_address:
+            try:
+                token_address = self.registry.get_token(service_id)
+            except Exception:
+                # Default to native if query fails
+                token_address = "0x0000000000000000000000000000000000000000"
+
+        security_deposit = service_info["security_deposit"]
+        is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
+
+        # Prepare activation transaction
+        # NOTE: For token-based services, we created an approval in create() for the bond amount.
+        # Here we only need to provide the 'security_deposit' (native value) which is typically 1 wei
+        # for token services, or the full bond for native services.
         activate_tx = self.manager.prepare_activate_registration_tx(
-            from_address=self.wallet.master_account.address, service_id=self.service.service_id
+            from_address=self.wallet.master_account.address,
+            service_id=service_id,
+            value=security_deposit,
         )
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
@@ -247,16 +274,16 @@ class ServiceManager:
 
         return True
 
-    def register_agent(self, agent_address: Optional[str] = None) -> bool:
+    def register_agent(self, agent_address: Optional[str] = None, bond_amount: Optional[int] = None) -> bool:
         """Register an agent for the service.
 
         Args:
             agent_address: Optional existing agent address to use.
                            If not provided, a new agent account will be created and funded.
+            bond_amount: The amount of tokens to bond for the agent. Required for token-bonded services.
 
         Returns:
             True if registration succeeded, False otherwise.
-
         """
         # Check that the service is in active registration
         service_state = self.registry.get_service(self.service.service_id)["state"]
@@ -293,11 +320,60 @@ class ServiceManager:
                 agent_account_address = agent_account.address
                 logger.info(f"Using existing agent account: {agent_account_address}")
         # Register the agent
+        service_id = self.service.service_id
+        service_info = self.registry.get_service(service_id)
+        token_address = self.service.token_address
+        if not token_address:
+            try:
+                token_address = self.registry.get_token(service_id)
+            except Exception:
+                token_address = "0x0000000000000000000000000000000000000000"
+
+        security_deposit = service_info["security_deposit"]
+        is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
+
+        if not is_native:
+            if not bond_amount:
+                logger.warning("No bond amount provided for token bonding. Agent might fail to bond.")
+            else:
+                # 1. Fund Agent with Bond Amount (Token)
+                logger.info(f"Funding agent {agent_account_address} with {bond_amount} of token {token_address}")
+                fund_success = self.wallet.transfer_service.send(
+                    from_address_or_tag=self.wallet.master_account.address,
+                    to_address_or_tag=agent_account_address,
+                    token_address_or_name=token_address,
+                    amount_wei=bond_amount,
+                    chain_name=self.service.chain_name
+                )
+                if not fund_success:
+                    logger.error("Failed to fund agent with bond tokens")
+                    return False
+
+                # 2. Agent Approves Token Utility
+                logger.info(f"Agent {agent_account_address} approving Token Utility for bond")
+                # Need to use agent account as signer. It's stored in key_storage.
+                # Wallet doesn't expose 'approve_erc20' with custom signer object directly?
+                # TransferService.approve_erc20 takes 'owner_address_or_tag'.
+                # Assuming 'agent_account_address' is recognized by wallet key_storage (it is, created there).
+                utility_address = str(OLAS_CONTRACTS[self.service.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"])
+
+                approve_success = self.wallet.transfer_service.approve_erc20(
+                    token_address_or_name=token_address,
+                    spender_address_or_tag=utility_address,
+                    amount_wei=bond_amount,
+                    owner_address_or_tag=agent_account_address,
+                    chain_name=self.service.chain_name
+                )
+                if not approve_success:
+                    logger.error("Failed to approve token for agent registration")
+                    return False
+
         register_tx = self.manager.prepare_register_agents_tx(
             from_address=self.wallet.master_account.address,
-            service_id=self.service.service_id,
+            service_id=service_id,
             agent_instances=[agent_account_address],
             agent_ids=self.service.agent_ids,
+            value=(security_deposit * len(self.service.agent_ids)),
         )
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=register_tx,
@@ -366,6 +442,27 @@ class ServiceManager:
 
         self.service.multisig_address = multisig_address
         self._save_config()
+
+        # Register multisig in wallet KeyStorage
+        try:
+            from iwa.core.models import StoredSafeAccount
+            _, agent_instances = self.registry.call("getAgentInstances", self.service.service_id)
+            service_info = self.registry.get_service(self.service.service_id)
+            threshold = service_info["threshold"]
+
+            safe_account = StoredSafeAccount(
+                tag=f"{self.service.service_name}_multisig",
+                address=multisig_address,
+                chains=[self.service.chain_name],
+                threshold=threshold,
+                signers=agent_instances,
+            )
+            self.wallet.key_storage.accounts[multisig_address] = safe_account
+            self.wallet.key_storage.save()
+            logger.info(f"Registered multisig {multisig_address} in wallet")
+        except Exception as e:
+            logger.warning(f"Failed to register multisig in wallet: {e}")
+
         logger.info("Service deployed successfully")
         return multisig_address
 
@@ -563,8 +660,10 @@ class ServiceManager:
 
     def spin_up(  # noqa: C901
         self,
-        staking_contract=None,
+        service_id: Optional[int] = None,
         agent_address: Optional[str] = None,
+        staking_contract=None,
+        bond_amount: Optional[int] = None,
     ) -> bool:
         """Spin up a service from PRE_REGISTRATION to DEPLOYED state.
 
@@ -611,7 +710,7 @@ class ServiceManager:
         # Step 2: Register agent if in ACTIVE_REGISTRATION
         if current_state == ServiceState.ACTIVE_REGISTRATION:
             logger.info("Registering agent...")
-            if not self.register_agent(agent_address=agent_address):
+            if not self.register_agent(agent_address=agent_address, bond_amount=bond_amount):
                 logger.error("Failed to register agent")
                 return False
 
@@ -674,14 +773,19 @@ class ServiceManager:
             True if service reached PRE_REGISTRATION, False otherwise.
 
         """
+        if not self.service:
+            logger.error("No active service")
+            return False
         service_id = self.service.service_id
         logger.info(f"Winding down service {service_id}")
 
-        # Get current state
+        # Get service state
         current_state = self.registry.get_service(service_id)["state"]
-        logger.info(f"Service {service_id} current state: {current_state.name}")
+        logger.info(f"Current service state: {current_state.name}")
 
-        # Already in target state
+        if current_state == ServiceState.NON_EXISTENT:
+            logger.error(f"Service {service_id} does not exist, cannot wind down")
+            return False
         if current_state == ServiceState.PRE_REGISTRATION:
             logger.info(f"Service {service_id} is already in PRE_REGISTRATION state")
             return True
@@ -741,3 +845,175 @@ class ServiceManager:
 
         logger.info(f"Service {service_id} wind down complete. State: {final_state.name}")
         return True
+
+    def send_mech_request(
+        self,
+        data: bytes,
+        value: Optional[int] = None,
+        mech_address: Optional[str] = None,
+        use_marketplace: bool = False,
+        use_new_abi: bool = False,
+        priority_mech: Optional[str] = None,
+        priority_mech_staking_instance: Optional[str] = None,
+        priority_mech_service_id: Optional[int] = None,
+        requester_staking_instance: Optional[str] = None,
+        response_timeout: int = 300,
+    ) -> Optional[str]:
+        """Send a Mech request from the service multisig.
+
+        Args:
+            data: The request data (IPFS hash bytes).
+            mech_address: Address of the Mech contract (for legacy/direct flow).
+            use_marketplace: Whether to use the Mech Marketplace flow.
+            priority_mech: Priority mech address (for marketplace).
+            priority_mech_staking_instance: Priority mech staking instance (for marketplace).
+            priority_mech_service_id: Priority mech service ID (for marketplace).
+            requester_staking_instance: Requester's staking instance (defaults to current).
+            response_timeout: Timeout for the marketplace request.
+            value: Payment value in wei.
+
+        Returns:
+            The transaction hash if successful, None otherwise.
+        """
+        service_id = self.service.service_id
+        multisig_address = self.service.multisig_address
+        if not multisig_address:
+            logger.error(f"Service {service_id} has no multisig address")
+            return None
+
+        if use_marketplace:
+            protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})
+            marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
+            if not marketplace_address:
+                logger.error("Mech Marketplace address not found for chain")
+                return None
+
+            marketplace = MechMarketplaceContract(marketplace_address, chain_name=self.chain_name)
+
+            # Use provided values or defaults
+            priority_mech = priority_mech or protocol_contracts.get("OLAS_MECH")
+
+            # requester_staking_instance defaults to the current service's staking contract
+            if not requester_staking_instance:
+                # Try to get it from self.staking_contract_address or OLAS_TRADER_STAKING_CONTRACTS
+                requester_staking_instance = self.service.staking_contract_address
+
+            if not requester_staking_instance:
+                from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+                staking_map = OLAS_TRADER_STAKING_CONTRACTS.get(self.chain_name, {})
+                if staking_map:
+                    # Use the first one (Expert) as a reasonable guess if not available
+                    requester_staking_instance = list(staking_map.values())[0]
+            if not priority_mech:
+                logger.error("Priority mech address not found")
+                return None
+
+            # requester_staking_instance defaults to the current service's staking contract
+            requester_staking_instance = (
+                requester_staking_instance or self.service.staking_contract_address
+            )
+            if not requester_staking_instance:
+                # If no staking instance, we use the zero address as a fallback
+                # Some marketplaces allow non-staked requests if configured
+                logger.warning("Requester staking instance not found, using zero address")
+                requester_staking_instance = "0x0000000000000000000000000000000000000000"
+
+            tx_data = marketplace.prepare_request_tx(
+                from_address=multisig_address,
+                data=data,
+                priority_mech=str(priority_mech),
+                priority_mech_staking_instance=priority_mech_staking_instance or "0x0000000000000000000000000000000000000000",
+                priority_mech_service_id=priority_mech_service_id or 0,
+                requester_staking_instance=str(requester_staking_instance),
+                requester_service_id=service_id,
+                response_timeout=response_timeout,
+                value=value,
+            )
+            to_address = marketplace_address
+        else:
+            protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})
+            mech_address = mech_address or protocol_contracts.get("OLAS_MECH")
+            if not mech_address:
+                logger.error("Mech address not found for chain")
+                return None
+
+            mech = MechContract(
+                mech_address, chain_name=self.chain_name, use_new_abi=use_new_abi
+            )
+            tx_data = mech.prepare_request_tx(
+                from_address=multisig_address,
+                data=data,
+                value=value,
+            )
+            to_address = mech_address
+
+        if not tx_data:
+            logger.error("Failed to prepare mech request transaction")
+            return None
+
+        from iwa.core.models import StoredSafeAccount
+        sender_account = self.wallet.account_service.resolve_account(str(multisig_address))
+        is_safe = isinstance(sender_account, StoredSafeAccount)
+
+        # Send transaction
+        tx_value = int(tx_data.get("value", value or 0))
+
+        if is_safe:
+            logger.info(f"Sending Mech request via Safe {multisig_address} (value: {tx_value})")
+            tx_hash = self.wallet.safe_service.execute_safe_transaction(
+                safe_address_or_tag=str(multisig_address),
+                to=str(to_address),
+                value=tx_value,
+                chain_name=self.chain_name,
+                data=tx_data["data"],
+            )
+        else:
+            # EOA flow
+            logger.info(f"Sending Mech request via EOA {multisig_address} (value: {tx_value})")
+            tx = {
+                "to": str(to_address),
+                "value": tx_value,
+                "data": tx_data["data"],
+            }
+            success, receipt = self.wallet.sign_and_send_transaction(
+                transaction=tx,
+                signer_address_or_tag=str(multisig_address),
+                chain_name=self.chain_name,
+            )
+            tx_hash = receipt.get("transactionHash").hex() if success else None
+
+        if tx_hash:
+            logger.info(f"Mech request transaction sent: {tx_hash}")
+
+            # Verify event emission
+            logger.info("Waiting for transaction receipt to verify event emission...")
+            try:
+                receipt = self.registry.chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+                # Determine which contract and event to check
+                if use_marketplace:
+                    contract_instance = marketplace
+                    expected_event = "MarketplaceRequest"
+                else:
+                    contract_instance = mech
+                    expected_event = "Request"
+
+                events = contract_instance.extract_events(receipt)
+                event_found = next((e for e in events if e["name"] == expected_event), None)
+
+                if event_found:
+                    logger.info(f"Event '{expected_event}' verified successfully.")
+                    return tx_hash
+                else:
+                    logger.error(f"Event '{expected_event}' NOT found in transaction logs.")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Error checking event emission: {e}")
+                # We return None to indicate failure in fully completing the verified request
+                return None
+
+        else:
+            logger.error("Failed to send Mech request transaction")
+            return None
+

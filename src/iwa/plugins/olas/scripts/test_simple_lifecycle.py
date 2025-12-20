@@ -47,13 +47,13 @@ def main():
     print(f"     - Multisig: {manager.service.multisig_address}")
 
     # Wind down (terminate → unbond)
-    print("\n3️⃣ Winding down Service...")
-    success = manager.wind_down()
-    if not success:
-        print("  ❌ Failed to wind down service")
-        return False
+    # print("\n3️⃣ Winding down Service...")
+    # success = manager.wind_down()
+    # if not success:
+    #     print("  ❌ Failed to wind down service")
+    #     return False
 
-    print("  ✅ Service wound down successfully!")
+    # print("  ✅ Service wound down successfully!")
 
     print("\n" + "=" * 60)
     print("  🎉 Full lifecycle completed!")

@@ -18,6 +18,7 @@ class Service(BaseModel):
     agent_address: Optional[EthereumAddress] = None
     multisig_address: Optional[EthereumAddress] = None
     staking_contract_address: Optional[EthereumAddress] = None
+    token_address: Optional[EthereumAddress] = None
 
     @property
     def key(self) -> str:

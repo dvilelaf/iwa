@@ -22,6 +22,8 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x9338b5153AE39BB89f50468E608eD9d764B755fD"),
         "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress("0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"),
         "OLAS_SERVICE_MANAGER": EthereumAddress("0x068a4f0946cF8c7f9C1B58a3b5243Ac8843bf473"),
+        "OLAS_MECH": EthereumAddress("0x77af31De935740567Cf4fF1986D04B2c964A786a"),
+        "OLAS_MECH_MARKETPLACE": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
     },
     "ethereum": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"),
