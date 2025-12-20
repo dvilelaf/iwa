@@ -1,3 +1,4 @@
+"""Decode Ethereum error data."""
 
 from eth_abi import decode
 from hexbytes import HexBytes
@@ -8,7 +9,7 @@ error_data = "0x08c379a000000000000000000000000000000000000000000000000000000000
 data = HexBytes(error_data[10:])
 
 try:
-    decoded = decode(['string'], data)
+    decoded = decode(["string"], data)
     print(f"Decoded error: {decoded[0]}")
 except Exception as e:
     print(f"Failed to decode: {e}")
@@ -16,5 +17,5 @@ except Exception as e:
     try:
         print(f"Raw bytes: {data}")
         print(f"Ascii: {data.decode('utf-8', errors='ignore')}")
-    except:
+    except Exception:
         pass

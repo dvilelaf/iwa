@@ -123,15 +123,12 @@ MECH_ECOSYSTEM = {
         # Mech contracts
         "legacy_mech": "0x77af31De935740567Cf4fF1986D04B2c964A786a",
         "priority_mech": "0x601024E27f1C67B28209E24272CED8A31fc8151F",
-
         # Marketplace contracts
         "old_marketplace": "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # v1, deprecated
         "new_marketplace": "0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB",  # v2, current
-
         # Activity checkers
         "legacy_activity_checker": "0x87E6a97bD97D41904B1125A014B16bec50C6A89D",
         "marketplace_activity_checker": "0x7Ec96996Cd146B91779f01419db42E67463817a0",
-
         # Staking with marketplace support (uses OLD marketplace)
         "pearl_beta_marketplace_staking": "0xDaF34eC46298b53a3d24CBCb431E84eBd23927dA",
     }

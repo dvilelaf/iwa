@@ -678,7 +678,9 @@ class TransferService:
             )
             return bool(tx_limit)
         else:
-            success, _ = self.transaction_service.sign_and_send(transaction, owner_address_or_tag, chain_name)
+            success, _ = self.transaction_service.sign_and_send(
+                transaction, owner_address_or_tag, chain_name
+            )
             return success
 
     def transfer_from_erc20(

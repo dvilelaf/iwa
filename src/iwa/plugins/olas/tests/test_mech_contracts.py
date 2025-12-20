@@ -1,10 +1,12 @@
 """Tests for Mech contracts."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from iwa.plugins.olas.constants import PAYMENT_TYPE_NATIVE
 from iwa.plugins.olas.contracts.mech import MechContract
 from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
-from iwa.plugins.olas.constants import PAYMENT_TYPE_NATIVE
 
 # Valid Ethereum addresses for testing
 VALID_FROM_ADDRESS = "0x0000000000000000000000000000000000000001"
@@ -31,7 +33,9 @@ class TestMechContracts:
             data = b"some data"
 
             # Mocking prepare_transaction since it involves web3 objects
-            contract.prepare_transaction = MagicMock(return_value={"data": "0xTxData", "value": 10**16})
+            contract.prepare_transaction = MagicMock(
+                return_value={"data": "0xTxData", "value": 10**16}
+            )
             # Mock get_price to avoid web3 call
             contract.get_price = MagicMock(return_value=10**16)
 
@@ -41,7 +45,7 @@ class TestMechContracts:
             contract.prepare_transaction.assert_called_once_with(
                 method_name="request",
                 method_kwargs={"data": data},
-                tx_params={"from": VALID_FROM_ADDRESS, "value": 10**16}
+                tx_params={"from": VALID_FROM_ADDRESS, "value": 10**16},
             )
 
     def test_mech_marketplace_contract_prepare_request_tx(self, mock_chain_interface):
@@ -52,7 +56,9 @@ class TestMechContracts:
             request_data = b"some data"
             payment_type_bytes = bytes.fromhex(PAYMENT_TYPE_NATIVE)
 
-            contract.prepare_transaction = MagicMock(return_value={"data": "0xMarketplaceTxData", "value": 10**16})
+            contract.prepare_transaction = MagicMock(
+                return_value={"data": "0xMarketplaceTxData", "value": 10**16}
+            )
 
             tx = contract.prepare_request_tx(
                 from_address=VALID_FROM_ADDRESS,
@@ -75,5 +81,5 @@ class TestMechContracts:
                     "responseTimeout": 300,
                     "paymentData": b"",
                 },
-                tx_params={"from": VALID_FROM_ADDRESS, "value": 10**16}
+                tx_params={"from": VALID_FROM_ADDRESS, "value": 10**16},
             )

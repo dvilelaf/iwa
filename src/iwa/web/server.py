@@ -7,9 +7,9 @@ import time
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel, field_validator
@@ -22,7 +22,9 @@ WEBUI_PASSWORD = os.getenv("WEBUI_PASSWORD")
 
 app = FastAPI(title="Iwa Web Interface")
 
+
 async def verify_auth(request: Request):
+    """Verify bearer token authentication if configured."""
     if WEBUI_PASSWORD:
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -31,6 +33,7 @@ async def verify_auth(request: Request):
         if token != WEBUI_PASSWORD:
             raise HTTPException(status_code=401, detail="Unauthorized")
     return True
+
 
 # CORS middleware
 app.add_middleware(
@@ -50,6 +53,7 @@ def _obscure_url(url: str) -> str:
     except Exception:
         return "N/A"
 
+
 # Wallet instance
 wallet = Wallet()
 
@@ -59,6 +63,7 @@ if not os.path.exists(STATIC_DIR):
     os.makedirs(STATIC_DIR)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 class TransactionRequest(BaseModel):
     """Request to send a transaction."""
@@ -143,16 +148,20 @@ class SafeCreateRequest(BaseModel):
     threshold: int
     chains: list[str]
 
+
 @app.get("/", response_class=HTMLResponse)
 def read_index():
+    """Serve the main index.html file."""
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r") as f:
             return f.read()
     return "<h1>Iwa Web Terminal</h1><p>Static files not found yet.</p>"
 
+
 @app.get("/api/state")
 def get_state():
+    """Get the current application state including available chains and tokens."""
     chains = [name for name, _ in ChainInterfaces().items()]
     tokens = {}
     native_currencies = {}
@@ -165,8 +174,9 @@ def get_state():
         "chains": chains,
         "tokens": tokens,
         "native_currencies": native_currencies,
-        "default_chain": "gnosis"
+        "default_chain": "gnosis",
     }
+
 
 @app.get("/api/accounts")
 def get_accounts(chain: str = "gnosis", tokens: str = "", auth: bool = Depends(verify_auth)):
@@ -175,11 +185,13 @@ def get_accounts(chain: str = "gnosis", tokens: str = "", auth: bool = Depends(v
     Args:
         chain: Chain name
         tokens: Comma-separated list of token names to fetch balances for (e.g. "native,OLAS")
+        auth: Authentication dependency
+
     """
     chain = chain.lower()
 
-    # Get chain interface
-    interface = ChainInterfaces().get(chain)
+    # Fetch account data (without balances first)
+    accounts_data = wallet.account_service.get_account_data()
     requested_tokens = [t.strip() for t in tokens.split(",") if t.strip()] if tokens else []
 
     # Fetch account data (without balances first)
@@ -209,49 +221,49 @@ def get_accounts(chain: str = "gnosis", tokens: str = "", auth: bool = Depends(v
                 bal = token_balances.get(addr, {}).get(t) if token_balances else None
                 acct_balances[t] = f"{bal:.4f}" if bal is not None else None
 
-        result.append({
-            "tag": acct.tag,
-            "address": addr,
-            "type": acct_type,
-            "balances": acct_balances
-        })
+        result.append(
+            {"tag": acct.tag, "address": addr, "type": acct_type, "balances": acct_balances}
+        )
     return result
+
 
 @app.get("/api/transactions")
 def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
+    """Get recent transactions for a specific chain."""
     chain = chain.lower()
     recent = (
         SentTransaction.select()
         .where(
             (SentTransaction.chain == chain)
-            & (
-                SentTransaction.timestamp
-                > (datetime.datetime.now() - datetime.timedelta(hours=24))
-            )
+            & (SentTransaction.timestamp > (datetime.datetime.now() - datetime.timedelta(hours=24)))
         )
         .order_by(SentTransaction.timestamp.desc())
     )
 
     result = []
     for tx in recent:
-        result.append({
-            "timestamp": tx.timestamp.isoformat(),
-            "chain": tx.chain.capitalize(),
-            "from": tx.from_tag or tx.from_address,
-            "to": tx.to_tag or tx.to_address,
-            "token": tx.token,
-            "amount": f"{float(tx.amount_wei or 0) / 10**18:.4f}",
-            "value_eur": f"€{(tx.value_eur or 0.0):.2f}",
-            "status": "Confirmed",
-            "hash": tx.tx_hash,
-            "gas_cost": str(tx.gas_cost or "0"),
-            "gas_value_eur": f"€{tx.gas_value_eur:.4f}" if tx.gas_value_eur else "?",
-            "tags": json.loads(tx.tags) if tx.tags else []
-        })
+        result.append(
+            {
+                "timestamp": tx.timestamp.isoformat(),
+                "chain": tx.chain.capitalize(),
+                "from": tx.from_tag or tx.from_address,
+                "to": tx.to_tag or tx.to_address,
+                "token": tx.token,
+                "amount": f"{float(tx.amount_wei or 0) / 10**18:.4f}",
+                "value_eur": f"€{(tx.value_eur or 0.0):.2f}",
+                "status": "Confirmed",
+                "hash": tx.tx_hash,
+                "gas_cost": str(tx.gas_cost or "0"),
+                "gas_value_eur": f"€{tx.gas_value_eur:.4f}" if tx.gas_value_eur else "?",
+                "tags": json.loads(tx.tags) if tx.tags else [],
+            }
+        )
     return result
+
 
 @app.get("/api/rpc-status")
 def get_rpc_status(auth: bool = Depends(verify_auth)):
+    """Get the status of all configured RPC endpoints."""
     status = {}
     for chain_name, interface in ChainInterfaces().items():
         if interface.chain.rpcs:
@@ -259,60 +271,63 @@ def get_rpc_status(auth: bool = Depends(verify_auth)):
                 start_time = time.time()
                 block = interface.web3.eth.block_number
                 latency = int((time.time() - start_time) * 1000)
-                status[chain_name] = {
-                    "status": "online",
-                    "block": block,
-                    "latency": f"{latency}ms"
-                }
+                status[chain_name] = {"status": "online", "block": block, "latency": f"{latency}ms"}
             except Exception as e:
                 status[chain_name] = {"status": "offline", "error": str(e)}
         else:
             status[chain_name] = {"status": "offline", "error": "No RPC configured"}
     return status
 
+
 @app.post("/api/send")
 def send_transaction(req: TransactionRequest, auth: bool = Depends(verify_auth)):
+    """Send a transaction from an account."""
     try:
         tx_hash = wallet.send(
             from_address_or_tag=req.from_address,
             to_address_or_tag=req.to_address,
             amount_wei=int(req.amount * 10**18),
             token_address_or_name=req.token,
-            chain_name=req.chain
+            chain_name=req.chain,
         )
         return {"status": "success", "hash": tx_hash}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
 
 @app.post("/api/accounts/eoa")
 def create_eoa(req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
+    """Create a new EOA account with the given tag."""
     try:
         wallet.key_storage.create_account(req.tag)
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
 
 @app.post("/api/accounts/safe")
 def create_safe(req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
+    """Create a new Safe multisig account."""
     try:
         # We use a timestamp-based salt to avoid collisions
         import time
+
         salt_nonce = int(time.time() * 1000)
 
         # Deploy on all requested chains
         for chain_name in req.chains:
             wallet.safe_service.create_safe(
-                "master", # WebUI uses master as deployer by default
+                "master",  # WebUI uses master as deployer by default
                 req.owners,
                 req.threshold,
                 chain_name,
                 req.tag,
-                salt_nonce
+                salt_nonce,
             )
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error creating Safe: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 class SwapRequest(BaseModel):
@@ -358,7 +373,7 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
             return {"status": "pending", "message": "Swap order placed, waiting for execution"}
     except Exception as e:
         logger.error(f"Error swapping tokens: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 @app.get("/api/swap/quote")
@@ -369,7 +384,7 @@ def get_swap_quote(
     amount: float,
     mode: str = "sell",
     chain: str = "gnosis",
-    auth: bool = Depends(verify_auth)
+    auth: bool = Depends(verify_auth),
 ):
     """Get a quote for a swap.
 
@@ -432,11 +447,10 @@ def get_swap_quote(
         error_msg = str(e)
         if "NoLiquidity" in error_msg or "no route found" in error_msg.lower():
             raise HTTPException(
-                status_code=400,
-                detail="No liquidity available for this token pair."
-            )
+                status_code=400, detail="No liquidity available for this token pair."
+            ) from None
         logger.error(f"Error getting swap quote: {e}")
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg) from None
 
 
 @app.get("/api/swap/max-amount")
@@ -446,7 +460,7 @@ def get_swap_max_amount(
     buy_token: str,
     mode: str = "sell",
     chain: str = "gnosis",
-    auth: bool = Depends(verify_auth)
+    auth: bool = Depends(verify_auth),
 ):
     """Get the maximum amount for a swap.
 
@@ -509,12 +523,14 @@ def get_swap_max_amount(
         if "NoLiquidity" in error_msg or "no route found" in error_msg.lower():
             raise HTTPException(
                 status_code=400,
-                detail="No liquidity available for this token pair. Try a different pair."
-            )
+                detail="No liquidity available for this token pair. Try a different pair.",
+            ) from None
         logger.error(f"Error getting max swap amount: {e}")
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg) from None
+
 
 def run_server(host: str = "127.0.0.1", port: int = 8080):
+    """Run the FastAPI web server."""
     import signal
     import sys
 

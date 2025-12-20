@@ -1,10 +1,12 @@
 """Tests for Mech integration in ServiceManager."""
 
-import pytest
 from unittest.mock import MagicMock, patch
-from iwa.plugins.olas.service_manager import ServiceManager
-from iwa.plugins.olas.models import Service, OlasConfig
+
+import pytest
+
 from iwa.plugins.olas.constants import PAYMENT_TYPE_NATIVE
+from iwa.plugins.olas.models import OlasConfig, Service
+from iwa.plugins.olas.service_manager import ServiceManager
 
 # Valid Ethereum address for testing
 VALID_PRIORITY_MECH = "0x0000000000000000000000000000000000000001"
@@ -68,7 +70,7 @@ class TestServiceManagerMech:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",
-                "value": 2 * 10**16
+                "value": 2 * 10**16,
             }
 
             # Should return None because priority_mech is not provided
@@ -87,6 +89,7 @@ class TestServiceManagerMech:
 
         # Mock the account resolution to return a Safe account
         from iwa.core.models import StoredSafeAccount
+
         mock_safe_account = MagicMock(spec=StoredSafeAccount)
         mock_wallet.account_service.resolve_account.return_value = mock_safe_account
 
@@ -94,7 +97,7 @@ class TestServiceManagerMech:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",
-                "value": value
+                "value": value,
             }
             # Mock event extraction to simulate successful event
             mock_market.extract_events.return_value = [{"name": "MarketplaceRequest"}]

@@ -18,8 +18,12 @@ from iwa.core.settings import settings
 def get_tenderly_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Get Tenderly credentials from settings (based on current profile)."""
     return (
-        settings.tenderly_account_slug.get_secret_value() if settings.tenderly_account_slug else None,
-        settings.tenderly_project_slug.get_secret_value() if settings.tenderly_project_slug else None,
+        settings.tenderly_account_slug.get_secret_value()
+        if settings.tenderly_account_slug
+        else None,
+        settings.tenderly_project_slug.get_secret_value()
+        if settings.tenderly_project_slug
+        else None,
         settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None,
     )
 
@@ -32,17 +36,23 @@ def _generate_default_config() -> TenderlyConfig:
     vnets = {}
     chains = SupportedChains()
 
-    for chain_name, chain in [("gnosis", chains.gnosis), ("ethereum", chains.ethereum), ("base", chains.base)]:
+    for chain_name, chain in [
+        ("gnosis", chains.gnosis),
+        ("ethereum", chains.ethereum),
+        ("base", chains.base),
+    ]:
         # Get OLAS token address for this chain
         olas_address = chain.tokens.get("OLAS")
 
         tokens = []
         if olas_address:
-            tokens.append(TokenAmount(
-                address=str(olas_address),
-                symbol="OLAS",
-                amount=settings.tenderly_olas_funds,
-            ))
+            tokens.append(
+                TokenAmount(
+                    address=str(olas_address),
+                    symbol="OLAS",
+                    amount=settings.tenderly_olas_funds,
+                )
+            )
 
         vnets[chain_name] = VirtualNet(
             chain_id=chain.chain_id,
@@ -312,6 +322,7 @@ if __name__ == "__main__":  # pragma: no cover
 
     # Reset the singleton to reload with new env
     from iwa.core.settings import Settings
+
     Settings._instance = None  # type: ignore
 
     # Reimport settings to get fresh instance

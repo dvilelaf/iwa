@@ -1,6 +1,7 @@
 """Mech Marketplace contract interaction."""
 
 from typing import Dict, Optional
+
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 

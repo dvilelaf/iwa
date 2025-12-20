@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, mock_open, patch
 
 from eth_account import Account
 
-from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 from iwa.plugins.olas.contracts.service import (
     ServiceManagerContract,
     ServiceRegistryContract,
@@ -79,13 +78,21 @@ MINIMAL_ABI = [
     {
         "name": "registerAgents",
         "type": "function",
-        "inputs": [{"name": "", "type": "uint256"}, {"name": "", "type": "address[]"}, {"name": "", "type": "uint256[]"}],
+        "inputs": [
+            {"name": "", "type": "uint256"},
+            {"name": "", "type": "address[]"},
+            {"name": "", "type": "uint256[]"},
+        ],
         "outputs": [],
     },
     {
         "name": "deploy",
         "type": "function",
-        "inputs": [{"name": "", "type": "uint256"}, {"name": "", "type": "address"}, {"name": "", "type": "bytes"}],
+        "inputs": [
+            {"name": "", "type": "uint256"},
+            {"name": "", "type": "address"},
+            {"name": "", "type": "bytes"},
+        ],
         "outputs": [],
     },
     {
@@ -150,7 +157,9 @@ def test_service_contracts():
             with patch.object(manager, "prepare_transaction") as mock_prep:
                 mock_prep.return_value = {}
 
-                manager.prepare_create_tx(VALID_ADDR_2, VALID_ADDR_3, VALID_ADDR_1, "hash", [], [], 3)
+                manager.prepare_create_tx(
+                    VALID_ADDR_2, VALID_ADDR_3, VALID_ADDR_1, "hash", [], [], 3
+                )
                 assert mock_prep.called
                 mock_prep.reset_mock()
 
@@ -178,7 +187,7 @@ def test_service_contracts():
         assert isinstance(payload, str)
 
 
-def test_staking_contract():
+def test_staking_contract():  # noqa: C901
     """Test StakingContract logic and integration."""
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
@@ -215,7 +224,9 @@ def test_staking_contract():
                 # Logic side effect
                 def logic_side_effect(method, *args):
                     if method == "getServiceInfo":
-                        return (VALID_ADDR_2, VALID_ADDR_3, [1], 1000, 50, 0)
+                        # Returns: (multisig, owner, nonces_on_last_checkpoint, ts_start, accrued_reward, inactivity)
+                        # nonces_on_last_checkpoint must be [safe_nonce, mech_requests]
+                        return (VALID_ADDR_2, VALID_ADDR_3, [1, 1], 1000, 50, 0)
                     if method == "getNextRewardCheckpointTimestamp":
                         return 4700000000  # Timestamp in future
                     if method == "calculateStakingLastReward":
@@ -231,15 +242,27 @@ def test_staking_contract():
                 # Test methods
                 # Note: logic_side_effect handles different calls now
                 assert staking.calculate_accrued_staking_reward(1) == 50
+                assert staking.calculate_staking_reward(1) == 50
                 assert staking.get_staking_state(1) == StakingState.STAKED
+                assert staking.call("nonexistent") == 0
 
-                # Activity checker interactions
-                mock_contract.functions.getMultisigNonces.return_value.call.return_value = [5]
+                # Activity checker interactions - nonces now returns [safe_nonce, mech_requests]
+                mock_contract.functions.getMultisigNonces.return_value.call.return_value = [5, 3]
                 staking.activity_checker.contract = mock_contract
 
                 staking.ts_checkpoint = MagicMock(return_value=0)
+
+                # Trigger original_open hit
+                try:
+                    with builtins.open("nonexistent_test_file.txt", "w") as f:
+                        f.write("test")
+                except Exception:
+                    pass
 
                 info = staking.get_service_info(1)
                 assert info["owner_address"] == VALID_ADDR_3
                 assert "remaining_epoch_seconds" in info
                 assert info["remaining_epoch_seconds"] > 0
+                # Verify new nonces fields
+                assert info["current_safe_nonce"] == 5
+                assert info["current_mech_requests"] == 3

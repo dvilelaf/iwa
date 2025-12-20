@@ -70,6 +70,7 @@ class StakingContract(ContractInstance):
             minStakingDeposit is 50% of the total OLAS required.
             The other 50% is the agentBond, deposited during service creation.
             Example: Hobbyist 1 (100 OLAS) = 50 deposit + 50 bond
+
         """
         super().__init__(address, chain_name=chain_name)
         self.chain_name = chain_name
@@ -126,6 +127,7 @@ class StakingContract(ContractInstance):
         Note:
             Activity nonces from the checker are: (safe_nonce, mech_requests_count).
             For liveness tracking, we use mech_requests_count (index 1).
+
         """
         (
             multisig_address,
@@ -203,8 +205,8 @@ class StakingContract(ContractInstance):
 
     def is_liveness_ratio_passed(
         self,
-        current_nonces: int,
-        last_nonces: int,
+        current_nonces: tuple,
+        last_nonces: tuple,
         ts_start: int,
     ) -> bool:
         """Check if the liveness ratio requirement is passed.
@@ -213,17 +215,23 @@ class StakingContract(ContractInstance):
         if the service meets liveness requirements for staking rewards.
 
         Args:
-            current_nonces: Current total mech request nonces.
-            last_nonces: Nonces at the last checkpoint.
+            current_nonces: Current (safe_nonce, mech_requests_count).
+            last_nonces: Nonces at the last checkpoint (safe_nonce, mech_requests_count).
             ts_start: Timestamp when staking started or last checkpoint.
 
         Returns:
             True if liveness requirements are met.
+
         """
+        # Calculate time difference since last checkpoint
+        ts_diff = int(time.time()) - ts_start
+        if ts_diff <= 0:
+            return False
+
         return self.activity_checker.is_ratio_pass(
             current_nonces=current_nonces,
             last_nonces=last_nonces,
-            ts_start=ts_start,
+            ts_diff=ts_diff,
         )
 
     def prepare_stake_tx(

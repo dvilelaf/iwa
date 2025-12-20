@@ -24,6 +24,8 @@ def mock_service():
     service.agent_address = None
     service.multisig_address = None
     service.staking_contract_address = None
+    service.token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"  # OLAS token
+    service.security_deposit = 50000000000000000000  # 50 OLAS
     service.key = "gnosis:1"
     return service
 
@@ -62,6 +64,9 @@ def mock_wallet():
     new_acc = MagicMock()
     new_acc.address = "0x0987654321098765432109876543210987654321"
     wallet.key_storage.create_account.return_value = new_acc
+    # Mock transfer_service
+    wallet.transfer_service = MagicMock()
+    wallet.transfer_service.approve_erc20.return_value = True
     return wallet
 
 
@@ -122,7 +127,6 @@ def service_manager(
         yield sm
 
 
-
 def test_init(service_manager):
     """Test initialization."""
     assert service_manager.registry is not None
@@ -175,7 +179,10 @@ def test_create_no_event(service_manager, mock_wallet):
 
 def test_activate_registration_success(service_manager, mock_wallet):
     """Test successful activation."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.PRE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
 
@@ -184,13 +191,19 @@ def test_activate_registration_success(service_manager, mock_wallet):
 
 def test_activate_registration_wrong_state(service_manager):
     """Test activation fails in wrong state."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
     assert service_manager.activate_registration() is False
 
 
 def test_register_agent_success(service_manager, mock_wallet):
     """Test successful agent registration."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.ACTIVE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.ACTIVE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     # create_account is already mocked
     mock_wallet.send.return_value = "0xMockTxHash"  # wallet.send returns tx_hash
@@ -218,7 +231,10 @@ def test_deploy_success(service_manager, mock_wallet):
 
 def test_terminate_success(service_manager, mock_wallet):
     """Test successful termination."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
     # Not staked
     service_manager.service.staking_contract_address = None
 
@@ -230,7 +246,10 @@ def test_terminate_success(service_manager, mock_wallet):
 
 def test_unbond_success(service_manager, mock_wallet):
     """Test successful unbonding."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.TERMINATED_BONDED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.TERMINATED_BONDED,
+        "security_deposit": 50000000000000000000,
+    }
 
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "OperatorUnbond"}]
@@ -247,7 +266,10 @@ def test_stake_success(service_manager, mock_wallet):
     staking_contract.min_staking_deposit = 100
     staking_contract.address = "0xStaking"
 
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
 
     with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
         mock_erc20.return_value.balance_of_wei.return_value = 200
@@ -280,7 +302,10 @@ def test_unstake_success(service_manager, mock_wallet):
 
 def test_register_agent_with_existing_address(service_manager, mock_wallet):
     """Test registering an existing agent address (no new account creation)."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.ACTIVE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.ACTIVE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "RegisterInstance"}]
@@ -296,7 +321,10 @@ def test_register_agent_with_existing_address(service_manager, mock_wallet):
 
 def test_register_agent_creates_new_if_none(service_manager, mock_wallet):
     """Test that register_agent creates and funds a new agent when no address provided."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.ACTIVE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.ACTIVE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     mock_wallet.send.return_value = "0xMockTxHash"  # wallet.send returns tx_hash
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
@@ -311,7 +339,10 @@ def test_register_agent_creates_new_if_none(service_manager, mock_wallet):
 
 def test_register_agent_fund_fails(service_manager, mock_wallet):
     """Test that register_agent fails when funding new agent fails."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.ACTIVE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.ACTIVE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     mock_wallet.send.return_value = None  # Funding fails (wallet.send returns None on failure)
 
@@ -323,24 +354,45 @@ def test_register_agent_fund_fails(service_manager, mock_wallet):
 
 def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
     """Test full spin_up path from PRE_REGISTRATION to DEPLOYED."""
-    # Mock state transitions - need to account for all get_service calls:
-    # 1. spin_up initial check
-    # 2. activate_registration internal check
-    # 3. spin_up verify after activate
-    # 4. register_agent internal check
-    # 5. spin_up verify after register
-    # 6. deploy internal check
-    # 7. spin_up verify after deploy
-    # 8. final verification
+    # Mock state transitions - need to match actual calls in spin_up
+    # The state after activate_registration should be ACTIVE_REGISTRATION
     state_sequence = [
-        {"state": ServiceState.PRE_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.PRE_REGISTRATION},  # activate_registration check
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # spin_up verify after activate
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # register_agent check
-        {"state": ServiceState.FINISHED_REGISTRATION},  # spin_up verify after register
-        {"state": ServiceState.FINISHED_REGISTRATION},  # deploy check
-        {"state": ServiceState.DEPLOYED},  # spin_up verify after deploy
-        {"state": ServiceState.DEPLOYED},  # final verification
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # activate_registration check
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after activate
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent check
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent internal
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after register
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # deploy check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after deploy
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -349,7 +401,10 @@ def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
     service_manager.registry.extract_events.side_effect = [
         [{"name": "ActivateRegistration"}],
         [{"name": "RegisterInstance"}],
-        [{"name": "DeployService"}, {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}}],
+        [
+            {"name": "DeployService"},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        ],
     ]
 
     assert service_manager.spin_up() is True
@@ -357,13 +412,36 @@ def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
 
 def test_spin_up_from_active_registration(service_manager, mock_wallet):
     """Test spin_up resume from ACTIVE_REGISTRATION state."""
+    # Need extra states because register_agent makes additional get_service calls
     state_sequence = [
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # register_agent check
-        {"state": ServiceState.FINISHED_REGISTRATION},  # spin_up verify after register
-        {"state": ServiceState.FINISHED_REGISTRATION},  # deploy check
-        {"state": ServiceState.DEPLOYED},  # spin_up verify after deploy
-        {"state": ServiceState.DEPLOYED},  # final verification
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent check
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent internal
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after register
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # deploy check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after deploy
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -371,7 +449,10 @@ def test_spin_up_from_active_registration(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.side_effect = [
         [{"name": "RegisterInstance"}],
-        [{"name": "DeployService"}, {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}}],
+        [
+            {"name": "DeployService"},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        ],
     ]
 
     assert service_manager.spin_up() is True
@@ -380,10 +461,22 @@ def test_spin_up_from_active_registration(service_manager, mock_wallet):
 def test_spin_up_from_finished_registration(service_manager, mock_wallet):
     """Test spin_up resume from FINISHED_REGISTRATION state."""
     state_sequence = [
-        {"state": ServiceState.FINISHED_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.FINISHED_REGISTRATION},  # deploy check
-        {"state": ServiceState.DEPLOYED},  # spin_up verify after deploy
-        {"state": ServiceState.DEPLOYED},  # final verification
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # deploy check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after deploy
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -398,7 +491,10 @@ def test_spin_up_from_finished_registration(service_manager, mock_wallet):
 
 def test_spin_up_already_deployed(service_manager, mock_wallet):
     """Test spin_up when already DEPLOYED (idempotent)."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
 
     # Should succeed without any transactions
     assert service_manager.spin_up() is True
@@ -408,9 +504,18 @@ def test_spin_up_already_deployed(service_manager, mock_wallet):
 def test_spin_up_with_staking(service_manager, mock_wallet):
     """Test spin_up with staking after deployment."""
     state_sequence = [
-        {"state": ServiceState.DEPLOYED},  # spin_up initial
-        {"state": ServiceState.DEPLOYED},  # stake internal check
-        {"state": ServiceState.DEPLOYED},  # final verification
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # stake internal check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -434,8 +539,14 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
 def test_spin_up_activate_fails(service_manager, mock_wallet):
     """Test spin_up fails when activate_registration fails."""
     state_sequence = [
-        {"state": ServiceState.PRE_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.PRE_REGISTRATION},  # activate_registration check
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # activate_registration check
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -447,8 +558,14 @@ def test_spin_up_activate_fails(service_manager, mock_wallet):
 def test_spin_up_register_fails(service_manager, mock_wallet):
     """Test spin_up fails when register_agent fails."""
     state_sequence = [
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # register_agent check
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent check
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -461,8 +578,14 @@ def test_spin_up_register_fails(service_manager, mock_wallet):
 def test_spin_up_deploy_fails(service_manager, mock_wallet):
     """Test spin_up fails when deploy fails."""
     state_sequence = [
-        {"state": ServiceState.FINISHED_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.FINISHED_REGISTRATION},  # deploy check
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # deploy check
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -473,20 +596,46 @@ def test_spin_up_deploy_fails(service_manager, mock_wallet):
 
 def test_spin_up_with_existing_agent(service_manager, mock_wallet):
     """Test spin_up uses provided agent address."""
+    # Need extra states for internal get_service calls
     state_sequence = [
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # spin_up initial
-        {"state": ServiceState.ACTIVE_REGISTRATION},  # register_agent check
-        {"state": ServiceState.FINISHED_REGISTRATION},  # spin_up verify after register
-        {"state": ServiceState.FINISHED_REGISTRATION},  # deploy check
-        {"state": ServiceState.DEPLOYED},  # spin_up verify after deploy
-        {"state": ServiceState.DEPLOYED},  # final verification
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up initial
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent check
+        {
+            "state": ServiceState.ACTIVE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # register_agent internal
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after register
+        {
+            "state": ServiceState.FINISHED_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # deploy check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # spin_up verify after deploy
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.side_effect = [
         [{"name": "RegisterInstance"}],
-        [{"name": "DeployService"}, {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}}],
+        [
+            {"name": "DeployService"},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        ],
     ]
 
     existing_agent = "0xExistingAgent999999999999999999999999999"
@@ -509,13 +658,34 @@ def test_wind_down_from_deployed_success(service_manager, mock_wallet):
     # 6. wind_down verify after unbond
     # 7. final verification
     state_sequence = [
-        {"state": ServiceState.DEPLOYED},  # wind_down initial
-        {"state": ServiceState.DEPLOYED},  # wind_down refresh after unstake check
-        {"state": ServiceState.DEPLOYED},  # terminate internal check
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down verify after terminate
-        {"state": ServiceState.TERMINATED_BONDED},  # unbond internal check
-        {"state": ServiceState.PRE_REGISTRATION},  # wind_down verify after unbond
-        {"state": ServiceState.PRE_REGISTRATION},  # final verification
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down initial
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down refresh after unstake check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # terminate internal check
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down verify after terminate
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # unbond internal check
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down verify after unbond
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
     service_manager.service.staking_contract_address = None
@@ -532,13 +702,34 @@ def test_wind_down_from_deployed_success(service_manager, mock_wallet):
 def test_wind_down_from_staked(service_manager, mock_wallet):
     """Test wind_down handles unstaking first."""
     state_sequence = [
-        {"state": ServiceState.DEPLOYED},  # wind_down initial
-        {"state": ServiceState.DEPLOYED},  # wind_down refresh after unstake
-        {"state": ServiceState.DEPLOYED},  # terminate internal check
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down verify after terminate
-        {"state": ServiceState.TERMINATED_BONDED},  # unbond internal check
-        {"state": ServiceState.PRE_REGISTRATION},  # wind_down verify after unbond
-        {"state": ServiceState.PRE_REGISTRATION},  # final verification
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down initial
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down refresh after unstake
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # terminate internal check
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down verify after terminate
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # unbond internal check
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down verify after unbond
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
     service_manager.service.staking_contract_address = "0xStaking"
@@ -565,11 +756,26 @@ def test_wind_down_from_terminated(service_manager, mock_wallet):
     # 4. wind_down verify after unbond (line 633)
     # 5. final verification (line 642)
     state_sequence = [
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down initial
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down refresh
-        {"state": ServiceState.TERMINATED_BONDED},  # unbond internal check
-        {"state": ServiceState.PRE_REGISTRATION},  # wind_down verify after unbond
-        {"state": ServiceState.PRE_REGISTRATION},  # final verification
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down initial
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down refresh
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # unbond internal check
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down verify after unbond
+        {
+            "state": ServiceState.PRE_REGISTRATION,
+            "security_deposit": 50000000000000000000,
+        },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
@@ -581,7 +787,10 @@ def test_wind_down_from_terminated(service_manager, mock_wallet):
 
 def test_wind_down_already_pre_registration(service_manager, mock_wallet):
     """Test wind_down when already PRE_REGISTRATION (idempotent)."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.PRE_REGISTRATION}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     # Should succeed without any transactions
     assert service_manager.wind_down() is True
@@ -590,7 +799,10 @@ def test_wind_down_already_pre_registration(service_manager, mock_wallet):
 
 def test_wind_down_staked_no_contract_provided(service_manager, mock_wallet):
     """Test wind_down fails when staked but no staking contract provided."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
     service_manager.service.staking_contract_address = "0xStaking"
 
     # No staking_contract provided
@@ -599,7 +811,10 @@ def test_wind_down_staked_no_contract_provided(service_manager, mock_wallet):
 
 def test_wind_down_unstake_fails(service_manager, mock_wallet):
     """Test wind_down fails when unstake fails."""
-    service_manager.registry.get_service.return_value = {"state": ServiceState.DEPLOYED}
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.DEPLOYED,
+        "security_deposit": 50000000000000000000,
+    }
     service_manager.service.staking_contract_address = "0xStaking"
 
     staking_contract = MagicMock()
@@ -613,9 +828,18 @@ def test_wind_down_unstake_fails(service_manager, mock_wallet):
 def test_wind_down_terminate_fails(service_manager, mock_wallet):
     """Test wind_down fails when terminate fails."""
     state_sequence = [
-        {"state": ServiceState.DEPLOYED},  # wind_down initial
-        {"state": ServiceState.DEPLOYED},  # wind_down refresh after unstake check
-        {"state": ServiceState.DEPLOYED},  # terminate internal check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down initial
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down refresh after unstake check
+        {
+            "state": ServiceState.DEPLOYED,
+            "security_deposit": 50000000000000000000,
+        },  # terminate internal check
     ]
     service_manager.registry.get_service.side_effect = state_sequence
     service_manager.service.staking_contract_address = None
@@ -632,13 +856,21 @@ def test_wind_down_unbond_fails(service_manager, mock_wallet):
     # 2. wind_down refresh after unstake block (line 607) - always called
     # 3. unbond internal check (line 323)
     state_sequence = [
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down initial
-        {"state": ServiceState.TERMINATED_BONDED},  # wind_down refresh
-        {"state": ServiceState.TERMINATED_BONDED},  # unbond internal check
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down initial
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # wind_down refresh
+        {
+            "state": ServiceState.TERMINATED_BONDED,
+            "security_deposit": 50000000000000000000,
+        },  # unbond internal check
     ]
     service_manager.registry.get_service.side_effect = state_sequence
 
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
 
     assert service_manager.wind_down() is False
-

@@ -10,9 +10,8 @@ requests relative to the time elapsed since the last checkpoint.
 
 from typing import Tuple
 
-from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
-from iwa.plugins.olas.contracts.base import ContractInstance, OLAS_ABI_PATH
+from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH, ContractInstance
 
 
 class ActivityCheckerContract(ContractInstance):
@@ -39,6 +38,7 @@ class ActivityCheckerContract(ContractInstance):
         Args:
             address: The activity checker contract address.
             chain_name: The chain name (default: gnosis).
+
         """
         super().__init__(address, chain_name=chain_name)
 
@@ -61,6 +61,7 @@ class ActivityCheckerContract(ContractInstance):
             Tuple of (safe_nonce, mech_requests_count):
                 - safe_nonce: Total Safe transaction count
                 - mech_requests_count: Total mech requests made
+
         """
         nonces = self.contract.functions.getMultisigNonces(multisig).call()
         return (nonces[0], nonces[1])
@@ -84,6 +85,7 @@ class ActivityCheckerContract(ContractInstance):
 
         Returns:
             True if liveness requirements are met.
+
         """
         return self.contract.functions.isRatioPass(
             list(current_nonces), list(last_nonces), ts_diff

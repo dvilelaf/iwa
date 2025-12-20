@@ -4,8 +4,6 @@ import time
 from enum import Enum
 from typing import Dict, Optional
 
-from web3 import Web3
-
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.constants import (
     DEFAULT_DEPLOY_PAYLOAD,
@@ -13,13 +11,10 @@ from iwa.plugins.olas.constants import (
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
 
-
 def get_deployment_payload(fallback_handler: str) -> str:
     """Calculates deployment payload."""
     return (
-        DEFAULT_DEPLOY_PAYLOAD.format(
-            fallback_handler=fallback_handler[2:]
-        )
+        DEFAULT_DEPLOY_PAYLOAD.format(fallback_handler=fallback_handler[2:])
         + int(time.time()).to_bytes(32, "big").hex()
     )
 

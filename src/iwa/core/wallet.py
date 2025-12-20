@@ -70,9 +70,17 @@ class Wallet:
         def fetch_balance(addr, t_name):
             try:
                 if t_name == "native":
-                    return addr, t_name, self.balance_service.get_native_balance_eth(addr, chain_name)
+                    return (
+                        addr,
+                        t_name,
+                        self.balance_service.get_native_balance_eth(addr, chain_name),
+                    )
                 else:
-                    return addr, t_name, self.balance_service.get_erc20_balance_eth(addr, t_name, chain_name)
+                    return (
+                        addr,
+                        t_name,
+                        self.balance_service.get_erc20_balance_eth(addr, t_name, chain_name),
+                    )
             except Exception as e:
                 logger.error(f"Error fetching {t_name} balance for {addr}: {e}")
                 return addr, t_name, 0.0

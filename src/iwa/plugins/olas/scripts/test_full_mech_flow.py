@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.wallet import Wallet
-from iwa.plugins.olas.service_manager import ServiceManager
 from iwa.plugins.olas.constants import OLAS_CONTRACTS
+from iwa.plugins.olas.service_manager import ServiceManager
 
 
 def print_step(step: str, emoji: str = "🔵"):
@@ -54,15 +54,17 @@ def verify_mech_event(chain, tx_hash, contract, expected_event_name, multisig_ad
     if request_event:
         print_success(f"Found '{expected_event_name}' event!")
         print_info(f"Event Args: {request_event['args']}")
-        args = request_event['args']
+        args = request_event["args"]
 
         # Verify requester/sender matches multisig
-        requester_key = 'requester' if expected_event_name == 'MarketplaceRequest' else 'sender'
+        requester_key = "requester" if expected_event_name == "MarketplaceRequest" else "sender"
         event_requester = args.get(requester_key)
         if event_requester and event_requester.lower() == multisig_address.lower():
             print_success(f"Event {requester_key} matches multisig address")
         else:
-            print_error(f"Event {requester_key} ({event_requester}) does not match multisig ({multisig_address})")
+            print_error(
+                f"Event {requester_key} ({event_requester}) does not match multisig ({multisig_address})"
+            )
             return False
         return True
     else:
@@ -71,7 +73,8 @@ def verify_mech_event(chain, tx_hash, contract, expected_event_name, multisig_ad
         return False
 
 
-def main():
+def main():  # noqa: C901
+    """Run full mech flow integration test: create -> spin_up -> legacy request -> marketplace request."""
     print("=" * 60)
     print("  OLAS Mech Request Integration Test")
     print("=" * 60)
@@ -136,7 +139,9 @@ def main():
             from_address=wallet.master_account.address,
             to_address=multisig_address,
             value_wei=int(required_payment * 2 * 1e18),
-            sign_callback=lambda tx: wallet.key_storage.sign_transaction(tx, wallet.master_account.address)
+            sign_callback=lambda tx: wallet.key_storage.sign_transaction(
+                tx, wallet.master_account.address
+            ),
         )
         if success:
             print_success(f"Funded multisig: {tx}")
@@ -148,10 +153,12 @@ def main():
     if float(agent_balance) < required_gas:
         print_step("Funding Agent", "⛽")
         success, tx = chain.send_native_transfer(
-             from_address=wallet.master_account.address,
-             to_address=agent_address,
-             value_wei=int(required_gas * 1e18),
-             sign_callback=lambda tx: wallet.key_storage.sign_transaction(tx, wallet.master_account.address)
+            from_address=wallet.master_account.address,
+            to_address=agent_address,
+            value_wei=int(required_gas * 1e18),
+            sign_callback=lambda tx: wallet.key_storage.sign_transaction(
+                tx, wallet.master_account.address
+            ),
         )
         if success:
             print_success(f"Funded agent: {tx}")
@@ -220,7 +227,9 @@ def main():
     # Verify marketplace event
     print_step("Step 4b: Verify Marketplace Mech Event", "✅")
     marketplace = MechMarketplaceContract(str(marketplace_address), chain_name="gnosis")
-    if not verify_mech_event(chain, tx_hash_marketplace, marketplace, "MarketplaceRequest", multisig_address):
+    if not verify_mech_event(
+        chain, tx_hash_marketplace, marketplace, "MarketplaceRequest", multisig_address
+    ):
         print_error("Marketplace mech event verification failed")
         return False
 
@@ -245,5 +254,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

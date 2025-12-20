@@ -59,7 +59,6 @@ class StakingStatus(BaseModel):
     liveness_ratio: int = 0  # Requests per second * 1e18
 
 
-
 class OlasConfig(BaseModel):
     """OlasConfig with multi-service support."""
 
@@ -100,4 +99,3 @@ class OlasConfig(BaseModel):
         """Get a specific service by chain and ID."""
         key = f"{chain_name}:{service_id}"
         return self.services.get(key)
-

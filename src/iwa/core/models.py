@@ -285,7 +285,6 @@ class Config(StorableModel):
         return self.plugins.get(plugin_name)
 
 
-
 class Token(BaseModel):
     """Token model for defined tokens."""
 

@@ -12,6 +12,7 @@ from iwa.plugins.olas.service_manager import ServiceManager
 
 
 def main():
+    """Run simple lifecycle integration test: create -> spin_up."""
     print("=" * 60)
     print("  Simple Lifecycle Test: create → spin_up → wind_down")
     print("=" * 60)
@@ -42,7 +43,7 @@ def main():
         print("  ❌ Failed to spin up service")
         return False
 
-    print(f"  ✅ Service deployed!")
+    print("  ✅ Service deployed!")
     print(f"     - Agent: {manager.service.agent_address}")
     print(f"     - Multisig: {manager.service.multisig_address}")
 
@@ -68,5 +69,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

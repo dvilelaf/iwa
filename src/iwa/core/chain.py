@@ -277,8 +277,12 @@ class Gnosis(SupportedChain):
         "EURE": EthereumAddress("0x420CA0f9B9b604cE0fd9C18EF134C705e5Fa3430"),
     }
     contracts: Dict[str, EthereumAddress] = {
-        "GNOSIS_SAFE_MULTISIG_IMPLEMENTATION": EthereumAddress("0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"),
-        "GNOSIS_SAFE_FALLBACK_HANDLER": EthereumAddress("0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4"),
+        "GNOSIS_SAFE_MULTISIG_IMPLEMENTATION": EthereumAddress(
+            "0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"
+        ),
+        "GNOSIS_SAFE_FALLBACK_HANDLER": EthereumAddress(
+            "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4"
+        ),
     }
 
 

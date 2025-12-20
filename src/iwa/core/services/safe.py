@@ -36,7 +36,7 @@ class SafeService:
         self.key_storage = key_storage
         self.account_service = account_service
 
-    def create_safe(
+    def create_safe(  # noqa: C901
         self,
         deployer_tag_or_address: str,
         owner_tags_or_addresses: List[str],
@@ -134,8 +134,9 @@ class SafeService:
 
                 # Get native token price for gas value calculation
                 from iwa.core.pricing import PriceService
-                CHAIN_COINGECKO_IDS = {"gnosis": "dai", "ethereum": "ethereum", "base": "ethereum"}
-                coingecko_id = CHAIN_COINGECKO_IDS.get(chain_name, "ethereum")
+
+                chain_coingecko_ids = {"gnosis": "dai", "ethereum": "ethereum", "base": "ethereum"}
+                coingecko_id = chain_coingecko_ids.get(chain_name, "ethereum")
                 price_service = PriceService()
                 native_price_eur = price_service.get_token_price(coingecko_id, "eur")
 
@@ -147,6 +148,7 @@ class SafeService:
 
         # Get native currency symbol for this chain
         from iwa.core.chain import ChainInterfaces
+
         chain_interface = ChainInterfaces().get(chain_name)
         native_symbol = chain_interface.chain.native_currency
 
