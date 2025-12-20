@@ -12,6 +12,21 @@ class AgentType(IntEnum):
     TRADER = 25
 
 
+class PaymentType(IntEnum):
+    """Supported Mech Marketplace payment types."""
+    # Values from mech-client/marketplace_interact.py
+    # NATIVE = "ba699a34be8fe0e7725e93dcbce1701b0211a8ca61330aaeb8a05bf2ec7abed1"
+    # TOKEN = "3679d66ef546e66ce9057c4a052f317b135bc8e8c509638f7966edfd4fcf45e9"
+    # We store the *bytes* representation here for convenience if needed, but IntEnum usually implies clean ints.
+    # However, mech-client uses strings. Let's use a class with constant strings/bytes as that's what we need.
+    pass
+
+
+# Mech Marketplace Payment Types (bytes32 hex strings)
+PAYMENT_TYPE_NATIVE = "ba699a34be8fe0e7725e93dcbce1701b0211a8ca61330aaeb8a05bf2ec7abed1"
+PAYMENT_TYPE_TOKEN = "3679d66ef546e66ce9057c4a052f317b135bc8e8c509638f7966edfd4fcf45e9"
+
+
 TRADER_CONFIG_HASH = "108e90795119d6015274ef03af1a669c6d13ab6acc9e2b2978be01ee9ea2ec93"
 DEFAULT_DEPLOY_PAYLOAD = "0x0000000000000000000000000000000000000000{fallback_handler}000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
@@ -23,7 +38,7 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress("0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"),
         "OLAS_SERVICE_MANAGER": EthereumAddress("0x068a4f0946cF8c7f9C1B58a3b5243Ac8843bf473"),
         "OLAS_MECH": EthereumAddress("0x77af31De935740567Cf4fF1986D04B2c964A786a"),
-        "OLAS_MECH_MARKETPLACE": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
+        "OLAS_MECH_MARKETPLACE": EthereumAddress("0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"),
     },
     "ethereum": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"),

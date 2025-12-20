@@ -116,10 +116,15 @@ def main():
     # payment amount
     payment_wei = int(0.01 * 1e18)
 
+    # User suggested Mech (ID 9)
+    # 0x552cEA7Bc33CbBEb9f1D90c1D11D2C6daefFd053
+    custom_priority_mech = "0x552cEA7Bc33CbBEb9f1D90c1D11D2C6daefFd053"
+
     tx_hash = manager.send_mech_request(
         data=dummy_data,
         value=payment_wei,
-        use_marketplace=False, # Try Legacy Mech first
+        use_marketplace=True,
+        priority_mech=custom_priority_mech,
         # response_timeout=300
     )
 
@@ -144,44 +149,71 @@ def main():
     print_step("Step 2: Verify Mech Request Event", "2️⃣")
     try:
         from iwa.plugins.olas.contracts.mech import MechContract
+        from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 
         # We need the mech address used.
-        # In legacy mode, it's retrieved from OLAS_CONTRACTS
         protocol_contracts = OLAS_CONTRACTS.get(manager.service.chain_name, {})
-        mech_address = protocol_contracts.get("OLAS_MECH")
 
-        mech = MechContract(str(mech_address), chain_name=manager.service.chain_name)
+        # Determine contract and event based on mode
+        use_marketplace = True
+
+        if use_marketplace:
+            mp_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
+            contract = MechMarketplaceContract(str(mp_address), chain_name=manager.service.chain_name)
+            expected_event_name = "MarketplaceRequest"
+        else:
+            mech_address = protocol_contracts.get("OLAS_MECH")
+            contract = MechContract(str(mech_address), chain_name=manager.service.chain_name)
+            expected_event_name = "Request"
 
         # Get receipt
         print_info("Fetching transaction receipt...")
         receipt = chain.web3.eth.wait_for_transaction_receipt(tx_hash)
 
         # Extract events
-        print_info("Extracting events...")
-        events = mech.extract_events(receipt)
+        print_info(f"Extracting events (expecting {expected_event_name})...")
+        events = contract.extract_events(receipt)
 
-        request_event = next((e for e in events if e["name"] == "Request"), None)
+        request_event = next((e for e in events if e["name"] == expected_event_name), None)
 
         if request_event:
-            print_success("Found 'Request' event!")
+            print_success(f"Found '{expected_event_name}' event!")
             print_info(f"Event Args: {request_event['args']}")
 
-            # Verify sender matches multisig
-            event_sender = request_event['args'].get('sender')
-            if event_sender.lower() == multisig_address.lower():
-                 print_success("Event sender matches multisig address")
-            else:
-                 print(f"  ❌ Event sender ({event_sender}) does not match multisig ({multisig_address})")
-                 return False
+            args = request_event['args']
 
-            # Verify data matches (if possible, it might be hashed or raw)
-            event_data = request_event['args'].get('data')
-            if event_data == dummy_data:
-                print_success("Event data matches request data")
+            if use_marketplace:
+                # Verify requester
+                event_requester = args.get('requester')
+                if event_requester and event_requester.lower() == multisig_address.lower():
+                     print_success("Event requester matches multisig address")
+                else:
+                     print(f"  ❌ Event requester ({event_requester}) does not match multisig ({multisig_address})")
+
+                # Verify priorityMech
+                expected_priority_mech = custom_priority_mech
+                event_priority_mech = args.get('priorityMech')
+                if event_priority_mech and str(event_priority_mech).lower() == str(expected_priority_mech).lower():
+                    print_success(f"Event priorityMech matches expected ({expected_priority_mech})")
+                else:
+                    print(f"  ⚠️ Event priorityMech ({event_priority_mech}) differs from expected ({expected_priority_mech})")
+
             else:
-                print_info(f"Event data: {event_data}")
+                # Verify sender matches multisig
+                event_sender = args.get('sender')
+                if event_sender.lower() == multisig_address.lower():
+                     print_success("Event sender matches multisig address")
+                else:
+                     print(f"  ❌ Event sender ({event_sender}) does not match multisig ({multisig_address})")
+
+                # Verify data matches (if possible, it might be hashed or raw)
+                event_data = args.get('data')
+                if event_data == dummy_data:
+                    print_success("Event data matches request data")
+                else:
+                    print_info(f"Event data: {event_data}")
         else:
-            print("  ❌ 'Request' event not found in transaction logs")
+            print(f"  ❌ '{expected_event_name}' event not found in transaction logs")
             print_info(f"All found events: {[e['name'] for e in events]}")
             return False
 

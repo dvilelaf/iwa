@@ -14,26 +14,28 @@ class MechMarketplaceContract(ContractInstance):
     def prepare_request_tx(
         self,
         from_address: str,
-        data: bytes,
+        request_data: bytes,
         priority_mech: str,
-        priority_mech_staking_instance: str,
-        priority_mech_service_id: int,
-        requester_staking_instance: str,
-        requester_service_id: int,
-        response_timeout: int,
-        value: int = 10**16,  # Default 0.01 xDAI
+        response_timeout: int = 300,
+        max_delivery_rate: int = 10_000,
+        payment_type: bytes = b"\x00" * 32,
+        payment_data: bytes = b"",
+        value: int = 10_000_000_000_000_000,  # Default 0.01 xDAI
     ) -> Optional[Dict]:
-        """Prepare a marketplace request transaction."""
+        """Prepare a marketplace request transaction.
+
+        Matches ABI:
+        request(bytes requestData, uint256 maxDeliveryRate, bytes32 paymentType, address priorityMech, uint256 responseTimeout, bytes paymentData)
+        """
         return self.prepare_transaction(
             method_name="request",
             method_kwargs={
-                "data": data,
+                "requestData": request_data,
+                "maxDeliveryRate": max_delivery_rate,
+                "paymentType": payment_type,
                 "priorityMech": priority_mech,
-                "priorityMechStakingInstance": priority_mech_staking_instance,
-                "priorityMechServiceId": priority_mech_service_id,
-                "requesterStakingInstance": requester_staking_instance,
-                "requesterServiceId": requester_service_id,
-                "response_timeout": response_timeout,
+                "responseTimeout": response_timeout,
+                "paymentData": payment_data,
             },
             tx_params={"from": from_address, "value": value},
         )

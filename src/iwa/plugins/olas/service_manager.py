@@ -13,6 +13,7 @@ from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     OLAS_TRADER_STAKING_CONTRACTS,
+    PAYMENT_TYPE_NATIVE,
     TRADER_CONFIG_HASH,
     AgentType,
 )
@@ -854,9 +855,9 @@ class ServiceManager:
         use_marketplace: bool = False,
         use_new_abi: bool = False,
         priority_mech: Optional[str] = None,
-        priority_mech_staking_instance: Optional[str] = None,
-        priority_mech_service_id: Optional[int] = None,
-        requester_staking_instance: Optional[str] = None,
+        max_delivery_rate: int = 10_000,
+        payment_type: bytes = bytes.fromhex(PAYMENT_TYPE_NATIVE),
+        payment_data: bytes = b"",
         response_timeout: int = 300,
     ) -> Optional[str]:
         """Send a Mech request from the service multisig.
@@ -866,11 +867,12 @@ class ServiceManager:
             mech_address: Address of the Mech contract (for legacy/direct flow).
             use_marketplace: Whether to use the Mech Marketplace flow.
             priority_mech: Priority mech address (for marketplace).
-            priority_mech_staking_instance: Priority mech staking instance (for marketplace).
-            priority_mech_service_id: Priority mech service ID (for marketplace).
-            requester_staking_instance: Requester's staking instance (defaults to current).
+            max_delivery_rate: Max delivery rate (for marketplace).
+            payment_type: Payment type (for marketplace).
+            payment_data: Payment data (for marketplace).
             response_timeout: Timeout for the marketplace request.
             value: Payment value in wei.
+            use_new_abi: Whether to use new ABI for legacy flow.
 
         Returns:
             The transaction hash if successful, None otherwise.
@@ -890,44 +892,24 @@ class ServiceManager:
 
             marketplace = MechMarketplaceContract(marketplace_address, chain_name=self.chain_name)
 
-            # Use provided values or defaults
-            priority_mech = priority_mech or protocol_contracts.get("OLAS_MECH")
-
-            # requester_staking_instance defaults to the current service's staking contract
-            if not requester_staking_instance:
-                # Try to get it from self.staking_contract_address or OLAS_TRADER_STAKING_CONTRACTS
-                requester_staking_instance = self.service.staking_contract_address
-
-            if not requester_staking_instance:
-                from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
-                staking_map = OLAS_TRADER_STAKING_CONTRACTS.get(self.chain_name, {})
-                if staking_map:
-                    # Use the first one (Expert) as a reasonable guess if not available
-                    requester_staking_instance = list(staking_map.values())[0]
             if not priority_mech:
-                logger.error("Priority mech address not found")
+                logger.error("Priority mech address is required for marketplace requests")
                 return None
 
-            # requester_staking_instance defaults to the current service's staking contract
-            requester_staking_instance = (
-                requester_staking_instance or self.service.staking_contract_address
-            )
-            if not requester_staking_instance:
-                # If no staking instance, we use the zero address as a fallback
-                # Some marketplaces allow non-staked requests if configured
-                logger.warning("Requester staking instance not found, using zero address")
-                requester_staking_instance = "0x0000000000000000000000000000000000000000"
+            priority_mech = Web3.to_checksum_address(priority_mech)
+
+            # 0.01 xDAI default value
+            request_value = value if value is not None else 10_000_000_000_000_000
 
             tx_data = marketplace.prepare_request_tx(
                 from_address=multisig_address,
-                data=data,
-                priority_mech=str(priority_mech),
-                priority_mech_staking_instance=priority_mech_staking_instance or "0x0000000000000000000000000000000000000000",
-                priority_mech_service_id=priority_mech_service_id or 0,
-                requester_staking_instance=str(requester_staking_instance),
-                requester_service_id=service_id,
+                request_data=data,
+                priority_mech=priority_mech,
                 response_timeout=response_timeout,
-                value=value,
+                max_delivery_rate=max_delivery_rate,
+                payment_type=payment_type,
+                payment_data=payment_data,
+                value=request_value,
             )
             to_address = marketplace_address
         else:
