@@ -1,4 +1,34 @@
-"""Staking contract interaction."""
+"""Staking contract interaction.
+
+=============================================================================
+OLAS STAKING TOKEN MECHANICS
+=============================================================================
+
+When staking a service, the TOTAL OLAS required is split 50/50:
+
+1. minStakingDeposit: Collateral for the staking contract
+   - Checked by stakingContract.minStakingDeposit()
+   - Goes to the staking contract when stake() is called
+
+2. agentBond: Operator bond for the agent instance
+   - Must be deposited BEFORE staking during service creation
+   - Stored in Token Utility: getAgentBond(serviceId, agentId)
+
+Both deposits are stored in the Token Utility contract:
+- mapServiceIdTokenDeposit(serviceId) -> (token, deposit)
+- getAgentBond(serviceId, agentId) -> bond
+
+Example for Hobbyist 1 (100 OLAS total):
+- minStakingDeposit: 50 OLAS
+- agentBond: 50 OLAS (set during service creation)
+- Total: 100 OLAS
+
+The staking contract checks that:
+1. Service is in DEPLOYED state
+2. Service was created with the correct token (OLAS)
+3. minStakingDeposit is met
+4. Agent bond was deposited during service registration
+"""
 
 import math
 import time
@@ -20,17 +50,38 @@ class StakingState(Enum):
 
 
 class StakingContract(ContractInstance):
-    """Class to interact with the staking contract."""
+    """Class to interact with the staking contract.
+
+    Manages staking operations for OLAS services and tracks activity/liveness
+    requirements through the associated activity checker.
+    """
 
     name = "staking"
     abi_path = OLAS_ABI_PATH / "staking.json"
 
-    def __init__(self, address: str):
-        """Initialize StakingContract."""
-        super().__init__(address)
+    def __init__(self, address: str, chain_name: str = "gnosis"):
+        """Initialize StakingContract.
 
+        Args:
+            address: The staking contract address.
+            chain_name: The chain name (default: gnosis).
+
+        Note:
+            minStakingDeposit is 50% of the total OLAS required.
+            The other 50% is the agentBond, deposited during service creation.
+            Example: Hobbyist 1 (100 OLAS) = 50 deposit + 50 bond
+        """
+        super().__init__(address, chain_name=chain_name)
+        self.chain_name = chain_name
+
+        # Get activity checker from the staking contract
         activity_checker_address = self.call("activityChecker")
-        self.activity_checker = ActivityCheckerContract(activity_checker_address)
+        self.activity_checker = ActivityCheckerContract(
+            activity_checker_address, chain_name=chain_name
+        )
+        self.activity_checker_address = activity_checker_address
+
+        # Cache contract parameters
         self.available_rewards = self.call("availableRewards")
         self.balance = self.call("balance")
         self.liveness_period = self.call("livenessPeriod")
@@ -63,8 +114,19 @@ class StakingContract(ContractInstance):
         """Get the current staked services."""
         return self.call("getServiceIds")
 
-    def get_service_info(self, service_id: int):
-        """Get information about services in the staking contract."""
+    def get_service_info(self, service_id: int) -> Dict:
+        """Get comprehensive staking information for a service.
+
+        Args:
+            service_id: The service ID to query.
+
+        Returns:
+            Dict with staking info including nonces, rewards, and liveness status.
+
+        Note:
+            Activity nonces from the checker are: (safe_nonce, mech_requests_count).
+            For liveness tracking, we use mech_requests_count (index 1).
+        """
         (
             multisig_address,
             owner_address,
@@ -73,22 +135,49 @@ class StakingContract(ContractInstance):
             accrued_reward,
             inactivity,
         ) = self.call("getServiceInfo", service_id)
-        total_nonces = self.activity_checker.get_multisig_nonces(multisig_address)
-        nonces_since_last_checkpoint = total_nonces[0] - nonces_on_last_checkpoint[0]
-        required_nonces = self.get_required_requests()
+
+        # Get current nonces from activity checker: (safe_nonce, mech_requests)
+        current_nonces = self.activity_checker.get_multisig_nonces(multisig_address)
+        current_safe_nonce, current_mech_requests = current_nonces
+
+        # Last checkpoint nonces are also (safe_nonce, mech_requests)
+        last_safe_nonce = nonces_on_last_checkpoint[0]
+        last_mech_requests = nonces_on_last_checkpoint[1]
+
+        # Mech requests this epoch (what matters for liveness)
+        mech_requests_this_epoch = current_mech_requests - last_mech_requests
+
+        required_requests = self.get_required_requests()
+        epoch_end = self.get_next_epoch_start()
+        remaining_seconds = (epoch_end - datetime.now(timezone.utc)).total_seconds()
+
+        # Check liveness ratio using activity checker
+        liveness_passed = self.is_liveness_ratio_passed(
+            current_nonces=current_nonces,
+            last_nonces=(last_safe_nonce, last_mech_requests),
+            ts_start=ts_start,
+        )
+
         return {
-            "owner_address": owner_address,
-            "activity_nonces": nonces_since_last_checkpoint,
             "multisig_address": multisig_address,
-            "accrued_reward": accrued_reward,
-            "required_nonces": required_nonces,
-            "has_enough_nonces": nonces_since_last_checkpoint >= required_nonces,
-            "remaining_epoch_seconds": (
-                self.get_next_epoch_start() - datetime.now(timezone.utc)
-            ).total_seconds(),
+            "owner_address": owner_address,
+            "current_safe_nonce": current_safe_nonce,
+            "current_mech_requests": current_mech_requests,
+            "last_checkpoint_safe_nonce": last_safe_nonce,
+            "last_checkpoint_mech_requests": last_mech_requests,
+            "mech_requests_this_epoch": mech_requests_this_epoch,
+            "required_mech_requests": required_requests,
+            "remaining_mech_requests": max(0, required_requests - mech_requests_this_epoch),
+            "has_enough_requests": mech_requests_this_epoch >= required_requests,
+            "accrued_reward_wei": accrued_reward,
+            "epoch_end_utc": epoch_end,
+            "remaining_epoch_seconds": remaining_seconds,
+            "liveness_ratio_passed": liveness_passed,
+            "ts_start": ts_start,
+            "inactivity_count": inactivity,
         }
 
-    def get_staking_state(self, service_id: int):
+    def get_staking_state(self, service_id: int) -> StakingState:
         """Get the staking state for a given service ID."""
         return StakingState(self.call("getStakingState", service_id))
 
@@ -97,7 +186,10 @@ class StakingContract(ContractInstance):
         return self.call("tsCheckpoint")
 
     def get_required_requests(self) -> int:
-        """Calculate the required requests for the next epoch."""
+        """Calculate the required requests for the current epoch.
+
+        Includes a safety margin of 1 extra request.
+        """
         requests_safety_margin = 1
         now_ts = time.time()
         return math.ceil(
@@ -109,12 +201,37 @@ class StakingContract(ContractInstance):
             + requests_safety_margin
         )
 
+    def is_liveness_ratio_passed(
+        self,
+        current_nonces: int,
+        last_nonces: int,
+        ts_start: int,
+    ) -> bool:
+        """Check if the liveness ratio requirement is passed.
+
+        Uses the activity checker's isRatioPass function to determine
+        if the service meets liveness requirements for staking rewards.
+
+        Args:
+            current_nonces: Current total mech request nonces.
+            last_nonces: Nonces at the last checkpoint.
+            ts_start: Timestamp when staking started or last checkpoint.
+
+        Returns:
+            True if liveness requirements are met.
+        """
+        return self.activity_checker.is_ratio_pass(
+            current_nonces=current_nonces,
+            last_nonces=last_nonces,
+            ts_start=ts_start,
+        )
+
     def prepare_stake_tx(
         self,
         from_address: str,
         service_id: int,
     ) -> Optional[Dict]:
-        """Stake a service."""
+        """Prepare a stake transaction."""
         tx = self.prepare_transaction(
             method_name="stake",
             method_kwargs={
@@ -129,7 +246,7 @@ class StakingContract(ContractInstance):
         from_address: str,
         service_id: int,
     ) -> Optional[Dict]:
-        """Unstake a service."""
+        """Prepare an unstake transaction."""
         tx = self.prepare_transaction(
             method_name="unstake",
             method_kwargs={

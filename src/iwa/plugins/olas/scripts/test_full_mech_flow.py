@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Full integration test: Create service, send legacy mech request, send marketplace mech request."""
+"""Integration test: Create service, send legacy mech request, send marketplace mech request.
+
+This script tests the full mech request flow on a Tenderly fork:
+1. Creates a new OLAS service (or uses existing one)
+2. Spins up the service
+3. Sends a legacy mech request and verifies the Request event
+4. Sends a marketplace mech request and verifies the MarketplaceRequest event
+"""
 
 import sys
 from pathlib import Path
@@ -10,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 from iwa.core.chain import ChainInterfaces
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.service_manager import ServiceManager
-from iwa.plugins.olas.constants import OLAS_CONTRACTS, PAYMENT_TYPE_NATIVE
+from iwa.plugins.olas.constants import OLAS_CONTRACTS
 
 
 def print_step(step: str, emoji: str = "🔵"):
@@ -66,7 +73,7 @@ def verify_mech_event(chain, tx_hash, contract, expected_event_name, multisig_ad
 
 def main():
     print("=" * 60)
-    print("  Full Mech Request Integration Test (Tenderly)")
+    print("  OLAS Mech Request Integration Test")
     print("=" * 60)
 
     # Initialize wallet
@@ -80,7 +87,7 @@ def main():
     master_balance = chain.get_native_balance_eth(wallet.master_account.address)
     print_info(f"Master xDAI Balance: {master_balance}")
 
-    # Step 1: Create Service
+    # Step 1: Create/Load Service
     print_step("Step 1: Create Service", "1️⃣")
     manager = ServiceManager(wallet)
 
@@ -191,18 +198,17 @@ def main():
     print_step("Step 4: Send Marketplace Mech Request", "4️⃣")
     from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 
-    # Priority mech address (known registered mech from mech-client tests)
+    # Known registered mech on Gnosis marketplace
     priority_mech = "0x601024E27f1C67B28209E24272CED8A31fc8151F"
 
+    # API uses smart defaults:
+    # - max_delivery_rate defaults to value
+    # - payment_type defaults to NATIVE
     tx_hash_marketplace = manager.send_mech_request(
         data=dummy_data,
         value=payment_wei,
         use_marketplace=True,
         priority_mech=priority_mech,
-        response_timeout=300,
-        max_delivery_rate=payment_wei,  # Must match mech's maxDeliveryRate
-        payment_type=bytes.fromhex(PAYMENT_TYPE_NATIVE),
-        payment_data=b"",
     )
 
     if not tx_hash_marketplace:

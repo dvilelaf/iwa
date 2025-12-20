@@ -83,6 +83,7 @@ class TestServiceManagerMech:
         """Test sending a marketplace Mech request."""
         data = b"marketplace data"
         payment_type_bytes = bytes.fromhex(PAYMENT_TYPE_NATIVE)
+        value = 2 * 10**16
 
         # Mock the account resolution to return a Safe account
         from iwa.core.models import StoredSafeAccount
@@ -93,7 +94,7 @@ class TestServiceManagerMech:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",
-                "value": 2 * 10**16
+                "value": value
             }
             # Mock event extraction to simulate successful event
             mock_market.extract_events.return_value = [{"name": "MarketplaceRequest"}]
@@ -105,18 +106,19 @@ class TestServiceManagerMech:
                 data=data,
                 use_marketplace=True,
                 priority_mech=VALID_PRIORITY_MECH,
-                response_timeout=600,
-                value=2 * 10**16
+                response_timeout=300,  # Within bounds [60, 300]
+                value=value,
             )
 
             assert tx_hash == "0xMockTxHash"
+            # Note: max_delivery_rate now defaults to value
             mock_market.prepare_request_tx.assert_called_once_with(
                 from_address=VALID_MULTISIG,
                 request_data=data,
                 priority_mech=VALID_PRIORITY_MECH,
-                response_timeout=600,
-                max_delivery_rate=10_000,
+                response_timeout=300,
+                max_delivery_rate=value,  # Defaults to value
                 payment_type=payment_type_bytes,
                 payment_data=b"",
-                value=2 * 10**16,
+                value=value,
             )

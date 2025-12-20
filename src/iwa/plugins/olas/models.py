@@ -26,6 +26,39 @@ class Service(BaseModel):
         return f"{self.chain_name}:{self.service_id}"
 
 
+class StakingStatus(BaseModel):
+    """Staking status for a service including liveness check info.
+
+    The activity checker tracks:
+    - safe_nonce: Total Safe multisig transactions
+    - mech_requests: Total mech requests made
+
+    Liveness is measured by mech_requests made since last checkpoint.
+    """
+
+    is_staked: bool
+    staking_contract_address: Optional[str] = None
+    staking_state: str  # "NOT_STAKED", "STAKED", "EVICTED"
+
+    # Mech request tracking (what determines liveness)
+    mech_requests_this_epoch: int = 0
+    required_mech_requests: int = 0
+    remaining_mech_requests: int = 0
+    has_enough_requests: bool = False
+    liveness_ratio_passed: bool = False
+
+    # Rewards
+    accrued_reward_wei: int = 0
+
+    # Epoch timing
+    epoch_end_utc: Optional[str] = None  # ISO format string
+    remaining_epoch_seconds: float = 0
+
+    # Activity checker info
+    activity_checker_address: Optional[str] = None
+    liveness_ratio: int = 0  # Requests per second * 1e18
+
+
 
 class OlasConfig(BaseModel):
     """OlasConfig with multi-service support."""
