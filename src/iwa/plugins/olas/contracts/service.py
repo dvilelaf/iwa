@@ -9,18 +9,16 @@ from web3 import Web3
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.constants import (
     DEFAULT_DEPLOY_PAYLOAD,
-    DEFAULT_FALLBACK_HANDLER,
-    MULTISIG_IMPLEMENTATION_ADDRESS,
 )
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
 
 
-def get_deployment_payload(fallback_handler: Optional[str] = None) -> str:
+def get_deployment_payload(fallback_handler: str) -> str:
     """Calculates deployment payload."""
     return (
         DEFAULT_DEPLOY_PAYLOAD.format(
-            fallback_handler=(fallback_handler or DEFAULT_FALLBACK_HANDLER)[2:]
+            fallback_handler=fallback_handler[2:]
         )
         + int(time.time()).to_bytes(32, "big").hex()
     )
@@ -150,16 +148,32 @@ class ServiceManagerContract(ContractInstance):
         self,
         from_address: str,
         service_id: int,
-        multisig_implementation_address: str = MULTISIG_IMPLEMENTATION_ADDRESS,
+        multisig_implementation_address: Optional[str] = None,
+        fallback_handler: Optional[str] = None,
         data: Optional[str] = None,
     ) -> Optional[Dict]:
         """Deploy a service."""
+        # Get addresses from chain if not provided
+        if not multisig_implementation_address:
+            multisig_implementation_address = self.chain_interface.get_contract_address(
+                "GNOSIS_SAFE_MULTISIG_IMPLEMENTATION"
+            )
+        if not fallback_handler:
+            fallback_handler = self.chain_interface.get_contract_address(
+                "GNOSIS_SAFE_FALLBACK_HANDLER"
+            )
+
+        if not multisig_implementation_address or not fallback_handler:
+            raise ValueError(
+                "Multisig implementation or fallback handler address not found for chain"
+            )
+
         tx = self.prepare_transaction(
             method_name="deploy",
             method_kwargs={
                 "serviceId": service_id,
                 "multisigImplementationAddress": multisig_implementation_address,
-                "data": data or get_deployment_payload(),
+                "data": data or get_deployment_payload(fallback_handler),
             },
             tx_params={"from": from_address},
         )

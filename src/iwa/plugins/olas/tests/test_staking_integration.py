@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 from eth_account import Account
 
+from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 from iwa.plugins.olas.contracts.service import (
     ServiceManagerContract,
     ServiceRegistryContract,
@@ -63,6 +64,42 @@ MINIMAL_ABI = [
         "stateMutability": "view",
         "type": "function",
     },
+    {
+        "name": "create",
+        "type": "function",
+        "inputs": [{"name": "", "type": "address"}] * 6,
+        "outputs": [],
+    },
+    {
+        "name": "activateRegistration",
+        "type": "function",
+        "inputs": [{"name": "", "type": "uint256"}],
+        "outputs": [],
+    },
+    {
+        "name": "registerAgents",
+        "type": "function",
+        "inputs": [{"name": "", "type": "uint256"}, {"name": "", "type": "address[]"}, {"name": "", "type": "uint256[]"}],
+        "outputs": [],
+    },
+    {
+        "name": "deploy",
+        "type": "function",
+        "inputs": [{"name": "", "type": "uint256"}, {"name": "", "type": "address"}, {"name": "", "type": "bytes"}],
+        "outputs": [],
+    },
+    {
+        "name": "terminate",
+        "type": "function",
+        "inputs": [{"name": "", "type": "uint256"}],
+        "outputs": [],
+    },
+    {
+        "name": "unbond",
+        "type": "function",
+        "inputs": [{"name": "", "type": "uint256"}],
+        "outputs": [],
+    },
 ]
 
 
@@ -105,35 +142,39 @@ def test_service_contracts():
 
         manager = ServiceManagerContract(VALID_ADDR_1)
 
-        # Test prepare methods
-        with patch.object(manager, "prepare_transaction") as mock_prep:
-            mock_prep.return_value = {}
+        # Mock ChainInterfaces for get_contract_address
+        with patch.object(manager.chain_interface, "get_contract_address") as mock_get_addr:
+            mock_get_addr.return_value = VALID_ADDR_4
 
-            manager.prepare_create_tx(VALID_ADDR_2, VALID_ADDR_3, VALID_ADDR_1, "hash", [], [], 3)
-            assert mock_prep.called
-            mock_prep.reset_mock()
+            # Test prepare methods
+            with patch.object(manager, "prepare_transaction") as mock_prep:
+                mock_prep.return_value = {}
 
-            manager.prepare_activate_registration_tx(VALID_ADDR_2, 1)
-            assert mock_prep.called
-            mock_prep.reset_mock()
+                manager.prepare_create_tx(VALID_ADDR_2, VALID_ADDR_3, VALID_ADDR_1, "hash", [], [], 3)
+                assert mock_prep.called
+                mock_prep.reset_mock()
 
-            manager.prepare_register_agents_tx(VALID_ADDR_2, 1, [], [])
-            assert mock_prep.called
-            mock_prep.reset_mock()
+                manager.prepare_activate_registration_tx(VALID_ADDR_2, 1)
+                assert mock_prep.called
+                mock_prep.reset_mock()
 
-            manager.prepare_deploy_tx(VALID_ADDR_2, 1)
-            assert mock_prep.called
-            mock_prep.reset_mock()
+                manager.prepare_register_agents_tx(VALID_ADDR_2, 1, [], [])
+                assert mock_prep.called
+                mock_prep.reset_mock()
 
-            manager.prepare_terminate_tx(VALID_ADDR_2, 1)
-            assert mock_prep.called
-            mock_prep.reset_mock()
+                manager.prepare_deploy_tx(VALID_ADDR_2, 1)
+                assert mock_prep.called
+                mock_prep.reset_mock()
 
-            manager.prepare_unbond_tx(VALID_ADDR_2, 1)
-            assert mock_prep.called
+                manager.prepare_terminate_tx(VALID_ADDR_2, 1)
+                assert mock_prep.called
+                mock_prep.reset_mock()
+
+                manager.prepare_unbond_tx(VALID_ADDR_2, 1)
+                assert mock_prep.called
 
         # Test get_deployment_payload
-        payload = get_deployment_payload()
+        payload = get_deployment_payload(VALID_ADDR_4)
         assert isinstance(payload, str)
 
 

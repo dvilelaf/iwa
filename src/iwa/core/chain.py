@@ -234,6 +234,7 @@ class SupportedChain(BaseModel):
     chain_id: int
     native_currency: str
     tokens: Dict[str, EthereumAddress] = {}
+    contracts: Dict[str, EthereumAddress] = {}
 
     @property
     def rpc(self) -> str:
@@ -275,6 +276,10 @@ class Gnosis(SupportedChain):
         "SDAI": EthereumAddress("0xaf204776c7245bF4147c2612BF6e5972Ee483701"),
         "EURE": EthereumAddress("0x420CA0f9B9b604cE0fd9C18EF134C705e5Fa3430"),
     }
+    contracts: Dict[str, EthereumAddress] = {
+        "GNOSIS_SAFE_MULTISIG_IMPLEMENTATION": EthereumAddress("0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"),
+        "GNOSIS_SAFE_FALLBACK_HANDLER": EthereumAddress("0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4"),
+    }
 
 
 @singleton
@@ -290,6 +295,7 @@ class Ethereum(SupportedChain):
     tokens: Dict[str, EthereumAddress] = {
         "OLAS": EthereumAddress("0x0001A500A6B18995B03f44bb040A5fFc28E45CB0"),
     }
+    contracts: Dict[str, EthereumAddress] = {}
 
 
 @singleton
@@ -303,6 +309,7 @@ class Base(SupportedChain):
     tokens: Dict[str, EthereumAddress] = {
         "OLAS": EthereumAddress("0x54330d28ca3357F294334BDC454a032e7f353416"),
     }
+    contracts: Dict[str, EthereumAddress] = {}
 
 
 @singleton
@@ -544,6 +551,10 @@ class ChainInterface:
     def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
         """Get token address by name"""
         return self.chain.get_token_address(token_name)
+
+    def get_contract_address(self, contract_name: str) -> Optional[EthereumAddress]:
+        """Get contract address by name from the chain's contracts mapping."""
+        return self.chain.contracts.get(contract_name)
 
 
 @singleton

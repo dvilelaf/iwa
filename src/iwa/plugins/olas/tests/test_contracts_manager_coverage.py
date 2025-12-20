@@ -83,7 +83,9 @@ def test_create_service_failures(
 ):
     """Test service creation failure modes."""
     mock_config_inst = mock_config_cls.return_value
-    mock_config_inst.plugins = {"olas": MagicMock()}
+    mock_olas_config = MagicMock()
+    mock_olas_config.get_active_service.return_value = None
+    mock_config_inst.plugins = {"olas": mock_olas_config}
 
     manager = ServiceManager(mock_wallet)
 
@@ -126,7 +128,9 @@ def test_create_service_with_approval(
 ):
     """Test service creation with token approval."""
     mock_config_inst = mock_config_cls.return_value
-    mock_config_inst.plugins = {"olas": MagicMock()}
+    mock_olas_config = MagicMock()
+    mock_olas_config.get_active_service.return_value = None
+    mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
     mock_registry_inst.extract_events.return_value = [
@@ -152,7 +156,10 @@ def test_activate_registration(
     """Test service registration activation."""
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
-    mock_olas_config.service_id = 123
+    mock_service = MagicMock()
+    mock_service.service_id = 123
+    mock_service.chain_name = "gnosis"
+    mock_olas_config.get_active_service.return_value = mock_service
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
@@ -187,7 +194,10 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
     """Test agent registration flow."""
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
-    mock_olas_config.service_id = 123
+    mock_service = MagicMock()
+    mock_service.service_id = 123
+    mock_service.chain_name = "gnosis"
+    mock_olas_config.get_active_service.return_value = mock_service
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value

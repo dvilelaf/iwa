@@ -7,10 +7,11 @@ from pathlib import Path
 # Add src to path (scripts are in src/iwa/plugins/olas/scripts/)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
+from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import CONFIG_PATH
 from iwa.core.models import Config
 from iwa.core.wallet import Wallet
-from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS, TRADER_STAKING_CONTRACTS
+from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 from iwa.plugins.olas.contracts.staking import StakingContract
 from iwa.plugins.olas.service_manager import ServiceManager
 
@@ -48,7 +49,7 @@ def find_staking_contract_with_slots():
     """Find a staking contract with available slots."""
     print_info("Searching for staking contract with available slots...")
 
-    for name, address in TRADER_STAKING_CONTRACTS.items():
+    for name, address in OLAS_TRADER_STAKING_CONTRACTS["gnosis"].items():
         try:
             contract = StakingContract(address)
             current_services = len(contract.get_service_ids())
@@ -102,7 +103,7 @@ def main():
         token_address = None
         bond_amount = 1
     else:
-        token_address = OLAS_TOKEN_ADDRESS_GNOSIS
+        token_address = ChainInterfaces().gnosis.get_token_address("OLAS")
         bond_amount = staking_contract.min_staking_deposit
         print_success(f"Will use OLAS token: {token_address}")
         print_success(f"Bond amount: {bond_amount / 1e18:.0f} OLAS")

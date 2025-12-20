@@ -5,15 +5,13 @@ from typing import Dict, List, Optional, Union
 from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.models import Config
 from iwa.core.utils import configure_logger
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import (
-    DEFAULT_TOKEN_ADDRESS,
-    SERVICE_MANAGER_ADDRESS_GNOSIS,
-    SERVICE_REGISTRY_ADDRESS_GNOSIS,
-    SERVICE_REGISTRY_TOKEN_UTILITY_ADDRESS_GNOSIS,
+    OLAS_CONTRACTS,
     TRADER_CONFIG_HASH,
     AgentType,
 )
@@ -62,10 +60,19 @@ class ServiceManager:
 
     def _init_contracts(self, chain_name: str) -> None:
         """Initialize contracts for the given chain."""
-        # TODO: Support multiple chains with different contract addresses
-        self.registry = ServiceRegistryContract(SERVICE_REGISTRY_ADDRESS_GNOSIS)
-        self.manager = ServiceManagerContract(SERVICE_MANAGER_ADDRESS_GNOSIS)
-        self.chain_name = chain_name
+        chain_interface = ChainInterfaces().get(chain_name)
+
+        # Get protocol contracts from plugin-local constants
+        protocol_contracts = OLAS_CONTRACTS.get(chain_name.lower(), {})
+        registry_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY")
+        manager_address = protocol_contracts.get("OLAS_SERVICE_MANAGER")
+
+        if not registry_address or not manager_address:
+            raise ValueError(f"OLAS contracts not found for chain: {chain_name}")
+
+        self.registry = ServiceRegistryContract(registry_address, chain_name=chain_name)
+        self.manager = ServiceManagerContract(manager_address, chain_name=chain_name)
+        self.chain_name = chain_interface.chain.name.lower()
 
     def _save_config(self) -> None:
         """Persist configuration to config.toml."""
@@ -124,7 +131,7 @@ class ServiceManager:
         create_tx = self.manager.prepare_create_tx(
             from_address=self.wallet.master_account.address,
             service_owner=service_owner_account.address,
-            token_address=token_address if token_address else DEFAULT_TOKEN_ADDRESS,
+            token_address=token_address if token_address else NATIVE_CURRENCY_ADDRESS,
             config_hash=bytes.fromhex(TRADER_CONFIG_HASH),
             agent_ids=agent_id_values,
             agent_params=agent_params,
@@ -178,11 +185,19 @@ class ServiceManager:
 
         erc20_contract = ERC20Contract(token_address)
 
-        # Approve the service registry token utility contract to spend the staking tokens
+        # Approve the service registry token utility contract
+        protocol_contracts = OLAS_CONTRACTS.get(chain_name.lower(), {})
+        utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
+
+        if not utility_address:
+            logger.error(f"OLAS Service Registry Token Utility not found for chain: {chain_name}")
+            return False
+
+        # Approve the token utility to move tokens
         approve_tx = erc20_contract.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
-            spender=SERVICE_REGISTRY_TOKEN_UTILITY_ADDRESS_GNOSIS,
-            amount_wei=2 * bond_amount,
+            spender=utility_address,
+            amount_wei=bond_amount,
         )
 
         logger.info("Approving OLAS token for staking contract")
@@ -254,23 +269,29 @@ class ServiceManager:
             agent_account_address = agent_address
             logger.info(f"Using existing agent address: {agent_address}")
         else:
-            # Create a new account for the service
+            # Create a new account for the service (or use existing if found)
             agent_tag = f"service_{self.service.service_id}_agent"
-            agent_account = self.wallet.key_storage.create_account(agent_tag)
-            agent_account_address = agent_account.address
-            logger.info(f"Created new agent account: {agent_account_address}")
+            try:
+                agent_account = self.wallet.key_storage.create_account(agent_tag)
+                agent_account_address = agent_account.address
+                logger.info(f"Created new agent account: {agent_account_address}")
 
-            # Fund the agent (only for newly created accounts)
-            tx_hash = self.wallet.send(
-                from_address_or_tag=self.wallet.master_account.address,
-                to_address_or_tag=agent_account_address,
-                token_address_or_name="native",
-                amount_wei=Web3.to_wei(1, "ether"),  # 1 xDAI
-            )
-            if not tx_hash:
-                logger.error("Failed to fund agent account")
-                return False
-
+                # Fund the agent (only for newly created accounts)
+                tx_hash = self.wallet.send(
+                    from_address_or_tag=self.wallet.master_account.address,
+                    to_address_or_tag=agent_account_address,
+                    token_address_or_name="native",
+                    amount_wei=Web3.to_wei(1, "ether"),  # 1 xDAI
+                )
+                if not tx_hash:
+                    logger.error("Failed to fund agent account")
+                    return False
+                logger.info(f"Funded agent account: {tx_hash}")
+            except ValueError:
+                # Handle case where account already exists
+                agent_account = self.wallet.key_storage.get_account(agent_tag)
+                agent_account_address = agent_account.address
+                logger.info(f"Using existing agent account: {agent_account_address}")
         # Register the agent
         register_tx = self.manager.prepare_register_agents_tx(
             from_address=self.wallet.master_account.address,
