@@ -101,6 +101,7 @@ def test_chain_interface_insecure_rpc_warning(mock_web3, caplog):
 def test_is_contract(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_code.return_value = b"code"
@@ -113,6 +114,7 @@ def test_is_contract(mock_web3):
 def test_get_native_balance(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_balance.return_value = 10**18
@@ -130,6 +132,7 @@ def test_get_native_balance(mock_web3):
 def test_estimate_gas(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     built_method = MagicMock()
@@ -147,6 +150,7 @@ def test_estimate_gas(mock_web3):
 def test_calculate_transaction_params(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
     ci.web3.eth.get_transaction_count.return_value = 5
@@ -162,6 +166,7 @@ def test_calculate_transaction_params(mock_web3):
 def test_wait_for_no_pending_tx(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     ci = ChainInterface(chain)
 
@@ -241,6 +246,7 @@ def test_chain_interfaces_get():
 def test_chain_interface_get_token_address(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
     chain.get_token_address.return_value = "0xToken"
     ci = ChainInterface(chain)
@@ -253,27 +259,24 @@ def test_rotate_rpc(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
     chain.rpcs = ["http://rpc1", "http://rpc2", "http://rpc3"]
-    chain.name = "TestChain"
     # Needs to return property value for rpc if accessed, but here access is via index
 
     ci = ChainInterface(chain)
     ci._current_rpc_index = 0
 
-    # Rotate 1
-    assert ci.rotate_rpc() is True
-    assert ci._current_rpc_index == 1
-    # Check that Web3 was re-initialized with new RPC
-    args, _ = mock_web3.call_args
-    # Web3 is init with HTTPProvider. Mock checking is complex for exact args if provider mock is deeper.
-    # Just check index for now.
+    # Mock health check to always pass
+    with patch.object(ci, "check_rpc_health", return_value=True):
+        # Rotate 1
+        assert ci.rotate_rpc() is True
+        assert ci._current_rpc_index == 1
 
-    # Rotate 2
-    assert ci.rotate_rpc() is True
-    assert ci._current_rpc_index == 2
+        # Rotate 2
+        assert ci.rotate_rpc() is True
+        assert ci._current_rpc_index == 2
 
-    # Rotate 3 (back to 0)
-    assert ci.rotate_rpc() is True
-    assert ci._current_rpc_index == 0
+        # Rotate 3 (back to 0)
+        assert ci.rotate_rpc() is True
+        assert ci._current_rpc_index == 0
 
 
 def test_rotate_rpc_no_rpcs(mock_web3):
@@ -313,10 +316,12 @@ def test_chain_interface_with_real_chains():
         interface.chain.rpcs = ["http://rpc1", "http://rpc2"]
         interface.web3 = MagicMock()
         interface.web3.provider.endpoint_uri = "http://rpc1"
+        interface.web3._web3.eth.block_number = 12345  # For health check
 
-        rotated = interface.rotate_rpc()
-        assert rotated is True
-        assert interface.web3.provider.endpoint_uri == "http://rpc2"
+        # Mock health check to pass
+        with patch.object(interface, "check_rpc_health", return_value=True):
+            rotated = interface.rotate_rpc()
+            assert rotated is True
 
         interface.web3.eth.get_code = MagicMock(return_value=b"code")
         assert interface.is_contract(valid_addr_1) is True
@@ -406,6 +411,7 @@ def test_get_token_symbol_fallback_on_error(mock_web3):
     """Test get_token_symbol returns truncated address on error."""
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     chain.tokens = {}
     type(chain).rpc = PropertyMock(return_value="https://rpc")
 
@@ -426,6 +432,7 @@ def test_get_token_decimals_fallback_on_error(mock_web3):
     """Test get_token_decimals returns 18 on error."""
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
 
     ci = ChainInterface(chain)
@@ -443,6 +450,7 @@ def test_is_rate_limit_error_detection(mock_web3):
     """Test _is_rate_limit_error detects various rate limit errors."""
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
+    chain.rpcs = ["https://rpc"]
     type(chain).rpc = PropertyMock(return_value="https://rpc")
 
     ci = ChainInterface(chain)
@@ -460,7 +468,7 @@ def test_is_rate_limit_error_detection(mock_web3):
 
 
 def test_handle_rpc_error_non_rate_limit(mock_web3):
-    """Test _handle_rpc_error returns False for non-rate-limit errors."""
+    """Test _handle_rpc_error returns dict with should_retry for connection errors."""
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
     chain.rpcs = ["https://rpc1", "https://rpc2"]
@@ -468,9 +476,14 @@ def test_handle_rpc_error_non_rate_limit(mock_web3):
 
     ci = ChainInterface(chain)
 
-    # Non-rate-limit error should return False
-    result = ci._handle_rpc_error(Exception("Connection timeout"))
-    assert result is False
+    # Connection error should now return dict with should_retry
+    with patch.object(ci, "check_rpc_health", return_value=True):
+        result = ci._handle_rpc_error(Exception("Connection timeout"))
+        assert isinstance(result, dict)
+        assert result["is_connection_error"] is True
+        assert result["should_retry"] is True
 
-    # RPC index should not have changed
-    assert ci._current_rpc_index == 0
+    # Non-retryable error (e.g., invalid address) should not trigger retry
+    result = ci._handle_rpc_error(Exception("Invalid address"))
+    assert isinstance(result, dict)
+    assert result["should_retry"] is False

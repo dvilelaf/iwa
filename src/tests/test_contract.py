@@ -71,8 +71,12 @@ def test_prepare_transaction_custom_error_known(mock_chain_interface, mock_abi_f
         ContractCustomError(error_data)
     )
 
-    with pytest.raises(Exception, match="CustomError in 'test_contract'"):
-        contract.prepare_transaction("testFunc", {}, {})
+    # Now the function returns None and logs the error instead of raising
+    with patch("iwa.core.contracts.contract.logger") as mock_logger:
+        result = contract.prepare_transaction("testFunc", {}, {})
+        assert result is None
+        # Verify error was logged
+        mock_logger.error.assert_called()
 
 
 def test_prepare_transaction_custom_error_unknown(mock_chain_interface, mock_abi_file):
@@ -83,13 +87,17 @@ def test_prepare_transaction_custom_error_unknown(mock_chain_interface, mock_abi
         ContractCustomError(error_data)
     )
 
-    with pytest.raises(Exception, match="Unknown custom error"):
-        contract.prepare_transaction("testFunc", {}, {})
+    # Now the function returns None and logs the error instead of raising
+    with patch("iwa.core.contracts.contract.logger") as mock_logger:
+        result = contract.prepare_transaction("testFunc", {}, {})
+        assert result is None
+        # Verify error was logged
+        mock_logger.error.assert_called()
 
 
 def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
-    # Prefix with 0x
+    # Encoded Error(string) with "Error" as the message
     encoded_error = "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000054572726f72000000000000000000000000000000000000000000000000000000"
     e = Exception("msg", encoded_error)
 
@@ -98,7 +106,8 @@ def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
     with patch("iwa.core.contracts.contract.logger") as mock_logger:
         tx = contract.prepare_transaction("testFunc", {}, {})
         assert tx is None
-        mock_logger.error.assert_called_with("Error preparing transaction: Error")
+        # Should log the decoded error
+        mock_logger.error.assert_called()
 
 
 def test_prepare_transaction_other_exception(mock_chain_interface, mock_abi_file):

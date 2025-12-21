@@ -2,7 +2,7 @@
 
 import threading
 import time
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 from eth_account.datastructures import SignedTransaction
 from pydantic import BaseModel
@@ -13,6 +13,12 @@ from iwa.core.settings import settings
 from iwa.core.utils import configure_logger, singleton
 
 logger = configure_logger()
+
+# Type variable for retry decorator
+T = TypeVar("T")
+
+# Default timeout for RPC requests (increased for reliability)
+DEFAULT_RPC_TIMEOUT = 10
 
 
 class RPCRateLimiter:
@@ -326,10 +332,14 @@ class SupportedChains:
 
 
 class ChainInterface:
-    """ChainInterface with rate limiting support."""
+    """ChainInterface with rate limiting, retry logic, and RPC rotation support."""
+
+    # Default retry settings
+    DEFAULT_MAX_RETRIES = 3
+    DEFAULT_RETRY_DELAY = 0.5  # Base delay in seconds (exponential backoff)
 
     def __init__(self, chain: Union[SupportedChain, str] = None):
-        """ChainInterface"""
+        """Initialize ChainInterface."""
         if chain is None:
             chain = Gnosis()
         if isinstance(chain, str):
@@ -337,16 +347,21 @@ class ChainInterface:
 
         self.chain = chain
         self._rate_limiter = get_rate_limiter(chain.name)
+        self._current_rpc_index = 0
+        self._rpc_failure_counts: Dict[int, int] = {}  # Track failures per RPC
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
             logger.warning(
                 f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS."
             )
 
-        # Use rate-limited Web3 wrapper - all RPC calls automatically rate limited
-        raw_web3 = Web3(Web3.HTTPProvider(self.chain.rpc, request_kwargs={"timeout": 3}))
+        self._init_web3()
+
+    def _init_web3(self):
+        """Initialize Web3 with current RPC."""
+        rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
+        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
         self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
-        self._current_rpc_index = 0
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """Check if error is a rate limit (429) error."""
@@ -354,44 +369,200 @@ class ChainInterface:
         rate_limit_signals = ["429", "rate limit", "too many requests", "ratelimit"]
         return any(signal in err_text for signal in rate_limit_signals)
 
-    def _handle_rpc_error(self, error: Exception) -> bool:
-        """Handle RPC errors, with smart rotation on rate limiting.
+    def _is_connection_error(self, error: Exception) -> bool:
+        """Check if error is a connection/network error.
 
-        When a rate limit is detected:
-        1. First, try to rotate to another RPC
-        2. If rotation succeeds, continue without backoff
-        3. If no other RPCs available, trigger backoff
+        These errors indicate the RPC may be broken or unreachable.
+        """
+        err_text = str(error).lower()
+        connection_signals = [
+            "timeout",
+            "timed out",
+            "connection refused",
+            "connection reset",
+            "connection error",
+            "connection aborted",
+            "name resolution",
+            "dns",
+            "no route to host",
+            "network unreachable",
+            "max retries exceeded",
+            "read timeout",
+            "connect timeout",
+            "remote end closed",
+            "broken pipe",
+        ]
+        return any(signal in err_text for signal in connection_signals)
+
+    def _is_server_error(self, error: Exception) -> bool:
+        """Check if error is a server-side error (5xx)."""
+        err_text = str(error).lower()
+        server_error_signals = [
+            "500",
+            "502",
+            "503",
+            "504",
+            "internal server error",
+            "bad gateway",
+            "service unavailable",
+            "gateway timeout",
+        ]
+        return any(signal in err_text for signal in server_error_signals)
+
+    def _handle_rpc_error(self, error: Exception) -> dict:
+        """Handle RPC errors with smart rotation and retry logic.
 
         Returns:
-            True if error was handled (rotation or backoff triggered)
+            dict with keys:
+                - is_rate_limit: bool
+                - is_connection_error: bool
+                - is_server_error: bool
+                - rotated: bool (whether RPC was rotated)
+                - should_retry: bool
 
         """
-        if self._is_rate_limit_error(error):
-            logger.warning(f"Rate limit error detected: {error}")
+        result = {
+            "is_rate_limit": self._is_rate_limit_error(error),
+            "is_connection_error": self._is_connection_error(error),
+            "is_server_error": self._is_server_error(error),
+            "rotated": False,
+            "should_retry": False,
+        }
 
-            # Try to rotate to another RPC first
+        # Track failure for current RPC
+        self._rpc_failure_counts[self._current_rpc_index] = (
+            self._rpc_failure_counts.get(self._current_rpc_index, 0) + 1
+        )
+
+        # Determine if we should try to rotate
+        should_rotate = result["is_rate_limit"] or result["is_connection_error"]
+
+        if should_rotate:
+            error_type = "rate limit" if result["is_rate_limit"] else "connection"
+            logger.warning(
+                f"RPC {error_type} error on {self.chain.name} "
+                f"(RPC #{self._current_rpc_index}): {error}"
+            )
+
             if self.rotate_rpc():
-                logger.info("Rotated to new RPC to escape rate limit")
-                return True
+                result["rotated"] = True
+                result["should_retry"] = True
+                logger.info(f"Rotated to RPC #{self._current_rpc_index} for {self.chain.name}")
+            else:
+                # No other RPCs available
+                if result["is_rate_limit"]:
+                    self._rate_limiter.trigger_backoff(seconds=5.0)
+                    result["should_retry"] = True
+                    logger.warning("No other RPCs available, triggered backoff")
 
-            # No other RPCs available, must backoff
-            logger.warning("No other RPCs available, triggering backoff")
-            self._rate_limiter.trigger_backoff(seconds=5.0)
-            return True
+        elif result["is_server_error"]:
+            logger.warning(f"Server error on {self.chain.name}: {error}")
+            result["should_retry"] = True  # Server errors are often transient
 
-        return False
+        return result
 
     def rotate_rpc(self) -> bool:
-        """Rotate to the next available RPC."""
+        """Rotate to the next available RPC.
+
+        Returns:
+            True if rotation succeeded, False if no other RPCs available.
+
+        """
         if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
             return False
 
-        self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
-        new_rpc = self.chain.rpcs[self._current_rpc_index]
-        logger.info(f"Rotating RPC for {self.chain.name} to {new_rpc}")
-        raw_web3 = Web3(Web3.HTTPProvider(new_rpc, request_kwargs={"timeout": 3}))
-        self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
-        return True
+        original_index = self._current_rpc_index
+        attempts = 0
+
+        while attempts < len(self.chain.rpcs) - 1:
+            self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
+            attempts += 1
+
+            # Skip RPCs that have failed too many times recently
+            if self._rpc_failure_counts.get(self._current_rpc_index, 0) >= 5:
+                continue
+
+            logger.info(f"Rotating RPC for {self.chain.name} to index {self._current_rpc_index}")
+            self._init_web3()
+
+            # Verify the new RPC works
+            if self.check_rpc_health():
+                return True
+            else:
+                logger.warning(f"RPC at index {self._current_rpc_index} failed health check")
+                self._rpc_failure_counts[self._current_rpc_index] = (
+                    self._rpc_failure_counts.get(self._current_rpc_index, 0) + 1
+                )
+
+        # All RPCs failed, restore original
+        self._current_rpc_index = original_index
+        self._init_web3()
+        return False
+
+    def check_rpc_health(self) -> bool:
+        """Check if the current RPC is healthy.
+
+        Returns:
+            True if RPC responds correctly, False otherwise.
+
+        """
+        try:
+            # Simple block number request to verify connectivity
+            block = self.web3._web3.eth.block_number
+            return block is not None and block > 0
+        except Exception as e:
+            logger.debug(f"RPC health check failed: {e}")
+            return False
+
+    def with_retry(
+        self,
+        operation: Callable[[], T],
+        max_retries: int = None,
+        operation_name: str = "operation",
+    ) -> T:
+        """Execute an operation with retry logic.
+
+        Automatically handles:
+        - Rate limit errors (with backoff)
+        - Connection errors (with RPC rotation)
+        - Server errors (with retry)
+
+        Args:
+            operation: Callable that performs the RPC operation
+            max_retries: Maximum retry attempts (default: DEFAULT_MAX_RETRIES)
+            operation_name: Name for logging purposes
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            Exception: If all retries exhausted
+
+        """
+        if max_retries is None:
+            max_retries = self.DEFAULT_MAX_RETRIES
+
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                return operation()
+            except Exception as e:
+                last_error = e
+                result = self._handle_rpc_error(e)
+
+                if not result["should_retry"] or attempt >= max_retries:
+                    logger.error(f"{operation_name} failed after {attempt + 1} attempts: {e}")
+                    raise
+
+                # Exponential backoff
+                delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
+                logger.info(
+                    f"{operation_name} attempt {attempt + 1} failed, retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+
+        raise last_error  # Should never reach here, but for type safety
 
     def is_contract(self, address: str) -> bool:
         """Check if address is a contract"""
@@ -456,15 +627,28 @@ class ChainInterface:
     # without exposing private keys.
 
     def estimate_gas(self, built_method, tx_params) -> int:
-        """Estimate gas for a contract function call."""
+        """Estimate gas for a contract function call.
+
+        For contract addresses (e.g., Safe multisigs), gas estimation cannot be done
+        directly as the transaction will be executed by the Safe. Returns 0 in this case.
+        """
         from_address = tx_params["from"]
         value = tx_params.get("value", 0)
-        estimated_gas = (
-            0
-            if self.is_contract(from_address)
-            else built_method.estimate_gas({"from": from_address, "value": value})
-        )
-        return int(estimated_gas * 1.1)
+
+        if self.is_contract(from_address):
+            # Cannot estimate gas for contract callers (e.g., Safe multisig)
+            # The actual gas will be determined when the Safe executes the tx
+            logger.debug(f"Skipping gas estimation for contract caller {from_address[:10]}...")
+            return 0
+
+        try:
+            estimated_gas = built_method.estimate_gas({"from": from_address, "value": value})
+            # Add 10% buffer for safety
+            return int(estimated_gas * 1.1)
+        except Exception as e:
+            logger.warning(f"Gas estimation failed: {e}")
+            # Return a reasonable default for most contract calls
+            return 500_000
 
     def calculate_transaction_params(self, built_method, tx_params) -> dict:
         """Calculate transaction parameters for a contract function call."""
@@ -504,36 +688,42 @@ class ChainInterface:
         value_wei: int,
         sign_callback: Callable[[dict], SignedTransaction],
     ) -> Tuple[bool, Optional[str]]:
-        """Send native currency transaction.
+        """Send native currency transaction with retry logic.
 
-        Note: Rate limiting is handled transparently by RateLimitedWeb3.
+        Automatically retries on transient errors with RPC rotation.
         """
-        tx = {
-            "from": from_address,
-            "to": to_address,
-            "value": value_wei,
-            "nonce": self.web3.eth.get_transaction_count(from_address),
-            "chainId": self.chain.chain_id,
-        }
 
-        balance_wei = self.get_native_balance_wei(from_address)
-        gas_price = self.web3.eth.gas_price
-        gas_estimate = self.web3.eth.estimate_gas(tx)
-        required_wei = value_wei + (gas_estimate * gas_price)
+        def _do_transfer() -> Tuple[bool, Optional[str]]:
+            tx = {
+                "from": from_address,
+                "to": to_address,
+                "value": value_wei,
+                "nonce": self.web3.eth.get_transaction_count(from_address),
+                "chainId": self.chain.chain_id,
+            }
 
-        if balance_wei < required_wei:
-            logger.error(
-                f"Insufficient balance to cover amount and gas fees.\nBalance: {self.web3.from_wei(balance_wei, 'ether'):.2f} {self.chain.native_currency}, Required: {self.web3.from_wei(required_wei, 'ether'):.2f} {self.chain.native_currency}"
-            )
-            return False, None
+            balance_wei = self.get_native_balance_wei(from_address)
+            gas_price = self.web3.eth.gas_price
+            gas_estimate = self.web3.eth.estimate_gas(tx)
+            required_wei = value_wei + (gas_estimate * gas_price)
 
-        tx["gas"] = gas_estimate
-        tx["gasPrice"] = gas_price
+            if balance_wei < required_wei:
+                logger.error(
+                    f"Insufficient balance. "
+                    f"Balance: {self.web3.from_wei(balance_wei, 'ether'):.4f} "
+                    f"{self.chain.native_currency}, "
+                    f"Required: {self.web3.from_wei(required_wei, 'ether'):.4f} "
+                    f"{self.chain.native_currency}"
+                )
+                return False, None
 
-        signed_tx = sign_callback(tx)
-        try:
+            tx["gas"] = gas_estimate
+            tx["gasPrice"] = gas_price
+
+            signed_tx = sign_callback(tx)
             txn_hash = self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
+
             # Use status from receipt, handle both object and dict
             status = getattr(receipt, "status", None)
             if status is None and isinstance(receipt, dict):
@@ -544,12 +734,16 @@ class ChainInterface:
                 logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
                 return True, receipt["transactionHash"].hex()
 
-            logger.error("Transaction failed.")
+            logger.error("Transaction failed (status != 1)")
             return False, None
+
+        try:
+            return self.with_retry(
+                _do_transfer,
+                operation_name=f"native_transfer to {str(to_address)[:10]}...",
+            )
         except Exception as e:
-            # Check if it's a rate limit error and handle accordingly
-            self._handle_rpc_error(e)
-            logger.exception(f"Unexpected error sending native transfer: {e}")
+            logger.exception(f"Native transfer failed: {e}")
             return False, None
 
     def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
@@ -559,6 +753,11 @@ class ChainInterface:
     def get_contract_address(self, contract_name: str) -> Optional[EthereumAddress]:
         """Get contract address by name from the chain's contracts mapping."""
         return self.chain.contracts.get(contract_name)
+
+    def reset_rpc_failure_counts(self):
+        """Reset RPC failure tracking. Call periodically to allow retrying failed RPCs."""
+        self._rpc_failure_counts.clear()
+        logger.debug("Reset RPC failure counts")
 
 
 @singleton
@@ -583,3 +782,10 @@ class ChainInterfaces:
         yield "gnosis", self.gnosis
         yield "ethereum", self.ethereum
         yield "base", self.base
+
+    def check_all_rpcs(self) -> Dict[str, bool]:
+        """Check health of all chain RPCs."""
+        results = {}
+        for name, interface in self.items():
+            results[name] = interface.check_rpc_health()
+        return results

@@ -161,15 +161,18 @@ class TestRateLimitRotationInterplay:
             ci = ChainInterface(chain)
             original_index = ci._current_rpc_index
 
-            # Simulate rate limit error
-            rate_limit_error = Exception("Error 429: Too Many Requests")
-            result = ci._handle_rpc_error(rate_limit_error)
+            # Mock health check to pass
+            with patch.object(ci, "check_rpc_health", return_value=True):
+                # Simulate rate limit error
+                rate_limit_error = Exception("Error 429: Too Many Requests")
+                result = ci._handle_rpc_error(rate_limit_error)
 
-            # Should have rotated
-            assert result is True
-            assert ci._current_rpc_index != original_index
-            # Backoff should NOT be triggered since rotation succeeded
-            assert ci._rate_limiter.get_status()["in_backoff"] is False
+                # Should have rotated
+                assert result["rotated"] is True
+                assert result["should_retry"] is True
+                assert ci._current_rpc_index != original_index
+                # Backoff should NOT be triggered since rotation succeeded
+                assert ci._rate_limiter.get_status()["in_backoff"] is False
 
     def test_rate_limit_triggers_backoff_when_no_rotation(self):
         """Test that rate limit triggers backoff when no other RPCs available."""
@@ -191,5 +194,6 @@ class TestRateLimitRotationInterplay:
             result = ci._handle_rpc_error(rate_limit_error)
 
             # Should have triggered backoff since can't rotate
-            assert result is True
+            assert result["should_retry"] is True
+            assert result["rotated"] is False
             assert ci._rate_limiter.get_status()["in_backoff"] is True
