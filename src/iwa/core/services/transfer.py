@@ -902,55 +902,146 @@ class TransferService:
         to_address_or_tag: str = "master",
         chain_name: str = "gnosis",
     ):
-        """Drain entire balance of an account to another account."""
+        """Drain entire balance of an account to another account.
+
+        For Safes that are Olas service multisigs, this will first claim any
+        pending staking rewards before draining.
+
+        Uses multi_send to batch all transfers (ERC20 + native) into a single
+        transaction for gas efficiency.
+        """
         from_account = self.account_service.resolve_account(from_address_or_tag)
 
         if not from_account:
             logger.error(f"From account '{from_address_or_tag}' not found in wallet.")
             return
 
+        to_account = self.account_service.resolve_account(to_address_or_tag)
+        to_address = to_account.address if to_account else to_address_or_tag
+
         is_safe = isinstance(from_account, StoredSafeAccount)
         chain_interface = ChainInterfaces().get(chain_name)
 
-        # ERC-20 tokens
+        # If this is a Safe, check if it's an Olas service multisig and claim rewards
+        if is_safe:
+            self._claim_olas_rewards_if_service(from_account.address, chain_name)
+
+        transactions = []
+
+        # Collect ERC-20 token transfers
         for token_name in chain_interface.chain.tokens.keys():
             balance_wei = self.balance_service.get_erc20_balance_wei(
                 from_address_or_tag, token_name, chain_name
             )
             if balance_wei and balance_wei > 0:
-                self.send(
-                    from_address_or_tag=from_address_or_tag,
-                    to_address_or_tag=to_address_or_tag,
-                    token_address_or_name=token_name,
-                    amount_wei=balance_wei,
-                    chain_name=chain_name,
-                )
+                # Convert to ether for multi_send (which expects amount in ether)
+                amount_ether = chain_interface.web3.from_wei(balance_wei, "ether")
+                transactions.append({
+                    "to": to_address,
+                    "amount": float(amount_ether),
+                    "token": token_name,
+                })
+                logger.info(f"Queued {amount_ether} {token_name} for drain.")
             else:
-                logger.info(f"No {token_name} to drain on {from_address_or_tag}.")
+                logger.debug(f"No {token_name} to drain on {from_address_or_tag}.")
 
-        # Native currency
+        # Calculate drainable native balance
         native_balance_wei = self.balance_service.get_native_balance_wei(from_account.address)
         if native_balance_wei and native_balance_wei > 0:
             if is_safe:
+                # Safe pays gas from the Safe, so we can drain all
                 drainable_balance_wei = native_balance_wei
             else:
-                # Estimate gas cost
-                estimated_gas = (
-                    30_000  # Basic transfer gas is 21_000 EOA->EOA. but more expensive EOA->Safe
-                )
+                # EOA needs to reserve gas for the multi_send transaction
+                # Estimate: base 21k + ~30k per transfer in batch + buffer
+                num_transfers = len(transactions) + 1  # +1 for native
+                estimated_gas = 50_000 + (30_000 * num_transfers)
                 gas_cost_wei = chain_interface.web3.eth.gas_price * estimated_gas
                 drainable_balance_wei = native_balance_wei - gas_cost_wei
 
-            if drainable_balance_wei <= 0:
+            if drainable_balance_wei > 0:
+                amount_ether = chain_interface.web3.from_wei(drainable_balance_wei, "ether")
+                transactions.append({
+                    "to": to_address,
+                    "amount": float(amount_ether),
+                    # No "token" key = native currency
+                })
+                logger.info(f"Queued {amount_ether} native for drain.")
+            else:
                 logger.info(
                     f"Not enough native balance to cover gas fees for draining from {from_address_or_tag}."
                 )
-                return
 
-            self.send(
-                from_address_or_tag=from_address_or_tag,
-                to_address_or_tag=to_address_or_tag,
-                token_address_or_name=NATIVE_CURRENCY_ADDRESS,
-                amount_wei=drainable_balance_wei,
-                chain_name=chain_name,
+        if not transactions:
+            logger.info(f"Nothing to drain from {from_address_or_tag}.")
+            return
+
+        logger.info(f"Draining {len(transactions)} assets from {from_address_or_tag} to {to_address_or_tag}...")
+        self.multi_send(
+            from_address_or_tag=from_address_or_tag,
+            transactions=transactions,
+            chain_name=chain_name,
+        )
+
+    def _claim_olas_rewards_if_service(self, safe_address: str, chain_name: str) -> bool:
+        """Check if Safe is an Olas service multisig and claim pending rewards.
+
+        This is a best-effort operation - if the Olas plugin is not available or
+        there's an error, it will log a warning and continue without failing.
+
+        Args:
+            safe_address: The Safe address to check.
+            chain_name: The chain name.
+
+        Returns:
+            True if rewards were claimed, False otherwise.
+        """
+        try:
+            # Import Olas plugin (optional dependency)
+            from iwa.plugins.olas.models import OlasConfig
+            from iwa.plugins.olas.service_manager import ServiceManager
+
+            # Check if this Safe is an Olas service multisig
+            config = Config()
+            if "olas" not in config.plugins:
+                return False
+
+            olas_config: OlasConfig = config.plugins["olas"]
+            service = olas_config.get_service_by_multisig(safe_address)
+
+            if not service:
+                logger.debug(f"Safe {safe_address} is not an Olas service multisig.")
+                return False
+
+            if not service.staking_contract_address:
+                logger.debug(f"Olas service {service.key} is not staked.")
+                return False
+
+            logger.info(
+                f"Safe {safe_address} is Olas service {service.key}. "
+                "Checking for pending staking rewards..."
             )
+
+            # Use ServiceManager to claim rewards
+            # Need to import Wallet dynamically to avoid circular import
+            from iwa.core.wallet import Wallet
+
+            wallet = Wallet()
+            service_manager = ServiceManager(wallet=wallet, service_key=service.key)
+            success, claimed_amount = service_manager.claim_rewards()
+
+            if success and claimed_amount > 0:
+                claimed_olas = claimed_amount / 1e18
+                logger.info(f"Claimed {claimed_olas:.4f} OLAS rewards before drain.")
+                return True
+            elif not success:
+                logger.debug("No rewards to claim or claim failed.")
+
+            return False
+
+        except ImportError:
+            logger.debug("Olas plugin not available, skipping reward claiming.")
+            return False
+        except Exception as e:
+            logger.warning(f"Failed to check/claim Olas rewards: {e}")
+            return False

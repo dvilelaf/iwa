@@ -83,3 +83,19 @@ class OlasConfig(BaseModel):
         """Get a specific service by chain and ID."""
         key = f"{chain_name}:{service_id}"
         return self.services.get(key)
+
+    def get_service_by_multisig(self, multisig_address: str) -> Optional[Service]:
+        """Get a service by its multisig (Safe) address.
+
+        Args:
+            multisig_address: The Safe multisig address.
+
+        Returns:
+            Service if found, None otherwise.
+        """
+        # Normalize address for comparison
+        target = multisig_address.lower()
+        for service in self.services.values():
+            if service.multisig_address and str(service.multisig_address).lower() == target:
+                return service
+        return None
