@@ -589,8 +589,27 @@ class TransferService:
             for tx in transactions
         )
 
+        # Group ERC20s by token to check allowances if EOA
+        erc20_totals = {}
         if not is_safe and not is_all_native:
-            raise ValueError("Multisend with ERC20 tokens requires a Safe account.")
+            # Check allowances and approve if needed
+            for tx in transactions:
+                token_addr_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
+                if token_addr_or_tag != NATIVE_CURRENCY_ADDRESS:
+                    token_address = self.account_service.get_token_address(
+                        token_addr_or_tag, chain_interface.chain
+                    )
+                    amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
+                    erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
+
+            for token_addr, total_amount in erc20_totals.items():
+                self.approve_erc20(
+                    owner_address_or_tag=from_address_or_tag,
+                    spender_address_or_tag=MULTISEND_CALL_ONLY_ADDRESS,
+                    token_address_or_name=token_addr,
+                    amount_wei=total_amount,
+                    chain_name=chain_name,
+                )
 
         for tx in transactions:
             to = self.account_service.resolve_account(tx["to"])
@@ -607,17 +626,28 @@ class TransferService:
                 tx["value"] = amount_wei
                 tx["data"] = b""
                 tx["operation"] = SafeOperationEnum.CALL
-
             else:
                 token_address = self.account_service.get_token_address(
                     token_address_or_tag, chain_interface.chain
                 )
                 erc20 = ERC20Contract(token_address, chain_name)
-                transfer_tx = erc20.prepare_transfer_tx(
-                    from_address=from_account.address,
-                    to=recipient_address,
-                    amount_wei=amount_wei,
-                )
+
+                if is_safe:
+                    # Safe uses transfer() because it DelegateCalls the MultiSend (sender identity preserved)
+                    transfer_tx = erc20.prepare_transfer_tx(
+                        from_address=from_account.address,
+                        to=recipient_address,
+                        amount_wei=amount_wei,
+                    )
+                else:
+                    # EOA uses transferFrom() because MultiSendCallOnly matches the calls (sender is MultiSend contract)
+                    transfer_tx = erc20.prepare_transfer_from_tx(
+                        from_address=from_account.address,
+                        sender=from_account.address,
+                        recipient=recipient_address,
+                        amount_wei=amount_wei
+                    )
+
                 tx["to"] = erc20.address
                 tx["value"] = 0
                 tx["data"] = transfer_tx["data"]
