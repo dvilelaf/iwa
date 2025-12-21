@@ -3,6 +3,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Tuple
 
+from web3.types import Wei
+
 from iwa.core.chain import SupportedChain
 from iwa.core.db import init_db
 from iwa.core.keys import KeyStorage
@@ -102,7 +104,7 @@ class Wallet:
         self,
         from_address: str,
         to_address: str,
-        value_wei: int,
+        value_wei: Wei,
         chain_name: str = "gnosis",
     ) -> Tuple[bool, Optional[str]]:
         """Send native currency."""
@@ -127,7 +129,7 @@ class Wallet:
         self,
         from_address: str,
         to_address: str,
-        amount_wei: int,
+        amount_wei: Wei,
         token_address: str,
         chain_name: str = "gnosis",
     ) -> Tuple[bool, Optional[str]]:
@@ -145,7 +147,7 @@ class Wallet:
         self,
         from_address_or_tag: str,
         to_address_or_tag: str,
-        amount_wei: int,
+        amount_wei: Wei,
         token_address_or_name: str = "native",
         chain_name: str = "gnosis",
     ) -> Optional[str]:
@@ -175,7 +177,7 @@ class Wallet:
 
     def get_native_balance_wei(
         self, account_address: str, chain_name: str = "gnosis"
-    ) -> Optional[int]:
+    ) -> Optional[Wei]:
         """Get native currency balance"""
         return self.balance_service.get_native_balance_wei(account_address, chain_name)
 
@@ -189,7 +191,7 @@ class Wallet:
 
     def get_erc20_balance_wei(
         self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
-    ) -> Optional[int]:
+    ) -> Optional[Wei]:
         """Get ERC20 token balance"""
         return self.balance_service.get_erc20_balance_wei(
             account_address_or_tag, token_address_or_name, chain_name
@@ -212,7 +214,7 @@ class Wallet:
         owner_address_or_tag: str,
         spender_address_or_tag: str,
         token_address_or_name: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str = "gnosis",
     ):
         """Approve ERC20 token allowance"""
@@ -230,7 +232,7 @@ class Wallet:
         sender_address_or_tag: str,
         recipient_address_or_tag: str,
         token_address_or_name: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str = "gnosis",
     ):
         """TransferFrom ERC20 tokens"""

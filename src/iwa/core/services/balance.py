@@ -4,6 +4,7 @@ import time
 from typing import TYPE_CHECKING, Optional, Union
 
 from loguru import logger
+from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.contracts.erc20 import ERC20Contract
@@ -46,7 +47,7 @@ class BalanceService:
 
     def get_native_balance_wei(
         self, account_address_or_tag: str, chain_name: str = "gnosis"
-    ) -> Optional[int]:
+    ) -> Optional[Wei]:
         """Get native currency balance in WEI."""
         account = self.account_service.resolve_account(account_address_or_tag)
         if not account:
@@ -76,7 +77,7 @@ class BalanceService:
 
     def get_erc20_balance_wei(
         self, account_address_or_tag: str, token_address_or_name: str, chain_name: str = "gnosis"
-    ) -> Optional[int]:
+    ) -> Optional[Wei]:
         """Get ERC20 token balance in WEI."""
         chain = ChainInterfaces().get(chain_name)
         token_address = self.account_service.get_token_address(token_address_or_name, chain.chain)

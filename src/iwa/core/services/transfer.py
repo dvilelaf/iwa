@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from loguru import logger
 from safe_eth.safe import SafeOperationEnum
 from web3 import Web3
+from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
@@ -133,7 +134,7 @@ class TransferService:
             return None, None
 
     def _get_token_price_info(
-        self, token_symbol: str, amount_wei: int, chain_name: str
+        self, token_symbol: str, amount_wei: Wei, chain_name: str
     ) -> tuple[Optional[float], Optional[float]]:
         """Calculate token price and total value in EUR.
 
@@ -273,7 +274,7 @@ class TransferService:
         from_account: StoredSafeAccount,
         from_address_or_tag: str,
         to_address: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str,
         from_tag: Optional[str],
         to_tag: Optional[str],
@@ -318,7 +319,7 @@ class TransferService:
         self,
         from_account,
         to_address: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str,
         chain_interface,
         from_tag: Optional[str],
@@ -365,7 +366,7 @@ class TransferService:
         from_account: StoredSafeAccount,
         from_address_or_tag: str,
         to_address: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str,
         erc20: ERC20Contract,
         transaction: dict,
@@ -414,7 +415,7 @@ class TransferService:
         from_account,
         from_address_or_tag: str,
         to_address: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str,
         transaction: dict,
         from_tag: Optional[str],
@@ -451,7 +452,7 @@ class TransferService:
         self,
         from_address_or_tag: str,
         to_address_or_tag: str,
-        amount_wei: int,
+        amount_wei: Wei,
         token_address_or_name: str = "native",
         chain_name: str = "gnosis",
     ) -> Optional[str]:
@@ -678,7 +679,7 @@ class TransferService:
         owner_address_or_tag: str,
         spender_address_or_tag: str,
         token_address_or_name: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str = "gnosis",
     ) -> bool:
         """Approve ERC20 token allowance."""
@@ -746,7 +747,7 @@ class TransferService:
         sender_address_or_tag: str,
         recipient_address_or_tag: str,
         token_address_or_name: str,
-        amount_wei: int,
+        amount_wei: Wei,
         chain_name: str = "gnosis",
     ):
         """TransferFrom ERC20 tokens."""

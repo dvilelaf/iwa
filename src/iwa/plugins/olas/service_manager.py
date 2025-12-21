@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Union
 
 from web3 import Web3
+from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
@@ -98,7 +99,7 @@ class ServiceManager:
         agent_ids: Optional[List[Union[AgentType, int]]] = None,
         service_owner_address_or_tag: Optional[str] = None,
         token_address_or_tag: Optional[str] = None,
-        bond_amount: int = 1,
+        bond_amount_wei: Wei = 1,  # type: ignore
     ) -> Optional[int]:
         """Create a new service.
 
@@ -109,7 +110,7 @@ class ServiceManager:
                        Defaults to [AgentType.TRADER] if not provided.
             service_owner_address_or_tag: The owner address or tag.
             token_address_or_tag: Token address for staking (optional).
-            bond_amount: Bond amount in tokens.
+            bond_amount_wei: Bond amount in tokens.
 
         Returns:
             The service_id if successful, None otherwise.
@@ -130,12 +131,14 @@ class ServiceManager:
         chain = ChainInterfaces().get(chain_name).chain
         token_address = chain.get_token_address(token_address_or_tag)
 
-        # Create agent_params: [[instances_per_agent, bond_amount], ...]
-        # agent_params = [[1, bond_amount] for _ in agent_id_values]
+        # Create agent_params: [[instances_per_agent, bond_amount_wei], ...]
+        # agent_params = [[1, bond_amount_wei] for _ in agent_id_values]
         # Use dictionary for explicit struct encoding
-        agent_params = [{"slots": 1, "bond": bond_amount} for _ in agent_id_values]
+        agent_params = [{"slots": 1, "bond": bond_amount_wei} for _ in agent_id_values]
 
-        print(f"DEBUG: ServiceManager.create bond_amount={bond_amount} agent_params={agent_params}")
+        print(
+            f"DEBUG: ServiceManager.create bond_amount_wei={bond_amount_wei} agent_params={agent_params}"
+        )
 
         create_tx = self.manager.prepare_create_tx(
             from_address=self.wallet.master_account.address,
@@ -206,12 +209,12 @@ class ServiceManager:
             return service_id  # Return service_id anyway, but log error (or should we fail?)
 
         # Approve the token utility to move tokens (2 * bond amount as per Triton reference)
-        logger.info(f"Approving Token Utility {utility_address} for {2 * bond_amount} tokens")
+        logger.info(f"Approving Token Utility {utility_address} for {2 * bond_amount_wei} tokens")
         approve_success = self.transfer_service.approve_erc20(
             owner_address_or_tag=service_owner_account.address,
             spender_address_or_tag=utility_address,
             token_address_or_name=token_address,
-            amount_wei=2 * bond_amount,
+            amount_wei=2 * bond_amount_wei,
             chain_name=chain_name,
         )
 
@@ -270,14 +273,14 @@ class ServiceManager:
         return True
 
     def register_agent(  # noqa: C901
-        self, agent_address: Optional[str] = None, bond_amount: Optional[int] = None
+        self, agent_address: Optional[str] = None, bond_amount_wei: Optional[Wei] = None
     ) -> bool:
         """Register an agent for the service.
 
         Args:
             agent_address: Optional existing agent address to use.
                            If not provided, a new agent account will be created and funded.
-            bond_amount: The amount of tokens to bond for the agent. Required for token-bonded services.
+            bond_amount_wei: The amount of tokens to bond for the agent. Required for token-bonded services.
 
         Returns:
             True if registration succeeded, False otherwise.
@@ -331,20 +334,20 @@ class ServiceManager:
         is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
 
         if not is_native:
-            if not bond_amount:
+            if not bond_amount_wei:
                 logger.warning(
                     "No bond amount provided for token bonding. Agent might fail to bond."
                 )
             else:
                 # 1. Fund Agent with Bond Amount (Token)
                 logger.info(
-                    f"Funding agent {agent_account_address} with {bond_amount} of token {token_address}"
+                    f"Funding agent {agent_account_address} with {bond_amount_wei} of token {token_address}"
                 )
                 fund_success = self.wallet.transfer_service.send(
                     from_address_or_tag=self.wallet.master_account.address,
                     to_address_or_tag=agent_account_address,
                     token_address_or_name=token_address,
-                    amount_wei=bond_amount,
+                    amount_wei=bond_amount_wei,
                     chain_name=self.service.chain_name,
                 )
                 if not fund_success:
@@ -364,7 +367,7 @@ class ServiceManager:
                 approve_success = self.wallet.transfer_service.approve_erc20(
                     token_address_or_name=token_address,
                     spender_address_or_tag=utility_address,
-                    amount_wei=bond_amount,
+                    amount_wei=bond_amount_wei,
                     owner_address_or_tag=agent_account_address,
                     chain_name=self.service.chain_name,
                 )
@@ -993,7 +996,7 @@ class ServiceManager:
         service_id: Optional[int] = None,
         agent_address: Optional[str] = None,
         staking_contract=None,
-        bond_amount: Optional[int] = None,
+        bond_amount_wei: Optional[Wei] = None,
     ) -> bool:
         """Spin up a service from PRE_REGISTRATION to DEPLOYED state.
 
@@ -1010,7 +1013,7 @@ class ServiceManager:
             service_id: Optional service ID to spin up. If None, uses active service.
             agent_address: Optional pre-existing agent address to use for registration.
             staking_contract: Optional staking contract to stake after deployment.
-            bond_amount: Optional bond amount for agent registration.
+            bond_amount_wei: Optional bond amount for agent registration.
 
         Returns:
             True if service reached DEPLOYED (and staked if requested), False otherwise.
@@ -1046,7 +1049,9 @@ class ServiceManager:
         # Step 2: Register agent if in ACTIVE_REGISTRATION
         if current_state == ServiceState.ACTIVE_REGISTRATION:
             logger.info("Registering agent...")
-            if not self.register_agent(agent_address=agent_address, bond_amount=bond_amount):
+            if not self.register_agent(
+                agent_address=agent_address, bond_amount_wei=bond_amount_wei
+            ):
                 logger.error("Failed to register agent")
                 return False
 

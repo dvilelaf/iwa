@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel, field_validator
+from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.db import SentTransaction
@@ -71,11 +72,15 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class TransactionRequest(BaseModel):
-    """Request to send a transaction."""
+    """Request to send a transaction.
+
+    Note: amount_eth is in human-readable ETH units (e.g., 1.5 for 1.5 ETH).
+    Conversion to wei happens internally.
+    """
 
     from_address: str
     to_address: str
-    amount: float
+    amount_eth: float
     token: str
     chain: str
 
@@ -94,10 +99,10 @@ class TransactionRequest(BaseModel):
             raise ValueError("Tag must be alphanumeric")
         return v
 
-    @field_validator("amount")
+    @field_validator("amount_eth")
     @classmethod
-    def validate_amount(cls, v: float) -> float:
-        """Validate amount is positive."""
+    def validate_amount_eth(cls, v: float) -> float:
+        """Validate amount_eth is positive."""
         if v <= 0:
             raise ValueError("Amount must be positive")
         if v > 1e18:
@@ -291,7 +296,7 @@ def send_transaction(req: TransactionRequest, auth: bool = Depends(verify_auth))
         tx_hash = wallet.send(
             from_address_or_tag=req.from_address,
             to_address_or_tag=req.to_address,
-            amount_wei=int(req.amount * 10**18),
+            amount_wei=Web3.to_wei(req.amount_eth_eth, "ether"),
             token_address_or_name=req.token,
             chain_name=req.chain,
         )
@@ -336,12 +341,15 @@ def create_safe(req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
 
 
 class SwapRequest(BaseModel):
-    """Request to swap tokens via CowSwap."""
+    """Request to swap tokens via CowSwap.
+
+    Note: amount_eth is in human-readable ETH units (e.g., 1.5 for 1.5 tokens).
+    """
 
     account: str
     sell_token: str
     buy_token: str
-    amount: float
+    amount_eth: float
     order_type: str  # "sell" or "buy"
     chain: str = "gnosis"
 
@@ -365,7 +373,7 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
 
         success = await wallet.transfer_service.swap(
             account_address_or_tag=req.account,
-            amount_eth=req.amount,
+            amount_eth=req.amount_eth,
             sell_token_name=req.sell_token,
             buy_token_name=req.buy_token,
             chain_name=req.chain,

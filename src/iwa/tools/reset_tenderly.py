@@ -2,12 +2,15 @@
 
 import argparse
 import json
+import os
 import random
 import re
 import string
+import sys
 from typing import List, Optional, Tuple
 
 import requests
+from web3 import Web3
 
 from iwa.core.constants import SECRETS_PATH, get_tenderly_config_path
 from iwa.core.keys import KeyStorage
@@ -50,7 +53,7 @@ def _generate_default_config() -> TenderlyConfig:
                 TokenAmount(
                     address=str(olas_address),
                     symbol="OLAS",
-                    amount=settings.tenderly_olas_funds,
+                    amount_eth=settings.tenderly_olas_funds,
                 )
             )
 
@@ -58,7 +61,7 @@ def _generate_default_config() -> TenderlyConfig:
             chain_id=chain.chain_id,
             funds_requirements={
                 "all": FundRequirements(
-                    native=settings.tenderly_native_funds,
+                    native_eth=settings.tenderly_native_funds,
                     tokens=tokens,
                 )
             },
@@ -164,7 +167,7 @@ def update_rpc_variables(tenderly_config: TenderlyConfig) -> None:
 def _fund_wallet(  # nosec
     admin_rpc: str,
     wallet_addresses: List[str],
-    amount: float,
+    amount_eth: float,
     native_or_token_address: str = "native",
 ) -> None:
     if native_or_token_address == "native":  # nosec
@@ -173,7 +176,7 @@ def _fund_wallet(  # nosec
             "method": "tenderly_setBalance",
             "params": [
                 wallet_addresses,
-                hex(int(amount * 1e18)),  # to wei
+                hex(Web3.to_wei(amount_eth, "ether")),  # to wei
             ],
             "id": "1234",
         }
@@ -184,7 +187,7 @@ def _fund_wallet(  # nosec
             "params": [
                 native_or_token_address,
                 wallet_addresses,
-                hex(int(amount * 1e18)),  # to wei
+                hex(Web3.to_wei(amount_eth, "ether")),  # to wei
             ],
             "id": "1234",
         }
@@ -279,23 +282,23 @@ def main() -> None:  # noqa: C901
             if not addresses:
                 continue
 
-            if requirement.native > 0:
+            if requirement.native_eth > 0:
                 _fund_wallet(
                     admin_rpc=vnet.admin_rpc,
                     wallet_addresses=addresses,
-                    amount=requirement.native,
+                    amount_eth=requirement.native_eth,
                     native_or_token_address="native",
                 )
-                print(f"Funded {tags} with {requirement.native} native")
+                print(f"Funded {tags} with {requirement.native_eth} native")
 
             for token in requirement.tokens:
                 _fund_wallet(
                     admin_rpc=vnet.admin_rpc,
                     wallet_addresses=addresses,
-                    amount=token.amount,
+                    amount_eth=token.amount_eth,
                     native_or_token_address=str(token.address),
                 )
-                print(f"Funded {tags} with {token.amount} {token.symbol}")
+                print(f"Funded {tags} with {token.amount_eth} {token.symbol}")
 
         # Redeploy safes
         if vnet_name == "Gnosis":
@@ -303,9 +306,6 @@ def main() -> None:  # noqa: C901
 
 
 if __name__ == "__main__":  # pragma: no cover
-    import os
-    import sys
-
     parser = argparse.ArgumentParser(description="Reset Tenderly networks")
     parser.add_argument(
         "--profile",

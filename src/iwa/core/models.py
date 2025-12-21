@@ -302,17 +302,17 @@ class Token(BaseModel):
 
 
 class TokenAmount(BaseModel):
-    """TokenAmount"""
+    """TokenAmount - amount in human-readable ETH units."""
 
     address: EthereumAddress
     symbol: str
-    amount: float
+    amount_eth: float
 
 
 class FundRequirements(BaseModel):
-    """FundRequirements"""
+    """FundRequirements - amounts in human-readable ETH units."""
 
-    native: float
+    native_eth: float
     tokens: List[TokenAmount] = Field(default_factory=list)
 
 

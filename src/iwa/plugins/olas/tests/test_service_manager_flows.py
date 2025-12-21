@@ -66,7 +66,7 @@ def test_create_service_success(
         mock_chains.return_value.get.return_value.chain.get_token_address.return_value = None
 
         # Call create
-        service_id = manager.create(bond_amount=10)
+        service_id = manager.create(bond_amount_wei=10)
 
         assert service_id == 123
         # Verify add_service was called

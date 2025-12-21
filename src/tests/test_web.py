@@ -47,12 +47,12 @@ class TestInputValidation:
         req = TransactionRequest(
             from_address="0x1234567890abcdef1234567890abcdef12345678",
             to_address="0xabcdef1234567890abcdef1234567890abcdef12",
-            amount=1.0,
+            amount_eth=1.0,
             token="native",
             chain="gnosis",
         )
         assert req.from_address == "0x1234567890abcdef1234567890abcdef12345678"
-        assert req.amount == 1.0
+        assert req.amount_eth == 1.0
 
     def test_transaction_request_valid_with_tag(self):
         """Test valid transaction request with tag passes validation."""
@@ -61,7 +61,7 @@ class TestInputValidation:
         req = TransactionRequest(
             from_address="my_wallet",
             to_address="receiver_wallet",
-            amount=1.0,
+            amount_eth=1.0,
             token="native",
             chain="gnosis",
         )
@@ -77,7 +77,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="<script>alert(1)</script>",
                 to_address="0x1234567890abcdef1234567890abcdef12345678",
-                amount=1.0,
+                amount_eth=1.0,
                 token="native",
                 chain="gnosis",
             )
@@ -93,7 +93,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="0xINVALIDHEXADDRESS",
                 to_address="0x1234567890abcdef1234567890abcdef12345678",
-                amount=1.0,
+                amount_eth=1.0,
                 token="native",
                 chain="gnosis",
             )
@@ -109,7 +109,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="",
                 to_address="0x1234567890abcdef1234567890abcdef12345678",
-                amount=1.0,
+                amount_eth=1.0,
                 token="native",
                 chain="gnosis",
             )
@@ -124,7 +124,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="0x1234567890abcdef1234567890abcdef12345678",
                 to_address="0xabcdef1234567890abcdef1234567890abcdef12",
-                amount=-1.0,
+                amount_eth=-1.0,
                 token="native",
                 chain="gnosis",
             )
@@ -140,7 +140,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="0x1234567890abcdef1234567890abcdef12345678",
                 to_address="0xabcdef1234567890abcdef1234567890abcdef12",
-                amount=0,
+                amount_eth=0,
                 token="native",
                 chain="gnosis",
             )
@@ -155,7 +155,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="0x1234567890abcdef1234567890abcdef12345678",
                 to_address="0xabcdef1234567890abcdef1234567890abcdef12",
-                amount=1e20,
+                amount_eth=1e20,
                 token="native",
                 chain="gnosis",
             )
@@ -171,7 +171,7 @@ class TestInputValidation:
             TransactionRequest(
                 from_address="0x1234567890abcdef1234567890abcdef12345678",
                 to_address="0xabcdef1234567890abcdef1234567890abcdef12",
-                amount=1.0,
+                amount_eth=1.0,
                 token="native",
                 chain="<script>",
             )
