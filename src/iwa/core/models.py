@@ -207,43 +207,49 @@ class Config(StorableModel):
             self._initialized = True
 
     def _try_load(self) -> None:
-        """Try to load from config.toml if exists."""
+        """Try to load from config.yaml if exists, otherwise create default."""
+        from loguru import logger
+
         from iwa.core.constants import CONFIG_PATH
 
-        if CONFIG_PATH.exists():
-            try:
-                with CONFIG_PATH.open("rb") as f:
-                    import tomli
+        if not CONFIG_PATH.exists():
+            # Initialize default core config and save
+            self.core = CoreConfig()
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self.save_yaml(CONFIG_PATH)
+            logger.info(f"Created default config file: {CONFIG_PATH}")
+            return
 
-                    data = tomli.load(f)
+        try:
+            import yaml
 
-                # Load core config
-                if "core" in data:
-                    self.core = CoreConfig(**data["core"])
+            with CONFIG_PATH.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
 
-                # Load plugin configs - will be hydrated when plugins register
-                if "plugins" in data:
-                    for plugin_name, plugin_data in data["plugins"].items():
-                        # Store raw data until plugin model is registered
-                        if plugin_name in self._plugin_models:
-                            self.plugins[plugin_name] = self._plugin_models[plugin_name](
-                                **plugin_data
-                            )
-                        else:
-                            # Store as dict temporarily, will hydrate on register
-                            self.plugins[plugin_name] = plugin_data
+            # Load core config
+            if "core" in data:
+                self.core = CoreConfig(**data["core"])
 
-                self._path = CONFIG_PATH
-                self._storage_format = "toml"
-            except Exception as e:
-                from loguru import logger
+            # Load plugin configs - will be hydrated when plugins register
+            if "plugins" in data:
+                for plugin_name, plugin_data in data["plugins"].items():
+                    # Store raw data until plugin model is registered
+                    if plugin_name in self._plugin_models:
+                        self.plugins[plugin_name] = self._plugin_models[plugin_name](**plugin_data)
+                    else:
+                        # Store as dict temporarily, will hydrate on register
+                        self.plugins[plugin_name] = plugin_data
 
-                logger.warning(f"Failed to load config from {CONFIG_PATH}: {e}")
+            self._path = CONFIG_PATH
+            self._storage_format = "yaml"
+        except Exception as e:
+            logger.warning(f"Failed to load config from {CONFIG_PATH}: {e}")
 
     def register_plugin_config(self, plugin_name: str, model_class: type) -> None:
         """Register a plugin's config model class.
 
         If raw data was loaded for this plugin, it will be hydrated into the model.
+        If no data exists, creates default config and persists to file.
         """
         self._plugin_models[plugin_name] = model_class
 
@@ -253,32 +259,33 @@ class Config(StorableModel):
             if isinstance(current, dict):
                 self.plugins[plugin_name] = model_class(**current)
         else:
-            # Create default config for plugin
+            # Create default config for plugin and persist
             self.plugins[plugin_name] = model_class()
+            self.save_config()
 
     def save_config(self) -> None:
-        """Persist current config to config.toml."""
+        """Persist current config to config.yaml."""
+        import yaml
+
         from iwa.core.constants import CONFIG_PATH
 
-        # Convert plugins to serializable format (exclude_none=True for TOML compatibility)
-        data = {"plugins": {}}
+        data = {}
 
         if self.core:
-            data["core"] = self.core.model_dump(exclude_none=True)
+            data["core"] = self.core.model_dump()
 
+        data["plugins"] = {}
         for plugin_name, plugin_config in self.plugins.items():
             if isinstance(plugin_config, BaseModel):
-                data["plugins"][plugin_name] = plugin_config.model_dump(exclude_none=True)
+                data["plugins"][plugin_name] = plugin_config.model_dump()
             elif isinstance(plugin_config, dict):
                 data["plugins"][plugin_name] = plugin_config
 
-        with CONFIG_PATH.open("wb") as f:
-            import tomli_w
-
-            tomli_w.dump(data, f)
+        with CONFIG_PATH.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
         self._path = CONFIG_PATH
-        self._storage_format = "toml"
+        self._storage_format = "yaml"
 
     def get_plugin_config(self, plugin_name: str) -> Optional[BaseModel]:
         """Get a plugin's configuration."""

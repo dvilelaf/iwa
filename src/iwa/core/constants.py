@@ -5,7 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 SECRETS_PATH = PROJECT_ROOT / "secrets.env"
-CONFIG_PATH = PROJECT_ROOT / "config.toml"
+CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 WALLET_PATH = PROJECT_ROOT / "wallet.json"
 TENDERLY_CONFIG_PATH = PROJECT_ROOT / "tenderly.yaml"
 
