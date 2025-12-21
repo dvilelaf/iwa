@@ -55,8 +55,20 @@ def mock_account():
 
         mock.create.side_effect = create_side_effect
 
-        mock.from_key.return_value.address = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-        mock.from_key.return_value.key = b"private_key"
+        def from_key_side_effect(private_key):
+            # Extract address from the mocked key format if possible
+            if isinstance(private_key, str) and "0xPrivateKey" in private_key:
+                addr = private_key.replace("0xPrivateKey", "")
+            else:
+                # Default fallback if key format is unexpected
+                addr = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+
+            m = MagicMock()
+            m.address = addr
+            m.key = private_key.encode() if isinstance(private_key, str) else private_key
+            return m
+
+        mock.from_key.side_effect = from_key_side_effect
         yield mock
 
 
@@ -73,7 +85,7 @@ def test_encrypted_account_derive_key(mock_scrypt):
 
 
 def test_encrypted_account_encrypt_private_key(mock_scrypt, mock_aesgcm, mock_account):
-    enc_account = EncryptedAccount.encrypt_private_key("0xPrivateKey", "password", "tag")
+    enc_account = EncryptedAccount.encrypt_private_key("0xPrivateKey0x5B38Da6a701c568545dCfcB03FcB875f56beddC4", "password", "tag")
     assert enc_account.address == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
     assert enc_account.tag == "tag"
     assert enc_account.ciphertext == base64.b64encode(b"ciphertext").decode()
@@ -91,10 +103,18 @@ def test_encrypted_account_decrypt_private_key(mock_scrypt, mock_aesgcm, mock_se
     assert pkey == "private_key"
 
 
-def test_keystorage_init_new(mock_secrets):
-    with patch("os.path.exists", return_value=False):
+def test_keystorage_init_new(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+    """Test initialization of new KeyStorage automatically creates master account."""
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
         storage = KeyStorage(Path("wallet.json"))
-        assert storage.accounts == {}
+        # Master account should be created automatically
+        assert len(storage.accounts) == 1
+        assert storage.get_account("master") is not None
 
 
 def test_keystorage_init_existing(mock_secrets):
@@ -112,68 +132,95 @@ def test_keystorage_init_existing(mock_secrets):
     with (
         patch("os.path.exists", return_value=True),
         patch("builtins.open", mock_open(read_data=json.dumps(data))),
+        patch("iwa.core.keys.KeyStorage.create_account") as mock_create_master,
     ):
         storage = KeyStorage(Path("wallet.json"))
         assert "0x1111111111111111111111111111111111111111" in storage.accounts
-        assert isinstance(
-            storage.accounts["0x1111111111111111111111111111111111111111"], EncryptedAccount
-        )
+        # Master creation triggered because 'master' tag is missing
+        mock_create_master.assert_called_with("master")
 
 
-def test_keystorage_init_corrupted(mock_secrets):
+def test_keystorage_init_corrupted(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     with (
         patch("os.path.exists", return_value=True),
         patch("builtins.open", mock_open(read_data="{invalid json")),
         patch("iwa.core.keys.logger") as mock_logger,
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
     ):
         storage = KeyStorage(Path("wallet.json"))
-        assert storage.accounts == {}
+        # Corrupted file -> empty accounts -> auto create master
+        assert len(storage.accounts) == 1
+        assert storage.get_account("master") is not None
         mock_logger.error.assert_called()
 
 
-def test_keystorage_save(mock_secrets):
-    storage = KeyStorage(Path("wallet.json"))
+def test_keystorage_save(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     with (
+        patch("os.path.exists", return_value=False),
         patch("builtins.open", mock_open()) as mock_file,
         patch("os.chmod") as mock_chmod,
         patch("pathlib.Path.mkdir"),
     ):
+        storage = KeyStorage(Path("wallet.json"))
         storage.save()
-        mock_file.assert_called_once()
-        mock_chmod.assert_called_once()
+        mock_file.assert_called()
+        mock_chmod.assert_called()
 
 
 def test_keystorage_create_account(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        # Master created in init
         enc_account = storage.create_account("tag")
         assert enc_account.tag == "tag"
-        assert "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4" in storage.accounts
+        assert len(storage.accounts) == 2  # master + tag
 
 
 def test_keystorage_create_account_duplicate_tag(
     mock_secrets, mock_account, mock_aesgcm, mock_scrypt
 ):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
         storage.create_account("tag")
         with pytest.raises(ValueError, match="already exists"):
             storage.create_account("tag")
 
 
 def test_keystorage_get_private_key(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
-        storage.create_account("tag")
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        # Just use master account for check
+        master = storage.get_account("master")
         # _get_private_key is internal but used by tests
-        pkey = storage._get_private_key("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4")
+        pkey = storage._get_private_key(master.address)
         assert pkey == "private_key"
 
 
 def test_keystorage_sign_message(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     """Test sign_message method signs messages without exposing private key."""
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
         storage.create_account("tag")
 
         # Mock the sign_message on Account
@@ -186,8 +233,13 @@ def test_keystorage_sign_message(mock_secrets, mock_account, mock_aesgcm, mock_s
 
 
 def test_keystorage_sign_transaction(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
         storage.create_account("tag")
 
         tx = {
@@ -213,39 +265,64 @@ def test_keystorage_sign_transaction(mock_secrets, mock_account, mock_aesgcm, mo
         assert args[1] == "private_key"
 
 
-def test_keystorage_get_private_key_not_found(mock_secrets):
-    with patch("os.path.exists", return_value=False):
+def test_keystorage_get_private_key_not_found(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
         storage = KeyStorage(Path("wallet.json"))
-        assert storage._get_private_key("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4") is None
+        # Master exists at 0x5B..., so check an unknown address
+        assert storage._get_private_key("0x0000000000000000000000000000000000000000") is None
 
 
 def test_keystorage_get_account(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
-        storage.create_account("tag")
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        # create_account("tag") creates a second account
+        acc1 = storage.create_account("tag")
 
         # Get by address
-        acct = storage.get_account("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4")
-        assert acct.address == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+        acct = storage.get_account(acc1.address)
+        assert acct.address == acc1.address
 
         # Get by tag
         acct = storage.get_account("tag")
-        assert acct.address == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+        assert acct.address == acc1.address
 
 
 def test_keystorage_get_tag_by_address(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
-        storage.create_account("tag")
-        assert storage.get_tag_by_address("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4") == "tag"
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        acc = storage.create_account("tag")
+        assert storage.get_tag_by_address(acc.address) == "tag"
+        # Master
+        master = storage.get_account("master")
+        assert storage.get_tag_by_address(master.address) == "master"
         assert storage.get_tag_by_address("0x3333333333333333333333333333333333333333") is None
 
 
 def test_keystorage_get_address_by_tag(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
-    storage = KeyStorage(Path("wallet.json"))
-    with patch("builtins.open", mock_open()), patch("os.chmod"), patch("pathlib.Path.mkdir"):
-        storage.create_account("tag")
-        assert storage.get_address_by_tag("tag") == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
+        storage = KeyStorage(Path("wallet.json"))
+        acc = storage.create_account("tag")
+        assert storage.get_address_by_tag("tag") == acc.address
         assert storage.get_address_by_tag("unknown") is None
 
 
@@ -255,9 +332,12 @@ def test_keystorage_master_account_fallback(mock_secrets, mock_account, mock_aes
         patch("builtins.open", mock_open()),
         patch("os.chmod"),
         patch("pathlib.Path.mkdir"),
+        # Mock default creation of master to verify fallback logic if master was missing
+        patch("iwa.core.keys.KeyStorage.create_account")
     ):
         storage = KeyStorage(Path("wallet.json"))
-        # Manually inject an account with a non-master tag to test fallback
+        # IMPORTANT: because we patched create_account, master wasn't actually added to storage.accounts
+        # Manual injection
         enc_account = EncryptedAccount(
             address="0x5B38Da6a701c568545dCfcB03FcB875f56beddC4",
             salt="salt",
@@ -267,7 +347,9 @@ def test_keystorage_master_account_fallback(mock_secrets, mock_account, mock_aes
         )
         storage.accounts["0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"] = enc_account
 
-        # Should return the first account if master not found
+        # Should return the first account if master not found in get_account("master")
+        # Wait, get_account("master") calls find_stored_account("master").
+        # If "master" tag doesn't exist, master_account property logic kicks in: returns first value.
         assert storage.master_account.tag == "other"
 
 
@@ -279,8 +361,9 @@ def test_keystorage_master_account_success(mock_secrets, mock_account, mock_aesg
         patch("pathlib.Path.mkdir"),
     ):
         storage = KeyStorage(Path("wallet.json"))
-        storage.create_account("master")
-        assert storage.master_account.address == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+        # Master created in init, just check it
+        assert storage.master_account.tag == "master"
+        assert storage.master_account.address is not None
 
 
 def test_keystorage_create_account_default_tag(
@@ -293,15 +376,31 @@ def test_keystorage_create_account_default_tag(
         patch("pathlib.Path.mkdir"),
     ):
         storage = KeyStorage(Path("wallet.json"))
+        # Master already exists, so create_account("foo") returns account with tag "foo"
+        # The original test checked if creating *without* arguments or similar defaulted to master,
+        # but create_account requires a tag argument.
+        # The code inside create_account handles `if not tags: tag="master"`.
+        # Since tags is not empty (contains master), that logic is skipped.
+        # So we just test that we can create a regular account.
         acc = storage.create_account("foo")
-        assert acc.tag == "master"
+        assert acc.tag == "foo"
+        assert len(storage.accounts) == 2
 
 
-def test_keystorage_remove_account_not_found(mock_secrets):
-    with patch("os.path.exists", return_value=False):
+def test_keystorage_remove_account_not_found(
+    mock_secrets, mock_account, mock_aesgcm, mock_scrypt
+):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("builtins.open", mock_open()),
+        patch("os.chmod"),
+        patch("pathlib.Path.mkdir"),
+    ):
         storage = KeyStorage(Path("wallet.json"))
         # Should not raise
         storage.remove_account("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4")
+
+
 
 
 def test_keystorage_get_account_auto_load_safe(
@@ -344,7 +443,8 @@ def test_get_account_info(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
         patch("pathlib.Path.mkdir"),
     ):
         storage = KeyStorage(Path("wallet.json"))
-        storage.create_account("master")
+        # Master created in init
+
         storage.create_account("tag1")
 
         info = storage.get_account_info("tag1")

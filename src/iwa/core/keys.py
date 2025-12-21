@@ -104,6 +104,15 @@ class KeyStorage(BaseModel):
         else:
             self.accounts = {}
 
+        # Ensure 'master' account exists
+        if not self.get_address_by_tag("master"):
+            logger.info("Master account not found. Creating new 'master' account...")
+            try:
+                self.create_account("master")
+            except Exception as e:
+                logger.error(f"Failed to create master account: {e}")
+
+
     @property
     def master_account(self) -> EncryptedAccount:
         """Get the master account"""
