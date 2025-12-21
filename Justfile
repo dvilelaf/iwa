@@ -21,6 +21,15 @@ format:
 check:
     uv run ruff check src/
 
+# Run security checks
+security:
+    # Check for secrets
+    gitleaks detect --source . -v
+    # Check for common security issues in code
+    uv run bandit -c pyproject.toml -r src/
+    # Check for vulnerable dependencies
+    uv run pip-audit --ignore-vuln CVE-2024-23342
+
 # Type check
 types:
     PYTHONNOUSERSITE=1 uv run mypy src/ --python-version 3.12

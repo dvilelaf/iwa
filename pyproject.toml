@@ -43,6 +43,8 @@ dev = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.49",
     "mkdocstrings[python]>=0.27.0",
+    "bandit>=1.9.2",
+    "pip-audit>=2.10.0",
 ]
 
 [build-system]
@@ -116,3 +118,7 @@ module = [
 ignore_missing_imports = true
 ignore_errors = true
 follow_imports = "skip"
+
+[tool.bandit]
+exclude_dirs = ["tests", "src/tests", "src/iwa/plugins/olas/tests"]
+skips = ["B101", "B105", "B106", "B110", "B107", "B112"]
