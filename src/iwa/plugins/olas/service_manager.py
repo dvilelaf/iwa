@@ -38,7 +38,7 @@ class ServiceManager:
         Args:
             wallet: The wallet instance for signing transactions.
             service_key: Optional key (chain_name:service_id) to select a specific service.
-                        If not provided, uses the active_service_key from config.
+                        If not provided, service operations require explicit service selection.
 
         """
         self.wallet = wallet
@@ -50,12 +50,11 @@ class ServiceManager:
 
         self.olas_config: OlasConfig = self.global_config.plugins["olas"]
 
-        # Set active service if key provided
-        if service_key:
-            self.olas_config.active_service_key = service_key
-
-        # Get active service (may be None for new services)
-        self.service = self.olas_config.get_active_service()
+        # Get service by key if provided
+        self.service = None
+        if service_key and ":" in service_key:
+            chain_name, service_id = service_key.split(":", 1)
+            self.service = self.olas_config.get_service(chain_name, int(service_id))
 
         # Initialize contracts (default to gnosis)
         chain_name = self.service.chain_name if self.service else "gnosis"
@@ -189,7 +188,6 @@ class ServiceManager:
         )
 
         self.olas_config.add_service(new_service)
-        self.olas_config.active_service_key = new_service.key
         self.service = new_service
 
         # Persist configuration

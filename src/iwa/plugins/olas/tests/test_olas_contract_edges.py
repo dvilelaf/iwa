@@ -161,7 +161,7 @@ def test_service_manager_config_edges(mock_wallet):
     with patch("iwa.plugins.olas.service_manager.Config") as mock_cfg_cls:
         mock_cfg = mock_cfg_cls.return_value
         mock_cfg.plugins = {"olas": MagicMock()}
-        mock_cfg.plugins["olas"].get_active_service.return_value = Service(
+        mock_cfg.plugins["olas"].get_service.return_value = Service(
             service_name="t", chain_name="gnosis", service_id=1, agent_ids=[1]
         )
         with patch("iwa.plugins.olas.service_manager.ChainInterfaces"):
@@ -178,7 +178,7 @@ def test_service_manager_config_edges(mock_wallet):
                 with patch("iwa.plugins.olas.service_manager.ServiceRegistryContract"):
                     with patch("iwa.plugins.olas.service_manager.ServiceManagerContract"):
                         manager = ServiceManager(mock_wallet, service_key="gnosis:1")
-                        assert manager.olas_config.active_service_key == "gnosis:1"
+                        assert manager.service is not None
 
             # hits 78
             with patch("iwa.plugins.olas.service_manager.OLAS_CONTRACTS", {"gnosis": {}}):

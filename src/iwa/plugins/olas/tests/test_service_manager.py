@@ -35,8 +35,7 @@ def mock_olas_config(mock_service):
     """Create a mock OlasConfig object."""
     olas_config = MagicMock(spec=OlasConfig)
     olas_config.services = {"gnosis:1": mock_service}
-    olas_config.active_service_key = "gnosis:1"
-    olas_config.get_active_service.return_value = mock_service
+    olas_config.get_service.return_value = mock_service
     return olas_config
 
 

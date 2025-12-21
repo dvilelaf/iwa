@@ -28,7 +28,7 @@ def setup_manager(mock_wallet):
     with patch("iwa.plugins.olas.service_manager.Config") as mock_cfg_cls:
         mock_cfg = mock_cfg_cls.return_value
         mock_olas_config = MagicMock()
-        mock_olas_config.get_active_service.return_value = None
+        mock_olas_config.get_service.return_value = None
         mock_olas_config.withdrawal_address = None
         mock_cfg.plugins = {"olas": mock_olas_config}
         with patch(

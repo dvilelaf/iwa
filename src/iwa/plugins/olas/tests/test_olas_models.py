@@ -6,34 +6,6 @@ from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
 class TestOlasConfig:
     """Tests for OlasConfig class."""
 
-    def test_get_active_service_returns_none_when_no_key(self):
-        """Test get_active_service returns None when no active key set."""
-        config = OlasConfig()
-        assert config.get_active_service() is None
-
-    def test_get_active_service_returns_none_when_key_not_in_services(self):
-        """Test get_active_service returns None when key not found."""
-        config = OlasConfig()
-        config.active_service_key = "gnosis:999"
-        assert config.get_active_service() is None
-
-    def test_get_active_service_returns_service(self):
-        """Test get_active_service returns service when found."""
-        config = OlasConfig()
-        service = Service(
-            service_name="test",
-            chain_name="gnosis",
-            service_id=123,
-            agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
-        )
-        config.services["gnosis:123"] = service
-        config.active_service_key = "gnosis:123"
-
-        result = config.get_active_service()
-        assert result is not None
-        assert result.service_id == 123
-
     def test_add_service(self):
         """Test add_service adds service to dict."""
         config = OlasConfig()
@@ -61,41 +33,16 @@ class TestOlasConfig:
             service_owner_address="0x1234567890123456789012345678901234567890",
         )
         config.services["gnosis:789"] = service
-        config.active_service_key = "gnosis:789"
 
         result = config.remove_service("gnosis:789")
 
         assert result is True
         assert "gnosis:789" not in config.services
-        assert config.active_service_key is None
 
     def test_remove_service_not_found(self):
         """Test remove_service returns False when not found."""
         config = OlasConfig()
         result = config.remove_service("gnosis:999")
-        assert result is False
-
-    def test_set_active_success(self):
-        """Test set_active sets active key when service exists."""
-        config = OlasConfig()
-        service = Service(
-            service_name="test",
-            chain_name="gnosis",
-            service_id=100,
-            agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
-        )
-        config.services["gnosis:100"] = service
-
-        result = config.set_active("gnosis", 100)
-
-        assert result is True
-        assert config.active_service_key == "gnosis:100"
-
-    def test_set_active_not_found(self):
-        """Test set_active returns False when service not found."""
-        config = OlasConfig()
-        result = config.set_active("gnosis", 999)
         assert result is False
 
     def test_get_service(self):

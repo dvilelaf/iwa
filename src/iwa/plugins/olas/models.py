@@ -65,17 +65,8 @@ class OlasConfig(BaseModel):
     # Dict keyed by service key (chain_name:service_id)
     services: Dict[str, Service] = Field(default_factory=dict)
 
-    # Currently active service key (for ServiceManager)
-    active_service_key: Optional[str] = None
-
     # Address to send claimed OLAS rewards to
     withdrawal_address: Optional[EthereumAddress] = None
-
-    def get_active_service(self) -> Optional[Service]:
-        """Get the currently active service."""
-        if self.active_service_key and self.active_service_key in self.services:
-            return self.services[self.active_service_key]
-        return None
 
     def add_service(self, service: Service) -> None:
         """Add or update a service."""
@@ -85,16 +76,6 @@ class OlasConfig(BaseModel):
         """Remove a service by key."""
         if key in self.services:
             del self.services[key]
-            if self.active_service_key == key:
-                self.active_service_key = None
-            return True
-        return False
-
-    def set_active(self, chain_name: str, service_id: int) -> bool:
-        """Set the active service by chain and ID."""
-        key = f"{chain_name}:{service_id}"
-        if key in self.services:
-            self.active_service_key = key
             return True
         return False
 

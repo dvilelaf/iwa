@@ -39,7 +39,7 @@ def mock_service():
 def mock_olas_config(mock_service):
     """Mock OlasConfig."""
     config = MagicMock(spec=OlasConfig)
-    config.get_active_service.return_value = mock_service
+    config.get_service.return_value = mock_service
     return config
 
 
@@ -50,7 +50,7 @@ def service_manager(mock_wallet, mock_olas_config):
         mock_config = mock_config_class.return_value
         mock_config.plugins = {"olas": mock_olas_config}
 
-        sm = ServiceManager(mock_wallet)
+        sm = ServiceManager(mock_wallet, service_key="gnosis:1")
         # Mocking registry to avoid initialization calls
         sm.registry = MagicMock()
         sm.registry.chain_interface = MagicMock()

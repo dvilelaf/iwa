@@ -28,8 +28,8 @@ def mock_config():
     config = MagicMock()
     olas_config = MagicMock()
     olas_config.services = {}
-    olas_config.active_service_key = None
-    olas_config.get_active_service.return_value = None
+    olas_config.get_service.return_value = None
+    olas_config.get_service.return_value = None
     config.plugins = {"olas": olas_config}
     config.save_config = MagicMock()
     return config
@@ -47,8 +47,8 @@ def test_create_service_success(
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_olas_config.services = {}
-    mock_olas_config.active_service_key = None
-    mock_olas_config.get_active_service.return_value = None
+    mock_olas_config.get_service.return_value = None
+    mock_olas_config.get_service.return_value = None
     mock_config_inst.plugins = {"olas": mock_olas_config}
     mock_config_inst.save_config = MagicMock()
 
@@ -59,7 +59,7 @@ def test_create_service_success(
     ]
 
     # Setup Manager
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     # Patch ChainInterfaces
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_chains:
@@ -85,10 +85,10 @@ def test_create_service_failures(
     """Test service creation failure modes."""
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
-    mock_olas_config.get_active_service.return_value = None
+    mock_olas_config.get_service.return_value = None
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     # 1. Transaction fails
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
@@ -137,7 +137,7 @@ def test_create_service_with_approval(
     """Test service creation with token approval."""
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
-    mock_olas_config.get_active_service.return_value = None
+    mock_olas_config.get_service.return_value = None
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
@@ -145,7 +145,7 @@ def test_create_service_with_approval(
         {"name": "CreateService", "args": {"serviceId": 123}}
     ]
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
     mock_wallet.transfer_service = MagicMock()
     mock_wallet.transfer_service.approve_erc20.return_value = True
 
@@ -172,7 +172,7 @@ def test_activate_registration(
     mock_service.service_id = 123
     mock_service.chain_name = "gnosis"
     mock_service.token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
-    mock_olas_config.get_active_service.return_value = mock_service
+    mock_olas_config.get_service.return_value = mock_service
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
@@ -182,7 +182,7 @@ def test_activate_registration(
     }
     mock_registry_inst.extract_events.return_value = [{"name": "ActivateRegistration"}]
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     success = manager.activate_registration()
     assert success is True
@@ -220,7 +220,7 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
     mock_service.service_id = 123
     mock_service.chain_name = "gnosis"
     mock_service.token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
-    mock_olas_config.get_active_service.return_value = mock_service
+    mock_olas_config.get_service.return_value = mock_service
     mock_config_inst.plugins = {"olas": mock_olas_config}
 
     mock_registry_inst = mock_registry_contract.return_value
@@ -230,7 +230,7 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
     }
     mock_registry_inst.extract_events.return_value = [{"name": "RegisterInstance"}]
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     success = manager.register_agent()
     assert success is True
@@ -271,7 +271,7 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     mock_service.multisig_address = None
 
     mock_olas_config = MagicMock()
-    mock_olas_config.get_active_service.return_value = mock_service
+    mock_olas_config.get_service.return_value = mock_service
 
     mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
@@ -287,7 +287,7 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
         {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
     ]
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     multisig = manager.deploy()
     assert multisig == "0xMultisig"
@@ -333,7 +333,7 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
     mock_service.staking_contract_address = None  # Not staked
 
     mock_olas_config = MagicMock()
-    mock_olas_config.get_active_service.return_value = mock_service
+    mock_olas_config.get_service.return_value = mock_service
 
     mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
@@ -346,7 +346,7 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
     }
     mock_registry_inst.extract_events.return_value = [{"name": "TerminateService"}]
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     success = manager.terminate()
     assert success is True
@@ -392,7 +392,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
     mock_service.staking_contract_address = None
 
     mock_olas_config = MagicMock()
-    mock_olas_config.get_active_service.return_value = mock_service
+    mock_olas_config.get_service.return_value = mock_service
 
     mock_config_inst = mock_config_cls.return_value
     mock_config_inst.plugins = {"olas": mock_olas_config}
@@ -404,7 +404,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
         "security_deposit": 50000000000000000000,
     }
 
-    manager = ServiceManager(mock_wallet)
+    manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     # Mock Staking Contract
     mock_staking = MagicMock()
