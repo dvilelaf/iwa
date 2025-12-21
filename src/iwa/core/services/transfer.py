@@ -178,25 +178,78 @@ class TransferService:
             logger.warning(f"Failed to calculate token price info for {token_symbol}: {e}")
             return None, None
 
-    def _check_whitelist(self, to_address: str) -> bool:
-        """Check if address is in whitelist.
+    def _is_whitelisted_destination(self, to_address: str) -> bool:
+        """Check if destination address is whitelisted.
+
+        An address is whitelisted if it's:
+        1. One of our own accounts (from wallets.json)
+        2. In the explicit whitelist in config.toml [core.whitelist]
 
         Returns:
-            True if allowed (no whitelist or address is in it), False otherwise.
+            True if allowed, False if blocked.
 
         """
-        config = Config()
-        if not (config.core and config.core.whitelist):
-            return True
-
+        # Normalize address for comparison
         try:
             target_addr = EthereumAddress(to_address)
+        except ValueError:
+            logger.error(f"Invalid address format: {to_address}")
+            return False
+
+        # Check 1: Is it one of our own wallets?
+        if self.account_service.resolve_account(to_address):
+            return True
+
+        # Check 2: Is it in the config whitelist?
+        config = Config()
+        if config.core and config.core.whitelist:
             if target_addr in config.core.whitelist.values():
                 return True
-        except ValueError:
-            pass
 
-        logger.error(f"Address '{to_address}' is not in the whitelist. Transaction blocked.")
+        # Not in whitelist - block transaction
+        logger.error(
+            f"SECURITY: Destination {to_address} is NOT whitelisted. "
+            "Transaction blocked. Add to config.toml [core.whitelist] to allow."
+        )
+        return False
+
+    def _is_supported_token(self, token_address_or_name: str, chain_name: str) -> bool:
+        """Validate that the token is supported on this chain.
+
+        Supported tokens are:
+        1. Native currency
+        2. Tokens defined in chain.tokens (defaults + custom_tokens)
+
+        Returns:
+            True if token is supported, False otherwise.
+
+        """
+        # Native currency is always allowed
+        if token_address_or_name.lower() in ("native", NATIVE_CURRENCY_ADDRESS.lower()):
+            return True
+
+        chain_interface = ChainInterfaces().get(chain_name)
+        supported_tokens = chain_interface.tokens
+
+        # Check by name (e.g., "OLAS")
+        if token_address_or_name.upper() in supported_tokens:
+            return True
+
+        # Check by address
+        try:
+            token_addr = EthereumAddress(token_address_or_name)
+            if token_addr in supported_tokens.values():
+                return True
+        except ValueError:
+            pass  # Not a valid address, already checked by name
+
+        # Token not supported
+        supported_list = ", ".join(supported_tokens.keys())
+        logger.error(
+            f"SECURITY: Token '{token_address_or_name}' is NOT supported on {chain_name}. "
+            f"Supported tokens: {supported_list}. "
+            "Add to config.toml [core.custom_tokens] to allow."
+        )
         return False
 
     def _resolve_token_symbol(
@@ -425,8 +478,12 @@ class TransferService:
         if not to_address:
             return None
 
-        # Whitelist check
-        if not self._check_whitelist(to_address):
+        # SECURITY: Validate destination is whitelisted
+        if not self._is_whitelisted_destination(to_address):
+            return None
+
+        # SECURITY: Validate token is supported
+        if not self._is_supported_token(token_address_or_name, chain_name):
             return None
 
         # Resolve chain and token
