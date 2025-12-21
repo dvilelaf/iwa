@@ -263,3 +263,90 @@ class StakingContract(ContractInstance):
             tx_params={"from": from_address},
         )
         return tx
+
+    def prepare_claim_tx(
+        self,
+        from_address: str,
+        service_id: int,
+    ) -> Optional[Dict]:
+        """Prepare a claim transaction to claim staking rewards.
+
+        Args:
+            from_address: The address sending the transaction (service owner).
+            service_id: The service ID to claim rewards for.
+
+        Returns:
+            Transaction dict ready to be signed and sent.
+
+        """
+        tx = self.prepare_transaction(
+            method_name="claim",
+            method_kwargs={
+                "serviceId": service_id,
+            },
+            tx_params={"from": from_address},
+        )
+        return tx
+
+    def get_accrued_rewards(self, service_id: int) -> int:
+        """Get accrued rewards for a service.
+
+        Args:
+            service_id: The service ID to query.
+
+        Returns:
+            Accrued rewards in wei (from mapServiceInfo[3]).
+
+        """
+        service_info = self.call("mapServiceInfo", service_id)
+        # mapServiceInfo returns (multisig, owner, nonces, tsStart, reward, inactivity)
+        # reward is at index 4 (0-indexed)
+        return service_info[4] if len(service_info) > 4 else 0
+
+    def is_checkpoint_needed(self, grace_period_seconds: int = 600) -> bool:
+        """Check if the checkpoint needs to be called.
+
+        The checkpoint should be called when:
+        1. The current epoch has ended (current time > epoch_end)
+        2. A grace period has passed (to allow someone else to call it first)
+
+        Args:
+            grace_period_seconds: Seconds to wait after epoch ends before calling.
+                                  Defaults to 600 (10 minutes).
+
+        Returns:
+            True if checkpoint should be called, False otherwise.
+
+        """
+        epoch_end = self.get_next_epoch_start()
+        now = datetime.now(timezone.utc)
+
+        # If the epoch has not finished, no need to call
+        if now < epoch_end:
+            return False
+
+        # If less than grace_period has passed since epoch ended, wait
+        if (now - epoch_end).total_seconds() < grace_period_seconds:
+            return False
+
+        return True
+
+    def prepare_checkpoint_tx(self, from_address: str) -> Optional[Dict]:
+        """Prepare a checkpoint transaction.
+
+        The checkpoint closes the current epoch and starts a new one.
+        Anyone can call this once the epoch has ended.
+
+        Args:
+            from_address: The address sending the transaction.
+
+        Returns:
+            Transaction dict ready to be signed and sent.
+
+        """
+        tx = self.prepare_transaction(
+            method_name="checkpoint",
+            method_kwargs={},
+            tx_params={"from": from_address},
+        )
+        return tx

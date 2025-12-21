@@ -764,6 +764,232 @@ class ServiceManager:
             liveness_ratio=staking.activity_checker.liveness_ratio,
         )
 
+    def claim_rewards(self, staking_contract: Optional[StakingContract] = None) -> tuple[bool, int]:
+        """Claim staking rewards for the active service.
+
+        The claimed OLAS tokens will be sent to the service's multisig (Safe).
+
+        Args:
+            staking_contract: Optional pre-loaded StakingContract. If not provided,
+                              it will be loaded from the service's staking_contract_address.
+
+        Returns:
+            Tuple of (success, claimed_amount_wei).
+
+        """
+        if not self.service:
+            logger.error("No active service")
+            return False, 0
+
+        if not self.service.staking_contract_address:
+            logger.error("Service is not staked")
+            return False, 0
+
+        # Load staking contract if not provided
+        if not staking_contract:
+            try:
+                staking_contract = StakingContract(
+                    str(self.service.staking_contract_address),
+                    chain_name=self.service.chain_name,
+                )
+            except Exception as e:
+                logger.error(f"Failed to load staking contract: {e}")
+                return False, 0
+
+        service_id = self.service.service_id
+
+        # Check if actually staked
+        if staking_contract.get_staking_state(service_id) != StakingState.STAKED:
+            logger.info("Service not staked, skipping claim")
+            return False, 0
+
+        # Check accrued rewards
+        accrued_rewards = staking_contract.get_accrued_rewards(service_id)
+        if accrued_rewards == 0:
+            logger.info("No accrued rewards to claim")
+            return False, 0
+
+        logger.info(f"Claiming {accrued_rewards / 1e18:.4f} OLAS rewards for service {service_id}")
+
+        # Prepare and send claim transaction
+        claim_tx = staking_contract.prepare_claim_tx(
+            from_address=self.wallet.master_account.address,
+            service_id=service_id,
+        )
+
+        if not claim_tx:
+            logger.error("Failed to prepare claim transaction")
+            return False, 0
+
+        success, receipt = self.wallet.sign_and_send_transaction(
+            claim_tx, signer_address_or_tag=self.wallet.master_account.address
+        )
+        if not success:
+            logger.error("Failed to send claim transaction")
+            return False, 0
+
+        events = staking_contract.extract_events(receipt)
+        if "RewardClaimed" not in [event["name"] for event in events]:
+            logger.warning("RewardClaimed event not found, but transaction succeeded")
+
+        logger.info(f"Successfully claimed {accrued_rewards / 1e18:.4f} OLAS rewards")
+        return True, accrued_rewards
+
+    def withdraw_rewards(self) -> tuple[bool, float]:
+        """Withdraw OLAS from the service Safe to the configured withdrawal address.
+
+        The OLAS tokens are transferred from the service's multisig to the
+        withdrawal_address configured in the OlasConfig.
+
+        Returns:
+            Tuple of (success, olas_amount_transferred).
+
+        """
+        from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS
+
+        if not self.service:
+            logger.error("No active service")
+            return False, 0
+
+        if not self.service.multisig_address:
+            logger.error("Service has no multisig address")
+            return False, 0
+
+        if not self.olas_config.withdrawal_address:
+            logger.error("No withdrawal address configured in OlasConfig")
+            return False, 0
+
+        multisig_address = str(self.service.multisig_address)
+        withdrawal_address = str(self.olas_config.withdrawal_address)
+
+        # Get OLAS balance of the Safe
+        olas_token = ERC20Contract(
+            str(OLAS_TOKEN_ADDRESS_GNOSIS),
+            chain_name=self.service.chain_name,
+        )
+
+        olas_balance = olas_token.balance_of_wei(multisig_address)
+        if olas_balance == 0:
+            logger.info("No OLAS balance to withdraw")
+            return False, 0
+
+        olas_amount = olas_balance / 1e18
+        logger.info(
+            f"Withdrawing {olas_amount:.4f} OLAS from {multisig_address} to {withdrawal_address}"
+        )
+
+        # Transfer from Safe to withdrawal address
+        tx_hash = self.wallet.send(
+            from_address_or_tag=multisig_address,
+            to_address_or_tag=withdrawal_address,
+            amount_wei=olas_balance,
+            token_address_or_name=str(OLAS_TOKEN_ADDRESS_GNOSIS),
+            chain_name=self.service.chain_name,
+        )
+
+        if not tx_hash:
+            logger.error("Failed to transfer OLAS")
+            return False, 0
+
+        logger.info(f"Withdrew {olas_amount:.4f} OLAS to {withdrawal_address}")
+        return True, olas_amount
+
+    def call_checkpoint(
+        self,
+        staking_contract: Optional[StakingContract] = None,
+        grace_period_seconds: int = 600,
+    ) -> bool:
+        """Call the checkpoint on the staking contract to close the current epoch.
+
+        The checkpoint closes the current epoch, calculates rewards for all staked
+        services, and starts a new epoch. Anyone can call this once the epoch has ended.
+
+        This method will:
+        1. Check if the service is staked
+        2. Verify that the epoch has ended (with a grace period)
+        3. Send the checkpoint transaction
+
+        Args:
+            staking_contract: Optional pre-loaded StakingContract. If not provided,
+                              it will be loaded from the service's staking_contract_address.
+            grace_period_seconds: Seconds to wait after epoch ends before calling.
+                                  Defaults to 600 (10 minutes) to allow others to call first.
+
+        Returns:
+            True if checkpoint was called successfully, False otherwise.
+
+        """
+        if not self.service:
+            logger.error("No active service")
+            return False
+
+        if not self.service.staking_contract_address:
+            logger.error("Service is not staked")
+            return False
+
+        # Load staking contract if not provided
+        if not staking_contract:
+            try:
+                staking_contract = StakingContract(
+                    str(self.service.staking_contract_address),
+                    chain_name=self.service.chain_name,
+                )
+            except Exception as e:
+                logger.error(f"Failed to load staking contract: {e}")
+                return False
+
+        # Check if checkpoint is needed
+        if not staking_contract.is_checkpoint_needed(grace_period_seconds):
+            epoch_end = staking_contract.get_next_epoch_start()
+            logger.info(f"Checkpoint not needed yet. Epoch ends at {epoch_end.isoformat()}")
+            return False
+
+        logger.info("Calling checkpoint to close the current epoch")
+
+        # Prepare and send checkpoint transaction
+        checkpoint_tx = staking_contract.prepare_checkpoint_tx(
+            from_address=self.wallet.master_account.address,
+        )
+
+        if not checkpoint_tx:
+            logger.error("Failed to prepare checkpoint transaction")
+            return False
+
+        success, receipt = self.wallet.sign_and_send_transaction(
+            checkpoint_tx, signer_address_or_tag=self.wallet.master_account.address
+        )
+        if not success:
+            logger.error("Failed to send checkpoint transaction")
+            return False
+
+        # Verify the Checkpoint event was emitted
+        events = staking_contract.extract_events(receipt)
+        checkpoint_events = [e for e in events if e["name"] == "Checkpoint"]
+
+        if not checkpoint_events:
+            logger.error("Checkpoint event not found - transaction may have failed")
+            return False
+
+        # Log checkpoint details from the event
+        checkpoint_event = checkpoint_events[0]
+        args = checkpoint_event.get("args", {})
+        new_epoch = args.get("epoch", "unknown")
+        available_rewards = args.get("availableRewards", 0)
+        rewards_olas = available_rewards / 1e18 if available_rewards else 0
+
+        logger.info(
+            f"Checkpoint successful - New epoch: {new_epoch}, "
+            f"Available rewards: {rewards_olas:.2f} OLAS"
+        )
+
+        # Log any inactivity warnings
+        inactivity_warnings = [e for e in events if e["name"] == "ServiceInactivityWarning"]
+        if inactivity_warnings:
+            service_ids = [e["args"]["serviceId"] for e in inactivity_warnings]
+            logger.warning(f"Services with inactivity warnings: {service_ids}")
+
+        return True
+
     def spin_up(  # noqa: C901
         self,
         service_id: Optional[int] = None,

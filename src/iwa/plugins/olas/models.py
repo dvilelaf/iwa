@@ -68,6 +68,9 @@ class OlasConfig(BaseModel):
     # Currently active service key (for ServiceManager)
     active_service_key: Optional[str] = None
 
+    # Address to send claimed OLAS rewards to
+    withdrawal_address: Optional[EthereumAddress] = None
+
     def get_active_service(self) -> Optional[Service]:
         """Get the currently active service."""
         if self.active_service_key and self.active_service_key in self.services:
