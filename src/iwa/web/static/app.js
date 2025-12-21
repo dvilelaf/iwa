@@ -1,15 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
     const state = {
-        activeChain: 'gnosis',
-        activeTab: 'dashboard',
+        activeChain: localStorage.getItem('iwa_active_chain') || 'gnosis',
+        activeTab: localStorage.getItem('iwa_active_tab') || 'dashboard',
         chains: [],
         tokens: {},
         nativeCurrencies: {},
         accounts: [],           // Basic account info
         balanceCache: {},       // { address: { native: "1.00", OLAS: "50.00", ... } }
         authToken: localStorage.getItem('iwa_auth_token') || '',
-        activeTokens: new Set(['native', 'OLAS'])  // Default: native and OLAS
+        activeTokens: new Set(['native', 'OLAS']),  // Default: native and OLAS
+        olasServicesCache: {},   // { chain: [services] }
+        stakingContractsCache: null,  // Cached staking contracts
+        olasPriceCache: null     // Cached OLAS price in EUR
     };
+
+    // Real-time countdown updater for unstake availability
+    function updateUnstakeCountdowns() {
+        document.querySelectorAll('[data-unstake-at]').forEach(el => {
+            const targetTime = new Date(el.dataset.unstakeAt);
+            const diffMs = targetTime - new Date();
+            if (diffMs <= 0) {
+                el.innerHTML = '<span style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>';
+                el.removeAttribute('data-unstake-at');
+            } else {
+                const totalMins = Math.ceil(diffMs / 60000);
+                const hours = Math.floor(totalMins / 60);
+                const mins = totalMins % 60;
+                el.textContent = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+            }
+        });
+    }
+    // Update every minute
+    setInterval(updateUnstakeCountdowns, 60000);
 
     // DOM Elements
     const tabBtns = document.querySelectorAll('.tab-btn');
@@ -68,21 +90,47 @@ document.addEventListener('DOMContentLoaded', () => {
             state.chains = data.chains;
             state.tokens = data.tokens;
             state.nativeCurrencies = data.native_currencies || {};
-            state.activeChain = data.default_chain;
+
+            // Restore saved chain or use default
+            const savedChain = localStorage.getItem('iwa_active_chain');
+            state.activeChain = savedChain && data.chains.includes(savedChain) ? savedChain : data.default_chain;
 
             populateChainSelect();
             populateTokenToggles();
             updateFormSelectors();
 
+            // Restore saved tab
+            const savedTab = localStorage.getItem('iwa_active_tab');
+            if (savedTab && document.getElementById(savedTab)) {
+                state.activeTab = savedTab;
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabPanes.forEach(p => p.classList.remove('active'));
+                const targetBtn = document.querySelector(`[data-tab="${savedTab}"]`);
+                if (targetBtn) targetBtn.classList.add('active');
+                document.getElementById(savedTab).classList.add('active');
+            }
+
             // Initial load
             loadAccounts();
             loadTransactions();
+            loadOlasServices();  // Preload Olas services
+            preloadStakingContracts();  // Preload staking contracts
 
             // Setup Safe chains
             populateSafeChains();
         } catch (err) {
             console.error("Init error:", err);
             showToast('Error initializing: ' + escapeHtml(err.message), 'error');
+        }
+    }
+
+    // Preload staking contracts for fast modal opening
+    async function preloadStakingContracts() {
+        try {
+            const resp = await authFetch('/api/olas/staking-contracts?chain=gnosis');
+            state.stakingContractsCache = await resp.json();
+        } catch (err) {
+            console.error('Failed to preload staking contracts:', err);
         }
     }
 
@@ -94,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.classList.add('active');
             const target = btn.getAttribute('data-tab');
             state.activeTab = target;
+            localStorage.setItem('iwa_active_tab', target);
             document.getElementById(target).classList.add('active');
             if (target === 'rpc') {
                 loadRPCStatus(true);
@@ -104,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Chain Change Handling
     activeChainSelect.addEventListener('change', (e) => {
         state.activeChain = e.target.value;
+        localStorage.setItem('iwa_active_chain', e.target.value);
         state.balanceCache = {};  // Clear cache on chain change
         populateTokenToggles();
         loadAccounts();
@@ -589,6 +639,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return value;
     }
 
+    function getExplorerUrl(address, chain) {
+        if (!address) return '#';
+        if (chain === 'gnosis') return `https://gnosisscan.io/address/${address}`;
+        if (chain === 'base') return `https://basescan.org/address/${address}`;
+        if (chain === 'ethereum') return `https://etherscan.io/address/${address}`;
+        return `https://gnosisscan.io/address/${address}`;
+    }
+
     window.copyToClipboard = (text) => {
         navigator.clipboard.writeText(text).then(() => {
             showToast('Copied to clipboard', 'info');
@@ -602,6 +660,37 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.innerText = msg;
         container.appendChild(toast);
         setTimeout(() => toast.remove(), 4000);
+    }
+
+    // Custom themed confirm dialog
+    function showConfirm(title, message) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirm-modal');
+            const titleEl = document.getElementById('confirm-title');
+            const messageEl = document.getElementById('confirm-message');
+            const okBtn = document.getElementById('confirm-ok');
+            const cancelBtn = document.getElementById('confirm-cancel');
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            modal.classList.add('active');
+
+            const cleanup = () => {
+                modal.classList.remove('active');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+
+            okBtn.onclick = () => {
+                cleanup();
+                resolve(true);
+            };
+
+            cancelBtn.onclick = () => {
+                cleanup();
+                resolve(false);
+            };
+        });
     }
 
     // ===== CowSwap Functions =====
@@ -840,9 +929,742 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => {
             if (btn.dataset.tab === 'cowswap') {
                 populateSwapForm();
+            } else if (btn.dataset.tab === 'olas') {
+                loadOlasServices();
             }
         });
     });
+
+    // ===== Olas Services Functions =====
+    const olasRefreshBtn = document.getElementById('refresh-olas-btn');
+    if (olasRefreshBtn) {
+        olasRefreshBtn.addEventListener('click', () => loadOlasServices(true));
+    }
+
+    window.loadOlasServices = async (forceRefresh = false) => {
+        if (!state.activeChain) return;
+
+        const container = document.getElementById('olas-services-container');
+        if (!container) return;
+
+        // Render cached data immediately if available (even on forceRefresh to prevent flash)
+        if (state.olasServicesCache[state.activeChain] && state.olasServicesCache[state.activeChain].length > 0) {
+            renderOlasSummaryAndCards(container, state.olasServicesCache[state.activeChain], state.olasPriceCache);
+        } else if (!state.olasServicesCache[state.activeChain]) {
+            // Only show loading spinner if no data is visible
+            container.innerHTML = `<div class="empty-state glass"><span class="loading-spinner"></span> Loading services...</div>`;
+        }
+
+        // If not force refresh and we have valid cache, we are done
+        if (!forceRefresh && state.olasServicesCache[state.activeChain]) {
+            return;
+        }
+
+        try {
+            // Step 1: Fetch basic data and OLAS price in parallel
+            const [basicResp, priceResp] = await Promise.all([
+                authFetch(`/api/olas/services/basic?chain=${state.activeChain}`),
+                authFetch('/api/olas/price')
+            ]);
+            const basicServices = await basicResp.json();
+            const priceData = await priceResp.json();
+
+            // Cache price
+            state.olasPriceCache = priceData.price_eur;
+
+            if (!basicServices || basicServices.length === 0) {
+                container.innerHTML = `<div class="empty-state glass"><p>No Olas services found for ${state.activeChain}.</p></div>`;
+                return;
+            }
+
+            // Render cards immediately with spinners for dynamic fields
+            renderOlasSummaryAndCards(container, basicServices, state.olasPriceCache, true);
+
+            // Step 2: Fetch full details per service in parallel
+            const detailPromises = basicServices.map(async (service) => {
+                try {
+                    const detailResp = await authFetch(`/api/olas/services/${service.key}/details`);
+                    if (detailResp.ok) {
+                        const details = await detailResp.json();
+                        // Merge details into service
+                        return { ...service, accounts: details.accounts, staking: details.staking };
+                    }
+                } catch (e) {
+                    console.error(`Failed to load details for ${service.key}:`, e);
+                }
+                return service;
+            });
+
+            const fullServices = await Promise.all(detailPromises);
+
+            // Cache the full results
+            state.olasServicesCache[state.activeChain] = fullServices;
+
+            // Re-render with full data
+            renderOlasSummaryAndCards(container, fullServices, state.olasPriceCache, false);
+
+            // Trigger countdown update
+            updateUnstakeCountdowns();
+        } catch (err) {
+            console.error('Error loading Olas services:', err);
+            // If we have cached data, show it with a warning toast instead of breaking UI
+            if (state.olasServicesCache[state.activeChain] && state.olasServicesCache[state.activeChain].length > 0) {
+                showToast(`Failed to refresh services: ${err.message}`, 'error');
+                return;
+            }
+            container.innerHTML = `<div class="empty-state glass" style="color: #e74c3c;"><p>Error loading services: ${escapeHtml(err.message)}</p></div>`;
+        }
+    }
+
+    function renderOlasSummaryAndCards(container, services, olasPrice, isLoading = false) {
+        // Calculate summary
+        const serviceCount = services.length;
+        let totalRewards = 0;
+        services.forEach(s => {
+            if (s.staking && s.staking.accrued_reward_olas) {
+                totalRewards += parseFloat(s.staking.accrued_reward_olas) || 0;
+            }
+        });
+
+        const priceDisplay = olasPrice ? `€${olasPrice.toFixed(2)}` : '<span class="cell-spinner"></span>';
+        const rewardsDisplay = isLoading ? '<span class="cell-spinner"></span>' : totalRewards.toFixed(4);
+        const valueEur = olasPrice && !isLoading ? (totalRewards * olasPrice).toFixed(2) : null;
+        const valueDisplay = valueEur ? `€${valueEur}` : (isLoading ? '<span class="cell-spinner"></span>' : '-');
+
+        // Render summary in separate container
+        const summaryContainer = document.getElementById('olas-summary-container');
+        if (summaryContainer) {
+            summaryContainer.innerHTML = `
+                <div class="olas-summary-header" style="margin: 0 auto 1rem auto; padding: 0.8rem 1.5rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); max-width: 700px;">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Services</div>
+                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);">${serviceCount}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Rewards</div>
+                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--success);">${rewardsDisplay} OLAS</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">OLAS Price</div>
+                            <div style="font-size: 1.3rem; font-weight: 600;">${priceDisplay}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Rewards Value</div>
+                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);">${valueDisplay}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render cards in services container
+        container.innerHTML = services.map(service => renderOlasServiceCard(service, isLoading)).join('');
+    }
+
+    function renderOlasServiceCard(service, isLoading = false) {
+        const staking = service.staking || {};
+        const isStaked = staking.is_staked || false;
+
+        // Format epoch countdown
+        let epochCountdown = '-';
+        if (staking.remaining_epoch_seconds !== undefined) {
+            const diff = Math.floor(staking.remaining_epoch_seconds);
+            if (diff <= 0) {
+                epochCountdown = '<span class="countdown" style="color: #e74c3c">Checkpoint pending</span>';
+            } else {
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                epochCountdown = `<span class="countdown" data-end="${staking.epoch_end_utc}">${h}h ${m}m</span>`;
+            }
+        }
+
+        // Build accounts table
+        const roles = ['agent', 'safe', 'owner'];
+        const accountsHtml = roles.map(role => {
+            const acc = service.accounts[role];
+            if (!acc || !acc.address) {
+                if (role === 'owner') return '';
+                return `
+                    <tr>
+                        <td>${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))}</td>
+                        <td class="address-cell" style="color: var(--text-muted)">Not deployed</td>
+                        <td class="val">-</td>
+                        <td class="val">-</td>
+                    </tr>
+                `;
+            }
+
+            // Requirement: addresses for 'agent' and 'safe', but only 'tag' for 'owner'
+            const displayText = (role === 'owner' && acc.tag) ? acc.tag : shortenAddr(acc.address);
+            const explorerUrl = getExplorerUrl(acc.address, service.chain);
+
+            // Show spinner if loading, otherwise show balance
+            const nativeDisplay = isLoading || acc.native === null ? '<span class="cell-spinner"></span>' : escapeHtml(acc.native);
+            const olasDisplay = isLoading || acc.olas === null ? '<span class="cell-spinner"></span>' : escapeHtml(acc.olas);
+
+            return `
+                <tr>
+                    <td>${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))}</td>
+                    <td class="address-cell">
+                        <a href="${explorerUrl}" target="_blank" class="explorer-link" title="${escapeHtml(acc.address)}">
+                            ${escapeHtml(displayText)}
+                        </a>
+                    </td>
+                    <td class="val">${nativeDisplay}</td>
+                    <td class="val">${olasDisplay}</td>
+                </tr>
+            `;
+        }).join('');
+
+        // Build liveness progress bar
+        let livenessProgressHtml = '';
+        if (isStaked) {
+            if (isLoading) {
+                livenessProgressHtml = `
+                    <div class="staking-row">
+                        <span class="label">Liveness:</span>
+                        <div class="liveness-progress">
+                            <div class="progress-bar" style="width: 0%"></div>
+                            <span class="progress-text"><span class="cell-spinner"></span></span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const current = staking.mech_requests_this_epoch || 0;
+                const required = staking.required_mech_requests || 1;
+                const percentage = Math.min(100, Math.round((current / required) * 100));
+                const progressClass = staking.liveness_ratio_passed ? 'progress-success' : 'progress-warning';
+                livenessProgressHtml = `
+                    <div class="staking-row">
+                        <span class="label">Liveness:</span>
+                        <div class="liveness-progress">
+                            <div class="progress-bar ${progressClass}" style="width: ${percentage}%"></div>
+                            <span class="progress-text">${current}/${required} ${staking.liveness_ratio_passed ? '✓' : ''}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Disable all buttons while loading
+        const loadingDisabled = isLoading ? 'disabled' : '';
+        const loadingStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
+
+        return `
+            <div class="service-card glass">
+                <div class="service-header">
+                    <h3>${escapeHtml(service.name || 'Service')} <span class="service-id">#${service.service_id}</span></h3>
+                    <span class="chain-badge">${escapeHtml(service.chain)}</span>
+                </div>
+
+                <table class="service-accounts-table">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Account</th>
+                            <th class="val">${escapeHtml(state.nativeCurrencies[service.chain] || 'Native')}</th>
+                            <th class="val">OLAS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${accountsHtml}
+                    </tbody>
+                </table>
+
+                <div class="staking-info">
+                    <div class="staking-row">
+                        <span class="label">Status:</span>
+                        <span class="value ${isStaked ? 'staked' : 'not-staked'}">
+                            ${isStaked ? '✓ STAKED' : '○ NOT STAKED'}
+                        </span>
+                    </div>
+                    ${isStaked && staking.staking_contract_address ? `
+                        <div class="staking-row">
+                            <span class="label">Contract:</span>
+                            <span class="value address-cell">
+                                <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
+                                    ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
+                                </a>
+                            </span>
+                        </div>
+                    ` : ''}
+                    ${isStaked ? `
+                        <div class="staking-row">
+                            <span class="label">Rewards:</span>
+                            <span class="value rewards">${isLoading ? '<span class="cell-spinner"></span>' : (escapeHtml(staking.accrued_reward_olas || '0') + ' OLAS')}</span>
+                        </div>
+                        ${livenessProgressHtml}
+                        <div class="staking-row">
+                            <span class="label">Epoch #${staking.epoch_number !== undefined ? staking.epoch_number : '?'} Ends:</span>
+                            <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : epochCountdown}</span>
+                        </div>
+                        ${(() => {
+                    if (isLoading) {
+                        return `
+                                <div class="staking-row">
+                                    <span class="label">Unstake available:</span>
+                                    <span class="value"><span class="cell-spinner"></span></span>
+                                </div>`;
+                    }
+                    if (!staking.unstake_available_at) return '';
+                    const diffMs = new Date(staking.unstake_available_at) - new Date();
+                    if (diffMs <= 0) {
+                        return `
+                                <div class="staking-row">
+                                    <span class="label">Unstake available:</span>
+                                    <span class="value" style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>
+                                </div>`;
+                    }
+                    const diffMins = Math.ceil(diffMs / 60000);
+                    const hours = Math.floor(diffMins / 60);
+                    const mins = diffMins % 60;
+                    const timeText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+                    return `
+                                <div class="staking-row">
+                                    <span class="label">Unstake available:</span>
+                                    <span class="value" data-unstake-at="${staking.unstake_available_at}">${timeText}</span>
+                                </div>`;
+                })()}
+                    ` : ''}
+                </div>
+
+                <div class="service-actions">
+                    <button class="btn-primary btn-sm" onclick="showFundServiceModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
+                        Fund
+                    </button>
+                    ${isStaked ? `
+                        ${(() => {
+                    const checkpointDisabled = isLoading || staking.remaining_epoch_seconds > 0;
+                    let checkpointTitle = 'Call checkpoint to close the epoch';
+                    if (isLoading) {
+                        checkpointTitle = 'Loading...';
+                    } else if (staking.remaining_epoch_seconds > 0) {
+                        const h = Math.floor(staking.remaining_epoch_seconds / 3600);
+                        const m = Math.floor((staking.remaining_epoch_seconds % 3600) / 60);
+                        checkpointTitle = `Checkpoint not needed yet. Epoch ends in ${h}h ${m}m.`;
+                    }
+                    return `
+                                <button class="btn-primary btn-sm btn-checkpoint" onclick="checkpointOlasService('${escapeHtml(service.key)}')" ${checkpointDisabled ? 'disabled' : ''} style="${loadingStyle}" title="${escapeHtml(checkpointTitle)}">
+                                    Checkpoint
+                                </button>
+                            `;
+                })()}
+                        ${(() => {
+                    const canUnstake = !staking.unstake_available_at || new Date() >= new Date(staking.unstake_available_at);
+                    const unstakeLabel = 'Unstake';
+                    let unstakeDisabled = isLoading ? 'disabled' : '';
+                    const disabledStyle = 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);';
+                    let timeText = '';
+
+                    if (!canUnstake) {
+                        unstakeDisabled = 'disabled';
+                        const diffMs = new Date(staking.unstake_available_at) - new Date();
+                        const diffMins = Math.ceil(diffMs / 60000);
+                        timeText = diffMins > 60 ? `~${Math.ceil(diffMins / 60)}h` : `${diffMins}m`;
+                    }
+
+                    return `
+                        <button class="btn-danger btn-sm" onclick="unstakeOlasService('${escapeHtml(service.key)}')" ${unstakeDisabled}
+                                style="${(isLoading || !canUnstake) ? disabledStyle : ''}"
+                                title="${isLoading ? 'Loading...' : (!canUnstake ? `Cannot unstake yet. Minimum staking duration (72h) ends in ${timeText}` : 'Unstake service')}">
+                            ${escapeHtml(unstakeLabel)}
+                        </button>
+                        `;
+                })()}
+                    ` : `
+                        <button class="btn-danger btn-sm" onclick="showStakeModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
+                            Stake
+                        </button>
+                    `}
+                ${(() => {
+                const terminateLabel = 'Terminate';
+                let terminateDisabled = isLoading ? 'disabled' : '';
+                let terminateStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
+                let terminateTitle = isLoading ? 'Loading...' : 'Terminate Service';
+
+                if (isStaked && !isLoading) {
+                    terminateDisabled = 'disabled';
+                    terminateStyle = 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);';
+
+                    // Calculate countdown if staked
+                    if (staking.unstake_available_at) {
+                        const diffMs = new Date(staking.unstake_available_at) - new Date();
+                        if (diffMs > 0) {
+                            const diffMins = Math.ceil(diffMs / 60000);
+                            const timeText = diffMins > 60 ? `~${Math.ceil(diffMins / 60)}h` : `${diffMins}m`;
+                            terminateTitle = `Cannot terminate while staked. Unstake available in ${timeText}.`;
+                        } else {
+                            terminateTitle = 'Service is staked. You must unstake before terminating.';
+                        }
+                    } else {
+                        terminateTitle = 'Service is staked. You must unstake before terminating.';
+                    }
+                }
+
+                return `
+                        <button class="btn-danger btn-sm" onclick="showTerminateModal('${escapeHtml(service.key)}')" ${terminateDisabled}
+                                style="${terminateStyle}"
+                                title="${escapeHtml(terminateTitle)}">
+                            ${escapeHtml(terminateLabel)}
+                        </button>
+                    `;
+            })()}
+                <button class="btn-danger btn-sm" onclick="drainOlasService('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
+                    Drain
+                </button>
+                ${isStaked && parseFloat(staking.accrued_reward_olas) > 0 ? `
+                    <button class="btn-primary btn-sm" onclick="claimOlasRewards('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
+                        Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS
+                    </button>
+                ` : ''}
+            </div>
+            </div>
+        `;
+    }
+
+    window.claimOlasRewards = async (serviceKey) => {
+        const confirmed = await showConfirm('Claim Rewards', 'Claim staking rewards for this service?');
+        if (!confirmed) return;
+
+        showToast('Claiming rewards...', 'info');
+        try {
+            const resp = await authFetch(`/api/olas/claim/${serviceKey}`, { method: 'POST' });
+            const result = await resp.json();
+            if (resp.ok) {
+                showToast(`Claimed ${result.claimed_olas.toFixed(4)} OLAS!`, 'success');
+                loadOlasServices(true);
+            } else {
+                showToast(`Error: ${result.detail}`, 'error');
+            }
+        } catch (err) {
+            showToast('Error claiming rewards', 'error');
+        }
+    };
+
+    window.unstakeOlasService = async (serviceKey) => {
+        const confirmed = await showConfirm('Unstake Service', 'Unstake this service? This will withdraw from the staking contract.');
+        if (!confirmed) return;
+
+        showToast('Unstaking service...', 'info');
+        try {
+            const resp = await authFetch(`/api/olas/unstake/${serviceKey}`, { method: 'POST' });
+            const result = await resp.json();
+            if (resp.ok) {
+                showToast('Service unstaked successfully!', 'success');
+                loadOlasServices(true);
+            } else {
+                showToast(`Error: ${result.detail}`, 'error');
+            }
+        } catch (err) {
+            showToast('Error unstaking service', 'error');
+        }
+    };
+
+    window.checkpointOlasService = async (serviceKey) => {
+        showToast('Calling checkpoint...', 'info');
+        try {
+            const resp = await authFetch(`/api/olas/checkpoint/${serviceKey}`, { method: 'POST' });
+            const result = await resp.json();
+            if (resp.ok) {
+                showToast('Checkpoint successful! Epoch closed.', 'success');
+                loadOlasServices(true);
+            } else {
+                showToast(`Error: ${result.detail}`, 'error');
+            }
+        } catch (err) {
+            showToast('Error calling checkpoint', 'error');
+        }
+    };
+
+    // Global countdown timer for Olas services
+    setInterval(() => {
+        const countdowns = document.querySelectorAll('.service-card .countdown[data-end]');
+        countdowns.forEach(el => {
+            const endTime = new Date(el.dataset.end).getTime();
+            const now = new Date().getTime();
+            const diff = Math.floor((endTime - now) / 1000);
+
+            const card = el.closest('.service-card');
+            const btn = card.querySelector('.btn-checkpoint');
+
+            if (diff <= 0) {
+                el.innerText = 'Checkpoint pending';
+                el.style.color = '#e74c3c';
+                if (btn) btn.disabled = false;
+            } else {
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                el.innerText = `${h}h ${m}m`;
+                el.style.color = '';
+                // Add a small grace period (30s) to avoid race conditions with contract
+                if (btn) btn.disabled = (diff > 30);
+            }
+        });
+    }, 1000);
+
+    window.drainOlasService = async (serviceKey) => {
+        const confirmed = await showConfirm('Drain Service', 'This will drain ALL service accounts (Safe, Agent, and Owner) to your master account. If staked, the service will be unstaked and rewards claimed first.');
+        if (!confirmed) return;
+
+        showToast('Draining service...', 'info');
+        try {
+            const resp = await authFetch(`/api/olas/drain/${serviceKey}`, { method: 'POST' });
+            const result = await resp.json();
+            if (resp.ok) {
+                showToast('Service drained successfully!', 'success');
+                loadOlasServices(true);
+                // Refresh main accounts too
+                state.balanceCache = {};
+                loadAccounts();
+            } else {
+                showToast(`Error: ${result.detail}`, 'error');
+            }
+        } catch (err) {
+            showToast('Error draining service', 'error');
+        }
+    };
+
+    // ===== Terminate Modal Functions =====
+    const terminateModal = document.getElementById('terminate-modal');
+    const terminateCancel = document.getElementById('terminate-cancel');
+    const terminateConfirm = document.getElementById('terminate-confirm');
+
+    window.showTerminateModal = (serviceKey) => {
+        document.getElementById('terminate-service-key').value = serviceKey;
+        terminateModal.classList.add('active');
+    };
+
+    if (terminateCancel) {
+        terminateCancel.addEventListener('click', () => {
+            terminateModal.classList.remove('active');
+        });
+    }
+
+    if (terminateConfirm) {
+        terminateConfirm.addEventListener('click', async () => {
+            const serviceKey = document.getElementById('terminate-service-key').value;
+            terminateModal.classList.remove('active');
+
+            showToast('Terminating service...', 'info');
+            try {
+                const resp = await authFetch(`/api/olas/terminate/${serviceKey}`, { method: 'POST' });
+                const result = await resp.json();
+                if (resp.ok) {
+                    showToast('Service terminated successfully!', 'success');
+                    loadOlasServices(true);
+                } else {
+                    showToast(`Error: ${result.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Error terminating service', 'error');
+            }
+        });
+    }
+
+    // ===== Stake Modal Functions =====
+    window.showStakeModal = async (serviceKey, chain) => {
+        const modal = document.getElementById('stake-modal');
+        const select = document.getElementById('stake-contract-select');
+        const keyInput = document.getElementById('stake-service-key');
+
+        keyInput.value = serviceKey;
+        select.innerHTML = '<option value="">Loading contracts...</option>';
+        modal.classList.add('active');
+
+        try {
+            const resp = await authFetch(`/api/olas/staking-contracts?chain=${chain}`);
+            const contracts = await resp.json();
+
+            if (contracts.length === 0) {
+                select.innerHTML = '<option value="">No contracts available</option>';
+                return;
+            }
+
+            select.innerHTML = contracts.map(c =>
+                `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`
+            ).join('');
+        } catch (err) {
+            select.innerHTML = '<option value="">Error loading contracts</option>';
+        }
+    };
+
+    const stakeModal = document.getElementById('stake-modal');
+    const stakeCancel = document.getElementById('stake-cancel');
+    const stakeConfirm = document.getElementById('stake-confirm');
+
+    if (stakeCancel) {
+        stakeCancel.addEventListener('click', () => {
+            stakeModal.classList.remove('active');
+        });
+    }
+
+    if (stakeConfirm) {
+        stakeConfirm.addEventListener('click', async () => {
+            const serviceKey = document.getElementById('stake-service-key').value;
+            const contractAddress = document.getElementById('stake-contract-select').value;
+
+            if (!contractAddress) {
+                showToast('Please select a staking contract', 'error');
+                return;
+            }
+
+            stakeModal.classList.remove('active');
+            showToast('Staking service...', 'info');
+
+            try {
+                const resp = await authFetch(`/api/olas/stake/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`, {
+                    method: 'POST'
+                });
+                const result = await resp.json();
+
+                if (resp.ok) {
+                    showToast('Service staked successfully!', 'success');
+                    loadOlasServices(true);
+                } else {
+                    showToast(`Error: ${result.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Error staking service', 'error');
+            }
+        });
+    }
+
+    // ===== Create Service Modal Functions =====
+    const createServiceBtn = document.getElementById('create-service-btn');
+    const createServiceModal = document.getElementById('create-service-modal');
+    const closeCreateServiceModal = document.getElementById('close-create-service-modal');
+    const createServiceForm = document.getElementById('create-service-form');
+
+    if (createServiceBtn) {
+        createServiceBtn.addEventListener('click', () => {
+            createServiceModal.classList.add('active');
+            // Use cached staking contracts for faster loading
+            const contractSelect = document.getElementById('new-service-staking-contract');
+            if (state.stakingContractsCache) {
+                contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
+                    state.stakingContractsCache.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+            } else {
+                // If cache not ready, load now
+                contractSelect.innerHTML = '<option value="">Loading...</option>';
+                authFetch('/api/olas/staking-contracts?chain=gnosis')
+                    .then(resp => resp.json())
+                    .then(contracts => {
+                        state.stakingContractsCache = contracts;
+                        contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
+                            contracts.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+                    })
+                    .catch(() => {
+                        contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>';
+                    });
+            }
+        });
+    }
+
+    if (closeCreateServiceModal) {
+        closeCreateServiceModal.addEventListener('click', () => {
+            createServiceModal.classList.remove('active');
+        });
+    }
+
+    if (createServiceForm) {
+        createServiceForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = createServiceForm.querySelector('button[type="submit"]');
+            const originalText = btn.innerText;
+            btn.innerText = 'Creating...';
+            btn.disabled = true;
+
+            const stakingContract = document.getElementById('new-service-staking-contract').value;
+            const payload = {
+                service_name: document.getElementById('new-service-name').value,
+                chain: document.getElementById('new-service-chain').value,
+                stake_on_create: !!stakingContract,
+                staking_contract: stakingContract || null
+            };
+
+            try {
+                const resp = await authFetch('/api/olas/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (resp.ok) {
+                    showToast(`Service created! ID: ${result.service_id}`, 'success');
+                    createServiceModal.classList.remove('active');
+                    createServiceForm.reset();
+                    loadOlasServices(true);
+                } else {
+                    showToast(`Error: ${result.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Error creating service', 'error');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+    }
+
+    // ===== Fund Service Modal Functions =====
+    const fundServiceModal = document.getElementById('fund-service-modal');
+    const closeFundModal = document.getElementById('close-fund-modal');
+    const fundConfirmBtn = document.getElementById('fund-confirm');
+
+    window.showFundServiceModal = (serviceKey, chain) => {
+        document.getElementById('fund-service-key').value = serviceKey;
+        document.getElementById('fund-agent-amount').value = '0';
+        document.getElementById('fund-safe-amount').value = '0';
+        // Update native currency symbol
+        const nativeSymbol = state.nativeCurrencies[chain] || 'Native';
+        document.getElementById('fund-native-symbol').textContent = nativeSymbol;
+        document.getElementById('fund-safe-symbol').textContent = nativeSymbol;
+        fundServiceModal.classList.add('active');
+    };
+
+    if (closeFundModal) {
+        closeFundModal.addEventListener('click', () => {
+            fundServiceModal.classList.remove('active');
+        });
+    }
+
+    if (fundConfirmBtn) {
+        fundConfirmBtn.addEventListener('click', async () => {
+            const serviceKey = document.getElementById('fund-service-key').value;
+            const agentAmount = parseFloat(document.getElementById('fund-agent-amount').value) || 0;
+            const safeAmount = parseFloat(document.getElementById('fund-safe-amount').value) || 0;
+
+            if (agentAmount <= 0 && safeAmount <= 0) {
+                showToast('Enter at least one amount', 'error');
+                return;
+            }
+
+            fundServiceModal.classList.remove('active');
+            showToast('Funding service...', 'info');
+
+            try {
+                const resp = await authFetch(`/api/olas/fund/${serviceKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_amount_eth: agentAmount,
+                        safe_amount_eth: safeAmount
+                    })
+                });
+                const result = await resp.json();
+                if (resp.ok) {
+                    const fundedAccounts = Object.keys(result.funded || {});
+                    showToast(`Funded ${fundedAccounts.join(', ')}!`, 'success');
+                    loadOlasServices(true);
+                } else {
+                    showToast(`Error: ${result.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Error funding service', 'error');
+            }
+        });
+    }
 
     init();
 });

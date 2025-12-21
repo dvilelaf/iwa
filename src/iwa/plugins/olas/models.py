@@ -38,6 +38,7 @@ class StakingStatus(BaseModel):
 
     is_staked: bool
     staking_contract_address: Optional[str] = None
+    staking_contract_name: Optional[str] = None
     staking_state: str  # "NOT_STAKED", "STAKED", "EVICTED"
 
     # Mech request tracking (what determines liveness)
@@ -49,14 +50,21 @@ class StakingStatus(BaseModel):
 
     # Rewards
     accrued_reward_wei: int = 0
+    accrued_reward_olas: float = 0
 
     # Epoch timing
+    epoch_number: int = 0
     epoch_end_utc: Optional[str] = None  # ISO format string
     remaining_epoch_seconds: float = 0
 
     # Activity checker info
     activity_checker_address: Optional[str] = None
     liveness_ratio: int = 0  # Requests per second * 1e18
+
+    # Unstake timing
+    ts_start: int = 0
+    min_staking_duration: int = 0
+    unstake_available_at: Optional[str] = None  # ISO format string
 
 
 class OlasConfig(BaseModel):
@@ -92,6 +100,7 @@ class OlasConfig(BaseModel):
 
         Returns:
             Service if found, None otherwise.
+
         """
         # Normalize address for comparison
         target = multisig_address.lower()

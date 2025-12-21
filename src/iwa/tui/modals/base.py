@@ -9,6 +9,7 @@ from textual.widgets import (
     Button,
     Input,
     Label,
+    Select,
     SelectionList,
 )
 
@@ -155,5 +156,220 @@ class CreateSafeModal(ModalScreen):
             owners = self.query_one("#owners_list", SelectionList).selected
             chains = self.query_one("#chains_list", SelectionList).selected
             self.dismiss({"tag": tag, "threshold": threshold, "owners": owners, "chains": chains})
+        elif event.button.id == "cancel":
+            self.dismiss(None)
+
+
+class StakeServiceModal(ModalScreen):
+    """Modal screen for selecting a staking contract."""
+
+    CSS = """
+    StakeServiceModal {
+        align: center middle;
+    }
+    #dialog {
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        border: thick $background 80%;
+        background: $surface;
+    }
+    #dialog Label {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    .header {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 2;
+    }
+    Select {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    #btn_row {
+        height: 3;
+        width: 100%;
+        align: center middle;
+    }
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, contracts: List[Tuple[str, str]]):
+        """Init with list of (name, address) tuples."""
+        super().__init__()
+        self.contracts = contracts
+
+    def compose(self) -> ComposeResult:
+        """Compose the modal UI."""
+        with Vertical(id="dialog"):
+            yield Label("Stake Service", classes="header")
+            yield Label("Select Staking Contract:")
+            options = [(name, addr) for name, addr in self.contracts]
+            yield Select(options, prompt="Select a contract...", id="contract_select")
+            with Horizontal(id="btn_row"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Stake", variant="primary", id="stake")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "stake":
+            contract_address = self.query_one("#contract_select", Select).value
+            if contract_address == Select.BLANK:
+                return
+            self.dismiss(contract_address)
+        elif event.button.id == "cancel":
+            self.dismiss(None)
+
+
+class CreateServiceModal(ModalScreen):
+    """Modal screen for creating a new Olas service."""
+
+    CSS = """
+    CreateServiceModal {
+        align: center middle;
+    }
+    #dialog {
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        border: thick $background 80%;
+        background: $surface;
+    }
+    #dialog Label {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    .header {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 2;
+    }
+    Input {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    Select {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    #btn_row {
+        height: 3;
+        width: 100%;
+        align: center middle;
+    }
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, chains: List[str], default_chain: str = "gnosis"):
+        """Init with list of available chains."""
+        super().__init__()
+        self.chains = chains
+        self.default_chain = default_chain
+
+    def compose(self) -> ComposeResult:
+        """Compose the modal UI."""
+        with Vertical(id="dialog"):
+            yield Label("Create New Olas Service", classes="header")
+            yield Label("Service Name:")
+            yield Input(placeholder="e.g. My Trader", id="name_input")
+            yield Label("Chain:")
+            chain_options = [(c.title(), c) for c in self.chains]
+            yield Select(chain_options, value=self.default_chain, id="chain_select")
+            with Horizontal(id="btn_row"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Create", variant="primary", id="create")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "create":
+            name = self.query_one("#name_input", Input).value
+            chain = self.query_one("#chain_select", Select).value
+            if not name or chain == Select.BLANK:
+                return
+            self.dismiss({"name": name, "chain": chain})
+        elif event.button.id == "cancel":
+            self.dismiss(None)
+
+
+class FundServiceModal(ModalScreen):
+    """Modal screen for funding Olas service accounts."""
+
+    CSS = """
+    FundServiceModal {
+        align: center middle;
+    }
+    #dialog {
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        border: thick $background 80%;
+        background: $surface;
+    }
+    #dialog Label {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    .header {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 2;
+    }
+    .desc {
+        color: $text-muted;
+        margin-bottom: 2;
+    }
+    Input {
+        width: 100%;
+        margin-bottom: 2;
+    }
+    #btn_row {
+        height: 3;
+        width: 100%;
+        align: center middle;
+    }
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, service_key: str, native_symbol: str = "xDAI"):
+        """Init with service key and native currency symbol."""
+        super().__init__()
+        self.service_key = service_key
+        self.native_symbol = native_symbol
+
+    def compose(self) -> ComposeResult:
+        """Compose the modal UI."""
+        with Vertical(id="dialog"):
+            yield Label("Fund Service", classes="header")
+            yield Label(f"Send {self.native_symbol} from master wallet:", classes="desc")
+            yield Label(f"Agent Amount ({self.native_symbol}):")
+            yield Input(placeholder="0.0", id="agent_amount", type="number")
+            yield Label(f"Safe Amount ({self.native_symbol}):")
+            yield Input(placeholder="0.0", id="safe_amount", type="number")
+            with Horizontal(id="btn_row"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Fund", variant="primary", id="fund")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "fund":
+            try:
+                agent_amount = float(self.query_one("#agent_amount", Input).value or "0")
+                safe_amount = float(self.query_one("#safe_amount", Input).value or "0")
+            except ValueError:
+                return
+            if agent_amount <= 0 and safe_amount <= 0:
+                return
+            self.dismiss({
+                "service_key": self.service_key,
+                "agent_amount": agent_amount,
+                "safe_amount": safe_amount,
+            })
         elif event.button.id == "cancel":
             self.dismiss(None)

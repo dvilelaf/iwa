@@ -7,6 +7,7 @@ from loguru import logger
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.db import log_transaction
 from iwa.core.keys import KeyStorage
 from iwa.core.services.account import AccountService
 
@@ -53,8 +54,37 @@ class TransactionService:
                     signer_account = self.account_service.resolve_account(signer_address_or_tag)
                     chain_interface.wait_for_no_pending_tx(signer_account.address)
                     logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+
+                    # Log the transaction to the database
+                    try:
+                        from_addr = signer_account.address
+                        to_addr = tx.get("to", "")
+                        value_wei = tx.get("value", 0)
+                        gas_used = getattr(receipt, "gasUsed", 0)
+                        gas_price = tx.get("gasPrice", tx.get("maxFeePerGas", 0))
+                        gas_cost_wei = gas_used * gas_price if gas_price else 0
+
+                        log_transaction(
+                            tx_hash=txn_hash.hex(),
+                            from_addr=from_addr,
+                            to_addr=to_addr,
+                            token="NATIVE",  # Generic, will be overwritten by transfer service for ERC20
+                            amount_wei=value_wei,
+                            chain=chain_name,
+                            from_tag=signer_account.tag if hasattr(signer_account, "tag") else None,
+                            gas_cost=str(gas_cost_wei) if gas_cost_wei else None,
+                            tags=["olas"] if "olas" in str(tx.get("to", "")).lower() else None,
+                        )
+                    except Exception as log_err:
+                        logger.warning(f"Failed to log transaction: {log_err}")
+
                     return True, receipt
 
+                # Transaction reverted - log details for debugging
+                print(f"[TX-DEBUG] Transaction REVERTED (status=0)", flush=True)
+                print(f"[TX-DEBUG] Tx Hash: {txn_hash.hex()}", flush=True)
+                print(f"[TX-DEBUG] To: {tx.get('to', 'Unknown')}", flush=True)
+                print(f"[TX-DEBUG] Gas used: {getattr(receipt, 'gasUsed', 'Unknown')}", flush=True)
                 logger.error("Transaction failed (status 0).")
                 return False, {}
 

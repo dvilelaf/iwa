@@ -74,6 +74,7 @@ class StakingContract(ContractInstance):
         """
         super().__init__(address, chain_name=chain_name)
         self.chain_name = chain_name
+        self._contract_params_cache = {}
 
         # Get activity checker from the staking contract
         activity_checker_address = self.call("activityChecker")
@@ -129,14 +130,24 @@ class StakingContract(ContractInstance):
             For liveness tracking, we use mech_requests_count (index 1).
 
         """
-        (
-            multisig_address,
-            owner_address,
-            nonces_on_last_checkpoint,
-            ts_start,
-            accrued_reward,
-            inactivity,
-        ) = self.call("getServiceInfo", service_id)
+        result = self.call("getServiceInfo", service_id)
+        # Handle potential nested tuple if web3 returns [(struct)]
+        if isinstance(result, (list, tuple)) and len(result) == 1 and isinstance(result[0], (list, tuple)):
+             result = result[0]
+
+        try:
+            (
+                multisig_address,
+                owner_address,
+                nonces_on_last_checkpoint,
+                ts_start,
+                accrued_reward,
+                inactivity,
+            ) = result
+        except ValueError as e:
+            # Try to log useful info if unpacking fails
+            logger.error(f"[Staking] Unpacking failed. Result type: {type(result)}, Result: {result}")
+            raise e
 
         # Get current nonces from activity checker: (safe_nonce, mech_requests)
         current_nonces = self.activity_checker.get_multisig_nonces(multisig_address)
@@ -187,19 +198,24 @@ class StakingContract(ContractInstance):
         """Get the timestamp of the last checkpoint."""
         return self.call("tsCheckpoint")
 
-    def get_required_requests(self) -> int:
+    def get_required_requests(self, use_liveness_period: bool = True) -> int:
         """Calculate the required requests for the current epoch.
 
         Includes a safety margin of 1 extra request.
         """
         requests_safety_margin = 1
         now_ts = time.time()
+
+        # If use_liveness_period is True, we show the requirement for a standard epoch
+        # instead of the potentially very long period since the last global checkpoint.
+        time_diff = (
+            self.liveness_period
+            if use_liveness_period
+            else max(self.liveness_period, now_ts - self.ts_checkpoint())
+        )
+
         return math.ceil(
-            (
-                max(self.liveness_period, now_ts - self.ts_checkpoint())
-                * self.activity_checker.liveness_ratio
-            )
-            / 1e18
+            (time_diff * self.activity_checker.liveness_ratio) / 1e18
             + requests_safety_margin
         )
 
@@ -233,6 +249,15 @@ class StakingContract(ContractInstance):
             last_nonces=last_nonces,
             ts_diff=ts_diff,
         )
+
+    @property
+    def min_staking_duration(self) -> int:
+        """Get the minimum duration a service must be staked before it can be unstaked."""
+        if "minStakingDuration" not in self._contract_params_cache:
+            self._contract_params_cache["minStakingDuration"] = self.call(
+                "minStakingDuration"
+            )
+        return self._contract_params_cache["minStakingDuration"]
 
     def prepare_stake_tx(
         self,

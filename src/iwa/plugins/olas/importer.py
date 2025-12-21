@@ -9,7 +9,7 @@ Supports two formats:
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from eth_account import Account
 from loguru import logger
@@ -94,6 +94,7 @@ class OlasServiceImporter:
 
         Args:
             key_storage: KeyStorage instance. If None, will create one.
+
         """
         self.key_storage = key_storage or KeyStorage()
         self.config = Config()
@@ -106,6 +107,7 @@ class OlasServiceImporter:
 
         Returns:
             List of discovered services.
+
         """
         path = Path(path)
         if not path.exists():
@@ -421,6 +423,7 @@ class OlasServiceImporter:
 
         Returns:
             True if decryption succeeded.
+
         """
         if key.is_decrypted:
             return True
@@ -451,6 +454,7 @@ class OlasServiceImporter:
 
         Returns:
             ImportResult with details of what was imported.
+
         """
         result = ImportResult(success=True, message="")
 
@@ -512,6 +516,7 @@ class OlasServiceImporter:
 
         Returns:
             Tuple of (success, error_message_or_status)
+
         """
         # Check for duplicate
         existing = self.key_storage.find_stored_account(key.address)

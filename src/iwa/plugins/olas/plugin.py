@@ -32,6 +32,12 @@ class OlasPlugin(Plugin):
             "import": self.import_services,
         }
 
+    def get_tui_view(self):
+        """Get TUI widget for this plugin."""
+        from iwa.plugins.olas.tui.olas_view import OlasView
+
+        return OlasView(wallet=Wallet())
+
     def create_service(
         self,
         chain_name: str = typer.Option("gnosis", "--chain", "-c"),
@@ -53,6 +59,7 @@ class OlasPlugin(Plugin):
             - (list, True) if Safe exists and query succeeds
             - ([], False) if Safe doesn't exist on-chain
             - (None, None) if RPC not configured (skip verification)
+
         """
         try:
             from safe_eth.eth import EthereumClient

@@ -995,6 +995,7 @@ class TransferService:
 
         Returns:
             True if rewards were claimed, False otherwise.
+
         """
         try:
             # Import Olas plugin (optional dependency)

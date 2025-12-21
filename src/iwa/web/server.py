@@ -542,6 +542,744 @@ def get_swap_max_amount(
         raise HTTPException(status_code=400, detail=error_msg) from None
 
 
+# ==============================================================================
+# Olas Plugin API Endpoints
+# ==============================================================================
+
+
+@app.get("/api/olas/price")
+def get_olas_price(auth: bool = Depends(verify_auth)):
+    """Get current OLAS token price in EUR from CoinGecko."""
+    try:
+        from iwa.core.pricing import PriceService
+
+        price_service = PriceService()
+        price = price_service.get_token_price("autonolas", "eur")
+
+        return {"price_eur": price, "symbol": "OLAS"}
+    except Exception as e:
+        logger.error(f"Error fetching OLAS price: {e}")
+        return {"price_eur": None, "symbol": "OLAS", "error": str(e)}
+
+
+@app.get("/api/olas/services/basic")
+def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
+    """Get basic Olas service info from config (fast, no RPC calls).
+
+    Returns just service metadata for instant card rendering.
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+
+        config = Config()
+        if "olas" not in config.plugins:
+            return []
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        result = []
+        for service_key, service in olas_config.services.items():
+            if service.chain_name != chain:
+                continue
+
+            # Get tags from wallet storage (fast, local lookup)
+            accounts = {}
+            for role, addr in [
+                ("agent", service.agent_address),
+                ("safe", str(service.multisig_address) if service.multisig_address else None),
+                ("owner", service.service_owner_address),
+            ]:
+                if addr:
+                    stored = wallet.key_storage.find_stored_account(addr)
+                    accounts[role] = {
+                        "address": addr,
+                        "tag": stored.tag if stored else None,
+                        "native": None,  # Will be filled by details endpoint
+                        "olas": None,
+                    }
+
+            result.append({
+                "key": service_key,
+                "name": service.service_name,
+                "service_id": service.service_id,
+                "chain": service.chain_name,
+                "accounts": accounts,
+                "staking": {"is_staked": bool(service.staking_contract_address)} if service.staking_contract_address else None,
+            })
+
+        return result
+
+    except ImportError:
+        return []
+    except Exception as e:
+        logger.error(f"Error getting basic Olas services: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.get("/api/olas/services/{service_key}/details")
+def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)):
+    """Get full details for a single Olas service (staking, balances)."""
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        chain = service.chain_name
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+        staking_status = manager.get_staking_status()
+
+        # Get balances
+        balances = {}
+        for role, addr in [
+            ("agent", service.agent_address),
+            ("safe", str(service.multisig_address) if service.multisig_address else None),
+            ("owner", service.service_owner_address),
+        ]:
+            if addr:
+                native_bal = wallet.get_native_balance_eth(addr, chain)
+                olas_bal = wallet.balance_service.get_erc20_balance_wei(addr, "OLAS", chain)
+                olas_bal_eth = float(olas_bal) / 1e18 if olas_bal else 0
+                stored = wallet.key_storage.find_stored_account(addr)
+                balances[role] = {
+                    "address": addr,
+                    "tag": stored.tag if stored else None,
+                    "native": f"{native_bal:.4f}" if native_bal else "0.0000",
+                    "olas": f"{olas_bal_eth:.4f}",
+                }
+
+        staking = None
+        if staking_status:
+            staking = {
+                "is_staked": staking_status.is_staked,
+                "staking_state": staking_status.staking_state,
+                "staking_contract_address": staking_status.staking_contract_address,
+                "staking_contract_name": staking_status.staking_contract_name,
+                "accrued_reward_olas": staking_status.accrued_reward_olas,
+                "accrued_reward_wei": staking_status.accrued_reward_wei,
+                "epoch_number": staking_status.epoch_number,
+                "epoch_end_utc": staking_status.epoch_end_utc,
+                "remaining_epoch_seconds": staking_status.remaining_epoch_seconds,
+                "mech_requests_this_epoch": staking_status.mech_requests_this_epoch,
+                "required_mech_requests": staking_status.required_mech_requests,
+                "has_enough_requests": staking_status.has_enough_requests,
+                "liveness_ratio_passed": staking_status.liveness_ratio_passed,
+                "unstake_available_at": staking_status.unstake_available_at,
+            }
+
+        return {
+            "key": service_key,
+            "accounts": balances,
+            "staking": staking,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting service details: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.get("/api/olas/services")
+def get_olas_services(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
+    """Get all Olas services with staking status for a specific chain.
+
+    Returns service information including:
+    - Service metadata (name, id, chain)
+    - Account addresses and balances (agent, safe, operator)
+    - Staking status and rewards
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+
+        # Check if Olas plugin is available
+        if "olas" not in config.plugins:
+            return []
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        result = []
+        for service_key, service in olas_config.services.items():
+            if service.chain_name != chain:
+                continue
+
+            # Create service manager for this service
+            manager = ServiceManager(wallet)
+            manager.service = service
+
+            # Get staking status
+            staking_status = manager.get_staking_status()
+
+            # Get balances for service accounts
+            balances = {}
+            accounts = {
+                "agent": service.agent_address,
+                "safe": str(service.multisig_address) if service.multisig_address else None,
+                "owner": service.service_owner_address,
+            }
+
+            for role, address in accounts.items():
+                if address:
+                    native_bal = wallet.get_native_balance_eth(address, chain)
+                    olas_bal = wallet.balance_service.get_erc20_balance_wei(address, "OLAS", chain)
+                    olas_bal_eth = float(olas_bal) / 1e18 if olas_bal else 0
+
+                    # Get tag if account exists in wallet
+                    stored = wallet.key_storage.find_stored_account(address)
+                    tag = stored.tag if stored else None
+
+                    balances[role] = {
+                        "address": address,
+                        "tag": tag,
+                        "native": f"{native_bal:.4f}" if native_bal else "0.0000",
+                        "olas": f"{olas_bal_eth:.4f}",
+                    }
+
+            # Build service data
+            service_data = {
+                "key": service_key,
+                "name": service.service_name,
+                "service_id": service.service_id,
+                "chain": service.chain_name,
+                "accounts": balances,
+                "staking": None,
+            }
+
+            if staking_status:
+                service_data["staking"] = {
+                    "is_staked": staking_status.is_staked,
+                    "staking_state": staking_status.staking_state,
+                    "staking_contract_address": staking_status.staking_contract_address,
+                    "staking_contract_name": staking_status.staking_contract_name,
+                    "accrued_reward_olas": staking_status.accrued_reward_olas,
+                    "accrued_reward_wei": staking_status.accrued_reward_wei,
+                    "epoch_number": staking_status.epoch_number,
+                    "epoch_end_utc": staking_status.epoch_end_utc,
+                    "remaining_epoch_seconds": staking_status.remaining_epoch_seconds,
+                    "mech_requests_this_epoch": staking_status.mech_requests_this_epoch,
+                    "required_mech_requests": staking_status.required_mech_requests,
+                    "has_enough_requests": staking_status.has_enough_requests,
+                    "liveness_ratio_passed": staking_status.liveness_ratio_passed,
+                    "unstake_available_at": staking_status.unstake_available_at,
+                }
+
+            result.append(service_data)
+
+        return result
+
+    except ImportError:
+        # Olas plugin not installed
+        return []
+    except Exception as e:
+        logger.error(f"Error getting Olas services: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.post("/api/olas/claim/{service_key}")
+def claim_olas_rewards(service_key: str, auth: bool = Depends(verify_auth)):
+    """Claim staking rewards for a specific Olas service."""
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        if not service.staking_contract_address:
+            raise HTTPException(status_code=400, detail="Service is not staked")
+
+        staking = StakingContract(service.staking_contract_address, service.chain_name)
+        success, amount = manager.claim_rewards(staking_contract=staking)
+
+        if success:
+            return {"status": "success", "claimed_olas": amount / 1e18}
+        else:
+            raise HTTPException(status_code=400, detail="Claim failed - no rewards or transaction error")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error claiming rewards: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.post("/api/olas/unstake/{service_key}")
+def unstake_olas_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Unstake an Olas service."""
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        logger.info(f"Requests to unstake service: {service_key}")
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        logger.info(f"Unstaking service {service.service_id} on chain {service.chain_name}")
+        logger.info(f"Staking contract: {service.staking_contract_address}")
+
+        if not service.staking_contract_address:
+            raise HTTPException(status_code=400, detail="Service is not staked")
+
+        staking = StakingContract(service.staking_contract_address, service.chain_name)
+        success = manager.unstake(staking)
+
+        if success:
+            logger.info(f"Successfully unstaked service {service.service_id}")
+            return {"status": "success"}
+        else:
+            logger.error(f"Failed to unstake service {service.service_id}")
+            raise HTTPException(status_code=400, detail="Unstake failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error unstaking service {service_key}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.get("/api/olas/staking-contracts")
+def get_staking_contracts(chain: str = "gnosis"):
+    """Get available staking contracts for a chain.
+
+    Only returns contracts that have available slots (not full).
+    Uses parallel loading for faster response.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+    from iwa.plugins.olas.contracts.staking import StakingContract
+
+    contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
+    result = []
+
+    def check_contract(name: str, addr: str):
+        """Check a single contract for available slots."""
+        try:
+            staking = StakingContract(str(addr), chain)
+            staked_services = staking.get_service_ids()
+            available_slots = staking.max_num_services - len(staked_services)
+            if available_slots > 0:
+                return {
+                    "name": f"{name} ({available_slots} slots)",
+                    "address": str(addr),
+                    "available_slots": available_slots
+                }
+        except Exception:
+            pass
+        return None
+
+    # Load contracts in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(check_contract, name, str(addr)): name for name, addr in contracts.items()}
+        for future in as_completed(futures):
+            contract_info = future.result()
+            if contract_info:
+                result.append(contract_info)
+
+    return result
+
+
+@app.post("/api/olas/stake/{service_key}")
+def stake_olas_service(
+    service_key: str,
+    staking_contract: str,
+    auth: bool = Depends(verify_auth),
+):
+    """Stake an Olas service in a staking contract.
+
+    Args:
+        service_key: The service key to stake
+        staking_contract: The staking contract address
+
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        logger.info(f"Staking service {service_key} in contract {staking_contract}")
+        print(f"[STAKE] Starting stake for {service_key} with contract {staking_contract}", flush=True)
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        logger.info(f"Service found: id={service.service_id}, chain={service.chain_name}")
+        print(f"[STAKE] Service: id={service.service_id}, chain={service.chain_name}", flush=True)
+
+        if service.staking_contract_address:
+            raise HTTPException(status_code=400, detail="Service is already staked")
+
+        manager = ServiceManager(wallet, service_key=service_key)
+        staking = StakingContract(staking_contract, service.chain_name)
+        logger.info(f"Staking contract: min_deposit={staking.min_staking_deposit}, slots={staking.max_num_services}")
+        print(f"[STAKE] Contract: min_deposit={staking.min_staking_deposit}, slots={staking.max_num_services}", flush=True)
+
+        success = manager.stake(staking)
+        logger.info(f"Stake result: {success}")
+        print(f"[STAKE] Result: {success}", flush=True)
+
+        if success:
+            return {"status": "success", "staking_contract": staking_contract}
+        else:
+            raise HTTPException(status_code=400, detail="Stake failed - check logs for details")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error staking service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.post("/api/olas/drain/{service_key}")
+def drain_olas_service(
+    service_key: str,
+    target: Optional[str] = None,
+    auth: bool = Depends(verify_auth),
+):
+    """Drain all accounts from an Olas service to a target address.
+
+    This drains Safe, Agent, and Owner accounts, claiming any staking rewards first.
+
+    Args:
+        service_key: The service key to drain
+        target: Optional target address/tag (defaults to master account)
+
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        # Use ServiceManager to drain all accounts
+        manager = ServiceManager(wallet, service_key=service_key)
+
+        # Target defaults to master
+        target_address = target or wallet.master_account.address
+
+        drained = manager.drain_service(target_address=target_address)
+
+        return {"status": "success", "drained": drained}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error draining service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+class CreateServiceRequest(BaseModel):
+    """Request to create a new Olas service."""
+
+    service_name: str
+    chain: str = "gnosis"
+    stake_on_create: bool = False
+    staking_contract: Optional[str] = None
+
+
+@app.post("/api/olas/create")
+def create_olas_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
+    """Create a new Olas service and deploy it.
+
+    This creates a new service on the specified chain, then runs spin_up to
+    deploy it fully. Optionally stakes it if a staking_contract is provided.
+    """
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+        from iwa.plugins.olas.contracts.staking import StakingContract
+
+        logger.info(f"Creating service: name={req.service_name}, chain={req.chain}, stake_on_create={req.stake_on_create}, staking_contract={req.staking_contract}")
+
+        # Load staking contract FIRST if we're going to stake
+        # We need its staking_token_address for service creation
+        staking_contract = None
+        token_address = None  # Token to use for bonding
+
+        if req.stake_on_create and req.staking_contract:
+            logger.info(f"Loading staking contract: {req.staking_contract}")
+            staking_contract = StakingContract(req.staking_contract, req.chain)
+            token_address = staking_contract.staking_token_address
+            logger.info(f"Staking contract loaded: min_deposit={staking_contract.min_staking_deposit}, "
+                       f"max_services={staking_contract.max_num_services}, token={token_address}")
+
+        manager = ServiceManager(wallet)
+
+        # Pass the staking token if we're going to stake, otherwise no token
+        service_id = manager.create(
+            chain_name=req.chain,
+            service_name=req.service_name,
+            token_address_or_tag=token_address,
+            bond_amount_wei=staking_contract.min_staking_deposit if staking_contract else 1,
+        )
+
+        if not service_id:
+            raise HTTPException(status_code=400, detail="Failed to create service")
+
+        result = {"status": "success", "service_id": service_id, "service_key": f"{req.chain}:{service_id}"}
+        logger.info(f"Service created with ID: {service_id}")
+
+        # Spin up to deploy the service fully (staking contract already loaded above)
+        logger.info(f"Running spin_up with staking_contract={'yes' if staking_contract else 'no'}")
+        spin_up_success = manager.spin_up(staking_contract=staking_contract)
+        result["deployed"] = spin_up_success
+        logger.info(f"spin_up result: {spin_up_success}")
+        if staking_contract:
+            result["staked"] = spin_up_success
+
+        if not spin_up_success:
+            result["status"] = "partial"
+            result["message"] = "Service created but deployment failed"
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.post("/api/olas/terminate/{service_key}")
+def terminate_olas_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Terminate (wind down) an Olas service.
+
+    This unstakes (if staked), terminates, and unbonds the service,
+    returning it to PRE_REGISTRATION state.
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        # Get staking contract if staked
+        staking_contract = None
+        if service.staking_contract_address:
+            staking_contract = StakingContract(service.staking_contract_address, service.chain_name)
+
+        success = manager.wind_down(staking_contract=staking_contract)
+
+        if success:
+            return {"status": "success", "message": "Service terminated"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to terminate service")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error terminating service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.get("/api/olas/debug/{service_key}")
+async def debug_olas_service(service_key: str):
+    """Debug endpoint to check service manager state."""
+    logger.info(f"Debugging service {service_key}")
+    try:
+        from iwa.core.models import Config
+        from iwa.core.wallet import Wallet
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+        from iwa.plugins.olas.constants import OLAS_CONTRACTS
+
+        config = Config()
+        wallet = Wallet()
+        if "olas" not in config.plugins:
+             return {"error": "Olas plugin not found in config"}
+
+        # Ensure we can load service manager
+        sm = ServiceManager(wallet, service_key)
+
+        staking_status = None
+        try:
+             # Try to get detailed staking status
+             status_obj = sm.get_staking_status()
+             if status_obj:
+                 staking_status = status_obj.model_dump()
+        except Exception as e:
+            logger.error(f"Debug staking status failed: {e}")
+
+        debug_info = {
+            "service_id": sm.service.service_id if sm.service else None,
+            "chain_name": sm.chain_name,
+            "registry_address": str(sm.registry.address),
+            "manager_address": str(sm.manager.address),
+            "staking_contract_address_from_service": str(sm.service.staking_contract_address) if sm.service else None,
+            "OLAS_CONTRACTS_ENTRY": OLAS_CONTRACTS.get(sm.chain_name, {}),
+            "staking_status": staking_status
+        }
+        return debug_info
+    except Exception as e:
+        logger.exception(f"Debug failed: {e}")
+        return {"error": str(e)}
+
+
+class FundServiceRequest(BaseModel):
+    """Request to fund Olas service accounts."""
+
+    agent_amount_eth: float = 0.0
+    safe_amount_eth: float = 0.0
+
+    @field_validator("agent_amount_eth", "safe_amount_eth")
+    @classmethod
+    def validate_amounts(cls, v: float) -> float:
+        """Validate amounts are non-negative."""
+        if v < 0:
+            raise ValueError("Amount cannot be negative")
+        if v > 1e18:
+            raise ValueError("Amount too large")
+        return v
+
+
+@app.post("/api/olas/fund/{service_key}")
+def fund_olas_service(
+    service_key: str,
+    req: FundServiceRequest,
+    auth: bool = Depends(verify_auth),
+):
+    """Fund Olas service accounts from the master wallet.
+
+    Sends native tokens to the agent and/or safe addresses.
+    """
+    try:
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+
+        if service_key not in olas_config.services:
+            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+
+        service = olas_config.services[service_key]
+        chain_name = service.chain_name
+        result = {"status": "success", "funded": {}}
+
+        # Fund agent if amount > 0
+        if req.agent_amount_eth > 0 and service.agent_address:
+            tx_hash = wallet.send(
+                from_address_or_tag="master",
+                to_address_or_tag=service.agent_address,
+                amount_wei=Web3.to_wei(req.agent_amount_eth, "ether"),
+                token_address_or_name="native",
+                chain_name=chain_name,
+            )
+            result["funded"]["agent"] = {"amount": req.agent_amount_eth, "tx_hash": tx_hash}
+
+        # Fund safe if amount > 0
+        if req.safe_amount_eth > 0 and service.multisig_address:
+            tx_hash = wallet.send(
+                from_address_or_tag="master",
+                to_address_or_tag=str(service.multisig_address),
+                amount_wei=Web3.to_wei(req.safe_amount_eth, "ether"),
+                token_address_or_name="native",
+                chain_name=chain_name,
+            )
+            result["funded"]["safe"] = {"amount": req.safe_amount_eth, "tx_hash": tx_hash}
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error funding service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@app.post("/api/olas/checkpoint/{service_key}")
+def checkpoint_olas_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Call checkpoint on the staking contract for a specific Olas service."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        manager = ServiceManager(wallet, service_key=service_key)
+        # We use a grace period of 0 since it's a manual call
+        success = manager.call_checkpoint(grace_period_seconds=0)
+
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Checkpoint failed - epoch may not have ended yet")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calling checkpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
 def run_server(host: str = "127.0.0.1", port: int = 8080):
     """Run the FastAPI web server."""
     import signal
