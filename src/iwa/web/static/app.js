@@ -1557,21 +1557,33 @@ document.addEventListener('DOMContentLoaded', () => {
             createServiceModal.classList.add('active');
             // Use cached staking contracts for faster loading
             const contractSelect = document.getElementById('new-service-staking-contract');
+            const spinnerDiv = document.getElementById('staking-contract-spinner');
             if (state.stakingContractsCache) {
                 contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
                     state.stakingContractsCache.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+                contractSelect.style.display = '';
+                spinnerDiv.style.display = 'none';
             } else {
-                // If cache not ready, load now
-                contractSelect.innerHTML = '<option value="">Loading...</option>';
+                // If cache not ready, show spinner and hide select
+                const submitBtn = createServiceForm.querySelector('button[type="submit"]');
+                contractSelect.style.display = 'none';
+                spinnerDiv.style.display = 'block';
+                submitBtn.disabled = true;
                 authFetch('/api/olas/staking-contracts?chain=gnosis')
                     .then(resp => resp.json())
                     .then(contracts => {
                         state.stakingContractsCache = contracts;
                         contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
                             contracts.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+                        contractSelect.style.display = '';
+                        spinnerDiv.style.display = 'none';
+                        submitBtn.disabled = false;
                     })
                     .catch(() => {
                         contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>';
+                        contractSelect.style.display = '';
+                        spinnerDiv.style.display = 'none';
+                        submitBtn.disabled = false;
                     });
             }
         });
@@ -1587,8 +1599,8 @@ document.addEventListener('DOMContentLoaded', () => {
         createServiceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = createServiceForm.querySelector('button[type="submit"]');
-            const originalText = btn.innerText;
-            btn.innerText = 'Creating...';
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating...';
             btn.disabled = true;
 
             const stakingContract = document.getElementById('new-service-staking-contract').value;
@@ -1617,7 +1629,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 showToast('Error creating service', 'error');
             } finally {
-                btn.innerText = originalText;
+                btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         });
