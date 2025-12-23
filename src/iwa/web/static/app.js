@@ -72,6 +72,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return div.innerHTML;
     };
 
+    // Format balance to 2 decimals
+    function formatBalance(value) {
+        if (value === null || value === undefined || value === '-') return value;
+        const num = parseFloat(value);
+        if (isNaN(num)) return value;
+        return num.toFixed(2);
+    }
+
     function getNativeCurrencySymbol() {
         return state.nativeCurrencies[state.activeChain] || 'Native';
     }
@@ -288,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const bal = cached[t];
                 if (bal !== undefined && bal !== null) {
-                    return `<td class="val balance-cell" data-token="${t}">${escapeHtml(bal)}</td>`;
+                    return `<td class="val balance-cell" data-token="${t}">${escapeHtml(formatBalance(bal))}</td>`;
                 }
                 return `<td class="val balance-cell" data-token="${t}"><span class="cell-spinner"></span></td>`;
             }).join('')}
@@ -349,12 +357,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="address-cell" title="${escapeHtml(tx.from)}">${escapeHtml(formatAddressOrTag(tx.from))}</td>
                     <td class="address-cell" title="${escapeHtml(tx.to)}">${escapeHtml(formatAddressOrTag(tx.to))}</td>
                     <td>${escapeHtml(tx.token.toUpperCase())}</td>
-                    <td class="val">${escapeHtml(tx.amount)}</td>
-                    <td class="val">${escapeHtml(tx.value_eur)}</td>
+                    <td class="val">${escapeHtml(formatBalance(tx.amount))}</td>
+                    <td class="val">${escapeHtml(formatBalance(tx.value_eur))}</td>
                     <td><span style="color: #2ecc71">${escapeHtml(tx.status)}</span></td>
                     <td class="address-cell" onclick="copyToClipboard('${escapeHtml(tx.hash)}')">${escapeHtml(tx.hash.substring(0, 10))}...</td>
                     <td>${escapeHtml(tx.gas_cost)}</td>
-                    <td>${escapeHtml(tx.gas_value_eur)}</td>
+                    <td>${escapeHtml(formatBalance(tx.gas_value_eur))}</td>
                     <td class="tags-cell">${(tx.tags || []).map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</td>
                 </tr>
             `).join('');
@@ -803,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await authFetch(`/api/swap/quote?${params}`);
             const result = await resp.json();
             if (resp.ok) {
-                outputField.value = result.amount.toFixed(4);
+                outputField.value = result.amount.toFixed(2);
             } else {
                 outputField.value = '';
                 showToast(result.detail || 'Error getting quote', 'error');
@@ -857,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await authFetch(`/api/swap/max-amount?${params}`);
             const result = await resp.json();
             if (resp.ok) {
-                targetInput.value = result.max_amount.toFixed(4);
+                targetInput.value = result.max_amount.toFixed(2);
                 // Trigger quote fetch
                 fetchQuote();
             } else {
@@ -1027,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const priceDisplay = olasPrice ? `€${olasPrice.toFixed(2)}` : '<span class="cell-spinner"></span>';
-        const rewardsDisplay = isLoading ? '<span class="cell-spinner"></span>' : totalRewards.toFixed(4);
+        const rewardsDisplay = isLoading ? '<span class="cell-spinner"></span>' : totalRewards.toFixed(2);
         const valueEur = olasPrice && !isLoading ? (totalRewards * olasPrice).toFixed(2) : null;
         const valueDisplay = valueEur ? `€${valueEur}` : (isLoading ? '<span class="cell-spinner"></span>' : '-');
 
@@ -1100,8 +1108,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const explorerUrl = getExplorerUrl(acc.address, service.chain);
 
             // Show spinner if loading, otherwise show balance
-            const nativeDisplay = isLoading || acc.native === null ? '<span class="cell-spinner"></span>' : escapeHtml(acc.native);
-            const olasDisplay = isLoading || acc.olas === null ? '<span class="cell-spinner"></span>' : escapeHtml(acc.olas);
+            const nativeDisplay = isLoading || acc.native === null ? '<span class="cell-spinner"></span>' : escapeHtml(formatBalance(acc.native));
+            const olasDisplay = isLoading || acc.olas === null ? '<span class="cell-spinner"></span>' : escapeHtml(formatBalance(acc.olas));
 
             return `
                 <tr>
@@ -1332,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await authFetch(`/api/olas/claim/${serviceKey}`, { method: 'POST' });
             const result = await resp.json();
             if (resp.ok) {
-                showToast(`Claimed ${result.claimed_olas.toFixed(4)} OLAS!`, 'success');
+                showToast(`Claimed ${result.claimed_olas.toFixed(2)} OLAS!`, 'success');
                 loadOlasServices(true);
             } else {
                 showToast(`Error: ${result.detail}`, 'error');

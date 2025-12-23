@@ -226,10 +226,10 @@ def get_accounts(chain: str = "gnosis", tokens: str = "", auth: bool = Depends(v
         for t in requested_tokens:
             if t == "native":
                 bal = wallet.get_native_balance_eth(addr, chain)
-                acct_balances["native"] = f"{bal:.4f}" if bal is not None else None
+                acct_balances["native"] = f"{bal:.2f}" if bal is not None else None
             else:
                 bal = token_balances.get(addr, {}).get(t) if token_balances else None
-                acct_balances[t] = f"{bal:.4f}" if bal is not None else None
+                acct_balances[t] = f"{bal:.2f}" if bal is not None else None
 
         result.append(
             {"tag": acct.tag, "address": addr, "type": acct_type, "balances": acct_balances}
@@ -259,7 +259,7 @@ def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
                 "from": tx.from_tag or tx.from_address,
                 "to": tx.to_tag or tx.to_address,
                 "token": tx.token,
-                "amount": f"{float(tx.amount_wei or 0) / 10**18:.4f}",
+                "amount": f"{float(tx.amount_wei or 0) / 10**18:.2f}",
                 "value_eur": f"€{(tx.value_eur or 0.0):.2f}",
                 "status": "Confirmed",
                 "hash": tx.tx_hash,
@@ -655,8 +655,8 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
                 balances[role] = {
                     "address": addr,
                     "tag": stored.tag if stored else None,
-                    "native": f"{native_bal:.4f}" if native_bal else "0.0000",
-                    "olas": f"{olas_bal_eth:.4f}",
+                    "native": f"{native_bal:.2f}" if native_bal else "0.00",
+                    "olas": f"{olas_bal_eth:.2f}",
                 }
 
         staking = None
@@ -746,8 +746,8 @@ def get_olas_services(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
                     balances[role] = {
                         "address": address,
                         "tag": tag,
-                        "native": f"{native_bal:.4f}" if native_bal else "0.0000",
-                        "olas": f"{olas_bal_eth:.4f}",
+                        "native": f"{native_bal:.2f}" if native_bal else "0.00",
+                        "olas": f"{olas_bal_eth:.2f}",
                     }
 
             # Build service data
