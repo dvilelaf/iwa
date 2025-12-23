@@ -312,7 +312,7 @@ if __name__ == "__main__":  # pragma: no cover
         "-p",
         type=int,
         default=1,
-        choices=[1, 2],
+        choices=[1, 2, 3],
         help="Tenderly profile to use (1 or 2)",
     )
     args = parser.parse_args()

@@ -1607,6 +1607,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 service_name: document.getElementById('new-service-name').value,
                 chain: document.getElementById('new-service-chain').value,
+                agent_type: document.getElementById('new-service-agent-type').value,
                 stake_on_create: !!stakingContract,
                 staking_contract: stakingContract || null
             };
