@@ -1187,54 +1187,62 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${isStaked ? '✓ STAKED' : '○ NOT STAKED'}
                         </span>
                     </div>
-                    ${isStaked && staking.staking_contract_address ? `
-                        <div class="staking-row">
-                            <span class="label">Contract:</span>
-                            <span class="value address-cell">
+                    <div class="staking-row">
+                        <span class="label">Contract:</span>
+                        <span class="value address-cell">
+                            ${isStaked && staking.staking_contract_address ? `
                                 <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
                                     ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
                                 </a>
-                            </span>
-                        </div>
-                    ` : ''}
-                    ${isStaked ? `
+                            ` : '-'}
+                        </span>
+                    </div>
+                    <div class="staking-row">
+                        <span class="label">Rewards:</span>
+                        <span class="value rewards">${isStaked ? (isLoading ? '<span class="cell-spinner"></span>' : (escapeHtml(formatBalance(staking.accrued_reward_olas) || '0') + ' OLAS')) : '-'}</span>
+                    </div>
+                    ${isStaked ? livenessProgressHtml : `
                         <div class="staking-row">
-                            <span class="label">Rewards:</span>
-                            <span class="value rewards">${isLoading ? '<span class="cell-spinner"></span>' : (escapeHtml(staking.accrued_reward_olas || '0') + ' OLAS')}</span>
+                            <span class="label">Liveness:</span>
+                            <span class="value">-</span>
                         </div>
-                        ${livenessProgressHtml}
-                        <div class="staking-row">
-                            <span class="label">Epoch #${staking.epoch_number !== undefined ? staking.epoch_number : '?'} Ends:</span>
-                            <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : epochCountdown}</span>
-                        </div>
-                        ${(() => {
-                    if (isLoading) {
-                        return `
-                                <div class="staking-row">
-                                    <span class="label">Unstake available:</span>
-                                    <span class="value"><span class="cell-spinner"></span></span>
-                                </div>`;
-                    }
-                    if (!staking.unstake_available_at) return '';
-                    const diffMs = new Date(staking.unstake_available_at) - new Date();
-                    if (diffMs <= 0) {
-                        return `
-                                <div class="staking-row">
-                                    <span class="label">Unstake available:</span>
-                                    <span class="value" style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>
-                                </div>`;
-                    }
-                    const diffMins = Math.ceil(diffMs / 60000);
-                    const hours = Math.floor(diffMins / 60);
-                    const mins = diffMins % 60;
-                    const timeText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+                    `}
+                    <div class="staking-row">
+                        <span class="label">Epoch:</span>
+                        <span class="value">${isStaked ? (isLoading ? '<span class="cell-spinner"></span>' : `#${staking.epoch_number !== undefined ? staking.epoch_number : '?'} - ${epochCountdown}`) : '-'}</span>
+                    </div>
+                    ${isStaked ? (() => {
+                if (isLoading) {
                     return `
-                                <div class="staking-row">
-                                    <span class="label">Unstake available:</span>
-                                    <span class="value" data-unstake-at="${staking.unstake_available_at}">${timeText}</span>
-                                </div>`;
-                })()}
-                    ` : ''}
+                            <div class="staking-row">
+                                <span class="label">Unstake available:</span>
+                                <span class="value"><span class="cell-spinner"></span></span>
+                            </div>`;
+                }
+                if (!staking.unstake_available_at) return '';
+                const diffMs = new Date(staking.unstake_available_at) - new Date();
+                if (diffMs <= 0) {
+                    return `
+                            <div class="staking-row">
+                                <span class="label">Unstake available:</span>
+                                <span class="value" style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>
+                            </div>`;
+                }
+                const diffMins = Math.ceil(diffMs / 60000);
+                const hours = Math.floor(diffMins / 60);
+                const mins = diffMins % 60;
+                const timeText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+                return `
+                            <div class="staking-row">
+                                <span class="label">Unstake available:</span>
+                                <span class="value" data-unstake-at="${staking.unstake_available_at}">${timeText}</span>
+                            </div>`;
+            })() : `
+                    <div class="staking-row">
+                        <span class="label">Unstake available:</span>
+                        <span class="value">-</span>
+                    </div>
+            `}
                 </div>
 
                 <div class="service-actions">
