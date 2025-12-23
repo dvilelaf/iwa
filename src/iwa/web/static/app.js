@@ -1024,7 +1024,138 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Refresh a single service card without affecting others
+    window.refreshSingleService = async (serviceKey) => {
+        const cardElement = document.querySelector(`.service-card[data-service-key="${serviceKey}"]`);
+        if (!cardElement) return;
+
+        // Find service in cache
+        const cachedServices = state.olasServicesCache[state.activeChain] || [];
+        const serviceIndex = cachedServices.findIndex(s => s.key === serviceKey);
+        if (serviceIndex === -1) {
+            // Service not in cache, reload all
+            loadOlasServices(true);
+            return;
+        }
+
+        // Render card with loading state (spinners)
+        const serviceData = cachedServices[serviceIndex];
+        cardElement.outerHTML = renderOlasServiceCard(serviceData, true);
+
+        // Also update summary to show loading
+        renderOlasSummary(cachedServices, state.olasPriceCache, true);
+
+        try {
+            const detailResp = await authFetch(`/api/olas/services/${serviceKey}/details`);
+            if (detailResp.ok) {
+                const details = await detailResp.json();
+                // Merge details into cached service
+                const updatedService = { ...serviceData, accounts: details.accounts, staking: details.staking };
+                cachedServices[serviceIndex] = updatedService;
+                state.olasServicesCache[state.activeChain] = cachedServices;
+
+                // Re-render card with actual data
+                const newCardElement = document.querySelector(`.service-card[data-service-key="${serviceKey}"]`);
+                if (newCardElement) {
+                    newCardElement.outerHTML = renderOlasServiceCard(updatedService, false);
+                }
+
+                // Update summary totals
+                renderOlasSummary(cachedServices, state.olasPriceCache, false);
+            } else {
+                showToast(`Failed to refresh service: ${serviceKey}`, 'error');
+                // Re-render with old data
+                const newCardElement = document.querySelector(`.service-card[data-service-key="${serviceKey}"]`);
+                if (newCardElement) {
+                    newCardElement.outerHTML = renderOlasServiceCard(serviceData, false);
+                }
+                renderOlasSummary(cachedServices, state.olasPriceCache, false);
+            }
+        } catch (err) {
+            console.error(`Error refreshing service ${serviceKey}:`, err);
+            showToast(`Error refreshing service: ${err.message}`, 'error');
+            // Re-render with old data
+            const newCardElement = document.querySelector(`.service-card[data-service-key="${serviceKey}"]`);
+            if (newCardElement) {
+                newCardElement.outerHTML = renderOlasServiceCard(serviceData, false);
+            }
+            renderOlasSummary(cachedServices, state.olasPriceCache, false);
+        }
+    };
+
+    // Add a newly created service card without reloading all services
+    window.addNewServiceCard = async (serviceId, chain) => {
+        const container = document.getElementById('olas-services-container');
+        if (!container) {
+            console.error('Container not found, falling back to full reload');
+            loadOlasServices(true);
+            return;
+        }
+
+        // Create a basic service object for the new card with loading state
+        const serviceKey = `${chain}:${serviceId}`;
+        const newService = {
+            key: serviceKey,
+            service_id: serviceId,
+            chain: chain,
+            name: `Service #${serviceId}`,
+            accounts: {},
+            staking: {}
+        };
+
+        // Add to cache
+        if (!state.olasServicesCache[chain]) {
+            state.olasServicesCache[chain] = [];
+        }
+        state.olasServicesCache[chain].push(newService);
+
+        // Clear empty state message if present
+        const emptyState = container.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+
+        // Append new card with loading state
+        container.insertAdjacentHTML('beforeend', renderOlasServiceCard(newService, true));
+
+        // Update summary
+        renderOlasSummary(state.olasServicesCache[chain], state.olasPriceCache, true);
+
+        // Fetch details for the new service
+        try {
+            const detailResp = await authFetch(`/api/olas/services/${serviceKey}/details`);
+            if (detailResp.ok) {
+                const details = await detailResp.json();
+                // Update cache with full data
+                const serviceIndex = state.olasServicesCache[chain].findIndex(s => s.key === serviceKey);
+                if (serviceIndex !== -1) {
+                    const updatedService = { ...newService, accounts: details.accounts, staking: details.staking };
+                    state.olasServicesCache[chain][serviceIndex] = updatedService;
+
+                    // Re-render the card with actual data
+                    const cardElement = document.querySelector(`.service-card[data-service-key="${serviceKey}"]`);
+                    if (cardElement) {
+                        cardElement.outerHTML = renderOlasServiceCard(updatedService, false);
+                    }
+
+                    // Update summary
+                    renderOlasSummary(state.olasServicesCache[chain], state.olasPriceCache, false);
+                }
+            }
+        } catch (err) {
+            console.error(`Error loading new service details: ${err}`);
+        }
+    };
+
     function renderOlasSummaryAndCards(container, services, olasPrice, isLoading = false) {
+        // Render summary
+        renderOlasSummary(services, olasPrice, isLoading);
+
+        // Render cards in services container
+        container.innerHTML = services.map(service => renderOlasServiceCard(service, isLoading)).join('');
+    }
+
+    function renderOlasSummary(services, olasPrice, isLoading = false) {
         // Calculate summary
         const serviceCount = services.length;
         let totalRewards = 0;
@@ -1065,9 +1196,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }
-
-        // Render cards in services container
-        container.innerHTML = services.map(service => renderOlasServiceCard(service, isLoading)).join('');
     }
 
     function renderOlasServiceCard(service, isLoading = false) {
@@ -1075,8 +1203,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const isStaked = staking.is_staked || false;
 
         // Format epoch countdown
-        let epochCountdown = '-';
-        if (staking.remaining_epoch_seconds !== undefined) {
+        let epochCountdown = '';
+        if (staking.remaining_epoch_seconds !== undefined && staking.remaining_epoch_seconds !== null) {
             const diff = Math.floor(staking.remaining_epoch_seconds);
             if (diff <= 0) {
                 epochCountdown = '<span class="countdown" style="color: #e74c3c">Checkpoint pending</span>';
@@ -1160,10 +1288,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const loadingStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
 
         return `
-            <div class="service-card glass">
+            <div class="service-card glass" data-service-key="${escapeHtml(service.key)}">
                 <div class="service-header">
                     <h3>${escapeHtml(service.name || 'Service')} <span class="service-id">#${service.service_id}</span></h3>
-                    <span class="chain-badge">${escapeHtml(service.chain)}</span>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="chain-badge">${escapeHtml(service.chain)}</span>
+                        <button class="btn-icon" onclick="refreshSingleService('${escapeHtml(service.key)}')" title="Refresh this service" ${loadingDisabled} style="padding: 0.3rem; ${loadingStyle}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <table class="service-accounts-table">
@@ -1201,14 +1338,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="label">Rewards:</span>
                         <span class="value rewards">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? (escapeHtml(formatBalance(staking.accrued_reward_olas) || '0') + ' OLAS') : '-')}</span>
                     </div>
+                    ${isLoading ? `
                     <div class="staking-row">
                         <span class="label">Liveness:</span>
-                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked && livenessProgressHtml ? '' : '-')}</span>
+                        <span class="value"><span class="cell-spinner"></span></span>
                     </div>
-                    ${!isLoading && isStaked && livenessProgressHtml ? livenessProgressHtml : ''}
+                    ` : (isStaked && livenessProgressHtml ? livenessProgressHtml : `
                     <div class="staking-row">
-                        <span class="label">Epoch:</span>
-                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? `#${staking.epoch_number !== undefined ? staking.epoch_number : '?'} - ${epochCountdown}` : '-')}</span>
+                        <span class="label">Liveness:</span>
+                        <span class="value">-</span>
+                    </div>
+                    `)}
+                    <div class="staking-row">
+                        <span class="label">${isStaked && staking.epoch_number !== undefined ? `Epoch #${staking.epoch_number} ends in:` : 'Epoch:'}</span>
+                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? (epochCountdown || '-') : '-')}</span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Unstake available:</span>
@@ -1329,7 +1472,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await resp.json();
             if (resp.ok) {
                 showToast(`Claimed ${result.claimed_olas.toFixed(2)} OLAS!`, 'success');
-                loadOlasServices(true);
+                refreshSingleService(serviceKey);
             } else {
                 showToast(`Error: ${result.detail}`, 'error');
             }
@@ -1348,7 +1491,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Service unstaked successfully!', 'success');
-                loadOlasServices(true);
+                refreshSingleService(serviceKey);
             } else {
                 showToast(`Error: ${result.detail}`, 'error');
             }
@@ -1364,7 +1507,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Checkpoint successful! Epoch closed.', 'success');
-                loadOlasServices(true);
+                refreshSingleService(serviceKey);
             } else {
                 showToast(`Error: ${result.detail}`, 'error');
             }
@@ -1409,7 +1552,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Service drained successfully!', 'success');
-                loadOlasServices(true);
+                refreshSingleService(serviceKey);
                 // Refresh main accounts too
                 state.balanceCache = {};
                 loadAccounts();
@@ -1448,7 +1591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await resp.json();
                 if (resp.ok) {
                     showToast('Service terminated successfully!', 'success');
-                    loadOlasServices(true);
+                    refreshSingleService(serviceKey);
                 } else {
                     showToast(`Error: ${result.detail}`, 'error');
                 }
@@ -1529,7 +1672,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (resp.ok) {
                     showToast('Service staked successfully!', 'success');
-                    loadOlasServices(true);
+                    refreshSingleService(serviceKey);
                 } else {
                     showToast(`Error: ${result.detail}`, 'error');
                 }
@@ -1616,7 +1759,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast(`Service created! ID: ${result.service_id}`, 'success');
                     createServiceModal.classList.remove('active');
                     createServiceForm.reset();
-                    loadOlasServices(true);
+                    addNewServiceCard(result.service_id, payload.chain);
                 } else {
                     showToast(`Error: ${result.detail}`, 'error');
                 }
@@ -1678,7 +1821,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (resp.ok) {
                     const fundedAccounts = Object.keys(result.funded || {});
                     showToast(`Funded ${fundedAccounts.join(', ')}!`, 'success');
-                    loadOlasServices(true);
+                    refreshSingleService(confirmServiceKey);
                 } else {
                     showToast(`Error: ${result.detail}`, 'error');
                 }
