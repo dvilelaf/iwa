@@ -1183,66 +1183,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="staking-info">
                     <div class="staking-row">
                         <span class="label">Status:</span>
-                        <span class="value ${isStaked ? 'staked' : 'not-staked'}">
-                            ${isStaked ? '✓ STAKED' : '○ NOT STAKED'}
+                        <span class="value ${isLoading ? '' : (isStaked ? 'staked' : 'not-staked')}">
+                            ${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? '✓ STAKED' : '○ NOT STAKED')}
                         </span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Contract:</span>
                         <span class="value address-cell">
-                            ${isStaked && staking.staking_contract_address ? `
+                            ${isLoading ? '<span class="cell-spinner"></span>' : (isStaked && staking.staking_contract_address ? `
                                 <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
                                     ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
                                 </a>
-                            ` : '-'}
+                            ` : '-')}
                         </span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Rewards:</span>
-                        <span class="value rewards">${isStaked ? (isLoading ? '<span class="cell-spinner"></span>' : (escapeHtml(formatBalance(staking.accrued_reward_olas) || '0') + ' OLAS')) : '-'}</span>
+                        <span class="value rewards">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? (escapeHtml(formatBalance(staking.accrued_reward_olas) || '0') + ' OLAS') : '-')}</span>
                     </div>
-                    ${isStaked ? livenessProgressHtml : `
-                        <div class="staking-row">
-                            <span class="label">Liveness:</span>
-                            <span class="value">-</span>
-                        </div>
-                    `}
+                    <div class="staking-row">
+                        <span class="label">Liveness:</span>
+                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked && livenessProgressHtml ? '' : '-')}</span>
+                    </div>
+                    ${!isLoading && isStaked && livenessProgressHtml ? livenessProgressHtml : ''}
                     <div class="staking-row">
                         <span class="label">Epoch:</span>
-                        <span class="value">${isStaked ? (isLoading ? '<span class="cell-spinner"></span>' : `#${staking.epoch_number !== undefined ? staking.epoch_number : '?'} - ${epochCountdown}`) : '-'}</span>
+                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? `#${staking.epoch_number !== undefined ? staking.epoch_number : '?'} - ${epochCountdown}` : '-')}</span>
                     </div>
-                    ${isStaked ? (() => {
-                if (isLoading) {
-                    return `
-                            <div class="staking-row">
-                                <span class="label">Unstake available:</span>
-                                <span class="value"><span class="cell-spinner"></span></span>
-                            </div>`;
-                }
-                if (!staking.unstake_available_at) return '';
+                    <div class="staking-row">
+                        <span class="label">Unstake available:</span>
+                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (() => {
+                if (!isStaked) return '-';
+                if (!staking.unstake_available_at) return '-';
                 const diffMs = new Date(staking.unstake_available_at) - new Date();
-                if (diffMs <= 0) {
-                    return `
-                            <div class="staking-row">
-                                <span class="label">Unstake available:</span>
-                                <span class="value" style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>
-                            </div>`;
-                }
+                if (diffMs <= 0) return '<span style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>';
                 const diffMins = Math.ceil(diffMs / 60000);
                 const hours = Math.floor(diffMins / 60);
                 const mins = diffMins % 60;
-                const timeText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-                return `
-                            <div class="staking-row">
-                                <span class="label">Unstake available:</span>
-                                <span class="value" data-unstake-at="${staking.unstake_available_at}">${timeText}</span>
-                            </div>`;
-            })() : `
-                    <div class="staking-row">
-                        <span class="label">Unstake available:</span>
-                        <span class="value">-</span>
+                return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+            })()}</span>
                     </div>
-            `}
                 </div>
 
                 <div class="service-actions">
@@ -1482,10 +1462,16 @@ document.addEventListener('DOMContentLoaded', () => {
     window.showStakeModal = async (serviceKey, chain) => {
         const modal = document.getElementById('stake-modal');
         const select = document.getElementById('stake-contract-select');
+        const spinnerDiv = document.getElementById('stake-contract-spinner');
         const keyInput = document.getElementById('stake-service-key');
+        const confirmBtn = document.getElementById('stake-confirm');
 
         keyInput.value = serviceKey;
-        select.innerHTML = '<option value="">Loading contracts...</option>';
+
+        // Show spinner, hide select, disable button
+        select.style.display = 'none';
+        spinnerDiv.style.display = 'block';
+        confirmBtn.disabled = true;
         modal.classList.add('active');
 
         try {
@@ -1494,14 +1480,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (contracts.length === 0) {
                 select.innerHTML = '<option value="">No contracts available</option>';
-                return;
+            } else {
+                select.innerHTML = contracts.map(c =>
+                    `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`
+                ).join('');
             }
 
-            select.innerHTML = contracts.map(c =>
-                `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`
-            ).join('');
+            // Show select, hide spinner, enable button
+            select.style.display = '';
+            spinnerDiv.style.display = 'none';
+            confirmBtn.disabled = false;
         } catch (err) {
             select.innerHTML = '<option value="">Error loading contracts</option>';
+            select.style.display = '';
+            spinnerDiv.style.display = 'none';
+            confirmBtn.disabled = false;
         }
     };
 
