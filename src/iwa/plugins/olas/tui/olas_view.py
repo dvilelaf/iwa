@@ -200,7 +200,6 @@ class OlasView(Static):
                 staking_status = manager.get_staking_status()
                 services_data.append((service_key, service, staking_status))
 
-            # Pass data to UI thread for widget creation
             self.app.call_from_thread(self._render_services, services_data)
 
         except Exception as e:
@@ -210,17 +209,27 @@ class OlasView(Static):
         finally:
             self._loading = False
 
-    def _render_services(self, services_data: list) -> None:
+    async def _render_services(self, services_data: list) -> None:
         """Create and mount service cards in UI thread."""
         try:
             container = self.query_one("#services-container", ScrollableContainer)
-            container.remove_children()
+            # Synchronously (as much as possible) clear children
+            # Querying and removing is safer than remove_children() when mounting immediately
+            children = container.query(".service-card")
+            if children:
+                await children.remove()
 
-            for service_key, service, staking_status in services_data:
-                card = self._create_service_card(service_key, service, staking_status)
-                container.mount(card)
+            # Use a slightly different approach: clear everything and wait
+            await container.query("*").remove()
 
-            container.mount(Button("Create New Service", id="olas-create-service-btn", variant="primary"))
+            if not services_data:
+                await container.mount(Label("No services found on this chain.", classes="empty-state"))
+            else:
+                for service_key, service, staking_status in services_data:
+                    card = self._create_service_card(service_key, service, staking_status)
+                    await container.mount(card)
+
+            await container.mount(Button("Create New Service", id="olas-create-service-btn", variant="primary"))
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -646,7 +655,7 @@ class OlasView(Static):
             manager.service = service
 
             staking = StakingContract(service.staking_contract_address, service.chain_name)
-            success = manager.checkpoint(staking)
+            success = manager.call_checkpoint(staking)
 
             if success:
                 self.notify("Checkpoint successful! Epoch closed.", severity="information")

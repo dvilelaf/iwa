@@ -1,4 +1,4 @@
-"""Tests for Olas Contract edge cases and ServiceManager advanced scenarios."""
+"""Tests for Olas contracts and ServiceManager advanced scenarios."""
 
 from unittest.mock import MagicMock, patch
 

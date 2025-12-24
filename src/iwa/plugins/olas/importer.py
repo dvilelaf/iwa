@@ -386,7 +386,7 @@ class OlasServiceImporter:
             # Try JSON format first ({"ledger": "ethereum", "address": "...", "private_key": "..."})
             try:
                 data = json.loads(content)
-                if "private_key" in data and "address" in data:
+                if isinstance(data, dict) and "private_key" in data and "address" in data:
                     return DiscoveredKey(
                         address=data["address"],
                         private_key=data["private_key"],

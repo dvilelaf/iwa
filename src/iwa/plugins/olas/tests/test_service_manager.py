@@ -259,8 +259,8 @@ def test_unbond_success(service_manager, mock_wallet):
 def test_stake_success(service_manager, mock_wallet):
     """Test successful staking."""
     staking_contract = MagicMock()
-    staking_contract.staking_token_address = "0xToken"
-    staking_contract.get_service_ids.return_value = 0
+    staking_contract.staking_token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
+    staking_contract.get_service_ids.return_value = []
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
     staking_contract.address = "0xStaking"
@@ -519,8 +519,8 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
     service_manager.registry.get_service.side_effect = state_sequence
 
     staking_contract = MagicMock()
-    staking_contract.staking_token_address = "0xToken"
-    staking_contract.get_service_ids.return_value = 0
+    staking_contract.staking_token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
+    staking_contract.get_service_ids.return_value = []
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
     staking_contract.address = "0xStaking"

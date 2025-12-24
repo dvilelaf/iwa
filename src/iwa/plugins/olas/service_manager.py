@@ -46,11 +46,13 @@ class ServiceManager:
         self.wallet = wallet
         self.global_config = Config()
 
-        # Get or create OlasConfig
-        if "olas" not in self.global_config.plugins:
-            self.global_config.plugins["olas"] = OlasConfig()
-
-        self.olas_config: OlasConfig = self.global_config.plugins["olas"]
+        self.olas_config = self.global_config.plugins.get("olas")
+        if isinstance(self.olas_config, dict):
+            self.olas_config = OlasConfig(**self.olas_config)
+            self.global_config.plugins["olas"] = self.olas_config
+        elif self.olas_config is None:
+            self.olas_config = OlasConfig()
+            self.global_config.plugins["olas"] = self.olas_config
 
         # Get service by key if provided
         self.service = None
@@ -717,11 +719,11 @@ class ServiceManager:
 
     def unstake(self, staking_contract) -> bool:
         """Unstake the service from the staking contract."""
-        logger.info(f"Preparing to unstake service {self.service.service_id} from {staking_contract.address}")
-
         if not self.service:
             logger.error("No active service")
             return False
+
+        logger.info(f"Preparing to unstake service {self.service.service_id} from {staking_contract.address}")
 
         # Check that the service is staked
         try:
@@ -776,9 +778,6 @@ class ServiceManager:
             return False
 
         logger.info(f"Unstake transaction sent: {receipt.get('transactionHash', '').hex() if receipt else 'No Receipt'}")
-        return True
-
-        logger.info("Service unstake transaction sent successfully")
 
         events = staking_contract.extract_events(receipt)
 

@@ -121,9 +121,9 @@ def test_create_service_failures(
 
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_chains:
         mock_chains.return_value.get.return_value.chain.get_token_address.return_value = (
-            "0x1111111111111111111111111111111111111111"
+            "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
         )
-        res = manager.create(token_address_or_tag="0x1111111111111111111111111111111111111111")
+        res = manager.create(token_address_or_tag="0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f")
         assert res == 123 or res is False  # May succeed on create but fail on approval
 
 
@@ -151,9 +151,9 @@ def test_create_service_with_approval(
 
     with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_chains:
         mock_chains.return_value.get.return_value.chain.get_token_address.return_value = (
-            "0x1111111111111111111111111111111111111111"
+            "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
         )
-        manager.create(token_address_or_tag="0x1111111111111111111111111111111111111111")
+        manager.create(token_address_or_tag="0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f")
 
         # Verify wallet transfer_service was used for approval
         assert mock_wallet.sign_and_send_transaction.call_count >= 1
@@ -408,9 +408,9 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
 
     # Mock Staking Contract
     mock_staking = MagicMock()
-    mock_staking.staking_token_address = "0x1111111111111111111111111111111111111111"
+    mock_staking.staking_token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
     mock_staking.address = "0xStaking"
-    mock_staking.get_service_ids.return_value = 0  # Not full
+    mock_staking.get_service_ids.return_value = []  # Not full
     mock_staking.max_num_services = 10
     mock_staking.min_staking_deposit = 100
     mock_staking.extract_events.return_value = [{"name": "ServiceStaked"}]
@@ -438,9 +438,9 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
         "state": ServiceState.DEPLOYED,
         "security_deposit": 50000000000000000000,
     }
-    mock_staking.get_service_ids.return_value = 10
+    mock_staking.get_service_ids.return_value = [0]*10
     assert manager.stake(mock_staking) is False
-    mock_staking.get_service_ids.return_value = 0
+    mock_staking.get_service_ids.return_value = []
 
     # 3. Not enough funds
     mock_erc20_inst.balance_of_wei.return_value = 50
@@ -453,16 +453,16 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
 
     # 5. Stake fail
     # First tx (approve) success, second (stake) fail
-    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (False, {})]
+    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (False, {}), (False, {})]
     assert manager.stake(mock_staking) is False
 
     # 6. Event missing
-    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (True, {})]
+    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (True, {}), (True, {})]
     mock_staking.extract_events.return_value = []
     assert manager.stake(mock_staking) is False
 
     # 7. State check fail
-    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (True, {})]
+    mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (True, {}), (True, {})]
     mock_staking.extract_events.return_value = [{"name": "ServiceStaked"}]
     mock_staking.get_staking_state.return_value = StakingState.NOT_STAKED
     assert manager.stake(mock_staking) is False
