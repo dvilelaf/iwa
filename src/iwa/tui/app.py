@@ -128,20 +128,22 @@ class IwaApp(App):
         trace("App COMPOSE called")
         yield Header(show_clock=True)
 
-        with TabbedContent():
-            with TabPane("Wallets"):
+        with TabbedContent(initial="wallets-tab"):
+            # Wallets first (default)
+            with TabPane("Wallets", id="wallets-tab"):
                 trace("App COMPOSE: Yielding WalletsScreen")
                 yield WalletsScreen(self.wallet)
 
-            with TabPane("RPC Status"):
-                yield RPCView()
-
-            # Dynamic Plugin Tabs
+            # Plugin tabs (Olas)
             for _name, plugin in self.plugins.items():
-                view = plugin.get_tui_view()
+                view = plugin.get_tui_view(wallet=self.wallet)
                 if view:
-                    with TabPane(plugin.name.capitalize()):
+                    with TabPane(plugin.name.capitalize(), id=f"{plugin.name.lower()}-tab"):
                         yield view
+
+            # RPC Status last
+            with TabPane("RPC Status", id="rpc-tab"):
+                yield RPCView()
 
         yield Footer()
 

@@ -233,7 +233,7 @@ class CreateServiceModal(ModalScreen):
     }
     #dialog {
         padding: 1 2;
-        width: 60;
+        width: 65;
         height: auto;
         border: thick $background 80%;
         background: $surface;
@@ -265,21 +265,39 @@ class CreateServiceModal(ModalScreen):
     }
     """
 
-    def __init__(self, chains: List[str], default_chain: str = "gnosis"):
-        """Init with list of available chains."""
+    def __init__(
+        self,
+        chains: List[str],
+        default_chain: str = "gnosis",
+        staking_contracts: List[Tuple[str, str]] = None,
+    ):
+        """Init with list of available chains and staking contracts."""
         super().__init__()
         self.chains = chains
         self.default_chain = default_chain
+        self.staking_contracts = staking_contracts or []
 
     def compose(self) -> ComposeResult:
         """Compose the modal UI."""
         with Vertical(id="dialog"):
             yield Label("Create New Olas Service", classes="header")
+
             yield Label("Service Name:")
             yield Input(placeholder="e.g. My Trader", id="name_input")
+
             yield Label("Chain:")
             chain_options = [(c.title(), c) for c in self.chains]
             yield Select(chain_options, value=self.default_chain, id="chain_select")
+
+            yield Label("Agent Type:")
+            agent_options = [("Trader", "trader")]
+            yield Select(agent_options, value="trader", id="agent_type_select")
+
+            yield Label("Staking Contract:")
+            contract_options = [("None (don't stake)", "")]
+            contract_options.extend([(name, addr) for name, addr in self.staking_contracts])
+            yield Select(contract_options, value="", id="staking_select")
+
             with Horizontal(id="btn_row"):
                 yield Button("Cancel", id="cancel")
                 yield Button("Create", variant="primary", id="create")
@@ -289,9 +307,16 @@ class CreateServiceModal(ModalScreen):
         if event.button.id == "create":
             name = self.query_one("#name_input", Input).value
             chain = self.query_one("#chain_select", Select).value
+            agent_type = self.query_one("#agent_type_select", Select).value
+            staking_contract = self.query_one("#staking_select", Select).value
             if not name or chain == Select.BLANK:
                 return
-            self.dismiss({"name": name, "chain": chain})
+            self.dismiss({
+                "name": name,
+                "chain": chain,
+                "agent_type": agent_type if agent_type != Select.BLANK else "trader",
+                "staking_contract": staking_contract if staking_contract != Select.BLANK else None,
+            })
         elif event.button.id == "cancel":
             self.dismiss(None)
 

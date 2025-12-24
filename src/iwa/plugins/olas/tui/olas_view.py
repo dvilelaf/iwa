@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
 from textual.widgets import Button, DataTable, Label, Select, Static
+from textual import work
 
 if TYPE_CHECKING:
     from iwa.core.wallet import Wallet
@@ -15,8 +16,8 @@ class OlasView(Static):
 
     DEFAULT_CSS = """
     OlasView {
-        height: 100%;
-        padding: 1;
+        height: auto;
+        min-height: 10;
     }
 
     .olas-header {
@@ -25,12 +26,13 @@ class OlasView(Static):
     }
 
     .services-container {
-        height: 1fr;
+        height: auto;
+        min-height: 5;
     }
 
     .service-card {
         border: solid $primary;
-        padding: 1;
+        padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
@@ -38,24 +40,24 @@ class OlasView(Static):
     .service-title {
         text-style: bold;
         color: $accent;
-    }
-
-    .service-info-row {
-        height: 1;
+        margin-bottom: 0;
     }
 
     .staking-section {
-        margin-top: 1;
-        padding: 1;
+        margin-top: 0;
+        padding: 0 1;
         background: $surface;
+        height: auto;
     }
 
     .staking-label {
         color: $text-muted;
+        height: 1;
     }
 
     .staking-value {
         color: $success;
+        height: 1;
     }
 
     .staking-value.not-staked {
@@ -65,10 +67,11 @@ class OlasView(Static):
     .rewards-value {
         color: $accent;
         text-style: bold;
+        height: 1;
     }
 
     .action-buttons {
-        margin-top: 1;
+        margin-top: 0;
         height: 3;
     }
 
@@ -78,7 +81,7 @@ class OlasView(Static):
 
     .accounts-table {
         height: auto;
-        max-height: 10;
+        max-height: 6;
     }
 
     .empty-state {
@@ -94,23 +97,22 @@ class OlasView(Static):
         self._wallet = wallet
         self._chain = "gnosis"
         self._services_data = []
+        self._loading = False  # Guard against duplicate worker execution
 
     def compose(self) -> ComposeResult:
         """Compose the Olas view."""
-        with Vertical():
-            # Header with chain selector and refresh
-            with Horizontal(classes="olas-header"):
-                yield Label("Chain: ", classes="label")
-                yield Select(
-                    [(c, c) for c in ["gnosis", "ethereum", "base"]],
-                    value="gnosis",
-                    id="olas-chain-select",
-                )
-                yield Button("Refresh", id="olas-refresh-btn", variant="default")
+        # Header with chain selector and refresh
+        with Horizontal(classes="olas-header"):
+            yield Label("Chain: ", classes="label")
+            yield Select(
+                [(c, c) for c in ["gnosis", "ethereum", "base"]],
+                value="gnosis",
+                id="olas-chain-select",
+            )
+            yield Button("Refresh", id="olas-refresh-btn", variant="default")
 
-            # Services container
-            with ScrollableContainer(classes="services-container", id="services-container"):
-                yield Label("Loading services...", id="olas-loading", classes="empty-state")
+        # Services container
+        yield ScrollableContainer(id="services-container")
 
     def on_mount(self) -> None:
         """Load services when mounted."""
@@ -124,23 +126,27 @@ class OlasView(Static):
         elif button_id == "olas-create-service-btn":
             self.show_create_service_modal()
         elif button_id and button_id.startswith("claim-"):
-            service_key = button_id.replace("claim-", "")
+            # Convert sanitized ID back to original key format (gnosis_2594 -> gnosis:2594)
+            service_key = button_id.replace("claim-", "").replace("_", ":", 1)
             self.claim_rewards(service_key)
         elif button_id and button_id.startswith("unstake-"):
-            service_key = button_id.replace("unstake-", "")
+            service_key = button_id.replace("unstake-", "").replace("_", ":", 1)
             self.unstake_service(service_key)
         elif button_id and button_id.startswith("stake-"):
-            service_key = button_id.replace("stake-", "")
+            service_key = button_id.replace("stake-", "").replace("_", ":", 1)
             self.stake_service(service_key)
         elif button_id and button_id.startswith("drain-"):
-            service_key = button_id.replace("drain-", "")
+            service_key = button_id.replace("drain-", "").replace("_", ":", 1)
             self.drain_service(service_key)
         elif button_id and button_id.startswith("fund-"):
-            service_key = button_id.replace("fund-", "")
+            service_key = button_id.replace("fund-", "").replace("_", ":", 1)
             self.show_fund_service_modal(service_key)
         elif button_id and button_id.startswith("terminate-"):
-            service_key = button_id.replace("terminate-", "")
+            service_key = button_id.replace("terminate-", "").replace("_", ":", 1)
             self.terminate_service(service_key)
+        elif button_id and button_id.startswith("checkpoint-"):
+            service_key = button_id.replace("checkpoint-", "").replace("_", ":", 1)
+            self.checkpoint_service(service_key)
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle chain selection change."""
@@ -148,15 +154,17 @@ class OlasView(Static):
             self._chain = str(event.value)
             self.load_services()
 
+    @work(thread=True)
     def load_services(self) -> None:
-        """Load Olas services for the selected chain."""
-        container = self.query_one("#services-container", ScrollableContainer)
-
-        # Clear existing content
-        container.remove_children()
+        """Load Olas services for the selected chain in background thread."""
+        # Prevent duplicate execution
+        if self._loading:
+            return
+        self._loading = True
 
         if not self._wallet:
-            container.mount(Label("Wallet not available", classes="empty-state"))
+            self.app.call_from_thread(self._mount_error, "Wallet not available")
+            self._loading = False
             return
 
         try:
@@ -166,16 +174,13 @@ class OlasView(Static):
 
             config = Config()
 
-            # Check if Olas plugin is configured
             if "olas" not in config.plugins:
-                container.mount(
-                    Label(f"No Olas services configured for {self._chain}", classes="empty-state")
-                )
+                self.app.call_from_thread(self._mount_error, f"No Olas services configured for {self._chain}")
+                self._loading = False
                 return
 
             olas_config = OlasConfig.model_validate(config.plugins["olas"])
 
-            # Filter services by chain
             services = [
                 (key, svc)
                 for key, svc in olas_config.services.items()
@@ -183,31 +188,73 @@ class OlasView(Static):
             ]
 
             if not services:
-                container.mount(
-                    Label(f"No Olas services found for {self._chain}", classes="empty-state")
-                )
+                self.app.call_from_thread(self._mount_error, f"No Olas services found for {self._chain}")
+                self._loading = False
                 return
 
-            # Create a card for each service
+            # Fetch data in background thread (network calls)
+            services_data = []
             for service_key, service in services:
                 manager = ServiceManager(self._wallet)
                 manager.service = service
                 staking_status = manager.get_staking_status()
+                services_data.append((service_key, service, staking_status))
 
+            # Pass data to UI thread for widget creation
+            self.app.call_from_thread(self._render_services, services_data)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.app.call_from_thread(self._mount_error, f"Error loading services: {e}")
+        finally:
+            self._loading = False
+
+    def _render_services(self, services_data: list) -> None:
+        """Create and mount service cards in UI thread."""
+        try:
+            container = self.query_one("#services-container", ScrollableContainer)
+            container.remove_children()
+
+            for service_key, service, staking_status in services_data:
                 card = self._create_service_card(service_key, service, staking_status)
                 container.mount(card)
 
-            # Add Create Service button at the bottom
             container.mount(Button("Create New Service", id="olas-create-service-btn", variant="primary"))
-
         except Exception as e:
-            container.mount(Label(f"Error loading services: {e}", classes="empty-state"))
+            import traceback
+            traceback.print_exc()
+
+    def _mount_cards(self, cards: list) -> None:
+        """Mount service cards (called from UI thread)."""
+        try:
+            container = self.query_one("#services-container", ScrollableContainer)
+            container.remove_children()
+            for card in cards:
+                container.mount(card)
+            container.mount(Button("Create New Service", id="olas-create-service-btn", variant="primary"))
+        except Exception as e:
+            import sys
+            print(f"[OLAS DEBUG] Error mounting cards: {e}", file=sys.stderr)
+
+    def _mount_error(self, message: str) -> None:
+        """Mount error message (called from UI thread)."""
+        try:
+            container = self.query_one("#services-container", ScrollableContainer)
+            container.remove_children()
+            container.mount(Label(message, classes="empty-state"))
+        except Exception as e:
+            import sys
+            print(f"[OLAS DEBUG] Error mounting error: {e}", file=sys.stderr)
 
     def _create_service_card(self, service_key: str, service, staking_status) -> Container:
         """Create a service card widget."""
         from iwa.plugins.olas.models import Service
 
         service: Service = service  # type hint
+
+        # Sanitize service_key for use in widget IDs (colons not allowed)
+        safe_key = service_key.replace(":", "_")
 
         # Get account info
         accounts_data = []
@@ -236,53 +283,85 @@ class OlasView(Static):
         # Build staking info
         is_staked = staking_status and staking_status.is_staked
         rewards = staking_status.accrued_reward_wei / 1e18 if staking_status else 0
+        checkpoint_pending = staking_status and staking_status.remaining_epoch_seconds is not None and staking_status.remaining_epoch_seconds <= 0
 
         # Calculate epoch countdown
         epoch_text = "-"
-        if staking_status and staking_status.remaining_epoch_seconds:
-            hours = int(staking_status.remaining_epoch_seconds // 3600)
-            mins = int((staking_status.remaining_epoch_seconds % 3600) // 60)
-            epoch_text = f"{hours}h {mins}m"
+        if staking_status and staking_status.remaining_epoch_seconds is not None:
+            if staking_status.remaining_epoch_seconds <= 0:
+                epoch_text = "Checkpoint pending"
+            else:
+                hours = int(staking_status.remaining_epoch_seconds // 3600)
+                mins = int((staking_status.remaining_epoch_seconds % 3600) // 60)
+                epoch_text = f"{hours}h {mins}m"
 
-        with Container(classes="service-card", id=f"card-{service_key}") as card:
-            # Title
-            yield Label(
-                f"{service.service_name or 'Service'} #{service.service_id}",
-                classes="service-title",
-            )
-
-            # Accounts table
-            table = DataTable(classes="accounts-table")
-            table.add_columns("Role", "Account", "Native", "OLAS")
-            for row in accounts_data:
-                table.add_row(*row)
-            yield table
-
-            # Staking info
-            with Container(classes="staking-section"):
-                yield Label(
-                    f"Status: {'✓ STAKED' if is_staked else '○ NOT STAKED'}",
-                    classes="staking-value" if is_staked else "staking-value not-staked",
-                )
-                if is_staked:
-                    yield Label(f"Rewards: {rewards:.4f} OLAS", classes="rewards-value")
-                    liveness = staking_status.mech_requests_this_epoch
-                    required = staking_status.required_mech_requests
-                    passed = "✓" if staking_status.liveness_ratio_passed else "⚠"
-                    yield Label(f"Liveness: {liveness}/{required} {passed}", classes="staking-label")
-                    yield Label(f"Epoch ends: {epoch_text}", classes="staking-label")
-
-            # Action buttons - Order: Fund, Stake/Unstake, Drain, Terminate
-            with Horizontal(classes="action-buttons"):
-                if is_staked and rewards > 0:
-                    yield Button(f"Claim {rewards:.2f} OLAS", id=f"claim-{service_key}", variant="primary")
-                yield Button("Fund", id=f"fund-{service_key}", variant="primary")
-                if is_staked:
-                    yield Button("Unstake", id=f"unstake-{service_key}", variant="primary")
+        # Calculate unstake countdown
+        unstake_text = "-"
+        if staking_status and staking_status.unstake_available_at:
+            from datetime import datetime, timezone
+            try:
+                # Parse ISO format string
+                unstake_dt = datetime.fromisoformat(staking_status.unstake_available_at.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                diff = (unstake_dt - now).total_seconds()
+                if diff <= 0:
+                    unstake_text = "AVAILABLE"
                 else:
-                    yield Button("Stake", id=f"stake-{service_key}", variant="primary")
-                yield Button("Drain", id=f"drain-{service_key}", variant="warning")
-                yield Button("Terminate", id=f"terminate-{service_key}", variant="error")
+                    hours = int(diff // 3600)
+                    mins = int((diff % 3600) // 60)
+                    unstake_text = f"{hours}h {mins}m"
+            except Exception:
+                unstake_text = "-"
+
+        # Build accounts table
+        table = DataTable(classes="accounts-table")
+        table.add_columns("Role", "Account", "Native", "OLAS")
+        for row in accounts_data:
+            table.add_row(*row)
+
+        # Build staking labels
+        staking_widgets = [
+            Label(
+                f"Status: {'✓ STAKED' if is_staked else '○ NOT STAKED'}",
+                classes="staking-value" if is_staked else "staking-value not-staked",
+            )
+        ]
+        if is_staked:
+            contract_name = staking_status.staking_contract_name if staking_status else "-"
+            staking_widgets.append(Label(f"Contract: {contract_name or '-'}", classes="staking-label"))
+            staking_widgets.append(Label(f"Rewards: {rewards:.4f} OLAS", classes="rewards-value"))
+            liveness = staking_status.mech_requests_this_epoch
+            required = staking_status.required_mech_requests
+            passed = "✓" if staking_status.liveness_ratio_passed else "⚠"
+            staking_widgets.append(Label(f"Liveness: {liveness}/{required} {passed}", classes="staking-label"))
+            epoch_num = staking_status.epoch_number if staking_status else "?"
+            staking_widgets.append(Label(f"Epoch #{epoch_num} ends in: {epoch_text}", classes="staking-label"))
+            staking_widgets.append(Label(f"Unstake available: {unstake_text}", classes="staking-label"))
+        staking_section = Vertical(*staking_widgets, classes="staking-section")
+
+        # Build action buttons
+        button_list = [Button("Fund", id=f"fund-{safe_key}", variant="primary")]
+        if is_staked and checkpoint_pending:
+            button_list.append(Button("Checkpoint", id=f"checkpoint-{safe_key}", variant="warning"))
+        if is_staked and rewards > 0:
+            button_list.append(Button(f"Claim {rewards:.2f} OLAS", id=f"claim-{safe_key}", variant="primary"))
+        if is_staked:
+            button_list.append(Button("Unstake", id=f"unstake-{safe_key}", variant="primary"))
+        else:
+            button_list.append(Button("Stake", id=f"stake-{safe_key}", variant="primary"))
+        button_list.append(Button("Drain", id=f"drain-{safe_key}", variant="warning"))
+        button_list.append(Button("Terminate", id=f"terminate-{safe_key}", variant="error"))
+        buttons = Horizontal(*button_list, classes="action-buttons")
+
+        # Build card
+        card = Vertical(
+            Label(f"{service.service_name or 'Service'} #{service.service_id}", classes="service-title"),
+            table,
+            staking_section,
+            buttons,
+            classes="service-card",
+            id=f"card-{safe_key}",
+        )
 
         return card
 
@@ -421,6 +500,16 @@ class OlasView(Static):
 
         chains = ["gnosis"]  # Only gnosis has staking contracts
 
+        # Get staking contracts list (don't check slots to avoid blocking UI)
+        staking_contracts = []
+        try:
+            from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
+            contracts_dict = OLAS_TRADER_STAKING_CONTRACTS.get(self._chain, {})
+            staking_contracts = [(name, str(addr)) for name, addr in contracts_dict.items()]
+        except Exception:
+            pass  # If fetch fails, just use empty list
+
         def on_modal_result(result) -> None:
             if not result:
                 return
@@ -443,14 +532,22 @@ class OlasView(Static):
                 spin_up_success = manager.spin_up()
 
                 if spin_up_success:
-                    self.notify(f"Service deployed! ID: {service_id}", severity="information")
+                    # If staking contract was selected, stake the service
+                    if result.get("staking_contract"):
+                        try:
+                            manager.stake(result["staking_contract"])
+                            self.notify(f"Service deployed and staked! ID: {service_id}", severity="information")
+                        except Exception as e:
+                            self.notify(f"Service deployed (ID: {service_id}) but staking failed: {e}", severity="warning")
+                    else:
+                        self.notify(f"Service deployed! ID: {service_id}", severity="information")
                 else:
                     self.notify(f"Service created (ID: {service_id}) but deployment failed", severity="warning")
                 self.load_services()
             except Exception as e:
                 self.notify(f"Error: {e}", severity="error")
 
-        self.app.push_screen(CreateServiceModal(chains, self._chain), on_modal_result)
+        self.app.push_screen(CreateServiceModal(chains, self._chain, staking_contracts), on_modal_result)
 
     def show_fund_service_modal(self, service_key: str) -> None:
         """Show modal to fund a service."""
@@ -532,3 +629,29 @@ class OlasView(Static):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
+    def checkpoint_service(self, service_key: str) -> None:
+        """Call checkpoint on a staking contract to close the epoch."""
+        self.notify("Calling checkpoint...", severity="information")
+        try:
+            from iwa.core.models import Config
+            from iwa.plugins.olas.contracts.staking import StakingContract
+            from iwa.plugins.olas.models import OlasConfig
+            from iwa.plugins.olas.service_manager import ServiceManager
+
+            config = Config()
+            olas_config = OlasConfig.model_validate(config.plugins["olas"])
+            service = olas_config.services[service_key]
+
+            manager = ServiceManager(self._wallet)
+            manager.service = service
+
+            staking = StakingContract(service.staking_contract_address, service.chain_name)
+            success = manager.checkpoint(staking)
+
+            if success:
+                self.notify("Checkpoint successful! Epoch closed.", severity="information")
+                self.load_services()
+            else:
+                self.notify("Checkpoint failed", severity="error")
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")

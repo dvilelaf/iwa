@@ -32,11 +32,11 @@ class OlasPlugin(Plugin):
             "import": self.import_services,
         }
 
-    def get_tui_view(self):
+    def get_tui_view(self, wallet=None):
         """Get TUI widget for this plugin."""
         from iwa.plugins.olas.tui.olas_view import OlasView
 
-        return OlasView(wallet=Wallet())
+        return OlasView(wallet=wallet)
 
     def create_service(
         self,

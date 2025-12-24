@@ -40,6 +40,6 @@ class Plugin(ABC):
         """Called when plugin is loaded."""
         pass
 
-    def get_tui_view(self) -> Optional["Widget"]:
+    def get_tui_view(self, wallet=None) -> Optional["Widget"]:
         """Return a Textual Widget to be displayed in the TUI."""
         return None
