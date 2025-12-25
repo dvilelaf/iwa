@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from iwa.core.wallet import init_db
@@ -60,10 +60,20 @@ app.include_router(transactions.router)
 app.include_router(swap.router)
 app.include_router(olas.router)
 
-# Mount Static Files (Frontend)
+# Mount Static Files at /static/ path
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+# Serve index.html for root path
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Serve the main HTML page."""
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return index_path.read_text()
+    return HTMLResponse(content="<h1>IWA Web UI</h1><p>index.html not found</p>", status_code=200)
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000):

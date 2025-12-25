@@ -99,11 +99,13 @@ def get_accounts(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
         result = []
         for addr, data in accounts_data.items():
             account_balances = balances.get(addr, {})
+            # Determine account type: if it has 'signers' attribute, it's a Safe
+            account_type = "Safe" if hasattr(data, "signers") else "EOA"
             result.append(
                 {
                     "address": addr,
                     "tag": data.tag,
-                    "is_safe": data.is_safe,
+                    "type": account_type,
                     "balances": account_balances,
                 }
             )

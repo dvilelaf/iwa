@@ -15,19 +15,21 @@ router = APIRouter(prefix="/api", tags=["state"])
 )
 def get_state(auth: bool = Depends(verify_auth)):
     """Get the current application state (configured chains, etc)."""
-    chains = {}
+    # Build native currencies map, tokens map, and collect chain names
+    chain_names = []
+    native_currencies = {}
+    tokens = {}
     for name, interface in ChainInterfaces().items():
-        chains[name] = {
-            "name": name,
-            "chain_id": interface.chain.chain_id,
-            "native_currency": interface.chain.native_currency,
-            "is_testnet": interface.chain.is_testnet,
-            # "rpc_url": interface.chain.rpc_url # Don't expose this potentially?
-        }
+        chain_names.append(name)
+        native_currencies[name] = interface.chain.native_currency
+        # Get token symbols from the interface (dict of symbol -> address)
+        tokens[name] = list(interface.tokens.keys())
 
     return {
-        "chains": chains,
-        "default_chain": "gnosis",  # Could be configurable
+        "chains": chain_names,
+        "tokens": tokens,
+        "native_currencies": native_currencies,
+        "default_chain": "gnosis",
     }
 
 

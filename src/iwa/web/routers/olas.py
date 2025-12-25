@@ -32,6 +32,28 @@ def get_olas_price(auth: bool = Depends(verify_auth)):
 
 
 @router.get(
+    "/staking-contracts",
+    summary="Get Staking Contracts",
+    description="Get the list of available OLAS staking contracts for a specific chain.",
+)
+def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
+    """Get available staking contracts for a chain."""
+    if not chain.replace("-", "").isalnum():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="Invalid chain name")
+
+    try:
+        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
+        contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
+        return [{"name": name, "address": addr} for name, addr in contracts.items()]
+    except Exception as e:
+        logger.error(f"Error fetching staking contracts: {e}")
+        return []
+
+
+@router.get(
     "/services/basic",
     summary="Get Basic Services",
     description="Get a lightweight list of configured Olas services without RPC calls.",
