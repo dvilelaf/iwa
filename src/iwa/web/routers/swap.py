@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from web3 import Web3
 
-from iwa.core.chain import ChainInterfaces
+from iwa.core.chain import ChainInterfaces, SupportedChain
 from iwa.plugins.gnosis.cow import CowSwap
 from iwa.web.dependencies import verify_auth, wallet
 
@@ -122,7 +122,8 @@ def get_swap_quote(
     try:
         amount_wei = Web3.to_wei(amount, "ether")
 
-        chain_obj = ChainInterfaces().get(chain).chain
+        chain_interface = ChainInterfaces().get(chain)
+        chain_obj: SupportedChain = chain_interface.chain  # type: ignore[assignment]
         account_obj = wallet.account_service.resolve_account(account)
         signer = wallet.key_storage.get_signer(account_obj.address)
 
@@ -199,7 +200,8 @@ def get_swap_max_amount(
             return {"max_amount": sell_balance_eth, "mode": "sell"}
 
         # For buy mode, use CowSwap to get quote in a separate thread
-        chain_obj = ChainInterfaces().get(chain).chain
+        chain_interface = ChainInterfaces().get(chain)
+        chain_obj: SupportedChain = chain_interface.chain  # type: ignore[assignment]
         account_obj = wallet.account_service.resolve_account(account)
         signer = wallet.key_storage.get_signer(account_obj.address)
 

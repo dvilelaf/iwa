@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#documentation" class="md-skip">
+        <a href="#iwa-documentation" class="md-skip">
           Skip to content
         </a>
       
@@ -333,6 +333,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#key-concepts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -379,6 +429,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
   
 </li>
       
@@ -547,6 +608,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#key-concepts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -597,6 +708,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#api-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -627,24 +749,70 @@
   
 
 
-<h1 id="documentation">Documentation</h1>
+<h1 id="iwa-documentation">Iwa Documentation</h1>
 <h2 id="overview">Overview</h2>
-<p>Iwa is designed to be the foundation for secure python-based crypto agents and applications.</p>
+<p>Iwa is a Python framework for secure crypto wallet management designed for building agents and applications that interact with blockchain networks. It provides encrypted key storage, multi-chain support, and a modular plugin system.</p>
+<h2 id="quick-start">Quick Start</h2>
+<h3 id="installation">Installation</h3>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/dvilelaf/iwa.git
+cd iwa
+
+# Install dependencies
+just install
+</code></pre>
+<h3 id="configuration">Configuration</h3>
+<p>Create a <code>secrets.env</code> file with your settings:</p>
+<pre><code class="language-bash">WALLET_PASSWORD=your_secure_password
+GNOSIS_RPC=https://rpc.gnosis.io
+ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
+BASE_RPC=https://mainnet.base.org
+</code></pre>
+<h3 id="running">Running</h3>
+<pre><code class="language-bash"># Launch the Terminal User Interface
+just tui
+
+# Launch the Web UI
+just web
+
+# Run tests
+just test
+</code></pre>
 <h2 id="key-concepts">Key Concepts</h2>
 <h3 id="key-management">Key Management</h3>
-<p>Security is paramount. <code>KeyStorage</code> is the "vault". It uses a user-provided password to encrypt private keys at rest. When needed, keys are decrypted only transiently for signing and then cleared.
-<strong>Developer Rule</strong>: Never use <code>_get_private_key</code>. Use <code>sign_transaction</code> or <code>sign_message</code>.</p>
+<p>Security is paramount. <code>KeyStorage</code> is the "vault". It uses a user-provided password to encrypt private keys at rest using AES-GCM with Scrypt key derivation. When needed, keys are decrypted only transiently for signing and then cleared.</p>
+<p><strong>Developer Rule</strong>: Never use <code>_get_private_key</code>. Use <code>sign_transaction</code> or <code>sign_message</code>.</p>
 <h3 id="plugins">Plugins</h3>
-<p>To add a new protocol:
-1. Create a directory in <code>src/iwa/plugins/&lt;protocol_name&gt;</code>.
-2. Implement a <code>Plugin</code> class inheriting from <code>iwa.core.plugins.Plugin</code> in <code>plugin.py</code>.
-3. Define CLI commands in your plugin class.
-4. Export the plugin class in <code>__init__.py</code>.
-The <code>PluginLoader</code> will automatically discover it.</p>
+<p>To add a new protocol:</p>
+<ol>
+<li>Create a directory in <code>src/iwa/plugins/&lt;protocol_name&gt;</code></li>
+<li>Implement a <code>Plugin</code> class inheriting from <code>iwa.core.plugins.Plugin</code> in <code>plugin.py</code></li>
+<li>Define CLI commands in your plugin class</li>
+<li>Export the plugin class in <code>__init__.py</code></li>
+</ol>
+<p>The <code>PluginLoader</code> will automatically discover it.</p>
 <h3 id="chains">Chains</h3>
-<p>Support for new chains can be added in <code>src/iwa/core/chain.py</code> by inheriting from <code>SupportedChain</code>.</p>
+<p>Support for new chains can be added in <code>src/iwa/core/chain.py</code> by inheriting from <code>SupportedChain</code>. Currently supported:</p>
+<ul>
+<li><strong>Gnosis Chain</strong>: Primary chain with CowSwap integration</li>
+<li><strong>Ethereum</strong>: Mainnet support</li>
+<li><strong>Base</strong>: L2 support</li>
+</ul>
+<h2 id="architecture">Architecture</h2>
+<pre><code>iwa/
+├── core/           # Core wallet functionality
+│   ├── keys.py     # KeyStorage - encrypted key management
+│   ├── wallet.py   # Wallet - high-level interface
+│   ├── chain.py    # ChainInterface - blockchain interaction
+│   └── services/   # Service layer (accounts, balances, transactions)
+├── plugins/        # Protocol integrations
+│   ├── gnosis/     # Safe and CowSwap
+│   └── olas/       # Olas Registry and Services
+├── tui/            # Terminal User Interface (Textual)
+└── web/            # Web API (FastAPI)
+</code></pre>
 <h2 id="api-reference">API Reference</h2>
-<p>(Run <code>pydoc</code> or view source for standard docstrings)</p>
+<p>Run <code>pydoc</code> or view source for standard docstrings. Full API documentation is generated via mkdocstrings.</p>
 
 
 

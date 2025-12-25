@@ -381,6 +381,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Private Key Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#internal-signing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Signing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -410,6 +427,17 @@
     <span class="md-ellipsis">
       
         External Connections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checks
       
     </span>
   </a>
@@ -562,6 +590,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Private Key Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#internal-signing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Signing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -597,6 +642,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#security-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checks
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -624,23 +680,33 @@
 <h2 id="secret-management">Secret Management</h2>
 <p>Application secrets (such as API keys and RPC URLs) are managed via environment variables, typically loaded from a <code>secrets.env</code> file.</p>
 <ul>
-<li><strong>Loading</strong>: Secrets are loaded into memory using the <code>Secrets</code> class (powered by Pydantic settings).</li>
+<li><strong>Loading</strong>: Secrets are loaded into memory using the <code>Settings</code> class (powered by Pydantic settings with <code>SecretStr</code> for sensitive values).</li>
 <li><strong>Storage</strong>: The <code>secrets.env</code> file should be secured with appropriate file system permissions (e.g., <code>chmod 600</code>) to prevent unauthorized access by other users on the system.</li>
 <li><strong>Memory</strong>: Once loaded, secrets reside in the application's memory. Debug logs are configured to avoid printing these values, but a memory dump of the running process could reveal them.</li>
 </ul>
 <h2 id="private-key-management">Private Key Management</h2>
 <p>Private keys are never stored in plain text on the disk.</p>
 <ul>
-<li><strong>Keystore</strong>: Encrypted private keys are stored in a JSON keystore file (default: <code>accounts.json</code>).</li>
-<li><strong>Encryption</strong>: The keystore uses standard encryption (e.g., AES) derived from a user-provided password.</li>
+<li><strong>Keystore</strong>: Encrypted private keys are stored in a JSON keystore file (default: <code>wallet.json</code>).</li>
+<li><strong>Encryption Algorithm</strong>: AES-256-GCM with AESGCM for authenticated encryption.</li>
+<li><strong>Key Derivation</strong>: Scrypt with 2^14 iterations, r=8, p=1 for password-based key derivation.</li>
 <li><strong>Decryption</strong>: Keys are decrypted <strong>only in memory</strong> and only when needed to sign a transaction.</li>
+<li><strong>File Permissions</strong>: The wallet file is automatically set to <code>chmod 600</code> (owner read/write only).</li>
 <li><strong>Session</strong>: When you launch the TUI or CLI, you provide the password. The keys remain accessible in memory for the duration of the session.</li>
 </ul>
+<h3 id="internal-signing">Internal Signing</h3>
+<p>The <code>KeyStorage</code> class provides internal signing methods that never expose the raw private key:</p>
+<ul>
+<li><code>sign_transaction()</code>: Sign a transaction dict</li>
+<li><code>sign_message()</code>: Sign raw message bytes</li>
+<li><code>sign_typed_data()</code>: Sign EIP-712 typed data</li>
+</ul>
+<p>These methods decrypt the key, sign, and return only the signature.</p>
 <h2 id="access-control">Access Control</h2>
 <p>Iwa does not implement multi-user roles or permissions.</p>
 <ul>
 <li><strong>Single User</strong>: The user running the <code>iwa</code> process has full access to all configured wallets.</li>
-<li><strong>Infrastructure Security</strong>: Security relies on the security of the host machine (access to the <code>secrets.env</code> and <code>accounts.json</code> files).</li>
+<li><strong>Infrastructure Security</strong>: Security relies on the security of the host machine (access to the <code>secrets.env</code> and <code>wallet.json</code> files).</li>
 </ul>
 <h2 id="logging">Logging</h2>
 <p>To prevent accidental leakage of sensitive information:</p>
@@ -657,6 +723,13 @@
 <li><strong>Etherscan/Gnosisscan</strong>: For fetching ABI or contract details.</li>
 </ul>
 <p>Ensure you trust your RPC providers, as they can see your read requests (though they cannot sign transactions for you).</p>
+<h2 id="security-checks">Security Checks</h2>
+<p>The project includes automated security checks (<code>just security</code>):</p>
+<ol>
+<li><strong>gitleaks</strong>: Scans for secrets accidentally committed to git</li>
+<li><strong>bandit</strong>: Static analysis for common security issues in Python</li>
+<li><strong>pip-audit</strong>: Checks for known vulnerabilities in dependencies</li>
+</ol>
 
 
 

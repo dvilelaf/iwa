@@ -1,117 +1,170 @@
 # Iwa - Secure Crypto Wallet Framework
 
-Iwa is a Python framework designed for managing crypto wallets and interacting with smart contracts and crypto protocols in a secure, modular, and extensible way.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-595%20passed-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Iwa is a Python framework designed for managing crypto wallets and interacting with smart contracts and crypto protocols in a secure, modular, and extensible way. It's ideal for building autonomous agents and applications that require blockchain interactions.
 
 ## Features
 
-- **Secure Key Storage**: Private keys are encrypted and stored safely. They are ideally never exposed to the application layer, with signing happening internally.
-- **Modularity (Plugins)**: Protocols and features are implemented as plugins, loaded dynamically.
-- **Multi-Chain Support**: Native support for Gnosis Chain, Ethereum, and Base, with easy extensibility for others.
-- **Robust Transaction Management**:
+- **🔐 Secure Key Storage**: Private keys are encrypted with AES-256-GCM and stored safely. They are never exposed to the application layer; signing happens internally via the `KeyStorage` class.
+- **🔌 Modularity (Plugins)**: Protocols and features are implemented as plugins, loaded dynamically. Currently supports Gnosis (Safe, CowSwap) and Olas (Registry, Services, Staking).
+- **⛓️ Multi-Chain Support**: Native support for Gnosis Chain, Ethereum, and Base, with easy extensibility for others.
+- **🔄 Robust Transaction Management**:
   - **RPC Rotation**: Automatically switches RPC providers if one fails or is rate-limited.
-  - **Automatic Gas Management**: Retries transactions with increased gas prices upon failure.
-  - **Internal Signing**: Transactions are signed within the secure `KeyStorage` module.
-- **CLI & TUI Integration**: Interact with your wallet via a unified CLI or a Terminal User Interface.
-- **Modern Tooling**: Managed with `uv`, `Justfile` for automation, and ready for Docker deployment.
+  - **Rate Limiting**: Token bucket algorithm with automatic backoff.
+  - **Retry Logic**: Automatic retries with exponential backoff for transient failures.
+- **💻 CLI & TUI Integration**: Interact with your wallet via a unified CLI or a beautiful Terminal User Interface built with Textual.
+- **🌐 Web API**: RESTful API built with FastAPI for web-based integrations.
+- **🛠️ Modern Tooling**: Managed with `uv`, `Justfile` for automation, and ready for Docker deployment.
 
-## Architecture & Important Classes
+## Architecture
 
-### `KeyStorage` (`iwa.core.keys`)
-The heart of the security model. It stores encrypted private keys (`EncryptedAccount`) and manages Safe multisig accounts (`StoredSafeAccount`).
-- **Internal Signing**: Methods like `sign_transaction` and `sign_message` handle cryptographic operations without returning the raw private key to the caller.
-- **Encryption**: Uses AES-GCM for encryption and Scrypt for key derivation.
+```
+iwa/
+├── core/               # Core wallet functionality
+│   ├── keys.py         # KeyStorage - Encrypted key management
+│   ├── wallet.py       # Wallet - High-level interface
+│   ├── chain.py        # ChainInterface - Blockchain interaction with rate limiting
+│   ├── services/       # Service layer (accounts, balances, transactions)
+│   └── contracts/      # Contract abstractions (ERC20, Safe)
+├── plugins/            # Protocol integrations
+│   ├── gnosis/         # Safe multisig and CowSwap DEX
+│   └── olas/           # Olas Registry, Services, Staking
+├── tui/                # Terminal User Interface (Textual)
+└── web/                # Web API (FastAPI)
+```
 
-### `Wallet` (`iwa.core.wallet`)
-The main high-level interface for user interactions.
-- Delegated signing to `KeyStorage`.
-- Orchestrates complex flows like swaps, transfers, and multisig interactions.
+### Key Components
 
-### `TransactionManager` (`iwa.core.managers`)
-Handles the low-level details of sending transactions.
-- **Retry Logic**: Implements retries for gas issues and connection failures.
-- **RPC Rotation**: Automatically rotates through configured RPCs in case of errors.
-
-### `ChainInterface` (`iwa.core.chain`)
-Abstraction layer for blockchain interactions via Web3.
-- Manages connection to RPC nodes.
-- Provides helper methods for balance checks, contract interaction, etc.
-
-### Web API (`iwa.web`)
-Modular Web API built with FastAPI.
-- **Routers**: Split into `accounts`, `transactions`, `olas`, `swap`, and `state` for modularity.
-- **Dependencies**: Centralized dependency injection for authentication and wallet access.
-
-### TUI (`iwa.tui`)
-Terminal User Interface built with Textual.
-- **Screens**: Dedicated screens for Wallet management (`WalletsScreen`).
-- **Widgets**: Reusable components like `AccountTable` and `ChainSelector` in `iwa.tui.widgets`.
-- **Workers**: Background workers for fetching balances (`fetch_all_balances`) and monitoring events.
-
-## Transaction Flow
-
-1. **Preparation**: A high-level method (e.g., in `Wallet` or a Plugin) calls a contract wrapper to prepare a raw transaction dictionary (data, to, value, etc.).
-2. **Delegation**: The transaction is passed to `TransactionManager` (via `Wallet.sign_and_send_transaction`).
-3. **Signing**: `TransactionManager` requests `KeyStorage` to sign the transaction. `KeyStorage` decrypts the key in memory, signs, and wipes the key (best effort).
-4. **Sending**: `TransactionManager` sends the signed transaction via `ChainInterface`.
-5. **Monitoring & Recovery**:
-   - If the RPC fails, `TransactionManager` triggers `ChainInterface.rotate_rpc()` and retries.
-   - If the transaction fails due to low gas, it bumps the gas price and retries.
-6. **Receipt**: Upon success, the transaction receipt is returned.
+| Component | Description |
+|-----------|-------------|
+| `KeyStorage` | Encrypts/decrypts private keys, provides internal signing |
+| `Wallet` | Main high-level interface for user interactions |
+| `ChainInterface` | Manages Web3 connections with rate limiting and RPC rotation |
+| `TransactionService` | Handles transaction signing and sending with retry logic |
+| `PluginService` | Dynamically loads and manages protocol plugins |
 
 ## Setup & Usage
 
 ### Prerequisites
+
 - Python 3.12+
-- `uv` package manager
+- [uv](https://github.com/astral-sh/uv) package manager
 
 ### Installation
+
 ```bash
+git clone https://github.com/dvilelaf/iwa.git
+cd iwa
 just install
 ```
 
 ### Configuration
-Create a `secrets.env` file (see `src/iwa/core/models.py` for schema) or set environment variables for RPCs and wallet password.
-Example `secrets.env`:
-```
+
+Create a `secrets.env` file with your configuration:
+
+```bash
 WALLET_PASSWORD=your_secure_password
 GNOSIS_RPC=https://rpc.gnosis.io
 ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
 BASE_RPC=https://mainnet.base.org
+
+# Optional
+GNOSISSCAN_API_KEY=your_api_key
+COINGECKO_API_KEY=your_api_key
+```
+
+### Running
+
+```bash
+# Launch TUI
+just tui
+
+# Launch Web UI
+just web
+
+# Use CLI
+iwa wallet list --chain gnosis
+iwa wallet balance <address> --chain gnosis
 ```
 
 ### Running Tests
+
 ```bash
 just test
 ```
 
-### Running CLI
-```bash
-just run wallet list --chain gnosis
-```
+### Security Checks
 
-### Running TUI
 ```bash
-just run tui
+just security  # Runs gitleaks, bandit, and pip-audit
 ```
 
 ### Docker
+
 ```bash
 just docker-build
 just docker-run
 ```
 
 ## Plugins
-Plugins are located in `src/iwa/plugins`. Currently supported:
-- **Gnosis**: Helpers for Safe and CowSwap.
-- **Olas**: Interaction with Olas registry and services.
 
+Plugins are located in `src/iwa/plugins`. Currently supported:
+
+### Gnosis Plugin
+- **Safe**: Create and manage Safe multisig wallets
+- **CowSwap**: Token swaps via CoW Protocol with MEV protection
+
+### Olas Plugin
+- **Registry**: Interact with Olas service registry
+- **Services**: Create, deploy, and manage Olas services
+- **Staking**: Stake/unstake services and claim rewards
+
+## Transaction Flow
+
+1. **Preparation**: A high-level method prepares a raw transaction dictionary
+2. **Delegation**: The transaction is passed to `TransactionService`
+3. **Signing**: `KeyStorage` decrypts the key in memory, signs, and wipes the key
+4. **Sending**: The signed transaction is sent via `ChainInterface`
+5. **Recovery**: Automatic RPC rotation and gas bumping on failures
+6. **Receipt**: Transaction receipt is returned upon success
 
 ## Documentation
-Full documentation is available in the `docs/` directory and can be served locally:
+
+Full documentation is available in the `docs/` directory:
+
 ```bash
-mkdocs serve
+# Serve docs locally
+just docs-serve
+
+# Build static docs
+just docs-build
 ```
-Or built statically:
+
+## Development
+
 ```bash
-mkdocs build
+# Format code
+just format
+
+# Lint code
+just check
+
+# Type check
+just types
 ```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

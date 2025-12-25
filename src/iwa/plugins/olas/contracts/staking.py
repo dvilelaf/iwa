@@ -77,7 +77,7 @@ class StakingContract(ContractInstance):
         """
         super().__init__(address, chain_name=chain_name)
         self.chain_name = chain_name
-        self._contract_params_cache = {}
+        self._contract_params_cache: Dict[str, int] = {}
 
         # Get activity checker from the staking contract
         activity_checker_address = self.call("activityChecker")

@@ -14,3 +14,12 @@
 5c3c5a35c3b36fd69c7f60a6672e2fd7f26292d4:src/tests/test_keys.py:hashicorp-tf-password:10
 5c3c5a35c3b36fd69c7f60a6672e2fd7f26292d4:src/tests/test_mnemonic.py:hashicorp-tf-password:9
 5c3c5a35c3b36fd69c7f60a6672e2fd7f26292d4:src/tests/test_mnemonic.py:hashicorp-tf-password:24
+# New fingerprints for false positives (Ethereum addresses and test passwords, not real secrets)
+3cb15cf96dd9e951c5f24e9d7cb0397806c0af23:src/iwa/plugins/olas/tests/test_service_lifecycle.py:generic-api-key:66
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:262
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:522
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:126
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:156
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:411
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_importer.py:hashicorp-tf-password:57
+427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_lifecycle.py:generic-api-key:48
