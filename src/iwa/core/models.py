@@ -43,27 +43,35 @@ class EthereumAddress(str):
 
 
 class StoredAccount(BaseModel):
-    """StoredAccount"""
+    """StoredAccount representing an EOA or contract account."""
 
-    address: EthereumAddress
-    tag: str
+    address: EthereumAddress = Field(description="Ethereum address (checksummed)")
+    tag: str = Field(description="Human-readable alias for the account")
 
 
 class StoredSafeAccount(StoredAccount):
-    """StoredSafeAccount"""
+    """StoredSafeAccount representing a Gnosis Safe."""
 
-    signers: List[EthereumAddress]
-    threshold: int
-    chains: List[str]
+    signers: List[EthereumAddress] = Field(description="List of owner addresses")
+    threshold: int = Field(description="Required signatures threshold")
+    chains: List[str] = Field(description="List of supported chains")
 
 
 class CoreConfig(BaseModel):
-    """CoreConfig"""
+    """Core configuration settings."""
 
-    manual_claim_enabled: bool = False
-    request_activity_alert_enabled: bool = True
-    whitelist: Dict[str, EthereumAddress] = Field(default_factory=dict)
-    custom_tokens: Dict[str, Dict[str, EthereumAddress]] = Field(default_factory=dict)
+    manual_claim_enabled: bool = Field(
+        default=False, description="Enable manual claiming of rewards"
+    )
+    request_activity_alert_enabled: bool = Field(
+        default=True, description="Enable alerts for suspicious activity"
+    )
+    whitelist: Dict[str, EthereumAddress] = Field(
+        default_factory=dict, description="Address whitelist for security"
+    )
+    custom_tokens: Dict[str, Dict[str, EthereumAddress]] = Field(
+        default_factory=dict, description="Custom token definitions per chain"
+    )
 
 
 T = TypeVar("T", bound="StorableModel")
@@ -317,15 +325,17 @@ class FundRequirements(BaseModel):
 
 
 class VirtualNet(BaseModel):
-    """VirtualNet"""
+    """Virtual Network configuration for Tenderly."""
 
-    vnet_id: Optional[str] = None
-    chain_id: int
-    vnet_slug: Optional[str] = None
-    vnet_display_name: Optional[str] = None
-    funds_requirements: Dict[str, FundRequirements]
-    admin_rpc: Optional[str] = None
-    public_rpc: Optional[str] = None
+    vnet_id: Optional[str] = Field(default=None, description="Tenderly Virtual TestNet ID")
+    chain_id: int = Field(description="Chain ID of the forked network")
+    vnet_slug: Optional[str] = Field(default=None, description="Slug for the Virtual TestNet")
+    vnet_display_name: Optional[str] = Field(default=None, description="Display name for UI")
+    funds_requirements: Dict[str, FundRequirements] = Field(
+        description="Required funds for test accounts"
+    )
+    admin_rpc: Optional[str] = Field(default=None, description="Admin RPC URL for the vNet")
+    public_rpc: Optional[str] = Field(default=None, description="Public RPC URL for the vNet")
 
     @classmethod
     def __get_pydantic_core_schema__(cls, _source, _handler):
@@ -350,6 +360,8 @@ class VirtualNet(BaseModel):
 
 
 class TenderlyConfig(StorableModel):
-    """TenderlyConfig"""
+    """Configuration for Tenderly integration."""
 
-    vnets: Dict[str, VirtualNet]
+    vnets: Dict[str, VirtualNet] = Field(
+        description="Map of chain names to VirtualNet configurations"
+    )

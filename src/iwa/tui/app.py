@@ -124,7 +124,15 @@ class IwaApp(App):
         trace("App INIT: Plugins Loaded")
 
     def compose(self) -> ComposeResult:
-        """Compose the App layout."""
+        """Compose the application layout.
+
+        Sets up the Header, TabbedContent with Wallets, Plugins, and RPC views,
+        and the Footer.
+
+        Returns:
+            ComposeResult: The widgets to be shown in the app.
+
+        """
         trace("App COMPOSE called")
         yield Header(show_clock=True)
 
@@ -148,7 +156,11 @@ class IwaApp(App):
         yield Footer()
 
     def action_refresh(self) -> None:
-        """Refresh current view."""
+        """Action handler for the 'refresh' key binding.
+
+        Triggers a refresh of the currently active view. Currently specifically
+        targets the WalletsScreen to reload accounts and balances.
+        """
         # Ideally, propagate refresh to active tab
         # For now, just refresh wallets view explicitly if it's there
         try:
@@ -158,7 +170,15 @@ class IwaApp(App):
             pass
 
     def copy_to_clipboard(self, text: str) -> None:
-        """Copy text to system clipboard using pyperclip."""
+        """Copy the provided text to the system clipboard.
+
+        Uses `pyperclip` to handle cross-platform clipboard operations.
+        Logs an error if the copy operation fails.
+
+        Args:
+            text: The string to copy.
+
+        """
         try:
             import pyperclip
 

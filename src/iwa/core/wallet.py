@@ -107,7 +107,20 @@ class Wallet:
         value_wei: Wei,
         chain_name: str = "gnosis",
     ) -> Tuple[bool, Optional[str]]:
-        """Send native currency."""
+        """Send a native currency transfer (e.g., ETH, xDAI).
+
+        Args:
+            from_address: Sender's address or tag.
+            to_address: Recipient's address or tag.
+            value_wei: Amount to send in Wei.
+            chain_name: Target blockchain name (default: "gnosis").
+
+        Returns:
+            Tuple containing:
+                - bool: True if transaction was successfully sent (status=1).
+                - Optional[str]: Transaction hash if successful, None otherwise.
+
+        """
         tx_hash = self.transfer_service.send(
             from_address_or_tag=from_address,
             to_address_or_tag=to_address,
@@ -120,7 +133,19 @@ class Wallet:
     def sign_and_send_transaction(
         self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
     ) -> Tuple[bool, dict]:
-        """Sign and send a transaction (generic wrapper)."""
+        """Sign and send a raw transaction dictionary.
+
+        Args:
+            transaction: Dictionary containing transaction parameters.
+            signer_address_or_tag: Address or tag of the signing account.
+            chain_name: Target blockchain name (default: "gnosis").
+
+        Returns:
+            Tuple containing:
+                - bool: True if successful.
+                - dict: Transaction receipt or error details.
+
+        """
         return self.transaction_service.sign_and_send(
             transaction, signer_address_or_tag, chain_name
         )
@@ -133,7 +158,21 @@ class Wallet:
         token_address: str,
         chain_name: str = "gnosis",
     ) -> Tuple[bool, Optional[str]]:
-        """Send ERC20 token."""
+        """Send an ERC20 token transfer.
+
+        Args:
+            from_address: Sender's address or tag.
+            to_address: Recipient's address or tag.
+            amount_wei: Amount to send in Wei.
+            token_address: Token address or name (e.g., "OLAS").
+            chain_name: Target blockchain name (default: "gnosis").
+
+        Returns:
+            Tuple containing:
+                - bool: True if transaction was successfully sent (status=1).
+                - Optional[str]: Transaction hash if successful, None otherwise.
+
+        """
         tx_hash = self.transfer_service.send(
             from_address_or_tag=from_address,
             to_address_or_tag=to_address,
@@ -151,7 +190,21 @@ class Wallet:
         token_address_or_name: str = "native",
         chain_name: str = "gnosis",
     ) -> Optional[str]:
-        """Send native currency or ERC20 token."""
+        """Send native currency or ERC20 tokens.
+
+        Unified interface for transferring assets.
+
+        Args:
+            from_address_or_tag: Sender's address or tag.
+            to_address_or_tag: Recipient's address or tag.
+            amount_wei: Amount to send in Wei.
+            token_address_or_name: Token address, name, or "native".
+            chain_name: Target blockchain name.
+
+        Returns:
+            Optional[str]: Transaction hash if successful, None otherwise.
+
+        """
         return self.transfer_service.send(
             from_address_or_tag,
             to_address_or_tag,
@@ -204,7 +257,18 @@ class Wallet:
         token_address_or_name: str,
         chain_name: str = "gnosis",
     ) -> Optional[float]:
-        """Get ERC20 token allowance"""
+        """Get ERC20 token allowance.
+
+        Args:
+            owner_address_or_tag: Token owner's address or tag.
+            spender_address: Address authorized to spend tokens.
+            token_address_or_name: Token address or name.
+            chain_name: Target blockchain name.
+
+        Returns:
+            Optional[float]: Allowance amount in Ether (float) or None on error.
+
+        """
         return self.transfer_service.get_erc20_allowance(
             owner_address_or_tag, spender_address, token_address_or_name, chain_name
         )
@@ -216,8 +280,20 @@ class Wallet:
         token_address_or_name: str,
         amount_wei: Wei,
         chain_name: str = "gnosis",
-    ):
-        """Approve ERC20 token allowance"""
+    ) -> Optional[str]:
+        """Approve ERC20 token allowance.
+
+        Args:
+            owner_address_or_tag: Token owner's address or tag.
+            spender_address_or_tag: Spender's address or tag.
+            token_address_or_name: Token address or name.
+            amount_wei: Amount to approve in Wei.
+            chain_name: Target blockchain name.
+
+        Returns:
+            Optional[str]: Transaction hash if successful, None otherwise.
+
+        """
         return self.transfer_service.approve_erc20(
             owner_address_or_tag,
             spender_address_or_tag,
@@ -254,7 +330,20 @@ class Wallet:
         chain_name: str = "gnosis",
         order_type: OrderType = OrderType.SELL,
     ) -> bool:
-        """Swap ERC-20 tokens on CowSwap."""
+        """Swap ERC-20 tokens on CowSwap.
+
+        Args:
+            account_address_or_tag: Account address or tag initiating the swap.
+            amount_eth: Amount to swap (sell or buy amount depending on order_type).
+            sell_token_name: Name of the token to sell.
+            buy_token_name: Name of the token to buy.
+            chain_name: Blockchain name (must supports CowSwap, e.g., "gnosis").
+            order_type: OrderType.SELL or OrderType.BUY.
+
+        Returns:
+            bool: True if swap order was created and filled successfully.
+
+        """
         return await self.transfer_service.swap(
             account_address_or_tag,
             amount_eth,
@@ -269,6 +358,18 @@ class Wallet:
         from_address_or_tag: str,
         to_address_or_tag: str = "master",
         chain_name: str = "gnosis",
-    ):
-        """Drain entire balance of an account to another account"""
+    ) -> Optional[str]:
+        """Drain entire balance of an account to another account.
+
+        Transfers all native currency and known ERC20 tokens.
+
+        Args:
+            from_address_or_tag: Source account address or tag.
+            to_address_or_tag: Destination account address or tag (default: "master").
+            chain_name: Target blockchain name.
+
+        Returns:
+            Optional[str]: Summary of the operation or transaction hash of the last transfer.
+
+        """
         return self.transfer_service.drain(from_address_or_tag, to_address_or_tag, chain_name)

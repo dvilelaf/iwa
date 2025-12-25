@@ -132,7 +132,7 @@ class OlasServiceImporter:
         logger.info(f"Discovered {len(discovered)} Olas service(s)")
         return discovered
 
-    def _parse_trader_runner_format(self, folder: Path) -> Optional[DiscoveredService]:
+    def _parse_trader_runner_format(self, folder: Path) -> Optional[DiscoveredService]:  # noqa: C901
         """Parse a .trader_runner folder.
 
         Expected files:
@@ -194,7 +194,7 @@ class OlasServiceImporter:
 
         return service
 
-    def _parse_operate_format(self, folder: Path) -> List[DiscoveredService]:
+    def _parse_operate_format(self, folder: Path) -> List[DiscoveredService]:  # noqa: C901
         """Parse a .operate folder.
 
         Expected structure:
@@ -251,7 +251,7 @@ class OlasServiceImporter:
 
         return discovered
 
-    def _parse_operate_service_config(self, config_file: Path) -> Optional[DiscoveredService]:
+    def _parse_operate_service_config(self, config_file: Path) -> Optional[DiscoveredService]:  # noqa: C901
         """Parse an operate service config.json file."""
         try:
             data = json.loads(config_file.read_text())
@@ -327,7 +327,9 @@ class OlasServiceImporter:
 
         return service
 
-    def _parse_keystore_file(self, file_path: Path, role: str = "unknown") -> Optional[DiscoveredKey]:
+    def _parse_keystore_file(
+        self, file_path: Path, role: str = "unknown"
+    ) -> Optional[DiscoveredKey]:
         """Parse a web3 v3 keystore file."""
         try:
             content = file_path.read_text().strip()
@@ -378,7 +380,9 @@ class OlasServiceImporter:
         except (json.JSONDecodeError, IOError):
             return []
 
-    def _parse_plaintext_key_file(self, file_path: Path, role: str = "unknown") -> Optional[DiscoveredKey]:
+    def _parse_plaintext_key_file(
+        self, file_path: Path, role: str = "unknown"
+    ) -> Optional[DiscoveredKey]:
         """Parse a file containing a plaintext private key."""
         try:
             content = file_path.read_text().strip()
@@ -441,7 +445,7 @@ class OlasServiceImporter:
             logger.warning(f"Failed to decrypt {key.address}: {e}")
             return False
 
-    def import_service(
+    def import_service(  # noqa: C901
         self,
         service: DiscoveredService,
         password: Optional[str] = None,
@@ -559,13 +563,15 @@ class OlasServiceImporter:
         prefix = service_name or "imported"
 
         # Normalize: lowercase, replace spaces/special chars with underscores
-        prefix = re.sub(r'[^a-z0-9]+', '_', prefix.lower()).strip('_')
-        role = re.sub(r'[^a-z0-9]+', '_', key.role.lower()).strip('_')
+        prefix = re.sub(r"[^a-z0-9]+", "_", prefix.lower()).strip("_")
+        role = re.sub(r"[^a-z0-9]+", "_", key.role.lower()).strip("_")
 
         base_tag = f"{prefix}_{role}"
 
         # Check if tag already exists
-        existing_tags = {acc.tag for acc in self.key_storage.accounts.values() if hasattr(acc, "tag")}
+        existing_tags = {
+            acc.tag for acc in self.key_storage.accounts.values() if hasattr(acc, "tag")
+        }
 
         if base_tag not in existing_tags:
             return base_tag
@@ -594,11 +600,14 @@ class OlasServiceImporter:
 
         # Generate tag
         import re
+
         prefix = service.service_name or "imported"
-        prefix = re.sub(r'[^a-z0-9]+', '_', prefix.lower()).strip('_')
+        prefix = re.sub(r"[^a-z0-9]+", "_", prefix.lower()).strip("_")
         base_tag = f"{prefix}_safe"
 
-        existing_tags = {acc.tag for acc in self.key_storage.accounts.values() if hasattr(acc, "tag")}
+        existing_tags = {
+            acc.tag for acc in self.key_storage.accounts.values() if hasattr(acc, "tag")
+        }
         tag = base_tag
         i = 2
         while tag in existing_tags:

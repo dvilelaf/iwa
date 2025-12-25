@@ -36,7 +36,9 @@ def mock_tenderly_config():
             native_eth=1.0,
             tokens=[
                 TokenAmount(
-                    address="0x1234567890123456789012345678901234567890", amount_eth=10.0, symbol="TKN"
+                    address="0x1234567890123456789012345678901234567890",
+                    amount_eth=10.0,
+                    symbol="TKN",
                 )
             ],
         )

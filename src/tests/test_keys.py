@@ -85,7 +85,9 @@ def test_encrypted_account_derive_key(mock_scrypt):
 
 
 def test_encrypted_account_encrypt_private_key(mock_scrypt, mock_aesgcm, mock_account):
-    enc_account = EncryptedAccount.encrypt_private_key("0xPrivateKey0x5B38Da6a701c568545dCfcB03FcB875f56beddC4", "password", "tag")
+    enc_account = EncryptedAccount.encrypt_private_key(
+        "0xPrivateKey0x5B38Da6a701c568545dCfcB03FcB875f56beddC4", "password", "tag"
+    )
     assert enc_account.address == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
     assert enc_account.tag == "tag"
     assert enc_account.ciphertext == base64.b64encode(b"ciphertext").decode()
@@ -333,7 +335,7 @@ def test_keystorage_master_account_fallback(mock_secrets, mock_account, mock_aes
         patch("os.chmod"),
         patch("pathlib.Path.mkdir"),
         # Mock default creation of master to verify fallback logic if master was missing
-        patch("iwa.core.keys.KeyStorage.create_account")
+        patch("iwa.core.keys.KeyStorage.create_account"),
     ):
         storage = KeyStorage(Path("wallet.json"))
         # IMPORTANT: because we patched create_account, master wasn't actually added to storage.accounts
@@ -387,9 +389,7 @@ def test_keystorage_create_account_default_tag(
         assert len(storage.accounts) == 2
 
 
-def test_keystorage_remove_account_not_found(
-    mock_secrets, mock_account, mock_aesgcm, mock_scrypt
-):
+def test_keystorage_remove_account_not_found(mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
     with (
         patch("os.path.exists", return_value=False),
         patch("builtins.open", mock_open()),
@@ -399,8 +399,6 @@ def test_keystorage_remove_account_not_found(
         storage = KeyStorage(Path("wallet.json"))
         # Should not raise
         storage.remove_account("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4")
-
-
 
 
 def test_keystorage_get_account_auto_load_safe(

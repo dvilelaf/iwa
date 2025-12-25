@@ -1,5 +1,6 @@
 """Olas service manager."""
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Union
 
 from web3 import Web3
@@ -11,7 +12,6 @@ from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.models import Config
 from iwa.core.utils import configure_logger
 from iwa.core.wallet import Wallet
-from datetime import datetime, timezone
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     PAYMENT_TYPE_NATIVE,
@@ -582,10 +582,13 @@ class ServiceManager:
         service_state = service_info["state"]
         print(f"[STAKE-SM] Service state: {service_state.name}", flush=True)
         print(f"[STAKE-SM] Service multisig: {self.service.multisig_address}", flush=True)
-        print(f"[STAKE-SM] Service registry info: multisig={service_info.get('multisig')}, threshold={service_info.get('threshold')}", flush=True)
+        print(
+            f"[STAKE-SM] Service registry info: multisig={service_info.get('multisig')}, threshold={service_info.get('threshold')}",
+            flush=True,
+        )
         logger.info(f"Service state: {service_state.name}")
         if service_state != ServiceState.DEPLOYED:
-            print(f"[STAKE-SM] FAIL: Service not deployed", flush=True)
+            print("[STAKE-SM] FAIL: Service not deployed", flush=True)
             logger.error("Service is not deployed, cannot stake")
             return False
 
@@ -594,11 +597,18 @@ class ServiceManager:
         # Check token compatibility - service must be created with same token as staking contract expects
         staking_token = staking_contract.staking_token_address.lower()
         service_token = (self.service.token_address or "").lower()
-        print(f"[STAKE-SM] Token check: service={service_token}, staking={staking_token}", flush=True)
+        print(
+            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token}", flush=True
+        )
         if service_token != staking_token:
-            print(f"[STAKE-SM] FAIL: Token mismatch! Service token != staking contract token", flush=True)
-            logger.error(f"Token mismatch: service was created with {service_token or 'native'}, "
-                        f"but staking contract requires {staking_token}")
+            print(
+                "[STAKE-SM] FAIL: Token mismatch! Service token != staking contract token",
+                flush=True,
+            )
+            logger.error(
+                f"Token mismatch: service was created with {service_token or 'native'}, "
+                f"but staking contract requires {staking_token}"
+            )
             return False
 
         logger.info("Token compatibility check passed")
@@ -609,31 +619,36 @@ class ServiceManager:
         print(f"[STAKE-SM] Slots: {staked_count}/{max_services}", flush=True)
         logger.info(f"Staking contract slots: {staked_count}/{max_services}")
         if staked_count >= max_services:
-            print(f"[STAKE-SM] FAIL: No free slots", flush=True)
+            print("[STAKE-SM] FAIL: No free slots", flush=True)
             logger.error("Staking contract is full, no free slots available")
             return False
 
         # Check that there are enough OLAS
         master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
         min_deposit = staking_contract.min_staking_deposit
-        print(f"[STAKE-SM] OLAS balance: {master_balance} wei, min_deposit: {min_deposit} wei", flush=True)
+        print(
+            f"[STAKE-SM] OLAS balance: {master_balance} wei, min_deposit: {min_deposit} wei",
+            flush=True,
+        )
         logger.info(f"OLAS balance check: master={master_balance}, min_deposit={min_deposit}")
         if master_balance < min_deposit:
-            print(f"[STAKE-SM] FAIL: Not enough OLAS", flush=True)
-            logger.error(f"Not enough tokens to stake service (have {master_balance}, need {min_deposit})")
+            print("[STAKE-SM] FAIL: Not enough OLAS", flush=True)
+            logger.error(
+                f"Not enough tokens to stake service (have {master_balance}, need {min_deposit})"
+            )
             return False
 
-        print(f"[STAKE-SM] All checks passed, proceeding with stake...", flush=True)
+        print("[STAKE-SM] All checks passed, proceeding with stake...", flush=True)
 
         # Approve the staking contract to move the service token (NFT)
-        print(f"[STAKE-SM] Preparing service NFT approval transaction...", flush=True)
+        print("[STAKE-SM] Preparing service NFT approval transaction...", flush=True)
         approve_tx = self.registry.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
             id_=self.service.service_id,
         )
 
-        print(f"[STAKE-SM] Sending service NFT approval transaction...", flush=True)
+        print("[STAKE-SM] Sending service NFT approval transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -643,21 +658,21 @@ class ServiceManager:
         print(f"[STAKE-SM] Service NFT approval result: success={success}", flush=True)
 
         if not success:
-            print(f"[STAKE-SM] FAIL: Service NFT approval transaction failed", flush=True)
+            print("[STAKE-SM] FAIL: Service NFT approval transaction failed", flush=True)
             logger.error("Failed to approve staking contract [Service Registry]")
             return False
 
         logger.info("Service token approved for staking contract")
 
         # Approve the staking contract to transfer OLAS tokens
-        print(f"[STAKE-SM] Preparing OLAS token approval transaction...", flush=True)
+        print("[STAKE-SM] Preparing OLAS token approval transaction...", flush=True)
         olas_approve_tx = erc20_contract.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
             amount_wei=min_deposit,
         )
 
-        print(f"[STAKE-SM] Sending OLAS token approval transaction...", flush=True)
+        print("[STAKE-SM] Sending OLAS token approval transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=olas_approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -666,20 +681,20 @@ class ServiceManager:
         print(f"[STAKE-SM] OLAS token approval result: success={success}", flush=True)
 
         if not success:
-            print(f"[STAKE-SM] FAIL: OLAS token approval transaction failed", flush=True)
+            print("[STAKE-SM] FAIL: OLAS token approval transaction failed", flush=True)
             logger.error("Failed to approve OLAS tokens for staking contract")
             return False
 
         logger.info("OLAS tokens approved for staking contract")
 
         # Stake the service
-        print(f"[STAKE-SM] Preparing stake transaction...", flush=True)
+        print("[STAKE-SM] Preparing stake transaction...", flush=True)
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=self.wallet.master_account.address,
             service_id=self.service.service_id,
         )
 
-        print(f"[STAKE-SM] Sending stake transaction...", flush=True)
+        print("[STAKE-SM] Sending stake transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=stake_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -688,32 +703,32 @@ class ServiceManager:
         print(f"[STAKE-SM] Stake tx result: success={success}", flush=True)
 
         if not success:
-            print(f"[STAKE-SM] FAIL: Stake transaction failed", flush=True)
+            print("[STAKE-SM] FAIL: Stake transaction failed", flush=True)
             logger.error("Failed to stake service")
             return False
 
         logger.info("Service stake transaction sent successfully")
 
-        print(f"[STAKE-SM] Extracting events from receipt...", flush=True)
+        print("[STAKE-SM] Extracting events from receipt...", flush=True)
         events = staking_contract.extract_events(receipt)
         event_names = [event["name"] for event in events]
         print(f"[STAKE-SM] Events found: {event_names}", flush=True)
 
         if "ServiceStaked" not in event_names:
-            print(f"[STAKE-SM] FAIL: ServiceStaked event not found", flush=True)
+            print("[STAKE-SM] FAIL: ServiceStaked event not found", flush=True)
             logger.error("Stake service event not found")
             return False
 
         staking_state = staking_contract.get_staking_state(self.service.service_id)
         print(f"[STAKE-SM] Final staking state: {staking_state}", flush=True)
         if staking_state != StakingState.STAKED:
-            print(f"[STAKE-SM] FAIL: Service not in STAKED state", flush=True)
+            print("[STAKE-SM] FAIL: Service not in STAKED state", flush=True)
             logger.error("Service is not staked after transaction")
             return False
 
         self.service.staking_contract_address = staking_contract.address
         self._save_config()
-        print(f"[STAKE-SM] SUCCESS: Service staked and config saved", flush=True)
+        print("[STAKE-SM] SUCCESS: Service staked and config saved", flush=True)
         logger.info("Service staked successfully")
         return True
 
@@ -723,7 +738,9 @@ class ServiceManager:
             logger.error("No active service")
             return False
 
-        logger.info(f"Preparing to unstake service {self.service.service_id} from {staking_contract.address}")
+        logger.info(
+            f"Preparing to unstake service {self.service.service_id} from {staking_contract.address}"
+        )
 
         # Check that the service is staked
         try:
@@ -731,7 +748,9 @@ class ServiceManager:
             logger.info(f"Current staking state: {staking_state}")
 
             if staking_state != StakingState.STAKED:
-                logger.error(f"Service {self.service.service_id} is not staked (state={staking_state}), cannot unstake")
+                logger.error(
+                    f"Service {self.service.service_id} is not staked (state={staking_state}), cannot unstake"
+                )
                 return False
         except Exception as e:
             logger.error(f"Failed to get staking state: {e}")
@@ -739,19 +758,21 @@ class ServiceManager:
 
         # Check that enough time has passed since staking
         try:
-             service_info = staking_contract.get_service_info(self.service.service_id)
-             ts_start = service_info.get("ts_start", 0)
-             if ts_start > 0:
-                 min_duration = staking_contract.min_staking_duration
-                 unlock_ts = ts_start + min_duration
-                 now_ts = datetime.now(timezone.utc).timestamp()
+            service_info = staking_contract.get_service_info(self.service.service_id)
+            ts_start = service_info.get("ts_start", 0)
+            if ts_start > 0:
+                min_duration = staking_contract.min_staking_duration
+                unlock_ts = ts_start + min_duration
+                now_ts = datetime.now(timezone.utc).timestamp()
 
-                 if now_ts < unlock_ts:
-                     diff = int(unlock_ts - now_ts)
-                     logger.error(f"Cannot unstake yet. Minimum staking duration not met. Unlocks in {diff} seconds.")
-                     return False
+                if now_ts < unlock_ts:
+                    diff = int(unlock_ts - now_ts)
+                    logger.error(
+                        f"Cannot unstake yet. Minimum staking duration not met. Unlocks in {diff} seconds."
+                    )
+                    return False
         except Exception as e:
-             logger.warning(f"Could not verify staking duration: {e}. Proceeding with caution.")
+            logger.warning(f"Could not verify staking duration: {e}. Proceeding with caution.")
 
         # Unstake the service
         try:
@@ -777,7 +798,9 @@ class ServiceManager:
             logger.error(f"Failed to unstake service {self.service.service_id}: Transaction failed")
             return False
 
-        logger.info(f"Unstake transaction sent: {receipt.get('transactionHash', '').hex() if receipt else 'No Receipt'}")
+        logger.info(
+            f"Unstake transaction sent: {receipt.get('transactionHash', '').hex() if receipt else 'No Receipt'}"
+        )
 
         events = staking_contract.extract_events(receipt)
 
@@ -791,7 +814,7 @@ class ServiceManager:
         logger.info("Service unstaked successfully")
         return True
 
-    def get_staking_status(self) -> Optional[StakingStatus]:
+    def get_staking_status(self) -> Optional[StakingStatus]:  # noqa: C901
         """Get comprehensive staking status for the active service.
 
         Returns:
@@ -845,6 +868,7 @@ class ServiceManager:
             # Look up contract name from constants
             staking_name = None
             from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
             for chain_cts in OLAS_TRADER_STAKING_CONTRACTS.values():
                 for name, addr in chain_cts.items():
                     if str(addr).lower() == str(staking_address).lower():
@@ -855,6 +879,7 @@ class ServiceManager:
         except Exception as e:
             logger.error(f"Failed to get service info for service {service_id}: {str(e)}")
             import traceback
+
             logger.error(traceback.format_exc())
             return StakingStatus(
                 is_staked=True,
@@ -876,17 +901,17 @@ class ServiceManager:
 
         if ts_start > 0:
             try:
-               unstake_ts = ts_start + min_duration
-               unstake_at = datetime.fromtimestamp(
-                   unstake_ts,
-                   tz=timezone.utc,
-               ).isoformat()
-               logger.info(f"[DEBUG-STAKE] unstake_available_at: {unstake_at} (ts={unstake_ts})")
+                unstake_ts = ts_start + min_duration
+                unstake_at = datetime.fromtimestamp(
+                    unstake_ts,
+                    tz=timezone.utc,
+                ).isoformat()
+                logger.info(f"[DEBUG-STAKE] unstake_available_at: {unstake_at} (ts={unstake_ts})")
             except Exception as e:
                 logger.error(f"[DEBUG-STAKE] calc error: {e}")
                 pass
         else:
-             logger.warning("[DEBUG-STAKE] ts_start is 0, cannot calculate unstake time")
+            logger.warning("[DEBUG-STAKE] ts_start is 0, cannot calculate unstake time")
 
         return StakingStatus(
             is_staked=True,
@@ -1336,7 +1361,7 @@ class ServiceManager:
         logger.info(f"Service {service_id} wind down complete. State: {final_state.name}")
         return True
 
-    def drain_service(
+    def drain_service(  # noqa: C901
         self,
         target_address: Optional[str] = None,
         claim_rewards: bool = True,

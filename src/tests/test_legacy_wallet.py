@@ -115,12 +115,14 @@ def mock_balance_service(mock_key_storage, mock_account_service):
         instance.get_native_balance_wei.return_value = 0
         instance.get_erc20_balance_eth.return_value = 0.0
         instance.get_erc20_balance_wei.return_value = 0
+
         # Mocking resolve_account to return something with an address
         def resolve_side_effect(tag_or_addr):
-             m = MagicMock()
-             m.address = VALID_ADDR_1 if not str(tag_or_addr).startswith("0x") else tag_or_addr
-             m.tag = "mock-tag"
-             return m
+            m = MagicMock()
+            m.address = VALID_ADDR_1 if not str(tag_or_addr).startswith("0x") else tag_or_addr
+            m.tag = "mock-tag"
+            return m
+
         yield instance
 
 
@@ -179,12 +181,14 @@ def wallet(
 ):
     with patch("iwa.core.wallet.init_db"):
         w = Wallet()
+
         # Mock internal transfer service methods to return 0 by default for numeric comparisons,
         # but allow side_effect to handle tests that expect None.
         def get_allowance_side_effect(owner, spender, token, chain="gnosis"):
             if owner == "unknown" or token == "INVALID":
                 return None
             return 0
+
         w.transfer_service.get_erc20_allowance = MagicMock(side_effect=get_allowance_side_effect)
         w.transfer_service.get_native_balance_wei = MagicMock(return_value=0)
         w.transfer_service.get_erc20_balance_wei = MagicMock(return_value=0)
@@ -474,7 +478,7 @@ def test_drain_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):
 
     with (
         patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20,
-        patch("iwa.core.services.transfer.MultiSendCallOnlyContract") as mock_multisend
+        patch("iwa.core.services.transfer.MultiSendCallOnlyContract") as mock_multisend,
     ):
         erc20_instance = mock_erc20.return_value
         erc20_instance.prepare_transfer_tx.return_value = {"to": "0x", "data": b"", "value": 0}
@@ -653,7 +657,7 @@ def test_multi_send_erc20_eoa_success(wallet, mock_key_storage, mock_chain_inter
 
     with (
         patch("iwa.core.services.transfer.ERC20Contract") as mock_erc20,
-        patch("iwa.core.services.transfer.MultiSendCallOnlyContract") as mock_multisend
+        patch("iwa.core.services.transfer.MultiSendCallOnlyContract") as mock_multisend,
     ):
         erc20_instance = mock_erc20.return_value
         erc20_instance.prepare_transfer_from_tx.return_value = {"to": "0x", "data": b"", "value": 0}
@@ -1019,7 +1023,7 @@ async def test_swap_entire_balance(wallet, mock_key_storage, mock_chain_interfac
     chain_interface.chain.tokens = {"SELL": sell_token_address}
     chain_interface.get_token_address.return_value = sell_token_address
     chain_interface.chain.get_token_address.return_value = sell_token_address
-    chain_interface.get_erc20_allowance.return_value = 0 # Added default allowance
+    chain_interface.get_erc20_allowance.return_value = 0  # Added default allowance
 
     cow_instance = mock_cow_swap.return_value
     cow_instance.swap = AsyncMock(return_value=True)

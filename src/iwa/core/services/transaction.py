@@ -81,7 +81,7 @@ class TransactionService:
                     return True, receipt
 
                 # Transaction reverted - log details for debugging
-                print(f"[TX-DEBUG] Transaction REVERTED (status=0)", flush=True)
+                print("[TX-DEBUG] Transaction REVERTED (status=0)", flush=True)
                 print(f"[TX-DEBUG] Tx Hash: {txn_hash.hex()}", flush=True)
                 print(f"[TX-DEBUG] To: {tx.get('to', 'Unknown')}", flush=True)
                 print(f"[TX-DEBUG] Gas used: {getattr(receipt, 'gasUsed', 'Unknown')}", flush=True)

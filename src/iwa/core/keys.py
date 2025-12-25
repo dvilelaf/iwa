@@ -112,7 +112,6 @@ class KeyStorage(BaseModel):
             except Exception as e:
                 logger.error(f"Failed to create master account: {e}")
 
-
     @property
     def master_account(self) -> EncryptedAccount:
         """Get the master account"""

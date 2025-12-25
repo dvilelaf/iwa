@@ -311,12 +311,16 @@ class CreateServiceModal(ModalScreen):
             staking_contract = self.query_one("#staking_select", Select).value
             if not name or chain == Select.BLANK:
                 return
-            self.dismiss({
-                "name": name,
-                "chain": chain,
-                "agent_type": agent_type if agent_type != Select.BLANK else "trader",
-                "staking_contract": staking_contract if staking_contract != Select.BLANK else None,
-            })
+            self.dismiss(
+                {
+                    "name": name,
+                    "chain": chain,
+                    "agent_type": agent_type if agent_type != Select.BLANK else "trader",
+                    "staking_contract": staking_contract
+                    if staking_contract != Select.BLANK
+                    else None,
+                }
+            )
         elif event.button.id == "cancel":
             self.dismiss(None)
 
@@ -391,10 +395,12 @@ class FundServiceModal(ModalScreen):
                 return
             if agent_amount <= 0 and safe_amount <= 0:
                 return
-            self.dismiss({
-                "service_key": self.service_key,
-                "agent_amount": agent_amount,
-                "safe_amount": safe_amount,
-            })
+            self.dismiss(
+                {
+                    "service_key": self.service_key,
+                    "agent_amount": agent_amount,
+                    "safe_amount": safe_amount,
+                }
+            )
         elif event.button.id == "cancel":
             self.dismiss(None)

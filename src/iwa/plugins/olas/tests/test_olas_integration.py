@@ -1,23 +1,27 @@
 """Integration tests for Olas plugin: importer, service manager, plugin, and TUI."""
 
-import pytest
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
+
+from iwa.plugins.olas.contracts.service import ServiceState
+from iwa.plugins.olas.contracts.staking import StakingState
+from iwa.plugins.olas.importer import DiscoveredKey, DiscoveredService, OlasServiceImporter
+from iwa.plugins.olas.models import Service, StakingStatus
 from iwa.plugins.olas.plugin import OlasPlugin
 from iwa.plugins.olas.service_manager import ServiceManager
-from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
-from iwa.plugins.olas.contracts.staking import StakingState
-from iwa.plugins.olas.contracts.service import ServiceState
-from iwa.plugins.olas.importer import OlasServiceImporter, DiscoveredService, DiscoveredKey
-from textual.app import App, ComposeResult
 from iwa.plugins.olas.tui.olas_view import OlasView
-from textual.containers import VerticalScroll
 
 VALID_ADDR = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 
+
 @pytest.fixture
 def mock_wallet():
+    """Mock wallet."""
     w = MagicMock()
     w.master_account.address = VALID_ADDR
     w.sign_and_send_transaction.return_value = (True, {"status": 1})
@@ -29,6 +33,7 @@ def mock_wallet():
 
 
 # === IMPORTER GAPS (lines 63-73, 114-115, 181-186, etc) ===
+
 
 def test_discovered_service_properties():
     """Cover DiscoveredService.agent_key and operator_key properties (lines 60-73)."""
@@ -70,10 +75,9 @@ def test_importer_parse_keys_json_variations(mock_wallet, tmp_path):
 
         # Valid array
         keys_file = tmp_path / "keys.json"
-        keys_file.write_text(json.dumps([
-            {"address": "abc123", "crypto": {}},
-            {"address": "0xdef456", "crypto": {}}
-        ]))
+        keys_file.write_text(
+            json.dumps([{"address": "abc123", "crypto": {}}, {"address": "0xdef456", "crypto": {}}])
+        )
         keys = importer._parse_keys_json(keys_file)
         assert len(keys) == 2
         assert keys[0].address == "0xabc123"  # 0x prefix added
@@ -98,9 +102,7 @@ def test_importer_parse_trader_runner_keys_json(mock_wallet, tmp_path):
         trader.mkdir()
         (trader / "service_id.txt").write_text("123")
         (trader / "service_safe_address.txt").write_text(VALID_ADDR)
-        (trader / "keys.json").write_text(json.dumps([
-            {"address": "0xkey1", "crypto": {}}
-        ]))
+        (trader / "keys.json").write_text(json.dumps([{"address": "0xkey1", "crypto": {}}]))
 
         services = importer.scan_directory(tmp_path)
         assert len(services) == 1
@@ -131,15 +133,12 @@ def test_importer_operate_wallets_only(mock_wallet, tmp_path):
         wallets.mkdir(parents=True)
 
         # ethereum.txt with valid plaintext key JSON
-        (wallets / "ethereum.txt").write_text(json.dumps({
-            "address": VALID_ADDR,
-            "private_key": "a" * 64
-        }))
+        (wallets / "ethereum.txt").write_text(
+            json.dumps({"address": VALID_ADDR, "private_key": "a" * 64})
+        )
 
         # ethereum.json with Safe info
-        (wallets / "ethereum.json").write_text(json.dumps({
-            "safes": {"gnosis": VALID_ADDR}
-        }))
+        (wallets / "ethereum.json").write_text(json.dumps({"safes": {"gnosis": VALID_ADDR}}))
 
         services = importer._parse_operate_format(operate)
         assert len(services) == 1
@@ -156,10 +155,9 @@ def test_importer_operate_ethereum_json_error(mock_wallet, tmp_path):
         wallets.mkdir(parents=True)
 
         # Valid key file
-        (wallets / "ethereum.txt").write_text(json.dumps({
-            "address": VALID_ADDR,
-            "private_key": "a" * 64
-        }))
+        (wallets / "ethereum.txt").write_text(
+            json.dumps({"address": VALID_ADDR, "private_key": "a" * 64})
+        )
 
         # Invalid JSON
         (wallets / "ethereum.json").write_text("{invalid")
@@ -228,12 +226,14 @@ def test_importer_import_service_key_errors(mock_wallet):
 
         # Key that needs password but none provided
         svc = DiscoveredService(service_name="t")
-        svc.keys.append(DiscoveredKey(
-            address=VALID_ADDR,
-            is_encrypted=True,
-            encrypted_keystore={"crypto": {}, "address": "abc"},
-            private_key=None
-        ))
+        svc.keys.append(
+            DiscoveredKey(
+                address=VALID_ADDR,
+                is_encrypted=True,
+                encrypted_keystore={"crypto": {}, "address": "abc"},
+                private_key=None,
+            )
+        )
 
         result = importer.import_service(svc, password=None)
         assert result.success is False or len(result.errors) > 0
@@ -262,7 +262,7 @@ def test_importer_generate_tag_collision(mock_wallet):
         # Pre-populate accounts with existing tags
         mock_wallet.key_storage.accounts = {
             "0x1": MagicMock(tag="svc_agent"),
-            "0x2": MagicMock(tag="svc_agent_2")
+            "0x2": MagicMock(tag="svc_agent_2"),
         }
 
         key = DiscoveredKey(address="0x3", role="agent")
@@ -297,11 +297,7 @@ def test_importer_import_service_config_duplicate(mock_wallet):
         # Replace the config instance
         importer.config = mock_config
 
-        svc = DiscoveredService(
-            service_name="t",
-            service_id=123,
-            chain_name="gnosis"
-        )
+        svc = DiscoveredService(service_name="t", service_id=123, chain_name="gnosis")
 
         success, msg = importer._import_service_config(svc)
         assert success is False
@@ -309,6 +305,7 @@ def test_importer_import_service_config_duplicate(mock_wallet):
 
 
 # === SERVICE MANAGER GAPS ===
+
 
 def test_sm_create_token_utility_missing(mock_wallet):
     """Cover create() with missing token utility (lines 204-206)."""
@@ -326,8 +323,7 @@ def test_sm_get_staking_status_staked_info_fail(mock_wallet):
     with patch("iwa.core.models.Config"):
         sm = ServiceManager(mock_wallet)
         sm.service = Service(
-            service_name="t", chain_name="gnosis",
-            service_id=1, staking_contract_address=VALID_ADDR
+            service_name="t", chain_name="gnosis", service_id=1, staking_contract_address=VALID_ADDR
         )
 
         mock_staking = MagicMock()
@@ -346,8 +342,7 @@ def test_sm_call_checkpoint_prepare_fail(mock_wallet):
     with patch("iwa.core.models.Config"):
         sm = ServiceManager(mock_wallet)
         sm.service = Service(
-            service_name="t", chain_name="gnosis",
-            service_id=1, staking_contract_address=VALID_ADDR
+            service_name="t", chain_name="gnosis", service_id=1, staking_contract_address=VALID_ADDR
         )
 
         mock_staking = MagicMock()
@@ -378,8 +373,10 @@ def test_sm_spin_up_activation_fail(mock_wallet):
         mock_reg = MagicMock()
         mock_reg.get_service.return_value = {"state": ServiceState.PRE_REGISTRATION}
 
-        with patch.object(sm, "registry", mock_reg), \
-             patch.object(sm, "activate_registration", return_value=False):
+        with (
+            patch.object(sm, "registry", mock_reg),
+            patch.object(sm, "activate_registration", return_value=False),
+        ):
             result = sm.spin_up()
             assert result is False
 
@@ -440,27 +437,26 @@ def test_sm_marketplace_mech_no_service(mock_wallet):
 
 # === PLUGIN GAPS ===
 
+
 def test_plugin_import_display_variants(mock_wallet):
     """Cover plugin import display paths (lines 141-166)."""
     import click
-    with patch("iwa.core.models.Config"), \
-         patch("iwa.plugins.olas.importer.OlasServiceImporter") as mock_imp, \
-         patch("rich.console.Console"), \
-         patch("typer.confirm", return_value=False):
 
+    with (
+        patch("iwa.core.models.Config"),
+        patch("iwa.plugins.olas.importer.OlasServiceImporter") as mock_imp,
+        patch("rich.console.Console"),
+        patch("typer.confirm", return_value=False),
+    ):
         # Service with various states
         svc = DiscoveredService(
             service_name="test",
             format="trader",
             source_folder=Path("/tmp"),
             chain_name="gnosis",
-            safe_address=VALID_ADDR
+            safe_address=VALID_ADDR,
         )
-        svc.keys.append(DiscoveredKey(
-            address=VALID_ADDR,
-            is_encrypted=True,
-            role="agent"
-        ))
+        svc.keys.append(DiscoveredKey(address=VALID_ADDR, is_encrypted=True, role="agent"))
 
         mock_imp.return_value.scan_directory.return_value = [svc]
 
@@ -490,13 +486,17 @@ def test_plugin_import_display_variants(mock_wallet):
 
 # === OLAS VIEW GAPS ===
 
+
 class OlasTestApp(App):
     """Test app to host OlasView."""
+
     def __init__(self, wallet=None):
+        """Initialize test app."""
         super().__init__()
         self.wallet = wallet
 
     def compose(self) -> ComposeResult:
+        """Compose layout."""
         yield VerticalScroll(OlasView(self.wallet), id="root-container")
 
 
@@ -505,7 +505,7 @@ async def test_view_button_handlers(mock_wallet):
     """Cover on_button_pressed handlers (lines 121-149)."""
     with patch("iwa.core.models.Config"):
         app = OlasTestApp(mock_wallet)
-        async with app.run_test() as pilot:
+        async with app.run_test():
             view = app.query_one(OlasView)
 
             # Test various button events
@@ -549,10 +549,7 @@ async def test_view_render_with_services(mock_wallet):
             view = app.query_one(OlasView)
 
             service = Service(
-                service_name="test",
-                chain_name="gnosis",
-                service_id=1,
-                multisig_address=VALID_ADDR
+                service_name="test", chain_name="gnosis", service_id=1, multisig_address=VALID_ADDR
             )
             status = StakingStatus(is_staked=False, staking_state="NOT_STAKED")
 

@@ -36,6 +36,17 @@ Abstraction layer for blockchain interactions via Web3.
 - Manages connection to RPC nodes.
 - Provides helper methods for balance checks, contract interaction, etc.
 
+### Web API (`iwa.web`)
+Modular Web API built with FastAPI.
+- **Routers**: Split into `accounts`, `transactions`, `olas`, `swap`, and `state` for modularity.
+- **Dependencies**: Centralized dependency injection for authentication and wallet access.
+
+### TUI (`iwa.tui`)
+Terminal User Interface built with Textual.
+- **Screens**: Dedicated screens for Wallet management (`WalletsScreen`).
+- **Widgets**: Reusable components like `AccountTable` and `ChainSelector` in `iwa.tui.widgets`.
+- **Workers**: Background workers for fetching balances (`fetch_all_balances`) and monitoring events.
+
 ## Transaction Flow
 
 1. **Preparation**: A high-level method (e.g., in `Wallet` or a Plugin) calls a contract wrapper to prepare a raw transaction dictionary (data, to, value, etc.).
@@ -78,6 +89,11 @@ just test
 just run wallet list --chain gnosis
 ```
 
+### Running TUI
+```bash
+just run tui
+```
+
 ### Docker
 ```bash
 just docker-build
@@ -91,4 +107,11 @@ Plugins are located in `src/iwa/plugins`. Currently supported:
 
 
 ## Documentation
-See `docs/` for more detailed documentation.
+Full documentation is available in the `docs/` directory and can be served locally:
+```bash
+mkdocs serve
+```
+Or built statically:
+```bash
+mkdocs build
+```

@@ -58,7 +58,7 @@ class RPCRateLimiter:
             timeout: Maximum time to wait for a token
 
         Returns:
-            True if token acquired, False if timeout
+            bool: True if token acquired, False if timeout occurred.
 
         """
         deadline = time.monotonic() + timeout
@@ -244,7 +244,12 @@ class SupportedChain(BaseModel):
 
     @property
     def rpc(self) -> str:
-        """Get the first RPC (primary)."""
+        """Get the primary RPC URL.
+
+        Returns:
+            str: The first RPC URL in the list, or empty string if none.
+
+        """
         return self.rpcs[0] if self.rpcs else ""
 
     def get_token_address(self, token_address_or_name: str) -> Optional[EthereumAddress]:
@@ -409,19 +414,25 @@ class ChainInterface:
         ]
         return any(signal in err_text for signal in server_error_signals)
 
-    def _handle_rpc_error(self, error: Exception) -> dict:
+    def _handle_rpc_error(self, error: Exception) -> Dict[str, Union[bool, int]]:
         """Handle RPC errors with smart rotation and retry logic.
 
+        Analyzes the exception to determine if it's a rate limit, connection,
+        or server error. Decides whether to rotate the RPC provider or back off.
+
+        Args:
+            error: The exception raised during the RPC call.
+
         Returns:
-            dict with keys:
-                - is_rate_limit: bool
-                - is_connection_error: bool
-                - is_server_error: bool
-                - rotated: bool (whether RPC was rotated)
-                - should_retry: bool
+            A dictionary containing:
+                - is_rate_limit (bool): True if error is 429/Rate Limit.
+                - is_connection_error (bool): True if network/connection related.
+                - is_server_error (bool): True if 5xx server error.
+                - rotated (bool): True if RPC rotation was performed.
+                - should_retry (bool): True if the operation should be retried.
 
         """
-        result = {
+        result: Dict[str, Union[bool, int]] = {
             "is_rate_limit": self._is_rate_limit_error(error),
             "is_connection_error": self._is_connection_error(error),
             "is_server_error": self._is_server_error(error),
@@ -517,26 +528,26 @@ class ChainInterface:
     def with_retry(
         self,
         operation: Callable[[], T],
-        max_retries: int = None,
+        max_retries: Optional[int] = None,
         operation_name: str = "operation",
     ) -> T:
         """Execute an operation with retry logic.
 
         Automatically handles:
-        - Rate limit errors (with backoff)
+        - Rate limit errors (with exponential backoff)
         - Connection errors (with RPC rotation)
-        - Server errors (with retry)
+        - Server errors (with standard retry)
 
         Args:
-            operation: Callable that performs the RPC operation
-            max_retries: Maximum retry attempts (default: DEFAULT_MAX_RETRIES)
-            operation_name: Name for logging purposes
+            operation: Callable that performs the RPC operation.
+            max_retries: Maximum retry attempts (default: DEFAULT_MAX_RETRIES).
+            operation_name: Name for logging purposes.
 
         Returns:
-            Result of the operation
+            The result of the operation.
 
         Raises:
-            Exception: If all retries exhausted
+            Exception: If all retries are exhausted.
 
         """
         if max_retries is None:
@@ -562,7 +573,10 @@ class ChainInterface:
                 )
                 time.sleep(delay)
 
-        raise last_error  # Should never reach here, but for type safety
+        if last_error:
+            raise last_error
+        # Fallback if loop finishes without error (should cover based on logic)
+        raise RuntimeError(f"{operation_name} failed unexpectedly")
 
     def is_contract(self, address: str) -> bool:
         """Check if address is a contract"""
@@ -626,19 +640,27 @@ class ChainInterface:
     # Use TransactionService.sign_and_send() instead, which handles signing internally
     # without exposing private keys.
 
-    def estimate_gas(self, built_method, tx_params) -> int:
+    def estimate_gas(self, built_method: Callable, tx_params: Dict[str, Union[str, int]]) -> int:
         """Estimate gas for a contract function call.
 
         For contract addresses (e.g., Safe multisigs), gas estimation cannot be done
         directly as the transaction will be executed by the Safe. Returns 0 in this case.
+
+        Args:
+            built_method: The web3 contract function to estimate gas for.
+            tx_params: Dictionary containing transaction parameters (from, value, etc.).
+
+        Returns:
+            int: Estimated gas limit or 0 if estimation is skipped.
+
         """
         from_address = tx_params["from"]
-        value = tx_params.get("value", 0)
+        value = int(tx_params.get("value", 0))  # Ensure value is int
 
-        if self.is_contract(from_address):
+        if self.is_contract(str(from_address)):
             # Cannot estimate gas for contract callers (e.g., Safe multisig)
             # The actual gas will be determined when the Safe executes the tx
-            logger.debug(f"Skipping gas estimation for contract caller {from_address[:10]}...")
+            logger.debug(f"Skipping gas estimation for contract caller {str(from_address)[:10]}...")
             return 0
 
         try:
@@ -650,8 +672,19 @@ class ChainInterface:
             # Return a reasonable default for most contract calls
             return 500_000
 
-    def calculate_transaction_params(self, built_method, tx_params) -> dict:
-        """Calculate transaction parameters for a contract function call."""
+    def calculate_transaction_params(
+        self, built_method: Callable, tx_params: Dict[str, Union[str, int]]
+    ) -> Dict[str, Union[str, int]]:
+        """Calculate transaction parameters for a contract function call.
+
+        Args:
+            built_method: The web3 contract function.
+            tx_params: Base transaction parameters.
+
+        Returns:
+            Dict containing full transaction parameters including nonce, gas, and gasPrice.
+
+        """
         params = {
             "from": tx_params["from"],
             "value": tx_params.get("value", 0),

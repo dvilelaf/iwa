@@ -160,7 +160,12 @@ class OrderType(Enum):
 
 
 class CowSwap:
-    """Simple CoW Swap integration using CoW Protocol's public API."""
+    """Simple CoW Swap integration using CoW Protocol's public API.
+
+    Handles token swaps on Gnosis Chain (and others) using CoW Protocol.
+    Uses lazy loading for `cowdao-cowpy` dependencies to improve startup time
+    and avoid asyncio conflicts during import.
+    """
 
     env: str = "prod"
 
@@ -191,8 +196,16 @@ class CowSwap:
 
     @staticmethod
     def check_cowswap_order(order: "CompletedOrder") -> bool:
-        """Check if a Cowswap order has been executed"""
-        logger.info("Checking order status")
+        """Check if a CowSwap order has been executed by polling the Explorer API.
+
+        Args:
+            order: The executed order object containing UID and URL.
+
+        Returns:
+            bool: True if order executed successfully, False if expired or timed out.
+
+        """
+        logger.info(f"Checking order status for UID: {order.uid}")
 
         max_retries = 8
         sleep_between_retries = 30
@@ -200,12 +213,12 @@ class CowSwap:
 
         while retries < max_retries:
             retries += 1
-
+            # ... (polling logic)
             response = requests.get(order.url, timeout=60)
 
             if response.status_code != HTTP_OK:
-                logger.info(
-                    f"Order is not ready yet: {response.status_code}. Checking again in {sleep_between_retries}s"
+                logger.debug(
+                    f"Order status check {retries}/{max_retries}: HTTP {response.status_code}. Retry in {sleep_between_retries}s"
                 )
                 time.sleep(sleep_between_retries)
                 continue
@@ -213,31 +226,31 @@ class CowSwap:
             order_data = response.json()
             status = order_data.get("status", "unknown")
             if status == "expired":
-                logger.error("Order has expired.")
+                logger.error("Order expired without execution.")
                 return False
 
             executed_sell = int(order_data.get("executedSellAmount", "0"))
             executed_buy = int(order_data.get("executedBuyAmount", "0"))
 
             if executed_sell > 0 or executed_buy > 0:
-                logger.info("Order executed")
+                logger.info("Order executed successfully.")
                 sell_price = order_data.get("quote", {}).get("sellTokenPrice", None)
                 buy_price = order_data.get("quote", {}).get("buyTokenPrice", None)
 
                 if sell_price is not None:
-                    logger.info(f"Sell price was ${float(sell_price):.2f}")
+                    logger.debug(f"Sell price: ${float(sell_price):.2f}")
 
                 if buy_price is not None:
-                    logger.info(f"Buy price was ${float(buy_price):.2f}")
+                    logger.debug(f"Buy price: ${float(buy_price):.2f}")
 
                 return True
 
             logger.info(
-                f"Order has not been executed yet. Checking again in {sleep_between_retries}s"
+                f"Order pending... ({retries}/{max_retries}). Retry in {sleep_between_retries}s"
             )
             time.sleep(sleep_between_retries)
 
-        logger.error("Max retries reached. Could not verify the order.")
+        logger.warning("Max retries reached. Order status unknown.")
         return False
 
     async def swap(
@@ -248,7 +261,19 @@ class CowSwap:
         safe_address: ChecksumAddress | None = None,
         order_type: OrderType = OrderType.SELL,
     ) -> bool:
-        """Swap tokens."""
+        """Execute a token swap on CoW Protocol.
+
+        Args:
+            amount_wei: Amount to swap in Wei.
+            sell_token_name: Symbol of token to sell.
+            buy_token_name: Symbol of token to buy.
+            safe_address: Optional address of Safe if this is a Multisig swap.
+            order_type: SELL or BUY.
+
+        Returns:
+            bool: True if swap initiated and verified successfully.
+
+        """
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
         if order_type == OrderType.BUY:
@@ -311,7 +336,23 @@ class CowSwap:
         env: "Envs" = "prod",
         slippage_tolerance: float = 0.005,
     ) -> int:
-        """Calculate the maximum sell amount needed to buy a fixed amount of tokens."""
+        """Calculate the estimated sell amount needed to buy a fixed amount of tokens.
+
+        Queries the CoW Protocol Order Book API for a quote.
+
+        Args:
+            amount_wei: Desired buy amount in Wei.
+            sell_token: Address of token to sell.
+            buy_token: Address of token to buy.
+            safe_address: Optional Safe address context.
+            app_data: Optional app data hash.
+            env: API environment ("prod" or "staging").
+            slippage_tolerance: Tolerance percentage (default 0.5%).
+
+        Returns:
+            int: Estimated sell amount in Wei (including slippage buffer).
+
+        """
         if app_data is None:
             app_data = _get_cowpy_module("DEFAULT_APP_DATA_HASH")
 
@@ -449,7 +490,28 @@ class CowSwap:
         slippage_tolerance: float = 0.005,
         partially_fillable: bool = False,
     ) -> "CompletedOrder":
-        """A modified version of cowdao_cowpy.cow.swap.swap_tokens to allow swapping to exact tokens."""
+        """Execute a 'Buy' order (Exact Output) on CoW Protocol.
+
+        This is a modified version of `cowdao_cowpy.cow.swap.swap_tokens` tailored
+        for 'Buy' orders where the buy amount is fixed and sell amount is estimated.
+
+        Args:
+            amount: Exact amount of tokens to buy in Wei.
+            account: The local account signing the order.
+            chain: The chain instance.
+            sell_token: Address of token to sell.
+            buy_token: Address of token to buy.
+            safe_address: Optional Safe address.
+            app_data: App data hash.
+            valid_to: Order expiration timestamp.
+            env: API environment.
+            slippage_tolerance: Slippage tolerance.
+            partially_fillable: Whether order can be partially filled.
+
+        Returns:
+            CompletedOrder: The created order with UID and explorer link.
+
+        """
         # Lazy imports
         if app_data is None:
             app_data = _get_cowpy_module("DEFAULT_APP_DATA_HASH")

@@ -1,8 +1,11 @@
 """Modal callback tests for OlasView."""
 
+from unittest.mock import MagicMock, PropertyMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+
 from iwa.plugins.olas.tui.olas_view import OlasView
+
 
 @pytest.mark.asyncio
 async def test_olas_view_modal_callbacks_full(mock_wallet):
@@ -32,12 +35,16 @@ async def test_olas_view_modal_callbacks_full(mock_wallet):
                     # Sub-case: created but deploy failed
                     mock_sm.spin_up.return_value = False
                     callback({"chain": "gnosis", "name": "test", "staking_contract": None})
-                    view.notify.assert_any_call("Service created (ID: 123) but deployment failed", severity="warning")
+                    view.notify.assert_any_call(
+                        "Service created (ID: 123) but deployment failed", severity="warning"
+                    )
 
                     # Sub-case: success with staking
                     mock_sm.spin_up.return_value = True
                     callback({"chain": "gnosis", "name": "test", "staking_contract": "0x1"})
-                    view.notify.assert_any_call("Service deployed and staked! ID: 123", severity="information")
+                    view.notify.assert_any_call(
+                        "Service deployed and staked! ID: 123", severity="information"
+                    )
 
                     # Sub-case: exception
                     mock_sm.create.side_effect = Exception("creation error")
@@ -65,7 +72,7 @@ async def test_olas_view_modal_callbacks_full(mock_wallet):
                                     "multisig_address": addr,
                                     "chain_name": "gnosis",
                                     "service_name": "test",
-                                    "service_id": 1
+                                    "service_id": 1,
                                 }
                             }
                         }
@@ -85,15 +92,24 @@ async def test_olas_view_modal_callbacks_full(mock_wallet):
 
             # 3. Stake Service callback
             view._chain = "gnosis"
-            with patch("iwa.plugins.olas.constants.OLAS_TRADER_STAKING_CONTRACTS", {"gnosis": {"test": "0x1"}}):
+            with patch(
+                "iwa.plugins.olas.constants.OLAS_TRADER_STAKING_CONTRACTS",
+                {"gnosis": {"test": "0x1"}},
+            ):
                 view.stake_service("gnosis:1")
                 assert mock_app.push_screen.called
                 args, kwargs = mock_app.push_screen.call_args
                 callback = kwargs.get("callback") or (args[1] if len(args) > 1 else None)
                 if callback:
-                    with patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_inner_cls, \
-                         patch("iwa.core.contracts.contract.ChainInterfaces") as mock_ci:
-                        mock_ci.get_instance.return_value.web3.eth.contract.return_value = MagicMock()
+                    with (
+                        patch(
+                            "iwa.plugins.olas.service_manager.ServiceManager"
+                        ) as mock_sm_inner_cls,
+                        patch("iwa.core.contracts.contract.ChainInterfaces") as mock_ci,
+                    ):
+                        mock_ci.get_instance.return_value.web3.eth.contract.return_value = (
+                            MagicMock()
+                        )
                         mock_sm_inner = mock_sm_inner_cls.return_value
                         mock_sm_inner.stake.return_value = True
                         try:

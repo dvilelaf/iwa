@@ -18,12 +18,22 @@ class ChainSelector(Horizontal):
     """Widget for selecting the active blockchain."""
 
     def __init__(self, active_chain: str = "gnosis", id: Optional[str] = None):
-        """Initialize ChainSelector."""
+        """Initialize ChainSelector.
+
+        Args:
+            active_chain: The chain to be selected by default.
+            id: The widget ID.
+
+        """
         super().__init__(id=id)
         self.active_chain = active_chain
 
     def compose(self) -> ComposeResult:
-        """Compose the widget."""
+        """Compose the widget.
+
+        Yields a Label and a Select widget populated with available chains.
+        Chains without RPC endpoints are disabled/struck-through.
+        """
         chain_options = []
         chain_names = ["gnosis", "ethereum", "base"]
 
@@ -49,7 +59,17 @@ class AccountTable(DataTable):
     """Table for displaying account addresses and balances."""
 
     def setup_columns(self, chain_name: str, native_symbol: str, token_names: List[str]):
-        """Setup table columns for the specified chain and tokens."""
+        """Setup table columns dynamically based on chain and token list.
+
+        Clears existing columns and adds new ones structure:
+        Tag | Address | Type | Native Symbol | Token 1 | Token 2 ...
+
+        Args:
+            chain_name: Name of the current chain (unused in col setup but contextually relevant).
+            native_symbol: Symbol of the native currency (e.g., ETH, xDAI).
+            token_names: List of additional token names/symbols to display.
+
+        """
         self.clear(columns=True)
         self.add_column("Tag", width=12)
         self.add_column("Address", width=44)

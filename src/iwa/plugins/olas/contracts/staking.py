@@ -37,11 +37,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
-
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.contracts.activity_checker import ActivityCheckerContract
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
+
+logger = logging.getLogger(__name__)
 
 
 class StakingState(Enum):
@@ -135,8 +135,12 @@ class StakingContract(ContractInstance):
         """
         result = self.call("getServiceInfo", service_id)
         # Handle potential nested tuple if web3 returns [(struct)]
-        if isinstance(result, (list, tuple)) and len(result) == 1 and isinstance(result[0], (list, tuple)):
-             result = result[0]
+        if (
+            isinstance(result, (list, tuple))
+            and len(result) == 1
+            and isinstance(result[0], (list, tuple))
+        ):
+            result = result[0]
 
         try:
             (
@@ -149,7 +153,9 @@ class StakingContract(ContractInstance):
             ) = result
         except ValueError as e:
             # Try to log useful info if unpacking fails
-            logger.error(f"[Staking] Unpacking failed. Result type: {type(result)}, Result: {result}")
+            logger.error(
+                f"[Staking] Unpacking failed. Result type: {type(result)}, Result: {result}"
+            )
             raise e
 
         # Get current nonces from activity checker: (safe_nonce, mech_requests)
@@ -218,8 +224,7 @@ class StakingContract(ContractInstance):
         )
 
         return math.ceil(
-            (time_diff * self.activity_checker.liveness_ratio) / 1e18
-            + requests_safety_margin
+            (time_diff * self.activity_checker.liveness_ratio) / 1e18 + requests_safety_margin
         )
 
     def is_liveness_ratio_passed(
@@ -257,9 +262,7 @@ class StakingContract(ContractInstance):
     def min_staking_duration(self) -> int:
         """Get the minimum duration a service must be staked before it can be unstaked."""
         if "minStakingDuration" not in self._contract_params_cache:
-            self._contract_params_cache["minStakingDuration"] = self.call(
-                "minStakingDuration"
-            )
+            self._contract_params_cache["minStakingDuration"] = self.call("minStakingDuration")
         return self._contract_params_cache["minStakingDuration"]
 
     def prepare_stake_tx(

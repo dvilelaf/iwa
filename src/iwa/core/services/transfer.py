@@ -568,7 +568,7 @@ class TransferService:
             token_symbol,
         )
 
-    def multi_send(
+    def multi_send(  # noqa: C901
         self,
         from_address_or_tag: str,
         transactions: list,
@@ -645,7 +645,7 @@ class TransferService:
                         from_address=from_account.address,
                         sender=from_account.address,
                         recipient=recipient_address,
-                        amount_wei=amount_wei
+                        amount_wei=amount_wei,
                     )
 
                 tx["to"] = erc20.address
@@ -936,11 +936,13 @@ class TransferService:
             if balance_wei and balance_wei > 0:
                 # Convert to ether for multi_send (which expects amount in ether)
                 amount_ether = chain_interface.web3.from_wei(balance_wei, "ether")
-                transactions.append({
-                    "to": to_address,
-                    "amount": float(amount_ether),
-                    "token": token_name,
-                })
+                transactions.append(
+                    {
+                        "to": to_address,
+                        "amount": float(amount_ether),
+                        "token": token_name,
+                    }
+                )
                 logger.info(f"Queued {amount_ether} {token_name} for drain.")
             else:
                 logger.debug(f"No {token_name} to drain on {from_address_or_tag}.")
@@ -961,11 +963,13 @@ class TransferService:
 
             if drainable_balance_wei > 0:
                 amount_ether = chain_interface.web3.from_wei(drainable_balance_wei, "ether")
-                transactions.append({
-                    "to": to_address,
-                    "amount": float(amount_ether),
-                    # No "token" key = native currency
-                })
+                transactions.append(
+                    {
+                        "to": to_address,
+                        "amount": float(amount_ether),
+                        # No "token" key = native currency
+                    }
+                )
                 logger.info(f"Queued {amount_ether} native for drain.")
             else:
                 logger.info(
@@ -976,7 +980,9 @@ class TransferService:
             logger.info(f"Nothing to drain from {from_address_or_tag}.")
             return
 
-        logger.info(f"Draining {len(transactions)} assets from {from_address_or_tag} to {to_address_or_tag}...")
+        logger.info(
+            f"Draining {len(transactions)} assets from {from_address_or_tag} to {to_address_or_tag}..."
+        )
         self.multi_send(
             from_address_or_tag=from_address_or_tag,
             transactions=transactions,

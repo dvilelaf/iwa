@@ -15,7 +15,11 @@ logger = configure_logger()
 
 
 class SafeMultisig:
-    """Class to interact with Gnosis Safe multisig wallets."""
+    """Class to interact with Gnosis Safe multisig wallets.
+
+    Wraps the `safe-eth-py` library to provide a simplified interface for
+    checking owners, thresholds, and building/sending multi-signature transactions.
+    """
 
     def __init__(self, safe_account: StoredSafeAccount, chain_name: str):
         """Initialize the SafeMultisig instance."""
@@ -57,7 +61,26 @@ class SafeMultisig:
         signatures: str = "",
         safe_nonce: Optional[int] = None,
     ) -> SafeTx:
-        """Build a Safe transaction without signing it."""
+        """Build a Safe transaction without signing it.
+
+        Args:
+            to: Destination address.
+            value: Value in Wei to transfer.
+            data: Hex data string (calldata).
+            operation: Operation type (0=Call, 1=DelegateCall).
+            safe_tx_gas: Gas that should be used for the Safe transaction.
+            base_gas: Gas costs for that are independent of the transaction execution
+                      (e.g. base transaction fee, signature check, payment of the refund).
+            gas_price: Gas price that should be used for the payment calculation.
+            gas_token: Token address (or 0 if ETH) that is used for the payment.
+            refund_receiver: Address of receiver of gas payment (or 0 if tx.origin).
+            signatures: Packed signature data (optional at build time).
+            safe_nonce: Nonce of the Safe transaction (optional, defaults to current).
+
+        Returns:
+            SafeTx: The constructed Safe transaction object.
+
+        """
         return self.multisig.build_multisig_tx(
             to,
             value,
@@ -87,10 +110,31 @@ class SafeMultisig:
         signatures: str = "",
         safe_nonce: Optional[int] = None,
     ) -> str:
-        """Build and execute a multisig transaction using provided signing callback.
+        """Build and execute a multisig transaction using a callback for signing/execution.
 
-        The callback receives a SafeTx object and should sign it, call() to verify,
-        execute it, and return the transaction hash.
+        This method:
+        1. Builds the `SafeTx` object.
+        2. Passes it to the `sign_and_execute_callback`.
+        3. Returns the resulting transaction hash.
+
+        Args:
+            sign_and_execute_callback: A function that accepts a `SafeTx`, signs it,
+                                       executes it, and returns the tx hash.
+            to: Destination address.
+            value: Value in Wei.
+            data: Calldata hex string.
+            operation: Operation type (Call/DelegateCall).
+            safe_tx_gas: Gas limit for the safe tx.
+            base_gas: Base gas cost.
+            gas_price: Gas price for refund.
+            gas_token: Gas token for refund.
+            refund_receiver: Refund receiver address.
+            signatures: Pre-existing signatures.
+            safe_nonce: Safe nonce.
+
+        Returns:
+            str: The executed transaction hash.
+
         """
         safe_tx = self.build_tx(
             to,

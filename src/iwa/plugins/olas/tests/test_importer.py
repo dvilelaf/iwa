@@ -1,13 +1,13 @@
 """Tests for Olas Service Importer."""
 
 import json
+from unittest.mock import patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 from eth_account import Account
 
-from iwa.plugins.olas.importer import OlasServiceImporter, DiscoveredService, DiscoveredKey
-from iwa.core.keys import KeyStorage
+from iwa.plugins.olas.importer import DiscoveredKey, DiscoveredService, OlasServiceImporter
+
 
 @pytest.fixture
 def temp_dirs(tmp_path):
@@ -23,7 +23,7 @@ def temp_dirs(tmp_path):
         "address": "78731d3ca6b7e34ac0f824c42a7cc18a495cabab",
         "crypto": {"cipher": "aes-128-ctr"},
         "id": "1",
-        "version": 3
+        "version": 3,
     }
     (tr_path / "agent_pkey.txt").write_text(json.dumps(keystore))
 
@@ -35,18 +35,12 @@ def temp_dirs(tmp_path):
 
     op_config = {
         "keys": [{"address": "0xAgent", "private_key": "0x123"}],
-        "chain_configs": {
-            "gnosis": {
-                "chain_data": {
-                    "token": 456,
-                    "multisig": "0xOpSafe"
-                }
-            }
-        }
+        "chain_configs": {"gnosis": {"chain_data": {"token": 456, "multisig": "0xOpSafe"}}},
     }
     (services_path / "config.json").write_text(json.dumps(op_config))
 
     return tmp_path
+
 
 @pytest.fixture
 def importer():
@@ -60,6 +54,7 @@ def importer():
             cfg = mock_cfg_cls.return_value
             cfg.plugins = {}
             return OlasServiceImporter(ks)
+
 
 def test_scan_directory(importer, temp_dirs):
     """Test scanning directory for services."""
@@ -79,20 +74,18 @@ def test_scan_directory(importer, temp_dirs):
     assert op_svc.safe_address == "0xOpSafe"
     assert op_svc.keys[0].address == "0xAgent"
 
+
 def test_decrypt_key(importer):
     """Test key decryption."""
     # Create mock encrypted key
-    keystore = Account.encrypt("0x" + "1"*64, "password")
-    key = DiscoveredKey(
-        address="0xAddr",
-        encrypted_keystore=keystore,
-        is_encrypted=True
-    )
+    keystore = Account.encrypt("0x" + "1" * 64, "password")
+    key = DiscoveredKey(address="0xAddr", encrypted_keystore=keystore, is_encrypted=True)
 
     success = importer.decrypt_key(key, "password")
     assert success
-    assert key.private_key == "1"*64
+    assert key.private_key == "1" * 64
     assert not key.is_encrypted
+
 
 def test_import_service_success(importer):
     """Test importing a discovered service."""
@@ -102,18 +95,20 @@ def test_import_service_success(importer):
         chain_name="gnosis",
         safe_address="0xSafe",
         keys=[
-            DiscoveredKey(address="0xAgent", private_key="1"*64, role="agent", is_encrypted=False)
-        ]
+            DiscoveredKey(address="0xAgent", private_key="1" * 64, role="agent", is_encrypted=False)
+        ],
     )
 
-    with patch.object(importer, "_import_key", return_value=(True, "ok")), \
-         patch.object(importer, "_import_safe", return_value=(True, "ok")), \
-         patch.object(importer, "_import_service_config", return_value=(True, "ok")):
-
+    with (
+        patch.object(importer, "_import_key", return_value=(True, "ok")),
+        patch.object(importer, "_import_safe", return_value=(True, "ok")),
+        patch.object(importer, "_import_service_config", return_value=(True, "ok")),
+    ):
         result = importer.import_service(service)
         assert result.success
         assert len(result.imported_keys) == 1
         assert "gnosis:789" in result.imported_services
+
 
 def test_parse_plaintext_key_file(importer, tmp_path):
     """Test parsing plaintext key file."""

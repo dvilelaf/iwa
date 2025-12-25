@@ -438,7 +438,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
         "state": ServiceState.DEPLOYED,
         "security_deposit": 50000000000000000000,
     }
-    mock_staking.get_service_ids.return_value = [0]*10
+    mock_staking.get_service_ids.return_value = [0] * 10
     assert manager.stake(mock_staking) is False
     mock_staking.get_service_ids.return_value = []
 

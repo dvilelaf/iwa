@@ -1,21 +1,26 @@
 """Tests for Olas Web API endpoints."""
 
-import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi.testclient import TestClient
+
 # We need to mock Wallet and ChainInterfaces BEFORE importing app from server
-with patch("iwa.core.wallet.Wallet"), \
-     patch("iwa.core.chain.ChainInterfaces"), \
-     patch("iwa.core.wallet.init_db"):
+with (
+    patch("iwa.core.wallet.Wallet"),
+    patch("iwa.core.chain.ChainInterfaces"),
+    patch("iwa.core.wallet.init_db"),
+):
     from iwa.web.server import app
 
-from iwa.plugins.olas.models import Service, OlasConfig, StakingStatus
+from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
+
 
 @pytest.fixture
 def client():
     """TestClient for FastAPI app."""
     return TestClient(app)
+
 
 @pytest.fixture
 def mock_olas_config():
@@ -27,9 +32,10 @@ def mock_olas_config():
         agent_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
         multisig_address="0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
         service_owner_address="0x1111111111111111111111111111111111111111",
-        staking_contract_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+        staking_contract_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
     )
     return OlasConfig(services={"gnosis:1": service})
+
 
 def test_get_olas_price(client):
     """Test /api/olas/price endpoint."""
@@ -39,14 +45,16 @@ def test_get_olas_price(client):
         assert response.status_code == 200
         assert response.json() == {"price_eur": 5.0, "symbol": "OLAS"}
 
+
 def test_get_olas_services_basic(client, mock_olas_config):
     """Test /api/olas/services/basic endpoint."""
-    with patch("iwa.core.models.Config") as mock_config_cls:
+    with patch("iwa.web.routers.olas.Config") as mock_config_cls:
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
 
         # Mock wallet.key_storage.find_stored_account
-        from iwa.web.server import wallet
+        from iwa.web.dependencies import wallet
+
         wallet.key_storage.find_stored_account.return_value = MagicMock(tag="test_tag")
 
         response = client.get("/api/olas/services/basic?chain=gnosis")
@@ -56,11 +64,13 @@ def test_get_olas_services_basic(client, mock_olas_config):
         assert data[0]["name"] == "Test Service"
         assert data[0]["accounts"]["agent"]["tag"] == "test_tag"
 
+
 def test_get_olas_service_details(client, mock_olas_config):
     """Test /api/olas/services/{service_key}/details endpoint."""
-    with patch("iwa.core.models.Config") as mock_config_cls, \
-         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls:
-
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
 
@@ -69,10 +79,11 @@ def test_get_olas_service_details(client, mock_olas_config):
             is_staked=True,
             staking_state="STAKED",
             accrued_reward_olas=10.5,
-            remaining_epoch_seconds=3600
+            remaining_epoch_seconds=3600,
         )
 
-        from iwa.web.server import wallet
+        from iwa.web.dependencies import wallet
+
         wallet.get_native_balance_eth.return_value = 1.0
         wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
         wallet.key_storage.find_stored_account.return_value = MagicMock(tag="test_tag")
@@ -84,21 +95,23 @@ def test_get_olas_service_details(client, mock_olas_config):
         assert data["staking"]["accrued_reward_olas"] == 10.5
         assert data["accounts"]["agent"]["native"] == "1.00"
 
+
 def test_get_olas_services_full(client, mock_olas_config):
     """Test /api/olas/services (full) endpoint."""
-    with patch("iwa.core.models.Config") as mock_config_cls, \
-         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls:
-
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
 
         mock_sm = mock_sm_cls.return_value
         mock_sm.get_staking_status.return_value = StakingStatus(
-            is_staked=True,
-            staking_state="STAKED"
+            is_staked=True, staking_state="STAKED"
         )
 
-        from iwa.web.server import wallet
+        from iwa.web.dependencies import wallet
+
         wallet.get_native_balance_eth.return_value = 1.0
         wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
 
@@ -108,11 +121,13 @@ def test_get_olas_services_full(client, mock_olas_config):
         assert len(data) == 1
         assert data[0]["staking"]["is_staked"] is True
 
+
 def test_olas_actions(client, mock_olas_config):
     """Test Olas action endpoints (claim, unstake, checkpoint)."""
-    with patch("iwa.core.models.Config") as mock_config_cls, \
-         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls:
-
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
 
@@ -122,13 +137,14 @@ def test_olas_actions(client, mock_olas_config):
         mock_sm.call_checkpoint.return_value = True
 
         # Mock StakingContract.from_address and ChainInterfaces
-        with patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls:
+        with patch("iwa.plugins.olas.contracts.staking.StakingContract"):
             from iwa.core.chain import ChainInterfaces
+
             # Properly access the return value of the mocked class singleton-like usage
             if hasattr(ChainInterfaces, "return_value"):
                 ChainInterfaces.return_value.get.return_value.chain = MagicMock()
 
-            mock_sc = mock_sc_cls.from_address.return_value
+            # mock_sc = mock_sc_cls.from_address.return_value
 
             # Claim
             response = client.post("/api/olas/claim/gnosis:1")

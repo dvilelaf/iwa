@@ -1,6 +1,5 @@
 """Wallets Screen for the IWA TUI."""
 
-import asyncio
 import datetime
 import json
 import time
@@ -26,8 +25,10 @@ from textual.widgets import (
     Select,
 )
 
+from iwa.tui.workers import MonitorWorker
+
 if TYPE_CHECKING:
-    from iwa.tui.app import IwaApp
+    pass
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.models import Config, StoredSafeAccount
@@ -42,40 +43,16 @@ from iwa.tui.widgets import AccountTable, ChainSelector, TransactionTable
 configure_logger()
 
 
-class MonitorWorker:
-    """Worker to run the EventMonitor."""
-
-    def __init__(self, monitor: EventMonitor, app: "IwaApp"):
-        """Initialize MonitorWorker."""
-        self.monitor = monitor
-        self.app = app
-        self._running = False
-
-    async def run(self):
-        """Run the monitor loop."""
-        self._running = True
-        self.monitor.running = True
-        logger.info(f"Starting MonitorWorker for {self.monitor.chain_name}")
-
-        while self._running:
-            try:
-                # Run check_activity in a thread to avoid blocking the async loop
-                # since web3 calls are synchronous
-                await asyncio.to_thread(self.monitor.check_activity)
-            except Exception as e:
-                logger.error(f"Error in MonitorWorker: {e}")
-
-            # Non-blocking sleep
-            await asyncio.sleep(6)
-
-    def stop(self):
-        """Stop the worker."""
-        self._running = False
-        self.monitor.stop()
-
-
 class WalletsScreen(VerticalScroll):
-    """View for managing wallets."""
+    """View for managing wallets (EOAs and Safes), viewing balances, and sending transactions.
+
+    This screen handles:
+    - Displaying account balances (native and tokens).
+    - Managing chain selection.
+    - Creating new accounts (EOA and Safe).
+    - Sending transactions.
+    - Monitoring transaction history.
+    """
 
     BINDINGS = [
         ("r", "refresh", "Refresh Balances"),
@@ -97,7 +74,11 @@ class WalletsScreen(VerticalScroll):
         self.price_service = PriceService()
 
     async def on_mount(self) -> None:
-        """Called when view is mounted."""
+        """Called when view is mounted.
+
+        Initializes UI state, loads accounts, starts the event monitor,
+        and sets up the transaction table columns.
+        """
         # Initialize UI state
         await self.refresh_ui_for_chain()
         self.refresh_accounts()
@@ -161,7 +142,12 @@ class WalletsScreen(VerticalScroll):
         self.refresh_accounts(force=True)
 
     def refresh_accounts(self, force: bool = False) -> None:
-        """Refreshes table data."""
+        """Refreshes table data.
+
+        Args:
+            force: If True, clears the local balance cache before refreshing.
+
+        """
         if force:
             if self.active_chain in self.balance_cache:
                 self.balance_cache[self.active_chain] = {}
@@ -265,7 +251,10 @@ class WalletsScreen(VerticalScroll):
 
     @work(exclusive=False, thread=True)
     def fetch_all_balances(self, chain_name: str, token_names: List[str]) -> None:
-        """Fetch all balances for the chain sequentially."""
+        """Fetch all balances for the chain sequentially in a background thread.
+
+        Iterates through all accounts and triggers fetch for native and token balances.
+        """
         accounts = list(self.wallet.account_service.get_account_data().values())
         for account in accounts:
             if self.active_chain != chain_name:

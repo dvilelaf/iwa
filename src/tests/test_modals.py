@@ -1,12 +1,11 @@
 """Tests for TUI modals to boost coverage."""
 
 import pytest
-from unittest.mock import MagicMock, patch
 from textual.app import App, ComposeResult
 from textual.containers import Container
 
-
 # === Modal compose tests - these test the UI rendering paths ===
+
 
 @pytest.mark.asyncio
 async def test_create_eoa_modal_compose():
@@ -76,9 +75,7 @@ async def test_create_service_modal_compose():
     chains = ["gnosis", "ethereum"]
     staking_contracts = [("Staking1", "0xabc")]
     modal = CreateServiceModal(
-        chains=chains,
-        default_chain="gnosis",
-        staking_contracts=staking_contracts
+        chains=chains, default_chain="gnosis", staking_contracts=staking_contracts
     )
 
     class TestApp(App):

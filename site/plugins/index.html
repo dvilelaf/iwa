@@ -561,6 +561,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#iwa.plugins.olas.plugin.OlasPlugin.get_tui_view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_tui_view
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iwa.plugins.olas.plugin.OlasPlugin.import_services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        import_services
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -783,6 +805,28 @@
     <span class="md-ellipsis">
       
         get_cli_commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iwa.plugins.olas.plugin.OlasPlugin.get_tui_view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_tui_view
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iwa.plugins.olas.plugin.OlasPlugin.import_services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        import_services
       
     </span>
   </a>
@@ -1257,37 +1301,244 @@
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/iwa/plugins/olas/plugin.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">14</span>
-<span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span>
-<span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OlasPlugin</span><span class="p">(</span><span class="n">Plugin</span><span class="p">):</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 15</span>
+<span class="normal"> 16</span>
+<span class="normal"> 17</span>
+<span class="normal"> 18</span>
+<span class="normal"> 19</span>
+<span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OlasPlugin</span><span class="p">(</span><span class="n">Plugin</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Olas Plugin.&quot;&quot;&quot;</span>
 
     <span class="nd">@property</span>
@@ -1304,7 +1555,14 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CLI commands.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_service</span><span class="p">,</span>
+            <span class="s2">&quot;import&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">import_services</span><span class="p">,</span>
         <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_tui_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wallet</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get TUI widget for this plugin.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">iwa.plugins.olas.tui.olas_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">OlasView</span>
+
+        <span class="k">return</span> <span class="n">OlasView</span><span class="p">(</span><span class="n">wallet</span><span class="o">=</span><span class="n">wallet</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1318,6 +1576,206 @@
         <span class="n">manager</span> <span class="o">=</span> <span class="n">ServiceManager</span><span class="p">(</span><span class="n">wallet</span><span class="p">)</span>
         <span class="c1"># Note: Manager logic currently depends on internal config state which might need setup</span>
         <span class="n">manager</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">chain_name</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">bond</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_safe_signers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">safe_address</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">chain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Query Safe signers on-chain.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (signers_list, safe_exists):</span>
+<span class="sd">            - (list, True) if Safe exists and query succeeds</span>
+<span class="sd">            - ([], False) if Safe doesn&#39;t exist on-chain</span>
+<span class="sd">            - (None, None) if RPC not configured (skip verification)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">safe_eth.eth</span><span class="w"> </span><span class="kn">import</span> <span class="n">EthereumClient</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">safe_eth.safe</span><span class="w"> </span><span class="kn">import</span> <span class="n">Safe</span>
+
+            <span class="kn">from</span><span class="w"> </span><span class="nn">iwa.core.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span>
+
+            <span class="n">rpc_secret</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">chain_name</span><span class="si">}</span><span class="s2">_rpc&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rpc_secret</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>  <span class="c1"># Can&#39;t verify, skip</span>
+
+            <span class="n">ethereum_client</span> <span class="o">=</span> <span class="n">EthereumClient</span><span class="p">(</span><span class="n">rpc_secret</span><span class="o">.</span><span class="n">get_secret_value</span><span class="p">())</span>
+            <span class="n">safe</span> <span class="o">=</span> <span class="n">Safe</span><span class="p">(</span><span class="n">safe_address</span><span class="p">,</span> <span class="n">ethereum_client</span><span class="p">)</span>
+            <span class="n">owners</span> <span class="o">=</span> <span class="n">safe</span><span class="o">.</span><span class="n">retrieve_owners</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">owners</span><span class="p">,</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="c1"># Query failed - Safe likely doesn&#39;t exist</span>
+            <span class="k">return</span> <span class="p">[],</span> <span class="kc">False</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">import_services</span><span class="p">(</span>  <span class="c1"># noqa: C901</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Argument</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory to scan for Olas services&quot;</span><span class="p">),</span>
+        <span class="n">dry_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+            <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;--dry-run&quot;</span><span class="p">,</span> <span class="s2">&quot;-n&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Show what would be imported without making changes&quot;</span>
+        <span class="p">),</span>
+        <span class="n">password</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+            <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;--password&quot;</span><span class="p">,</span> <span class="s2">&quot;-p&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Password for encrypted keys (will prompt if needed)&quot;</span>
+        <span class="p">),</span>
+        <span class="n">yes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+            <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;--yes&quot;</span><span class="p">,</span> <span class="s2">&quot;-y&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Import all without confirmation prompts&quot;</span>
+        <span class="p">),</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Import Olas services and keys from external directories.</span>
+
+<span class="sd">        Scans the given path recursively for Olas service directories in supported formats:</span>
+<span class="sd">        - .trader_runner (trader_alpha style)</span>
+<span class="sd">        - .operate (trader_xi style)</span>
+
+<span class="sd">        For each discovered service, imports:</span>
+<span class="sd">        - Agent private keys (re-encrypted with your wallet password)</span>
+<span class="sd">        - Operator/owner private keys</span>
+<span class="sd">        - Safe multisig accounts</span>
+<span class="sd">        - Service configuration to config.toml</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">rich.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">iwa.plugins.olas.importer</span><span class="w"> </span><span class="kn">import</span> <span class="n">OlasServiceImporter</span>
+
+        <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
+
+        <span class="c1"># Scan directory</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Scanning[/bold] </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+        <span class="n">importer</span> <span class="o">=</span> <span class="n">OlasServiceImporter</span><span class="p">()</span>
+        <span class="n">discovered</span> <span class="o">=</span> <span class="n">importer</span><span class="o">.</span><span class="n">scan_directory</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">discovered</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]No Olas services found.[/yellow]&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># Display discovered services</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold green]Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">discovered</span><span class="p">)</span><span class="si">}</span><span class="s2"> service(s):[/bold green]</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">service</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">discovered</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Service </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">service_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Unknown&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">show_header</span><span class="o">=</span><span class="kc">False</span>
+            <span class="p">)</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Property&quot;</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;cyan&quot;</span><span class="p">)</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Value&quot;</span><span class="p">)</span>
+
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">format</span><span class="p">)</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Source&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">service</span><span class="o">.</span><span class="n">source_folder</span><span class="p">))</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Service ID&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">service</span><span class="o">.</span><span class="n">service_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">service</span><span class="o">.</span><span class="n">service_id</span> <span class="k">else</span> <span class="s2">&quot;N/A&quot;</span><span class="p">)</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Chain&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">chain_name</span><span class="p">)</span>
+
+            <span class="c1"># Verify Safe exists on-chain and get signers</span>
+            <span class="n">on_chain_signers</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">safe_exists</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">:</span>
+                <span class="n">on_chain_signers</span><span class="p">,</span> <span class="n">safe_exists</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_safe_signers</span><span class="p">(</span>
+                    <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">chain_name</span>
+                <span class="p">)</span>
+
+                <span class="c1"># Display Safe with warning if it doesn&#39;t exist</span>
+                <span class="k">if</span> <span class="n">safe_exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">safe_exists</span><span class="p">:</span>
+                    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="si">}</span><span class="s2"> [green]✓[/green]&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span>
+                        <span class="s2">&quot;Safe&quot;</span><span class="p">,</span>
+                        <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="si">}</span><span class="s2"> - DOES NOT EXIST ON-CHAIN![/bold red]&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="s2">&quot;N/A&quot;</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">service</span><span class="o">.</span><span class="n">keys</span><span class="p">:</span>
+                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;🔒 encrypted&quot;</span> <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">is_encrypted</span> <span class="k">else</span> <span class="s2">&quot;🔓 plaintext&quot;</span>
+                <span class="n">key_info</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span>
+
+                <span class="c1"># Check if agent is actually a signer of the Safe</span>
+                <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;agent&quot;</span> <span class="ow">and</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">safe_exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="c1"># Could not verify (no RPC)</span>
+                        <span class="k">pass</span>  <span class="c1"># Keep normal display</span>
+                    <span class="k">elif</span> <span class="ow">not</span> <span class="n">safe_exists</span><span class="p">:</span>
+                        <span class="c1"># Safe doesn&#39;t exist, so agent can&#39;t be a signer</span>
+                        <span class="n">key_info</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> - NOT A SIGNER OF THE SAFE![/bold red]&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">on_chain_signers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">is_signer</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">on_chain_signers</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_signer</span><span class="p">:</span>
+                            <span class="n">key_info</span> <span class="o">=</span> <span class="p">(</span>
+                                <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> - NOT A SIGNER OF THE SAFE![/bold red]&quot;</span>
+                            <span class="p">)</span>
+
+                <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Key (</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">role</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">key_info</span><span class="p">)</span>
+
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">dry_run</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]Dry run mode - no changes made.[/yellow]&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># Confirm import</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">yes</span><span class="p">:</span>
+            <span class="n">confirm</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">confirm</span><span class="p">(</span><span class="s2">&quot;Import these services?&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">confirm</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]Aborted.[/yellow]&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># Check if we need a password for encrypted keys</span>
+        <span class="n">needs_password</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">key</span><span class="o">.</span><span class="n">is_encrypted</span> <span class="k">for</span> <span class="n">service</span> <span class="ow">in</span> <span class="n">discovered</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">service</span><span class="o">.</span><span class="n">keys</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">needs_password</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">password</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[yellow]Some keys are encrypted. Please enter the source password.[/yellow]&quot;</span>
+            <span class="p">)</span>
+            <span class="n">password</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s2">&quot;Password&quot;</span><span class="p">,</span> <span class="n">hide_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Import each service</span>
+        <span class="n">total_keys</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">total_safes</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">total_services</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">all_skipped</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_errors</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">service</span> <span class="ow">in</span> <span class="n">discovered</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Importing[/bold] </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">service_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">service</span><span class="o">.</span><span class="n">source_folder</span><span class="si">}</span><span class="s2">...&quot;</span>
+            <span class="p">)</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">importer</span><span class="o">.</span><span class="n">import_service</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+
+            <span class="n">total_keys</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">)</span>
+            <span class="n">total_safes</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">)</span>
+            <span class="n">total_services</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">)</span>
+            <span class="n">all_skipped</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">)</span>
+            <span class="n">all_errors</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported keys: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported safes: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported services: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">:</span>
+                    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [yellow]⊘[/yellow] Skipped: </span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+                    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [red]✗[/red] Error: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Summary</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Summary:[/bold]&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Keys imported: </span><span class="si">{</span><span class="n">total_keys</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Safes imported: </span><span class="si">{</span><span class="n">total_safes</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Services imported: </span><span class="si">{</span><span class="n">total_services</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">all_skipped</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Skipped: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_skipped</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">all_errors</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [red]Errors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_errors</span><span class="p">)</span><span class="si">}</span><span class="s2">[/red]&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1394,18 +1852,18 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/iwa/plugins/olas/plugin.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
-<span class="normal">44</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span>
+<span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">chain_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="s2">&quot;gnosis&quot;</span><span class="p">,</span> <span class="s2">&quot;--chain&quot;</span><span class="p">,</span> <span class="s2">&quot;-c&quot;</span><span class="p">),</span>
     <span class="n">owner</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;--owner&quot;</span><span class="p">,</span> <span class="s2">&quot;-o&quot;</span><span class="p">),</span>
@@ -1439,15 +1897,419 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/iwa/plugins/olas/plugin.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">27</span>
-<span class="normal">28</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">28</span>
 <span class="normal">29</span>
 <span class="normal">30</span>
-<span class="normal">31</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_cli_commands</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">callable</span><span class="p">]:</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
+<span class="normal">33</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_cli_commands</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">callable</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get CLI commands.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_service</span><span class="p">,</span>
+        <span class="s2">&quot;import&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">import_services</span><span class="p">,</span>
     <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="iwa.plugins.olas.plugin.OlasPlugin.get_tui_view" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_tui_view</span><span class="p">(</span><span class="n">wallet</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get TUI widget for this plugin.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/iwa/plugins/olas/plugin.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_tui_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wallet</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get TUI widget for this plugin.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">iwa.plugins.olas.tui.olas_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">OlasView</span>
+
+    <span class="k">return</span> <span class="n">OlasView</span><span class="p">(</span><span class="n">wallet</span><span class="o">=</span><span class="n">wallet</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="iwa.plugins.olas.plugin.OlasPlugin.import_services" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">import_services</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">typer</span><span class="o">.</span><span class="n">Argument</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Directory to scan for Olas services&#39;</span><span class="p">),</span> <span class="n">dry_run</span><span class="o">=</span><span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;--dry-run&#39;</span><span class="p">,</span> <span class="s1">&#39;-n&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Show what would be imported without making changes&#39;</span><span class="p">),</span> <span class="n">password</span><span class="o">=</span><span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;--password&#39;</span><span class="p">,</span> <span class="s1">&#39;-p&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Password for encrypted keys (will prompt if needed)&#39;</span><span class="p">),</span> <span class="n">yes</span><span class="o">=</span><span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;--yes&#39;</span><span class="p">,</span> <span class="s1">&#39;-y&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Import all without confirmation prompts&#39;</span><span class="p">))</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Import Olas services and keys from external directories.</p>
+<p>Scans the given path recursively for Olas service directories in supported formats:
+- .trader_runner (trader_alpha style)
+- .operate (trader_xi style)</p>
+<p>For each discovered service, imports:
+- Agent private keys (re-encrypted with your wallet password)
+- Operator/owner private keys
+- Safe multisig accounts
+- Service configuration to config.toml</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/iwa/plugins/olas/plugin.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">import_services</span><span class="p">(</span>  <span class="c1"># noqa: C901</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Argument</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory to scan for Olas services&quot;</span><span class="p">),</span>
+    <span class="n">dry_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+        <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;--dry-run&quot;</span><span class="p">,</span> <span class="s2">&quot;-n&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Show what would be imported without making changes&quot;</span>
+    <span class="p">),</span>
+    <span class="n">password</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+        <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;--password&quot;</span><span class="p">,</span> <span class="s2">&quot;-p&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Password for encrypted keys (will prompt if needed)&quot;</span>
+    <span class="p">),</span>
+    <span class="n">yes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span>
+        <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;--yes&quot;</span><span class="p">,</span> <span class="s2">&quot;-y&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Import all without confirmation prompts&quot;</span>
+    <span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import Olas services and keys from external directories.</span>
+
+<span class="sd">    Scans the given path recursively for Olas service directories in supported formats:</span>
+<span class="sd">    - .trader_runner (trader_alpha style)</span>
+<span class="sd">    - .operate (trader_xi style)</span>
+
+<span class="sd">    For each discovered service, imports:</span>
+<span class="sd">    - Agent private keys (re-encrypted with your wallet password)</span>
+<span class="sd">    - Operator/owner private keys</span>
+<span class="sd">    - Safe multisig accounts</span>
+<span class="sd">    - Service configuration to config.toml</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">rich.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">iwa.plugins.olas.importer</span><span class="w"> </span><span class="kn">import</span> <span class="n">OlasServiceImporter</span>
+
+    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
+
+    <span class="c1"># Scan directory</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Scanning[/bold] </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+    <span class="n">importer</span> <span class="o">=</span> <span class="n">OlasServiceImporter</span><span class="p">()</span>
+    <span class="n">discovered</span> <span class="o">=</span> <span class="n">importer</span><span class="o">.</span><span class="n">scan_directory</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">discovered</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]No Olas services found.[/yellow]&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Display discovered services</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold green]Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">discovered</span><span class="p">)</span><span class="si">}</span><span class="s2"> service(s):[/bold green]</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">service</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">discovered</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span>
+            <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Service </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">service_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Unknown&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">show_header</span><span class="o">=</span><span class="kc">False</span>
+        <span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Property&quot;</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;cyan&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Value&quot;</span><span class="p">)</span>
+
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">format</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Source&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">service</span><span class="o">.</span><span class="n">source_folder</span><span class="p">))</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Service ID&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">service</span><span class="o">.</span><span class="n">service_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">service</span><span class="o">.</span><span class="n">service_id</span> <span class="k">else</span> <span class="s2">&quot;N/A&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Chain&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">chain_name</span><span class="p">)</span>
+
+        <span class="c1"># Verify Safe exists on-chain and get signers</span>
+        <span class="n">on_chain_signers</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">safe_exists</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">:</span>
+            <span class="n">on_chain_signers</span><span class="p">,</span> <span class="n">safe_exists</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_safe_signers</span><span class="p">(</span>
+                <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">chain_name</span>
+            <span class="p">)</span>
+
+            <span class="c1"># Display Safe with warning if it doesn&#39;t exist</span>
+            <span class="k">if</span> <span class="n">safe_exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">safe_exists</span><span class="p">:</span>
+                <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="si">}</span><span class="s2"> [green]✓[/green]&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span>
+                    <span class="s2">&quot;Safe&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="si">}</span><span class="s2"> - DOES NOT EXIST ON-CHAIN![/bold red]&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Safe&quot;</span><span class="p">,</span> <span class="s2">&quot;N/A&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">service</span><span class="o">.</span><span class="n">keys</span><span class="p">:</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;🔒 encrypted&quot;</span> <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">is_encrypted</span> <span class="k">else</span> <span class="s2">&quot;🔓 plaintext&quot;</span>
+            <span class="n">key_info</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span>
+
+            <span class="c1"># Check if agent is actually a signer of the Safe</span>
+            <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">role</span> <span class="o">==</span> <span class="s2">&quot;agent&quot;</span> <span class="ow">and</span> <span class="n">service</span><span class="o">.</span><span class="n">safe_address</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">safe_exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="c1"># Could not verify (no RPC)</span>
+                    <span class="k">pass</span>  <span class="c1"># Keep normal display</span>
+                <span class="k">elif</span> <span class="ow">not</span> <span class="n">safe_exists</span><span class="p">:</span>
+                    <span class="c1"># Safe doesn&#39;t exist, so agent can&#39;t be a signer</span>
+                    <span class="n">key_info</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> - NOT A SIGNER OF THE SAFE![/bold red]&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">on_chain_signers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">is_signer</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">on_chain_signers</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_signer</span><span class="p">:</span>
+                        <span class="n">key_info</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;[bold red]⚠ </span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">address</span><span class="si">}</span><span class="s2"> - NOT A SIGNER OF THE SAFE![/bold red]&quot;</span>
+                        <span class="p">)</span>
+
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Key (</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">role</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">key_info</span><span class="p">)</span>
+
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">dry_run</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]Dry run mode - no changes made.[/yellow]&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Confirm import</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">yes</span><span class="p">:</span>
+        <span class="n">confirm</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">confirm</span><span class="p">(</span><span class="s2">&quot;Import these services?&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">confirm</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;[yellow]Aborted.[/yellow]&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Check if we need a password for encrypted keys</span>
+    <span class="n">needs_password</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">key</span><span class="o">.</span><span class="n">is_encrypted</span> <span class="k">for</span> <span class="n">service</span> <span class="ow">in</span> <span class="n">discovered</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">service</span><span class="o">.</span><span class="n">keys</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">needs_password</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">password</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[yellow]Some keys are encrypted. Please enter the source password.[/yellow]&quot;</span>
+        <span class="p">)</span>
+        <span class="n">password</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s2">&quot;Password&quot;</span><span class="p">,</span> <span class="n">hide_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Import each service</span>
+    <span class="n">total_keys</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_safes</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">total_services</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">all_skipped</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">all_errors</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">service</span> <span class="ow">in</span> <span class="n">discovered</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Importing[/bold] </span><span class="si">{</span><span class="n">service</span><span class="o">.</span><span class="n">service_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">service</span><span class="o">.</span><span class="n">source_folder</span><span class="si">}</span><span class="s2">...&quot;</span>
+        <span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">importer</span><span class="o">.</span><span class="n">import_service</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+
+        <span class="n">total_keys</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">)</span>
+        <span class="n">total_safes</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">)</span>
+        <span class="n">total_services</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">)</span>
+        <span class="n">all_skipped</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">)</span>
+        <span class="n">all_errors</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported keys: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_keys</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported safes: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_safes</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">:</span>
+            <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;  [green]✓[/green] Imported services: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">imported_services</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">skipped</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [yellow]⊘[/yellow] Skipped: </span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [red]✗[/red] Error: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Summary</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[bold]Summary:[/bold]&quot;</span><span class="p">)</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Keys imported: </span><span class="si">{</span><span class="n">total_keys</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Safes imported: </span><span class="si">{</span><span class="n">total_safes</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Services imported: </span><span class="si">{</span><span class="n">total_services</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">all_skipped</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Skipped: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_skipped</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">all_errors</span><span class="p">:</span>
+        <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [red]Errors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_errors</span><span class="p">)</span><span class="si">}</span><span class="s2">[/red]&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">typer</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
