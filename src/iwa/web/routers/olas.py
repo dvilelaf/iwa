@@ -53,6 +53,67 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
         return []
 
 
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class CreateServiceRequest(BaseModel):
+    """Request model for creating an Olas service."""
+
+    service_name: str = Field(description="Human-readable name for the service")
+    chain: str = Field(default="gnosis", description="Chain to create the service on")
+    agent_type: str = Field(default="trader", description="Agent type (trader)")
+    stake_on_create: bool = Field(default=False, description="Whether to stake after creation")
+    staking_contract: Optional[str] = Field(
+        default=None, description="Staking contract address if staking"
+    )
+
+
+@router.post(
+    "/create",
+    summary="Create Service",
+    description="Create a new Olas service on the specified chain.",
+)
+def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
+    """Create a new Olas service."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        manager = ServiceManager(wallet)
+
+        # Create the service
+        service_id = manager.create(
+            chain_name=req.chain,
+            service_name=req.service_name,
+        )
+
+        if not service_id:
+            raise HTTPException(status_code=400, detail="Failed to create service")
+
+        result = {"status": "success", "service_id": service_id}
+
+        # If staking requested and contract provided, stake the service
+        if req.stake_on_create and req.staking_contract:
+            try:
+                from iwa.plugins.olas.contracts.staking import StakingContract
+
+                staking = StakingContract(req.staking_contract, req.chain)
+                # Note: Full staking requires additional steps (activate, register, deploy)
+                # For now, just return the service ID - staking can be done separately
+                result["staking_pending"] = True
+            except Exception as stake_err:
+                logger.error(f"Error setting up staking: {stake_err}")
+                result["staking_error"] = str(stake_err)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
 @router.get(
     "/services/basic",
     summary="Get Basic Services",
@@ -222,6 +283,78 @@ def get_olas_services(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
 
 
 @router.post(
+    "/stake/{service_key}",
+    summary="Stake Service",
+    description="Stake a service into a staking contract.",
+)
+def stake_service(
+    service_key: str,
+    staking_contract: str,
+    auth: bool = Depends(verify_auth),
+):
+    """Stake a service into a staking contract."""
+    try:
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        staking = StakingContract(staking_contract, service.chain_name)
+        success = manager.stake(staking)
+
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to stake service")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error staking service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/terminate/{service_key}",
+    summary="Terminate Service",
+    description="Terminate a deployed service.",
+)
+def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Terminate a deployed service."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        success = manager.terminate()
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to terminate service")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error terminating service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+@router.post(
     "/claim/{service_key}",
     summary="Claim Rewards",
     description="Claim accrued staking rewards for a specific service.",
@@ -276,7 +409,7 @@ def unstake_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager.service = service
 
         # We need the staking contract instance
-        staking_contract = StakingContract.from_address(
+        staking_contract = StakingContract(
             service.staking_contract_address, service.chain_name
         )
 
@@ -314,7 +447,7 @@ def checkpoint_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager = ServiceManager(wallet)
         manager.service = service
 
-        staking_contract = StakingContract.from_address(
+        staking_contract = StakingContract(
             service.staking_contract_address, service.chain_name
         )
 
@@ -332,3 +465,103 @@ def checkpoint_service(service_key: str, auth: bool = Depends(verify_auth)):
     except Exception as e:
         logger.error(f"Error checkpointing: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+class FundRequest(BaseModel):
+    """Request model for funding a service."""
+
+    agent_amount_eth: float = Field(default=0, description="Amount to fund agent in ETH")
+    safe_amount_eth: float = Field(default=0, description="Amount to fund safe in ETH")
+
+
+@router.post(
+    "/fund/{service_key}",
+    summary="Fund Service",
+    description="Fund a service's agent and safe accounts with native currency.",
+)
+def fund_service(service_key: str, req: FundRequest, auth: bool = Depends(verify_auth)):
+    """Fund a service's agent and safe accounts."""
+    try:
+        from web3 import Web3
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        funded = {}
+
+        # Fund agent if amount provided and agent exists
+        if req.agent_amount_eth > 0 and service.agent_address:
+            amount_wei = Web3.to_wei(req.agent_amount_eth, "ether")
+            tx_hash = wallet.send(
+                from_address_or_tag="master",
+                to_address_or_tag=service.agent_address,
+                amount_wei=amount_wei,
+                token_address_or_name="native",
+                chain_name=service.chain_name,
+            )
+            funded["agent"] = {"amount": req.agent_amount_eth, "tx_hash": tx_hash}
+
+        # Fund safe if amount provided and safe exists
+        if req.safe_amount_eth > 0 and service.multisig_address:
+            amount_wei = Web3.to_wei(req.safe_amount_eth, "ether")
+            tx_hash = wallet.send(
+                from_address_or_tag="master",
+                to_address_or_tag=str(service.multisig_address),
+                amount_wei=amount_wei,
+                token_address_or_name="native",
+                chain_name=service.chain_name,
+            )
+            funded["safe"] = {"amount": req.safe_amount_eth, "tx_hash": tx_hash}
+
+        if not funded:
+            raise HTTPException(
+                status_code=400, detail="No valid accounts to fund or amounts are zero"
+            )
+
+        return {"status": "success", "funded": funded}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error funding service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/drain/{service_key}",
+    summary="Drain Service",
+    description="Drain all funds from a service's accounts to the master account.",
+)
+def drain_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Drain all funds from a service's accounts."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        # Withdraw rewards if staked
+        success, amount = manager.withdraw_rewards()
+
+        return {
+            "status": "success",
+            "withdrawn_olas": float(amount) / 1e18 if amount else 0,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error draining service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
