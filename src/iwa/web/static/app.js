@@ -1321,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="staking-row">
                         <span class="label">Status:</span>
                         <span class="value ${isLoading ? '' : (isStaked ? 'staked' : 'not-staked')}">
-                            ${isLoading ? '<span class="cell-spinner"></span>' : (isStaked ? '✓ STAKED' : '○ NOT STAKED')}
+                            ${isLoading ? '<span class="cell-spinner"></span>' : (service.state ? service.state : (isStaked ? '✓ STAKED' : '○ NOT STAKED'))}
                         </span>
                     </div>
                     <div class="staking-row">
@@ -1411,34 +1411,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                         `;
                 })()}
-                    ` : `
+                    ` : (service.state === 'DEPLOYED' ? `
                         <button class="btn-danger btn-sm" onclick="showStakeModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
                             Stake
                         </button>
-                    `}
-                ${(() => {
+                    ` : '')}
+                ${service.state !== 'PRE_REGISTRATION' ? (() => {
+                // Terminate button - now uses wind_down which handles unstake automatically
+                // Only show if service is not in PRE_REGISTRATION (nothing to wind down)
                 const terminateLabel = 'Terminate';
                 let terminateDisabled = isLoading ? 'disabled' : '';
                 let terminateStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
-                let terminateTitle = isLoading ? 'Loading...' : 'Terminate Service';
+                let terminateTitle = 'Wind down service: unstake (if staked) → terminate → unbond';
 
-                if (isStaked && !isLoading) {
-                    terminateDisabled = 'disabled';
-                    terminateStyle = 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);';
-
-                    // Calculate countdown if staked
-                    if (staking.unstake_available_at) {
-                        const diffMs = new Date(staking.unstake_available_at) - new Date();
-                        if (diffMs > 0) {
-                            const diffMins = Math.ceil(diffMs / 60000);
-                            const timeText = diffMins > 60 ? `~${Math.ceil(diffMins / 60)}h` : `${diffMins}m`;
-                            terminateTitle = `Cannot terminate while staked. Unstake available in ${timeText}.`;
-                        } else {
-                            terminateTitle = 'Service is staked. You must unstake before terminating.';
-                        }
-                    } else {
-                        terminateTitle = 'Service is staked. You must unstake before terminating.';
-                    }
+                if (isLoading) {
+                    terminateTitle = 'Loading...';
                 }
 
                 return `
@@ -1448,14 +1435,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${escapeHtml(terminateLabel)}
                         </button>
                     `;
-            })()}
+            })() : ''}
             ${(() => {
                 const drainLabel = 'Drain';
                 let drainDisabled = isLoading ? 'disabled' : '';
                 let drainStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
                 let drainTitle = isLoading ? 'Loading...' : 'Drain all service funds to master account';
 
-                if (isStaked && !isLoading) {
+                // Check if there's anything to drain (Agent or Safe have non-zero balance)
+                const agentBalance = service.accounts?.agent ?
+                    (parseFloat(service.accounts.agent.native) || 0) + (parseFloat(service.accounts.agent.olas) || 0) : 0;
+                const safeBalance = service.accounts?.safe ?
+                    (parseFloat(service.accounts.safe.native) || 0) + (parseFloat(service.accounts.safe.olas) || 0) : 0;
+                const hasBalanceToDrain = agentBalance > 0 || safeBalance > 0;
+
+                if (!hasBalanceToDrain && !isLoading) {
+                    drainDisabled = 'disabled';
+                    drainStyle = 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);';
+                    drainTitle = 'Nothing to drain (Agent and Safe have zero balance)';
+                } else if (isStaked && !isLoading) {
                     // Check if we can unstake yet
                     const canUnstake = !staking.unstake_available_at || new Date() >= new Date(staking.unstake_available_at);
                     if (!canUnstake) {
@@ -1714,6 +1712,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeCreateServiceModal = document.getElementById('close-create-service-modal');
     const createServiceForm = document.getElementById('create-service-form');
 
+    // Helper to render contract options
+    function renderContractOptions(contracts) {
+        if (!contracts.length) return '<option value="">No contracts available</option>';
+
+        return '<option value="">None (don\'t stake)</option>' +
+            contracts.map(c => {
+                let label = escapeHtml(c.name);
+                let disabled = '';
+
+                if (c.usage) {
+                    label += ` (${c.usage.used}/${c.usage.max})`;
+                    if (!c.usage.available) {
+                        label += ' (Full)';
+                        disabled = 'disabled';
+                    }
+                }
+
+                return `<option value="${escapeHtml(c.address)}" ${disabled}>${label}</option>`;
+            }).join('');
+    }
+
     if (createServiceBtn) {
         createServiceBtn.addEventListener('click', () => {
             createServiceModal.classList.add('active');
@@ -1721,8 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const contractSelect = document.getElementById('new-service-staking-contract');
             const spinnerDiv = document.getElementById('staking-contract-spinner');
             if (state.stakingContractsCache) {
-                contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
-                    state.stakingContractsCache.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+                contractSelect.innerHTML = renderContractOptions(state.stakingContractsCache);
                 contractSelect.style.display = '';
                 spinnerDiv.style.display = 'none';
             } else {
@@ -1735,8 +1753,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .then(resp => resp.json())
                     .then(contracts => {
                         state.stakingContractsCache = contracts;
-                        contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
-                            contracts.map(c => `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`).join('');
+                        contractSelect.innerHTML = renderContractOptions(contracts);
                         contractSelect.style.display = '';
                         spinnerDiv.style.display = 'none';
                         submitBtn.disabled = false;
@@ -1762,7 +1779,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const btn = createServiceForm.querySelector('button[type="submit"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating...';
+            btn.innerHTML = '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating & Deploying...';
             btn.disabled = true;
 
             const stakingContract = document.getElementById('new-service-staking-contract').value;
@@ -1847,7 +1864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (resp.ok) {
                     const fundedAccounts = Object.keys(result.funded || {});
                     showToast(`Funded ${fundedAccounts.join(', ')}!`, 'success');
-                    refreshSingleService(confirmServiceKey);
+                    refreshSingleService(serviceKey);
                 } else {
                     showToast(`Error: ${result.detail}`, 'error');
                 }

@@ -44,10 +44,60 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
     try:
+        import json
+        from concurrent.futures import ThreadPoolExecutor
+        from iwa.core.chain import ChainInterfaces
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+        from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
-        return [{"name": name, "address": addr} for name, addr in contracts.items()]
+
+        # Load ABI once
+        with open(OLAS_ABI_PATH / "staking.json", "r") as f:
+            abi = json.load(f)
+
+        # Get correct web3 instance
+        w3 = getattr(ChainInterfaces(), chain.lower()).web3
+
+        def check_availability(name, address):
+            try:
+                contract = w3.eth.contract(address=address, abi=abi)
+                service_ids = contract.functions.getServiceIds().call()
+                max_services = contract.functions.maxNumServices().call()
+                used = len(service_ids)
+
+                # Check for explicit "Full" in name as a fallback hint,
+                # but trust the chain data.
+
+                return {
+                    "name": name,
+                    "address": address,
+                    "usage": {
+                        "used": used,
+                        "max": max_services,
+                        "available": used < max_services,
+                    },
+                }
+            except Exception as e:
+                logger.warning(f"Failed to check availability for {name} ({address}): {e}")
+                # Return basic info with assumed availability (or not)
+                return {
+                    "name": name,
+                    "address": address,
+                    "usage": None,  # Could not verify
+                }
+
+        results = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(check_availability, name, addr)
+                for name, addr in contracts.items()
+            ]
+            for future in futures:
+                results.append(future.result())
+
+        return results
+
     except Exception as e:
         logger.error(f"Error fetching staking contracts: {e}")
         return []
@@ -75,21 +125,39 @@ class CreateServiceRequest(BaseModel):
 @router.post(
     "/create",
     summary="Create Service",
-    description="Create a new Olas service on the specified chain.",
+    description="Create a new Olas service on the specified chain and deploy it.",
 )
 def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
-    """Create a new Olas service."""
+    """Create a new Olas service using spin_up for seamless deployment."""
     try:
+        from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
+        from web3 import Web3
 
         manager = ServiceManager(wallet)
 
-        from web3 import Web3
+        # Determine bond amount based on staking contract
+        bond_amount = 1  # Default for native token (1 wei)
 
-        # Use 50 OLAS (50 * 10^18 wei) as bond for staking-compatible services
-        bond_amount = Web3.to_wei(50, "ether") if req.token_address else 1
+        staking_contract = None
+        if req.token_address:
+            if req.staking_contract:
+                try:
+                    logger.info(f"Fetching bond requirement from {req.staking_contract}...")
+                    staking_contract = StakingContract(req.staking_contract, req.chain)
+                    # The agent bond should match the staking deposit (50/50 split)
+                    bond_amount = staking_contract.min_staking_deposit
+                    logger.info(f"Required bond amount: {bond_amount} wei")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fetch bond from staking contract: {e}. Using default 50 OLAS."
+                    )
+                    bond_amount = Web3.to_wei(50, "ether")
+            else:
+                # Default to 50 OLAS if no staking contract specified
+                bond_amount = Web3.to_wei(50, "ether")
 
-        # Create the service
+        # Step 1: Create the service (PRE_REGISTRATION state)
         service_id = manager.create(
             chain_name=req.chain,
             service_name=req.service_name,
@@ -100,22 +168,35 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
         if not service_id:
             raise HTTPException(status_code=400, detail="Failed to create service")
 
-        result = {"status": "success", "service_id": service_id}
+        logger.info(f"Service {service_id} created. Running spin_up...")
 
-        # If staking requested and contract provided, stake the service
-        if req.stake_on_create and req.staking_contract:
-            try:
-                from iwa.plugins.olas.contracts.staking import StakingContract
+        # Step 2: Spin up the service (activate → register → deploy → optionally stake)
+        # Only pass staking_contract if user wants to stake on create
+        spin_up_staking = staking_contract if req.stake_on_create else None
 
-                staking = StakingContract(req.staking_contract, req.chain)
-                # Note: Full staking requires additional steps (activate, register, deploy)
-                # For now, just return the service ID - staking can be done separately
-                result["staking_pending"] = True
-            except Exception as stake_err:
-                logger.error(f"Error setting up staking: {stake_err}")
-                result["staking_error"] = str(stake_err)
+        success = manager.spin_up(
+            service_id=service_id,
+            staking_contract=spin_up_staking,
+            bond_amount_wei=bond_amount,
+        )
 
-        return result
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="Service created but spin_up failed. Check logs for details.",
+            )
+
+        # Get final state
+        final_state = manager.get_service_state()
+
+        return {
+            "status": "success",
+            "service_id": service_id,
+            "service_key": manager.service.key if manager.service else None,
+            "multisig": str(manager.service.multisig_address) if manager.service else None,
+            "final_state": final_state,
+            "staked": req.stake_on_create and spin_up_staking is not None,
+        }
 
     except HTTPException:
         raise
@@ -233,6 +314,8 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
     try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
         config = Config()
         if "olas" not in config.plugins:
             return []
@@ -243,6 +326,15 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
         for service_key, service in olas_config.services.items():
             if service.chain_name != chain:
                 continue
+
+            # Get service state from registry
+            state = "UNKNOWN"
+            try:
+                manager = ServiceManager(wallet)
+                manager.service = service
+                state = manager.get_service_state()
+            except Exception as e:
+                logger.warning(f"Could not get state for {service_key}: {e}")
 
             # Get tags from wallet storage (fast, local lookup)
             accounts = {}
@@ -266,6 +358,7 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
                     "name": service.service_name,
                     "service_id": service.service_id,
                     "chain": service.chain_name,
+                    "state": state,
                     "accounts": accounts,
                     "staking": {"is_staked": bool(service.staking_contract_address)}
                     if service.staking_contract_address
@@ -306,6 +399,7 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
         manager = ServiceManager(wallet)
         manager.service = service
         staking_status = manager.get_staking_status()
+        service_state = manager.get_service_state()
 
         # Get balances
         balances = {}
@@ -347,6 +441,7 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
 
         return {
             "key": service_key,
+            "state": service_state,
             "accounts": balances,
             "staking": staking,
         }
@@ -433,11 +528,12 @@ def stake_service(
 @router.post(
     "/terminate/{service_key}",
     summary="Terminate Service",
-    description="Terminate a deployed service.",
+    description="Wind down a service: unstake (if staked) → terminate → unbond.",
 )
 def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
-    """Terminate a deployed service."""
+    """Terminate and unbond a service using wind_down."""
     try:
+        from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
 
         config = Config()
@@ -450,16 +546,38 @@ def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager = ServiceManager(wallet)
         manager.service = service
 
-        success = manager.terminate()
+        # Get current state for logging
+        current_state = manager.get_service_state()
+        logger.info(f"[WIND_DOWN] Service {service_key} state: {current_state}")
+
+        if current_state == "PRE_REGISTRATION":
+            return {"status": "success", "message": "Service already in PRE_REGISTRATION state"}
+
+        if current_state == "NON_EXISTENT":
+            raise HTTPException(status_code=400, detail="Service does not exist")
+
+        # Prepare staking contract if service is staked
+        staking_contract = None
+        if service.staking_contract_address:
+            staking_contract = StakingContract(
+                service.staking_contract_address, service.chain_name
+            )
+
+        # Use wind_down which handles unstake → terminate → unbond
+        success = manager.wind_down(staking_contract=staking_contract)
+
         if success:
-            return {"status": "success"}
+            return {"status": "success", "message": "Service wound down to PRE_REGISTRATION"}
         else:
-            raise HTTPException(status_code=400, detail="Failed to terminate service")
+            raise HTTPException(
+                status_code=400,
+                detail="Wind down failed. Check logs for details.",
+            )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error terminating service: {e}")
+        logger.error(f"Error winding down service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 @router.post(
@@ -659,12 +777,30 @@ def drain_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager = ServiceManager(wallet)
         manager.service = service
 
-        # Withdraw rewards if staked
-        success, amount = manager.withdraw_rewards()
+        logger.info(f"[DRAIN] Starting drain for service {service_key}")
+        logger.info(f"[DRAIN] Agent: {service.agent_address}")
+        logger.info(f"[DRAIN] Safe: {service.multisig_address}")
+        logger.info(f"[DRAIN] Owner: {service.service_owner_address}")
+
+        # Drain all accounts (Safe, Agent, Owner)
+        try:
+            drained = manager.drain_service()
+            logger.info(f"[DRAIN] drain_service returned: {drained}")
+        except Exception as drain_ex:
+            logger.error(f"[DRAIN] drain_service threw exception: {drain_ex}")
+            import traceback
+            logger.error(f"[DRAIN] Traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=400, detail=str(drain_ex))
+
+        if not drained:
+            raise HTTPException(
+                status_code=400,
+                detail="Nothing drained. Accounts may have no balance or private keys may be missing.",
+            )
 
         return {
             "status": "success",
-            "withdrawn_olas": float(amount) / 1e18 if amount else 0,
+            "drained": drained,
         }
 
     except HTTPException:

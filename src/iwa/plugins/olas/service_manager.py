@@ -91,6 +91,16 @@ class ServiceManager:
         """Persist configuration to config.toml."""
         self.global_config.save_config()
 
+    def _update_and_save_service_state(self) -> None:
+        """Update the service object in olas_config and persist to config.toml."""
+        if self.service:
+            # Update the service object in the configuration dictionary
+            # This ensures that changes to self.service (which comes from the Router)
+            # are reflected in the ServiceManager's internal configuration state
+            # before saving to disk.
+            self.olas_config.add_service(self.service)
+        self._save_config()
+
     def get(self) -> Optional[Dict]:
         """Get service details by ID."""
         if not self.service:
@@ -401,7 +411,7 @@ class ServiceManager:
             return False
 
         self.service.agent_address = agent_account_address
-        self._save_config()
+        self._update_and_save_service_state()
         return True
 
     def deploy(self) -> Optional[str]:
@@ -449,7 +459,7 @@ class ServiceManager:
             return None
 
         self.service.multisig_address = multisig_address
-        self._save_config()
+        self._update_and_save_service_state()
 
         # Register multisig in wallet KeyStorage
         try:
@@ -736,7 +746,7 @@ class ServiceManager:
             return False
 
         self.service.staking_contract_address = staking_contract.address
-        self._save_config()
+        self._update_and_save_service_state()
         print("[STAKE-SM] SUCCESS: Service staked and config saved", flush=True)
         logger.info("Service staked successfully")
         return True
@@ -819,10 +829,29 @@ class ServiceManager:
             return False
 
         self.service.staking_contract_address = None
-        self._save_config()
+        self._update_and_save_service_state()
+
+
 
         logger.info("Service unstaked successfully")
         return True
+
+    def get_service_state(self) -> str:
+        """Get the current service state from the registry.
+
+        Returns:
+            str: Service state name (e.g., DEPLOYED, TERMINATED_BONDED).
+        """
+        if not self.service:
+            return "UNKNOWN"
+
+        try:
+            info = self.registry.get_service(self.service.service_id)
+            # ServiceState enum name
+            return info["state"].name
+        except Exception as e:
+            logger.error(f"Failed to get service state: {e}")
+            return "UNKNOWN"
 
     def get_staking_status(self) -> Optional[StakingStatus]:  # noqa: C901
         """Get comprehensive staking status for the active service.
@@ -1426,48 +1455,65 @@ class ServiceManager:
         # Step 2: Drain the Safe
         if self.service.multisig_address:
             safe_addr = str(self.service.multisig_address)
+            logger.info(f"[DRAIN-DEBUG] Attempting to drain Safe: {safe_addr}")
             try:
                 result = self.wallet.drain(
-                    from_tag_or_address=safe_addr,
-                    to_tag_or_address=target,
+                    from_address_or_tag=safe_addr,
+                    to_address_or_tag=target,
                     chain_name=chain,
-                    claim_olas_rewards=False,  # Already claimed above
                 )
+                logger.info(f"[DRAIN-DEBUG] Safe drain result: {result}")
                 if result:
                     drained["safe"] = result
                     logger.info(f"Drained Safe: {result}")
+                else:
+                    logger.warning(f"[DRAIN-DEBUG] Safe drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Safe: {e}")
+                import traceback
+                logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
 
         # Step 3: Drain the Agent account
         if self.service.agent_address:
             agent_addr = str(self.service.agent_address)
+            logger.info(f"[DRAIN-DEBUG] Attempting to drain Agent: {agent_addr}")
             try:
                 result = self.wallet.drain(
-                    from_tag_or_address=agent_addr,
-                    to_tag_or_address=target,
+                    from_address_or_tag=agent_addr,
+                    to_address_or_tag=target,
                     chain_name=chain,
                 )
+                logger.info(f"[DRAIN-DEBUG] Agent drain result: {result}")
                 if result:
                     drained["agent"] = result
                     logger.info(f"Drained Agent: {result}")
+                else:
+                    logger.warning(f"[DRAIN-DEBUG] Agent drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Agent: {e}")
+                import traceback
+                logger.warning(f"[DRAIN-DEBUG] Agent traceback: {traceback.format_exc()}")
 
         # Step 4: Drain the Owner account
         if self.service.service_owner_address:
             owner_addr = str(self.service.service_owner_address)
+            logger.info(f"[DRAIN-DEBUG] Attempting to drain Owner: {owner_addr}")
             try:
                 result = self.wallet.drain(
-                    from_tag_or_address=owner_addr,
-                    to_tag_or_address=target,
+                    from_address_or_tag=owner_addr,
+                    to_address_or_tag=target,
                     chain_name=chain,
                 )
+                logger.info(f"[DRAIN-DEBUG] Owner drain result: {result}")
                 if result:
                     drained["owner"] = result
                     logger.info(f"Drained Owner: {result}")
+                else:
+                    logger.warning(f"[DRAIN-DEBUG] Owner drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Owner: {e}")
+                import traceback
+                logger.warning(f"[DRAIN-DEBUG] Owner traceback: {traceback.format_exc()}")
 
         logger.info(f"Drain complete. Accounts drained: {list(drained.keys())}")
         return drained
