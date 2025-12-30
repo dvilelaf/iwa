@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const body = document.getElementById('tx-body');
             body.innerHTML = data.map(tx => `
                 <tr>
-                    <td>${escapeHtml(tx.timestamp.split('T')[1].split('.')[0])}</td>
+                    <td>${escapeHtml(new Date(tx.timestamp).toLocaleString().replace(',', ''))}</td>
                     <td>${escapeHtml(tx.chain)}</td>
                     <td class="address-cell" title="${escapeHtml(tx.from)}">${escapeHtml(formatAddressOrTag(tx.from))}</td>
                     <td class="address-cell" title="${escapeHtml(tx.to)}">${escapeHtml(formatAddressOrTag(tx.to))}</td>
@@ -1355,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="staking-row">
                         <span class="label">Unstake available:</span>
-                        <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : (() => {
+                        <span class="value" ${staking.unstake_available_at ? `data-unstake-at="${staking.unstake_available_at}"` : ''}>${isLoading ? '<span class="cell-spinner"></span>' : (() => {
                 if (!isStaked) return '-';
                 if (!staking.unstake_available_at) return '-';
                 const diffMs = new Date(staking.unstake_available_at) - new Date();
@@ -1449,9 +1449,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     `;
             })()}
-                <button class="btn-danger btn-sm" onclick="drainOlasService('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
-                    Drain
-                </button>
+            ${(() => {
+                const drainLabel = 'Drain';
+                let drainDisabled = isLoading ? 'disabled' : '';
+                let drainStyle = isLoading ? 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);' : '';
+                let drainTitle = isLoading ? 'Loading...' : 'Drain all service funds to master account';
+
+                if (isStaked && !isLoading) {
+                    // Check if we can unstake yet
+                    const canUnstake = !staking.unstake_available_at || new Date() >= new Date(staking.unstake_available_at);
+                    if (!canUnstake) {
+                        drainDisabled = 'disabled';
+                        drainStyle = 'opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);';
+                        const diffMs = new Date(staking.unstake_available_at) - new Date();
+                        const diffMins = Math.ceil(diffMs / 60000);
+                        const timeText = diffMins > 60 ? `~${Math.ceil(diffMins / 60)}h` : `${diffMins}m`;
+                        drainTitle = `Cannot drain while staked. Unstake available in ${timeText}.`;
+                    } else {
+                        drainTitle = 'Service is staked. Will unstake and claim rewards first.';
+                    }
+                }
+
+                return `
+                    <button class="btn-danger btn-sm" onclick="drainOlasService('${escapeHtml(service.key)}')" ${drainDisabled}
+                            style="${drainStyle}"
+                            title="${escapeHtml(drainTitle)}">
+                        ${escapeHtml(drainLabel)}
+                    </button>
+                `;
+            })()}
                 ${isStaked && parseFloat(staking.accrued_reward_olas) > 0 ? `
                     <button class="btn-primary btn-sm" onclick="claimOlasRewards('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
                         Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS

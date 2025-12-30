@@ -63,6 +63,9 @@ class CreateServiceRequest(BaseModel):
     service_name: str = Field(description="Human-readable name for the service")
     chain: str = Field(default="gnosis", description="Chain to create the service on")
     agent_type: str = Field(default="trader", description="Agent type (trader)")
+    token_address: Optional[str] = Field(
+        default="OLAS", description="Token address or name for bonding (OLAS for staking)"
+    )
     stake_on_create: bool = Field(default=False, description="Whether to stake after creation")
     staking_contract: Optional[str] = Field(
         default=None, description="Staking contract address if staking"
@@ -81,10 +84,17 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
 
         manager = ServiceManager(wallet)
 
+        from web3 import Web3
+
+        # Use 50 OLAS (50 * 10^18 wei) as bond for staking-compatible services
+        bond_amount = Web3.to_wei(50, "ether") if req.token_address else 1
+
         # Create the service
         service_id = manager.create(
             chain_name=req.chain,
             service_name=req.service_name,
+            token_address_or_tag=req.token_address,
+            bond_amount_wei=bond_amount,
         )
 
         if not service_id:
@@ -113,6 +123,104 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
         logger.error(f"Error creating service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
 
+
+@router.post(
+    "/activate/{service_key}",
+    summary="Activate Registration",
+    description="Activate registration for a service (step 1 after creation).",
+)
+def activate_registration(service_key: str, auth: bool = Depends(verify_auth)):
+    """Activate service registration."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        success = manager.activate_registration()
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to activate registration")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error activating registration: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/register/{service_key}",
+    summary="Register Agent",
+    description="Register an agent for the service (step 2 after activation).",
+)
+def register_agent(service_key: str, auth: bool = Depends(verify_auth)):
+    """Register agent for service."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        success = manager.register_agent()
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to register agent")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error registering agent: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/deploy/{service_key}",
+    summary="Deploy Service",
+    description="Deploy the service (step 3, creates multisig Safe).",
+)
+def deploy_service(service_key: str, auth: bool = Depends(verify_auth)):
+    """Deploy the service."""
+    try:
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        success = manager.deploy()
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to deploy service")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deploying service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 @router.get(
     "/services/basic",
