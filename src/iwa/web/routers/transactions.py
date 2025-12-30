@@ -34,8 +34,8 @@ class TransactionRequest(BaseModel):
             if len(v) != 42:
                 raise ValueError("Invalid address format")
         else:
-            # Assume it's a tag
-            if not v.replace("_", "").replace("-", "").isalnum():
+            # Assume it's a tag - allow alphanumeric, underscores, dashes, and spaces
+            if not v.replace("_", "").replace("-", "").replace(" ", "").isalnum():
                 raise ValueError("Invalid tag format")
         return v
 

@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             from_address: document.getElementById('tx-from').value,
             to_address: document.getElementById('tx-to').value,
-            amount: parseFloat(document.getElementById('tx-amount').value),
+            amount_eth: parseFloat(document.getElementById('tx-amount').value),
             token: document.getElementById('tx-token').value,
             chain: state.activeChain
         };

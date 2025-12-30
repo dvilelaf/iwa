@@ -40,12 +40,18 @@ class SafeCreateRequest(BaseModel):
     @field_validator("owners")
     @classmethod
     def validate_owners(cls, v: List[str]) -> List[str]:
-        """Validate owners list is not empty and contains valid addresses."""
+        """Validate owners list is not empty and contains valid addresses or tags."""
         if not v:
             raise ValueError("Owners list cannot be empty")
         for owner in v:
-            if not owner.startswith("0x") or len(owner) != 42:
-                raise ValueError(f"Invalid owner address: {owner}")
+            # Accept both addresses (0x...) and tags (alphanumeric with _ and -)
+            if owner.startswith("0x"):
+                if len(owner) != 42:
+                    raise ValueError(f"Invalid owner address: {owner}")
+            else:
+                # Tag format validation
+                if not owner.replace("_", "").replace("-", "").replace(" ", "").isalnum():
+                    raise ValueError(f"Invalid owner tag: {owner}")
         # Check for duplicates
         if len(v) != len(set(v)):
             raise ValueError("Duplicate owners not allowed")
@@ -83,15 +89,20 @@ class SafeCreateRequest(BaseModel):
     summary="Get accounts",
     description="Retrieve all stored accounts and their balances for the specified chain.",
 )
-def get_accounts(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
+def get_accounts(
+    chain: str = "gnosis",
+    tokens: str = None,
+    auth: bool = Depends(verify_auth),
+):
     """Get all accounts and their balances for a specific chain."""
     if not chain.replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid chain name")
     try:
-        # We fetch balances for native currency and known tokens
-        # For now, just hardcode a list of common tokens or fetch from config
-        # Ideally this comes from a TokenService or Config
-        token_names = ["native", "OLAS", "WXDAI", "USDC"]
+        # Parse tokens from query parameter or use defaults
+        if tokens:
+            token_names = [t.strip() for t in tokens.split(",") if t.strip()]
+        else:
+            token_names = ["native", "OLAS", "WXDAI", "USDC"]
 
         accounts_data, balances = wallet.get_accounts_balances(chain, token_names)
 
@@ -143,11 +154,23 @@ def create_safe(req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
 
         salt_nonce = int(time.time() * 1000)
 
+        # Resolve owner tags to addresses
+        resolved_owners = []
+        for owner in req.owners:
+            if owner.startswith("0x"):
+                resolved_owners.append(owner)
+            else:
+                # It's a tag, resolve to address
+                account = wallet.account_service.resolve_account(owner)
+                if not account:
+                    raise ValueError(f"Owner account not found: {owner}")
+                resolved_owners.append(account.address)
+
         # Deploy on all requested chains
         for chain_name in req.chains:
             wallet.safe_service.create_safe(
                 "master",  # WebUI uses master as deployer by default
-                req.owners,
+                resolved_owners,
                 req.threshold,
                 chain_name,
                 req.tag,

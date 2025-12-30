@@ -232,12 +232,14 @@ def get_swap_max_amount(
         return {"max_amount": max_buy_eth, "mode": "buy", "sell_balance": sell_balance_eth}
 
     except Exception as e:
-        error_msg = str(e)
+        import traceback
+
+        error_msg = str(e) or repr(e)
+        logger.error(f"Error getting max swap amount: {error_msg}\n{traceback.format_exc()}")
         # Handle common CowSwap errors with clearer messages
         if "NoLiquidity" in error_msg or "no route found" in error_msg.lower():
             raise HTTPException(
                 status_code=400,
                 detail="No liquidity available for this token pair. Try a different pair.",
             ) from None
-        logger.error(f"Error getting max swap amount: {e}")
-        raise HTTPException(status_code=400, detail=error_msg) from None
+        raise HTTPException(status_code=400, detail=error_msg or "Unknown error") from None
