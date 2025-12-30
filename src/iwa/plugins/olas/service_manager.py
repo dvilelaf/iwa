@@ -155,6 +155,7 @@ class ServiceManager:
             transaction=create_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=chain_name,
+            tags=["olas_create_service"],
         )
 
         if not success:
@@ -253,6 +254,7 @@ class ServiceManager:
             transaction=activate_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_activate_registration"],
         )
 
         if not success:
@@ -383,6 +385,7 @@ class ServiceManager:
             transaction=register_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_register_agent"],
         )
 
         if not success:
@@ -418,6 +421,7 @@ class ServiceManager:
             transaction=deploy_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_deploy_service"],
         )
 
         if not success:
@@ -497,6 +501,7 @@ class ServiceManager:
             transaction=terminate_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_terminate_service"],
         )
 
         if not success:
@@ -531,6 +536,7 @@ class ServiceManager:
             transaction=unbond_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_unbond_service"],
         )
 
         if not success:
@@ -653,6 +659,7 @@ class ServiceManager:
             transaction=approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_approve_service_nft"],
         )
         logger.info("Approving service token for staking contract")
         print(f"[STAKE-SM] Service NFT approval result: success={success}", flush=True)
@@ -677,6 +684,7 @@ class ServiceManager:
             transaction=olas_approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_approve_olas_token"],
         )
         print(f"[STAKE-SM] OLAS token approval result: success={success}", flush=True)
 
@@ -699,6 +707,7 @@ class ServiceManager:
             transaction=stake_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_stake_service"],
         )
         print(f"[STAKE-SM] Stake tx result: success={success}", flush=True)
 
@@ -792,6 +801,7 @@ class ServiceManager:
             transaction=unstake_tx,
             signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
+            tags=["olas_unstake_service"],
         )
 
         if not success:
@@ -993,7 +1003,10 @@ class ServiceManager:
             return False, 0
 
         success, receipt = self.wallet.sign_and_send_transaction(
-            claim_tx, signer_address_or_tag=self.wallet.master_account.address
+            claim_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.service.chain_name,
+            tags=["olas_claim_rewards"],
         )
         if not success:
             logger.error("Failed to send claim transaction")
@@ -1127,7 +1140,10 @@ class ServiceManager:
             return False
 
         success, receipt = self.wallet.sign_and_send_transaction(
-            checkpoint_tx, signer_address_or_tag=self.wallet.master_account.address
+            checkpoint_tx,
+            signer_address_or_tag=self.wallet.master_account.address,
+            chain_name=self.service.chain_name,
+            tags=["olas_call_checkpoint"],
         )
         if not success:
             logger.error("Failed to send checkpoint transaction")
@@ -1723,6 +1739,7 @@ class ServiceManager:
                 transaction=tx,
                 signer_address_or_tag=str(multisig_address),
                 chain_name=self.chain_name,
+                tags=["olas_mech_request"],
             )
             tx_hash = receipt.get("transactionHash").hex() if success else None
 

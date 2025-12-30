@@ -1,7 +1,7 @@
 """Transaction service module."""
 
 import time
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
 from web3 import exceptions as web3_exceptions
@@ -21,7 +21,11 @@ class TransactionService:
         self.account_service = account_service
 
     def sign_and_send(  # noqa: C901
-        self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
+        self,
+        transaction: dict,
+        signer_address_or_tag: str,
+        chain_name: str = "gnosis",
+        tags: Optional[List[str]] = None,
     ) -> Tuple[bool, Dict]:
         """Sign and send a transaction with retry logic for gas."""
         chain_interface = ChainInterfaces().get(chain_name)
@@ -61,8 +65,32 @@ class TransactionService:
                         to_addr = tx.get("to", "")
                         value_wei = tx.get("value", 0)
                         gas_used = getattr(receipt, "gasUsed", 0)
-                        gas_price = tx.get("gasPrice", tx.get("maxFeePerGas", 0))
+                        gas_price = getattr(receipt, "effectiveGasPrice", tx.get("gasPrice", tx.get("maxFeePerGas", 0)))
                         gas_cost_wei = gas_used * gas_price if gas_price else 0
+
+                        # Calculate gas value in EUR
+                        gas_value_eur = None
+                        if gas_cost_wei > 0:
+                            try:
+                                from iwa.core.pricing import PriceService
+
+                                # Simple mapping for now
+                                token_id = "dai" if chain_name.lower() == "gnosis" else "ethereum"
+                                pricing = PriceService()
+                                native_price = pricing.get_token_price(token_id)
+                                if native_price:
+                                    gas_eth = float(gas_cost_wei) / 10**18
+                                    gas_value_eur = gas_eth * native_price
+                            except Exception as price_err:
+                                logger.warning(f"Failed to calculate gas value: {price_err}")
+
+                        # Determine tags
+                        final_tags = tags or []
+                        if "olas" in str(tx.get("to", "")).lower():
+                            final_tags.append("olas")
+
+                        # Remove duplicates
+                        final_tags = list(set(final_tags))
 
                         log_transaction(
                             tx_hash=txn_hash.hex(),
@@ -73,7 +101,8 @@ class TransactionService:
                             chain=chain_name,
                             from_tag=signer_account.tag if hasattr(signer_account, "tag") else None,
                             gas_cost=str(gas_cost_wei) if gas_cost_wei else None,
-                            tags=["olas"] if "olas" in str(tx.get("to", "")).lower() else None,
+                            gas_value_eur=gas_value_eur,
+                            tags=final_tags if final_tags else None,
                         )
                     except Exception as log_err:
                         logger.warning(f"Failed to log transaction: {log_err}")

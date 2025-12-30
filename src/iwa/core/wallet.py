@@ -1,7 +1,7 @@
 """Wallet module."""
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from web3.types import Wei
 
@@ -131,7 +131,11 @@ class Wallet:
         return bool(tx_hash), tx_hash
 
     def sign_and_send_transaction(
-        self, transaction: dict, signer_address_or_tag: str, chain_name: str = "gnosis"
+        self,
+        transaction: dict,
+        signer_address_or_tag: str,
+        chain_name: str = "gnosis",
+        tags: Optional[List[str]] = None,
     ) -> Tuple[bool, dict]:
         """Sign and send a raw transaction dictionary.
 
@@ -139,6 +143,7 @@ class Wallet:
             transaction: Dictionary containing transaction parameters.
             signer_address_or_tag: Address or tag of the signing account.
             chain_name: Target blockchain name (default: "gnosis").
+            tags: List of tags to associate with the transaction.
 
         Returns:
             Tuple containing:
@@ -147,7 +152,7 @@ class Wallet:
 
         """
         return self.transaction_service.sign_and_send(
-            transaction, signer_address_or_tag, chain_name
+            transaction, signer_address_or_tag, chain_name, tags
         )
 
     def send_erc20_transfer(
