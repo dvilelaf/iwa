@@ -251,18 +251,52 @@ class ServiceManager:
 
         security_deposit = service_info["security_deposit"]
 
+        # Ensure Approval: If using tokens, check allowance and approve if needed
+        is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
+        if not is_native:
+            try:
+                protocol_contracts = OLAS_CONTRACTS.get(self.service.chain_name.lower(), {})
+                utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
+
+                if utility_address:
+                    required_approval = Web3.to_wei(1000, "ether") # Approve generous amount to be safe
+
+                    # Check current allowance
+                    allowance = self.wallet.transfer_service.get_erc20_allowance(
+                        owner_address_or_tag=self.service.service_owner_address,
+                        spender_address=utility_address,
+                        token_address_or_name=token_address,
+                        chain_name=self.service.chain_name
+                    )
+
+                    if allowance < Web3.to_wei(10, "ether"): # Min threshold check
+                        logger.info(f"Low allowance ({allowance}). Approving Token Utility {utility_address}")
+                        success_approve = self.wallet.transfer_service.approve_erc20(
+                            owner_address_or_tag=self.service.service_owner_address,
+                            spender_address_or_tag=utility_address,
+                            token_address_or_name=token_address,
+                            amount_wei=required_approval,
+                            chain_name=self.service.chain_name,
+                        )
+                        if not success_approve:
+                             logger.warning("Token approval transaction returned failure.")
+            except Exception as e:
+                logger.warning(f"Failed to check/approve tokens: {e}")
+
         # Prepare activation transaction
-        # NOTE: For token-based services, we created an approval in create() for the bond amount.
-        # Here we only need to provide the 'security_deposit' (native value) which is typically 1 wei
-        # for token services, or the full bond for native services.
+        # NOTE: For token-based services, the security deposit is handled by the TokenUtility via transferFrom.
+        # We should NOT send native value (msg.value) for token-secured services, as security_deposit
+        # represents the Token amount, not native currency. Sending 1000 OLAS as 1000 xDAI will fail.
+        value_to_send = security_deposit if is_native else 0
+
         activate_tx = self.manager.prepare_activate_registration_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=self.service.service_owner_address,
             service_id=service_id,
-            value=security_deposit,
+            value=value_to_send,
         )
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=self.service.service_owner_address,
             chain_name=self.service.chain_name,
             tags=["olas_activate_registration"],
         )
@@ -423,13 +457,12 @@ class ServiceManager:
             return False
 
         deploy_tx = self.manager.prepare_deploy_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
         )
-
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=deploy_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=self.service.service_owner_address,
             chain_name=self.service.chain_name,
             tags=["olas_deploy_service"],
         )
@@ -502,14 +535,14 @@ class ServiceManager:
         logger.info(f"[SM-TERM] Manager Contract Address: {self.manager.address}")
 
         terminate_tx = self.manager.prepare_terminate_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
         )
         logger.info(f"[SM-TERM] Terminate TX Prepared. To: {terminate_tx.get('to')}")
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=terminate_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=self.service.service_owner_address,
             chain_name=self.service.chain_name,
             tags=["olas_terminate_service"],
         )
@@ -538,13 +571,13 @@ class ServiceManager:
             return False
 
         unbond_tx = self.manager.prepare_unbond_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
         )
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=unbond_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=self.service.service_owner_address,
             chain_name=self.service.chain_name,
             tags=["olas_unbond_service"],
         )

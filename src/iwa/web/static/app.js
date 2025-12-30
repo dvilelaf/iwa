@@ -1415,7 +1415,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn-danger btn-sm" onclick="showStakeModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
                             Stake
                         </button>
-                    ` : '')}
+                    ` : (service.state === 'PRE_REGISTRATION' ? `
+                        <button class="btn-primary btn-sm" onclick="showDeployModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}', '${escapeHtml(service.name || '')}', '${escapeHtml(service.service_id)}')" ${loadingDisabled} style="${loadingStyle}">
+                            Deploy
+                        </button>
+                    ` : ''))}
                 ${service.state !== 'PRE_REGISTRATION' ? (() => {
                 // Terminate button - now uses wind_down which handles unstake automatically
                 // Only show if service is not in PRE_REGISTRATION (nothing to wind down)
@@ -1435,7 +1439,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${escapeHtml(terminateLabel)}
                         </button>
                     `;
-            })() : ''}
+            })() : ''
+            }
             ${(() => {
                 const drainLabel = 'Drain';
                 let drainDisabled = isLoading ? 'disabled' : '';
@@ -1475,15 +1480,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${escapeHtml(drainLabel)}
                     </button>
                 `;
-            })()}
+            })()
+            }
                 ${isStaked && parseFloat(staking.accrued_reward_olas) > 0 ? `
                     <button class="btn-primary btn-sm" onclick="claimOlasRewards('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
                         Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS
                     </button>
-                ` : ''}
-            </div>
-            </div>
-        `;
+                ` : ''
+            }
+            </div >
+            </div >
+    `;
     }
 
     window.claimOlasRewards = async (serviceKey) => {
@@ -1492,13 +1499,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showToast('Claiming rewards...', 'info');
         try {
-            const resp = await authFetch(`/api/olas/claim/${serviceKey}`, { method: 'POST' });
+            const resp = await authFetch(`/ api / olas / claim / ${serviceKey} `, { method: 'POST' });
             const result = await resp.json();
             if (resp.ok) {
                 showToast(`Claimed ${result.claimed_olas.toFixed(2)} OLAS!`, 'success');
                 refreshSingleService(serviceKey);
             } else {
-                showToast(`Error: ${result.detail}`, 'error');
+                showToast(`Error: ${result.detail} `, 'error');
             }
         } catch (err) {
             showToast('Error claiming rewards', 'error');
@@ -1511,13 +1518,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showToast('Unstaking service...', 'info');
         try {
-            const resp = await authFetch(`/api/olas/unstake/${serviceKey}`, { method: 'POST' });
+            const resp = await authFetch(`/ api / olas / unstake / ${serviceKey} `, { method: 'POST' });
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Service unstaked successfully!', 'success');
                 refreshSingleService(serviceKey);
             } else {
-                showToast(`Error: ${result.detail}`, 'error');
+                showToast(`Error: ${result.detail} `, 'error');
             }
         } catch (err) {
             showToast('Error unstaking service', 'error');
@@ -1527,13 +1534,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.checkpointOlasService = async (serviceKey) => {
         showToast('Calling checkpoint...', 'info');
         try {
-            const resp = await authFetch(`/api/olas/checkpoint/${serviceKey}`, { method: 'POST' });
+            const resp = await authFetch(`/ api / olas / checkpoint / ${serviceKey} `, { method: 'POST' });
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Checkpoint successful! Epoch closed.', 'success');
                 refreshSingleService(serviceKey);
             } else {
-                showToast(`Error: ${result.detail}`, 'error');
+                showToast(`Error: ${result.detail} `, 'error');
             }
         } catch (err) {
             showToast('Error calling checkpoint', 'error');
@@ -1558,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const h = Math.floor(diff / 3600);
                 const m = Math.floor((diff % 3600) / 60);
-                el.innerText = `${h}h ${m}m`;
+                el.innerText = `${h}h ${m} m`;
                 el.style.color = '';
                 // Add a small grace period (30s) to avoid race conditions with contract
                 if (btn) btn.disabled = (diff > 30);
@@ -1572,7 +1579,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showToast('Draining service...', 'info');
         try {
-            const resp = await authFetch(`/api/olas/drain/${serviceKey}`, { method: 'POST' });
+            const resp = await authFetch(`/ api / olas / drain / ${serviceKey} `, { method: 'POST' });
             const result = await resp.json();
             if (resp.ok) {
                 showToast('Service drained successfully!', 'success');
@@ -1581,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.balanceCache = {};
                 loadAccounts();
             } else {
-                showToast(`Error: ${result.detail}`, 'error');
+                showToast(`Error: ${result.detail} `, 'error');
             }
         } catch (err) {
             showToast('Error draining service', 'error');
@@ -1611,13 +1618,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             showToast('Terminating service...', 'info');
             try {
-                const resp = await authFetch(`/api/olas/terminate/${serviceKey}`, { method: 'POST' });
+                const resp = await authFetch(`/ api / olas / terminate / ${serviceKey} `, { method: 'POST' });
                 const result = await resp.json();
                 if (resp.ok) {
                     showToast('Service terminated successfully!', 'success');
                     refreshSingleService(serviceKey);
                 } else {
-                    showToast(`Error: ${result.detail}`, 'error');
+                    showToast(`Error: ${result.detail} `, 'error');
                 }
             } catch (err) {
                 showToast('Error terminating service', 'error');
@@ -1642,14 +1649,14 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.add('active');
 
         try {
-            const resp = await authFetch(`/api/olas/staking-contracts?chain=${chain}`);
+            const resp = await authFetch(`/ api / olas / staking - contracts ? chain = ${chain} `);
             const contracts = await resp.json();
 
             if (contracts.length === 0) {
                 select.innerHTML = '<option value="">No contracts available</option>';
             } else {
                 select.innerHTML = contracts.map(c =>
-                    `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)}</option>`
+                    `< option value = "${escapeHtml(c.address)}" > ${escapeHtml(c.name)}</option > `
                 ).join('');
             }
 
@@ -1662,6 +1669,85 @@ document.addEventListener('DOMContentLoaded', () => {
             select.style.display = '';
             spinnerDiv.style.display = 'none';
             confirmBtn.disabled = false;
+        }
+    };
+
+    // ===== Deploy Modal Functions =====
+    window.showDeployModal = async (serviceKey, chain, serviceName, serviceId) => {
+        const modal = document.getElementById('create-service-modal');
+        const form = document.getElementById('create-service-form');
+        const nameInput = document.getElementById('new-service-name');
+        const chainSelect = document.getElementById('new-service-chain');
+        const agentTypeSelect = document.getElementById('new-service-agent-type');
+        const contractSelect = document.getElementById('new-service-staking-contract');
+        const spinnerDiv = document.getElementById('staking-contract-spinner');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const modalTitle = modal.querySelector('.modal-header h3') || modal.querySelector('h3');
+
+        // Store deploy mode info
+        form.dataset.deployMode = 'true';
+        form.dataset.deployServiceKey = serviceKey;
+
+        // Show modal immediately
+        modal.classList.add('active');
+
+        // Update modal title
+        if (modalTitle) modalTitle.textContent = 'Deploy Olas Service';
+
+        // Pre-fill and disable fields with better styling
+        nameInput.value = serviceName || `Service #${serviceId}`;
+        nameInput.disabled = true;
+        nameInput.style.opacity = '1'; // Full opacity for readability
+        nameInput.style.backgroundColor = '#e9ecef'; // Bootstrap readonly gray
+        nameInput.style.color = '#495057';
+        chainSelect.value = chain;
+        chainSelect.disabled = true;
+        chainSelect.style.opacity = '1';
+        chainSelect.style.backgroundColor = '#e9ecef';
+        chainSelect.style.color = '#495057';
+        agentTypeSelect.disabled = true;
+        agentTypeSelect.style.opacity = '1';
+        agentTypeSelect.style.backgroundColor = '#e9ecef';
+        agentTypeSelect.style.color = '#495057';
+        submitBtn.innerHTML = 'Deploy & Stake';
+
+        // Load staking contracts
+        contractSelect.style.display = 'none';
+        spinnerDiv.style.display = 'block';
+        submitBtn.disabled = true;
+
+        try {
+            const resp = await authFetch(`/api/olas/staking-contracts?chain=${chain}`);
+            const contracts = await resp.json();
+            // Filter out contracts with no available slots if they come unfiltered?
+            // Assuming backend filters, but let's be safe if we can see slots.
+            // Actually, backend should filter.
+            contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>' +
+                contracts.map(c => {
+                    const usage = c.usage;
+                    const slots = usage ? usage.available_slots : null;
+
+                    const isDisabled = (slots !== null && slots <= 0);
+                    const disabledStr = isDisabled ? 'disabled' : '';
+
+                    let slotText = 'Status Unknown';
+                    if (slots !== null) {
+                        slotText = `${slots} slots`;
+                    }
+
+                    const text = `${escapeHtml(c.name)} (${slotText})`;
+                    const style = isDisabled ? 'color: #999;' : '';
+
+                    return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
+                }).join('');
+            contractSelect.style.display = '';
+            spinnerDiv.style.display = 'none';
+            submitBtn.disabled = false;
+        } catch (err) {
+            contractSelect.innerHTML = '<option value="">None (don\'t stake)</option>';
+            contractSelect.style.display = '';
+            spinnerDiv.style.display = 'none';
+            submitBtn.disabled = false;
         }
     };
 
@@ -1689,7 +1775,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Staking service...', 'info');
 
             try {
-                const resp = await authFetch(`/api/olas/stake/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`, {
+                const resp = await authFetch(`/ api / olas / stake / ${serviceKey}?staking_contract = ${encodeURIComponent(contractAddress)} `, {
                     method: 'POST'
                 });
                 const result = await resp.json();
@@ -1698,7 +1784,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('Service staked successfully!', 'success');
                     refreshSingleService(serviceKey);
                 } else {
-                    showToast(`Error: ${result.detail}`, 'error');
+                    showToast(`Error: ${result.detail} `, 'error');
                 }
             } catch (err) {
                 showToast('Error staking service', 'error');
@@ -1718,18 +1804,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return '<option value="">None (don\'t stake)</option>' +
             contracts.map(c => {
-                let label = escapeHtml(c.name);
-                let disabled = '';
+                const usage = c.usage;
+                const slots = usage ? usage.available_slots : null;
 
-                if (c.usage) {
-                    label += ` (${c.usage.used}/${c.usage.max})`;
-                    if (!c.usage.available) {
-                        label += ' (Full)';
-                        disabled = 'disabled';
-                    }
+                const isDisabled = (slots !== null && slots <= 0);
+                const disabledStr = isDisabled ? 'disabled' : '';
+
+                let slotText = 'Status Unknown';
+                if (slots !== null) {
+                    slotText = `${slots} slots`;
                 }
 
-                return `<option value="${escapeHtml(c.address)}" ${disabled}>${label}</option>`;
+                const text = `${escapeHtml(c.name)} (${slotText})`;
+                const style = isDisabled ? 'color: #999;' : '';
+
+                return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
             }).join('');
     }
 
@@ -1779,38 +1868,79 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const btn = createServiceForm.querySelector('button[type="submit"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating & Deploying...';
+
+            const isDeployMode = createServiceForm.dataset.deployMode === 'true';
+            const serviceKey = createServiceForm.dataset.deployServiceKey;
+
+            btn.innerHTML = isDeployMode
+                ? '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Deploying...'
+                : '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating & Deploying...';
             btn.disabled = true;
 
             const stakingContract = document.getElementById('new-service-staking-contract').value;
-            const payload = {
-                service_name: document.getElementById('new-service-name').value,
-                chain: document.getElementById('new-service-chain').value,
-                agent_type: document.getElementById('new-service-agent-type').value,
-                stake_on_create: !!stakingContract,
-                staking_contract: stakingContract || null
-            };
 
             try {
-                const resp = await authFetch('/api/olas/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await resp.json();
-                if (resp.ok) {
-                    showToast(`Service created! ID: ${result.service_id}`, 'success');
-                    createServiceModal.classList.remove('active');
-                    createServiceForm.reset();
-                    addNewServiceCard(result.service_id, payload.chain);
+                let resp, result;
+
+                if (isDeployMode) {
+                    const url = `/api/olas/deploy/${serviceKey}${stakingContract ? '?staking_contract=' + encodeURIComponent(stakingContract) : ''}`;
+                    resp = await authFetch(url, { method: 'POST' });
+                    result = await resp.json();
+                    if (resp.ok) {
+                        showToast('Service deployed successfully!', 'success');
+                        createServiceModal.classList.remove('active');
+                        refreshSingleService(serviceKey);
+                    } else {
+                        showToast(`Error: ${result.detail}`, 'error');
+                    }
                 } else {
-                    showToast(`Error: ${result.detail}`, 'error');
+                    const payload = {
+                        service_name: document.getElementById('new-service-name').value,
+                        chain: document.getElementById('new-service-chain').value,
+                        agent_type: document.getElementById('new-service-agent-type').value,
+                        stake_on_create: !!stakingContract,
+                        staking_contract: stakingContract || null
+                    };
+                    resp = await authFetch('/api/olas/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    result = await resp.json();
+                    if (resp.ok) {
+                        showToast(`Service created! ID: ${result.service_id}`, 'success');
+                        createServiceModal.classList.remove('active');
+                        createServiceForm.reset();
+                        addNewServiceCard(result.service_id, payload.chain);
+                    } else {
+                        showToast(`Error: ${result.detail}`, 'error');
+                    }
                 }
             } catch (err) {
-                showToast('Error creating service', 'error');
+                showToast(isDeployMode ? 'Error deploying service' : 'Error creating service', 'error');
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+                // Reset modal to create mode
+                const modalTitle = createServiceModal.querySelector('h3');
+                if (modalTitle) modalTitle.textContent = 'Create Olas Service';
+                const nameInput = document.getElementById('new-service-name');
+                const chainSelect = document.getElementById('new-service-chain');
+                const agentTypeSelect = document.getElementById('new-service-agent-type');
+                nameInput.disabled = false;
+                nameInput.style.opacity = '';
+                nameInput.style.backgroundColor = '';
+                nameInput.style.color = '';
+                chainSelect.disabled = false;
+                chainSelect.style.opacity = '';
+                chainSelect.style.backgroundColor = '';
+                chainSelect.style.color = '';
+                agentTypeSelect.disabled = false;
+                agentTypeSelect.style.opacity = '';
+                agentTypeSelect.style.backgroundColor = '';
+                agentTypeSelect.style.color = '';
+                delete createServiceForm.dataset.deployMode;
+                delete createServiceForm.dataset.deployServiceKey;
             }
         });
     }
@@ -1852,7 +1982,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Funding service...', 'info');
 
             try {
-                const resp = await authFetch(`/api/olas/fund/${serviceKey}`, {
+                const resp = await authFetch(`/ api / olas / fund / ${serviceKey} `, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1863,10 +1993,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await resp.json();
                 if (resp.ok) {
                     const fundedAccounts = Object.keys(result.funded || {});
-                    showToast(`Funded ${fundedAccounts.join(', ')}!`, 'success');
+                    showToast(`Funded ${fundedAccounts.join(', ')} !`, 'success');
                     refreshSingleService(serviceKey);
                 } else {
-                    showToast(`Error: ${result.detail}`, 'error');
+                    showToast(`Error: ${result.detail} `, 'error');
                 }
             } catch (err) {
                 showToast('Error funding service', 'error');

@@ -46,18 +46,20 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
     try:
         import json
         from concurrent.futures import ThreadPoolExecutor
-        from iwa.core.chain import ChainInterfaces
+        from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
         from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
+        print(f"DEBUG: Staking Contracts for {chain}: {contracts}")
 
         # Load ABI once
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
             abi = json.load(f)
 
         # Get correct web3 instance
-        w3 = getattr(ChainInterfaces(), chain.lower()).web3
+        w3 = ChainInterface(chain).web3
+        print(f"DEBUG: Web3 Instance: {w3}")
 
         def check_availability(name, address):
             try:
@@ -66,8 +68,7 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
                 max_services = contract.functions.maxNumServices().call()
                 used = len(service_ids)
 
-                # Check for explicit "Full" in name as a fallback hint,
-                # but trust the chain data.
+                print(f"DEBUG: {name}: {used}/{max_services}")
 
                 return {
                     "name": name,
@@ -75,11 +76,15 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
                     "usage": {
                         "used": used,
                         "max": max_services,
+                        "available_slots": max_services - used,
                         "available": used < max_services,
                     },
                 }
             except Exception as e:
+                print(f"DEBUG: Failed for {name}: {e}")
                 logger.warning(f"Failed to check availability for {name} ({address}): {e}")
+                import traceback
+                traceback.print_exc()
                 # Return basic info with assumed availability (or not)
                 return {
                     "name": name,
@@ -96,9 +101,19 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
             for future in futures:
                 results.append(future.result())
 
-        return results
+        print(f"DEBUG: Final Results: {results}")
+
+        # Filter valid contracts (fetched info) OR unverified (RPC failed)
+        # But exclude contracts KNOWN to be full (usage exists AND available <= 0)
+        return [
+            r for r in results
+            if r["usage"] is None or r["usage"]["available"] > 0
+        ]
 
     except Exception as e:
+        print(f"DEBUG: Top Level Error: {e}")
+        import traceback
+        traceback.print_exc()
         logger.error(f"Error fetching staking contracts: {e}")
         return []
 
@@ -202,6 +217,81 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
         raise
     except Exception as e:
         logger.error(f"Error creating service: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/deploy/{service_key}",
+    summary="Deploy Service",
+    description="Deploy an existing PRE_REGISTRATION service using spin_up.",
+)
+def deploy_service(
+    service_key: str,
+    staking_contract: Optional[str] = None,
+    auth: bool = Depends(verify_auth),
+):
+    """Deploy an existing service (spin_up from PRE_REGISTRATION to DEPLOYED/STAKED)."""
+    try:
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        if "olas" not in config.plugins:
+            raise HTTPException(status_code=404, detail="Olas plugin not configured")
+
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+        manager._init_contracts(service.chain_name)
+
+        # Get current state
+        current_state = manager.get_service_state()
+        if current_state != "PRE_REGISTRATION":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Service is not in PRE_REGISTRATION state (current: {current_state})",
+            )
+
+        # Set up staking contract if provided
+        staking_obj = None
+        if staking_contract:
+            try:
+                staking_obj = StakingContract(staking_contract, service.chain_name)
+                logger.info(f"Will stake in {staking_contract} after deployment")
+            except Exception as e:
+                logger.warning(f"Could not set up staking contract: {e}")
+
+        logger.info(f"Running spin_up for service {service_key}...")
+
+        # Use spin_up to deploy (and optionally stake)
+        success = manager.spin_up(
+            service_id=service.service_id,
+            staking_contract=staking_obj,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="spin_up failed. Check server logs for details.",
+            )
+
+        final_state = manager.get_service_state()
+        return {
+            "status": "success",
+            "service_key": service_key,
+            "final_state": final_state,
+            "staked": staking_obj is not None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deploying service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
