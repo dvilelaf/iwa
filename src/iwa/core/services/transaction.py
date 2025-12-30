@@ -65,7 +65,11 @@ class TransactionService:
                         to_addr = tx.get("to", "")
                         value_wei = tx.get("value", 0)
                         gas_used = getattr(receipt, "gasUsed", 0)
-                        gas_price = getattr(receipt, "effectiveGasPrice", tx.get("gasPrice", tx.get("maxFeePerGas", 0)))
+                        gas_price = getattr(
+                            receipt,
+                            "effectiveGasPrice",
+                            tx.get("gasPrice", tx.get("maxFeePerGas", 0)),
+                        )
                         gas_cost_wei = gas_used * gas_price if gas_price else 0
 
                         # Calculate gas value in EUR

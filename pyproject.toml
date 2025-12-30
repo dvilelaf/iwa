@@ -45,6 +45,7 @@ dev = [
     "mkdocstrings[python]>=0.27.0",
     "bandit>=1.9.2",
     "pip-audit>=2.10.0",
+    "djlint>=1.34.1",
 ]
 
 [build-system]
@@ -123,3 +124,7 @@ follow_imports = "skip"
 [tool.bandit]
 exclude_dirs = ["tests", "src/tests", "src/iwa/plugins/olas/tests"]
 skips = ["B101", "B105", "B106", "B110", "B107", "B112"]
+[tool.djlint]
+profile = "jinja"
+extension = "html"
+indent = 4

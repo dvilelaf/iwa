@@ -231,7 +231,7 @@ class ServiceManager:
             return service_id
         return service_id
 
-    def activate_registration(self) -> bool:
+    def activate_registration(self) -> bool:  # noqa: C901
         """Activate registration for the service."""
         service_id = self.service.service_id
         # Check that the service is created
@@ -259,18 +259,22 @@ class ServiceManager:
                 utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
                 if utility_address:
-                    required_approval = Web3.to_wei(1000, "ether") # Approve generous amount to be safe
+                    required_approval = Web3.to_wei(
+                        1000, "ether"
+                    )  # Approve generous amount to be safe
 
                     # Check current allowance
                     allowance = self.wallet.transfer_service.get_erc20_allowance(
                         owner_address_or_tag=self.service.service_owner_address,
                         spender_address=utility_address,
                         token_address_or_name=token_address,
-                        chain_name=self.service.chain_name
+                        chain_name=self.service.chain_name,
                     )
 
-                    if allowance < Web3.to_wei(10, "ether"): # Min threshold check
-                        logger.info(f"Low allowance ({allowance}). Approving Token Utility {utility_address}")
+                    if allowance < Web3.to_wei(10, "ether"):  # Min threshold check
+                        logger.info(
+                            f"Low allowance ({allowance}). Approving Token Utility {utility_address}"
+                        )
                         success_approve = self.wallet.transfer_service.approve_erc20(
                             owner_address_or_tag=self.service.service_owner_address,
                             spender_address_or_tag=utility_address,
@@ -279,7 +283,7 @@ class ServiceManager:
                             chain_name=self.service.chain_name,
                         )
                         if not success_approve:
-                             logger.warning("Token approval transaction returned failure.")
+                            logger.warning("Token approval transaction returned failure.")
             except Exception as e:
                 logger.warning(f"Failed to check/approve tokens: {e}")
 
@@ -864,8 +868,6 @@ class ServiceManager:
         self.service.staking_contract_address = None
         self._update_and_save_service_state()
 
-
-
         logger.info("Service unstaked successfully")
         return True
 
@@ -874,6 +876,7 @@ class ServiceManager:
 
         Returns:
             str: Service state name (e.g., DEPLOYED, TERMINATED_BONDED).
+
         """
         if not self.service:
             return "UNKNOWN"
@@ -1500,10 +1503,11 @@ class ServiceManager:
                     drained["safe"] = result
                     logger.info(f"Drained Safe: {result}")
                 else:
-                    logger.warning(f"[DRAIN-DEBUG] Safe drain returned None/empty")
+                    logger.warning("[DRAIN-DEBUG] Safe drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Safe: {e}")
                 import traceback
+
                 logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
 
         # Step 3: Drain the Agent account
@@ -1521,10 +1525,11 @@ class ServiceManager:
                     drained["agent"] = result
                     logger.info(f"Drained Agent: {result}")
                 else:
-                    logger.warning(f"[DRAIN-DEBUG] Agent drain returned None/empty")
+                    logger.warning("[DRAIN-DEBUG] Agent drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Agent: {e}")
                 import traceback
+
                 logger.warning(f"[DRAIN-DEBUG] Agent traceback: {traceback.format_exc()}")
 
         # Step 4: Drain the Owner account
@@ -1542,10 +1547,11 @@ class ServiceManager:
                     drained["owner"] = result
                     logger.info(f"Drained Owner: {result}")
                 else:
-                    logger.warning(f"[DRAIN-DEBUG] Owner drain returned None/empty")
+                    logger.warning("[DRAIN-DEBUG] Owner drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Owner: {e}")
                 import traceback
+
                 logger.warning(f"[DRAIN-DEBUG] Owner traceback: {traceback.format_exc()}")
 
         logger.info(f"Drain complete. Accounts drained: {list(drained.keys())}")

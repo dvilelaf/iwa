@@ -1,8 +1,10 @@
 """Olas Router for Web API."""
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
@@ -46,6 +48,7 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
     try:
         import json
         from concurrent.futures import ThreadPoolExecutor
+
         from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
         from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
@@ -84,6 +87,7 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
                 print(f"DEBUG: Failed for {name}: {e}")
                 logger.warning(f"Failed to check availability for {name} ({address}): {e}")
                 import traceback
+
                 traceback.print_exc()
                 # Return basic info with assumed availability (or not)
                 return {
@@ -95,8 +99,7 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
         results = []
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [
-                executor.submit(check_availability, name, addr)
-                for name, addr in contracts.items()
+                executor.submit(check_availability, name, addr) for name, addr in contracts.items()
             ]
             for future in futures:
                 results.append(future.result())
@@ -105,21 +108,15 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
 
         # Filter valid contracts (fetched info) OR unverified (RPC failed)
         # But exclude contracts KNOWN to be full (usage exists AND available <= 0)
-        return [
-            r for r in results
-            if r["usage"] is None or r["usage"]["available"] > 0
-        ]
+        return [r for r in results if r["usage"] is None or r["usage"]["available"] > 0]
 
     except Exception as e:
         print(f"DEBUG: Top Level Error: {e}")
         import traceback
+
         traceback.print_exc()
         logger.error(f"Error fetching staking contracts: {e}")
         return []
-
-
-from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class CreateServiceRequest(BaseModel):
@@ -145,9 +142,10 @@ class CreateServiceRequest(BaseModel):
 def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
     """Create a new Olas service using spin_up for seamless deployment."""
     try:
+        from web3 import Web3
+
         from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
-        from web3 import Web3
 
         manager = ServiceManager(wallet)
 
@@ -362,11 +360,11 @@ def register_agent(service_key: str, auth: bool = Depends(verify_auth)):
 
 
 @router.post(
-    "/deploy/{service_key}",
-    summary="Deploy Service",
+    "/deploy-step/{service_key}",
+    summary="Deploy Service (Step 3)",
     description="Deploy the service (step 3, creates multisig Safe).",
 )
-def deploy_service(service_key: str, auth: bool = Depends(verify_auth)):
+def deploy_service_step(service_key: str, auth: bool = Depends(verify_auth)):
     """Deploy the service."""
     try:
         from iwa.plugins.olas.service_manager import ServiceManager
@@ -392,6 +390,7 @@ def deploy_service(service_key: str, auth: bool = Depends(verify_auth)):
     except Exception as e:
         logger.error(f"Error deploying service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
+
 
 @router.get(
     "/services/basic",
@@ -649,9 +648,7 @@ def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
         # Prepare staking contract if service is staked
         staking_contract = None
         if service.staking_contract_address:
-            staking_contract = StakingContract(
-                service.staking_contract_address, service.chain_name
-            )
+            staking_contract = StakingContract(service.staking_contract_address, service.chain_name)
 
         # Use wind_down which handles unstake → terminate → unbond
         success = manager.wind_down(staking_contract=staking_contract)
@@ -669,6 +666,7 @@ def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
     except Exception as e:
         logger.error(f"Error winding down service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
+
 
 @router.post(
     "/claim/{service_key}",
@@ -725,9 +723,7 @@ def unstake_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager.service = service
 
         # We need the staking contract instance
-        staking_contract = StakingContract(
-            service.staking_contract_address, service.chain_name
-        )
+        staking_contract = StakingContract(service.staking_contract_address, service.chain_name)
 
         success = manager.unstake(staking_contract)
         if success:
@@ -763,9 +759,7 @@ def checkpoint_service(service_key: str, auth: bool = Depends(verify_auth)):
         manager = ServiceManager(wallet)
         manager.service = service
 
-        staking_contract = StakingContract(
-            service.staking_contract_address, service.chain_name
-        )
+        staking_contract = StakingContract(service.staking_contract_address, service.chain_name)
 
         success = manager.call_checkpoint(staking_contract)
         if success:
@@ -879,8 +873,9 @@ def drain_service(service_key: str, auth: bool = Depends(verify_auth)):
         except Exception as drain_ex:
             logger.error(f"[DRAIN] drain_service threw exception: {drain_ex}")
             import traceback
+
             logger.error(f"[DRAIN] Traceback: {traceback.format_exc()}")
-            raise HTTPException(status_code=400, detail=str(drain_ex))
+            raise HTTPException(status_code=400, detail=str(drain_ex)) from drain_ex
 
         if not drained:
             raise HTTPException(
@@ -898,4 +893,3 @@ def drain_service(service_key: str, auth: bool = Depends(verify_auth)):
     except Exception as e:
         logger.error(f"Error draining service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
-

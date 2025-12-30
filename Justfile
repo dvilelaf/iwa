@@ -16,10 +16,14 @@ reset-tenderly profile="1":
 format:
     uv run ruff format src/
     uv run ruff check src/ --fix
+    uv run djlint src/ --reformat
+    npx -y prettier 'src/**/*.{js,css}' --write
 
 # Check code (lint only)
-check:
+check: types
     uv run ruff check src/
+    uv run djlint src/ --check
+    npx -y prettier 'src/**/*.{js,css}' --check
 
 # Run security checks
 security:

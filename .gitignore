@@ -40,3 +40,5 @@ config.yaml
 tenderly_3.yaml
 
 iwa.code-workspace
+
+node_modules/
