@@ -155,17 +155,12 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
         staking_contract = None
         if req.token_address:
             if req.staking_contract:
-                try:
-                    logger.info(f"Fetching bond requirement from {req.staking_contract}...")
-                    staking_contract = StakingContract(req.staking_contract, req.chain)
-                    # The agent bond should match the staking deposit (50/50 split)
-                    bond_amount = staking_contract.min_staking_deposit
-                    logger.info(f"Required bond amount: {bond_amount} wei")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to fetch bond from staking contract: {e}. Using default 50 OLAS."
-                    )
-                    bond_amount = Web3.to_wei(50, "ether")
+                # If a contract is specified, we MUST use its requirements
+                logger.info(f"Fetching requirements from {req.staking_contract}...")
+                staking_contract = StakingContract(req.staking_contract, req.chain)
+                reqs = staking_contract.get_requirements()
+                bond_amount = reqs["required_agent_bond"]
+                logger.info(f"Required bond amount from contract: {bond_amount} wei")
             else:
                 # Default to 1 wei of the service token if no staking contract specified
                 bond_amount = Web3.to_wei(1, "wei")
@@ -609,6 +604,10 @@ def stake_service(
 
         manager = ServiceManager(wallet)
         manager.service = service
+
+        # Ensure staking_contract is a valid address format
+        if not staking_contract.startswith("0x"):
+             raise HTTPException(status_code=400, detail=f"Invalid staking contract address: {staking_contract}")
 
         staking = StakingContract(staking_contract, service.chain_name)
         success = manager.stake(staking)

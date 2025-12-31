@@ -96,6 +96,24 @@ class StakingContract(ContractInstance):
         self.min_staking_duration_hours = self.call("minStakingDuration") / 3600
         self.staking_token_address = self.call("stakingToken")
 
+    def get_requirements(self) -> Dict[str, Union[str, int]]:
+        """Get the contract requirements for token and deposits.
+
+        Returns:
+            Dict containing:
+                - staking_token: address of the token required
+                - min_staking_deposit: amount required to be paid during stake()
+                - required_agent_bond: amount required to be set during service creation
+        """
+        # For Olas Trader contracts (Hobbyist, Alpha, Beta, etc.),
+        # the total OLAS is split 50/50:
+        # 50% as agent bond (in registry) and 50% as staking deposit (passed to stake()).
+        return {
+            "staking_token": self.staking_token_address,
+            "min_staking_deposit": self.min_staking_deposit,
+            "required_agent_bond": self.min_staking_deposit,
+        }
+
     def calculate_accrued_staking_reward(self, service_id: int) -> int:
         """Calculate the accrued staking reward for a given service ID."""
         return self.call("calculateStakingLastReward", service_id)

@@ -636,7 +636,13 @@ class ServiceManager:
             True if staking succeeded, False otherwise.
 
         """
-        erc20_contract = ERC20Contract(staking_contract.staking_token_address)
+        # Check centralized staking requirements
+        reqs = staking_contract.get_requirements()
+        min_deposit = reqs["min_staking_deposit"]
+        required_bond = reqs["required_agent_bond"]
+        staking_token = reqs["staking_token"].lower()
+
+        erc20_contract = ERC20Contract(staking_token)
         print(f"[STAKE-SM] Checking requirements for service {self.service.service_id}", flush=True)
         logger.info(f"Checking stake requirements for service {self.service.service_id}")
 
@@ -658,7 +664,6 @@ class ServiceManager:
         logger.info("Service is deployed")
 
         # Check token compatibility - service must be created with same token as staking contract expects
-        staking_token = staking_contract.staking_token_address.lower()
         service_token = (self.service.token_address or "").lower()
         print(
             f"[STAKE-SM] Token check: service={service_token}, staking={staking_token}", flush=True
@@ -676,6 +681,33 @@ class ServiceManager:
 
         logger.info("Token compatibility check passed")
 
+        # Check that the service has enough agent bond
+        # We check for the first agent ID as Olas services usually have one type for traders
+        try:
+            # Get the first agent ID for this service
+            agent_ids = service_info["agent_ids"]
+            if not agent_ids:
+                logger.error("No agent IDs found for service")
+                return False
+
+            agent_id = agent_ids[0]
+            agent_params = self.registry.get_agent_params(self.service.service_id, agent_id)
+            current_bond = agent_params["bond"]
+
+            print(f"[STAKE-SM] Bond check: current={current_bond}, required={required_bond}", flush=True)
+            logger.info(f"Agent bond check: current={current_bond}, required={required_bond}")
+
+            if current_bond < required_bond:
+                error_msg = (
+                    f"Service agent bond is too low ({current_bond} < {required_bond}). "
+                    "Service must be created with the correct bond amount to be stakeable."
+                )
+                print(f"[STAKE-SM] FAIL: {error_msg}", flush=True)
+                logger.error(error_msg)
+                return False
+        except Exception as e:
+            logger.warning(f"Could not verify agent bond: {e}")
+
         # Check that there are free slots
         staked_count = len(staking_contract.get_service_ids())
         max_services = staking_contract.max_num_services
@@ -686,9 +718,8 @@ class ServiceManager:
             logger.error("Staking contract is full, no free slots available")
             return False
 
-        # Check that there are enough OLAS
+        # Check that there are enough OLAS for the deposit
         master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
-        min_deposit = staking_contract.min_staking_deposit
         print(
             f"[STAKE-SM] OLAS balance: {master_balance} wei, min_deposit: {min_deposit} wei",
             flush=True,
@@ -770,6 +801,9 @@ class ServiceManager:
 
         if not success:
             print("[STAKE-SM] FAIL: Stake transaction failed", flush=True)
+            if receipt and "status" in receipt and receipt["status"] == 0:
+                logger.error(f"Stake transaction reverted. Receipt: {receipt}")
+                # Try to decode error if possible (though for status 0 receipt it's too late for simple decoding without re-tracing)
             logger.error("Failed to stake service")
             return False
 
@@ -1495,10 +1529,12 @@ class ServiceManager:
         logger.info(f"Draining service {self.service.key} to {target}")
 
         # Step 1: Claim rewards if staked
+        claimed_rewards = 0
         if claim_rewards and self.service.staking_contract_address:
             try:
                 success, amount = self.claim_rewards()
                 if success and amount > 0:
+                    claimed_rewards = amount
                     logger.info(f"Claimed {amount / 1e18:.4f} OLAS rewards")
             except Exception as e:
                 logger.warning(f"Could not claim rewards: {e}")
@@ -1508,23 +1544,49 @@ class ServiceManager:
         if self.service.multisig_address:
             safe_addr = str(self.service.multisig_address)
             logger.info(f"[DRAIN-DEBUG] Attempting to drain Safe: {safe_addr}")
-            try:
-                result = self.wallet.drain(
-                    from_address_or_tag=safe_addr,
-                    to_address_or_tag=target,
-                    chain_name=chain,
-                )
-                logger.info(f"[DRAIN-DEBUG] Safe drain result: {result}")
-                if result:
-                    drained["safe"] = result
-                    logger.info(f"Drained Safe: {result}")
-                else:
-                    logger.warning("[DRAIN-DEBUG] Safe drain returned None/empty")
-            except Exception as e:
-                logger.warning(f"Could not drain Safe: {e}")
-                import traceback
 
-                logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
+            # Retry loop if we claimed rewards to allow for RPC indexing
+            max_retries = 6 if claimed_rewards > 0 else 1
+
+            for attempt in range(max_retries):
+                try:
+                    result = self.wallet.drain(
+                        from_address_or_tag=safe_addr,
+                        to_address_or_tag=target,
+                        chain_name=chain,
+                    )
+                    logger.info(f"[DRAIN-DEBUG] Safe drain result (attempt {attempt+1}): {result}")
+
+                    if result:
+                        # Normalize result (handle Tuple[bool, dict] from EOA/TransactionService)
+                        if isinstance(result, tuple) and len(result) >= 2:
+                            success, receipt = result
+                            if success:
+                                tx_hash = receipt.get("transactionHash")
+                                if hasattr(tx_hash, "hex"):
+                                    result = tx_hash.hex()
+                                else:
+                                    result = str(tx_hash)
+                            else:
+                                result = None
+
+                        if result:
+                            drained["safe"] = result
+                            logger.info(f"Drained Safe: {result}")
+                            break
+
+                    if attempt < max_retries - 1:
+                        logger.info(f"Waiting for rewards to appear in balance (attempt {attempt+1})...")
+                        import time
+                        time.sleep(3)
+
+                except Exception as e:
+                    logger.warning(f"Could not drain Safe: {e}")
+                    import traceback
+                    logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
+                    if attempt < max_retries - 1:
+                        import time
+                        time.sleep(3)
 
         # Step 3: Drain the Agent account
         if self.service.agent_address:
@@ -1538,8 +1600,21 @@ class ServiceManager:
                 )
                 logger.info(f"[DRAIN-DEBUG] Agent drain result: {result}")
                 if result:
-                    drained["agent"] = result
-                    logger.info(f"Drained Agent: {result}")
+                    # Normalize result
+                    if isinstance(result, tuple) and len(result) >= 2:
+                        success, receipt = result
+                        if success:
+                            tx_hash = receipt.get("transactionHash")
+                            if hasattr(tx_hash, "hex"):
+                                result = tx_hash.hex()
+                            else:
+                                result = str(tx_hash)
+                        else:
+                            result = None
+
+                    if result:
+                        drained["agent"] = result
+                        logger.info(f"Drained Agent: {result}")
                 else:
                     logger.warning("[DRAIN-DEBUG] Agent drain returned None/empty")
             except Exception as e:
@@ -1560,8 +1635,21 @@ class ServiceManager:
                 )
                 logger.info(f"[DRAIN-DEBUG] Owner drain result: {result}")
                 if result:
-                    drained["owner"] = result
-                    logger.info(f"Drained Owner: {result}")
+                    # Normalize result
+                    if isinstance(result, tuple) and len(result) >= 2:
+                        success, receipt = result
+                        if success:
+                            tx_hash = receipt.get("transactionHash")
+                            if hasattr(tx_hash, "hex"):
+                                result = tx_hash.hex()
+                            else:
+                                result = str(tx_hash)
+                        else:
+                            result = None
+
+                    if result:
+                        drained["owner"] = result
+                        logger.info(f"Drained Owner: {result}")
                 else:
                     logger.warning("[DRAIN-DEBUG] Owner drain returned None/empty")
             except Exception as e:
@@ -1569,6 +1657,10 @@ class ServiceManager:
                 import traceback
 
                 logger.warning(f"[DRAIN-DEBUG] Owner traceback: {traceback.format_exc()}")
+
+        if not drained and claimed_rewards > 0:
+            logger.info("Drain returned empty but rewards were claimed. Reporting partial success.")
+            drained["safe_rewards_only"] = {"olas": claimed_rewards / 1e18}
 
         logger.info(f"Drain complete. Accounts drained: {list(drained.keys())}")
         return drained

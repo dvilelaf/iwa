@@ -672,7 +672,7 @@ class TransferService:
         logger.info("Sending multisend transaction")
 
         if is_safe:
-            self.safe_service.execute_safe_transaction(
+            return self.safe_service.execute_safe_transaction(
                 safe_address_or_tag=from_address_or_tag,
                 to=multi_send_contract.address,
                 value=transaction["value"],
@@ -681,7 +681,7 @@ class TransferService:
                 operation=SafeOperationEnum.DELEGATE_CALL.value,
             )
         else:
-            self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)
+            return self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)
 
     def get_erc20_allowance(
         self,
