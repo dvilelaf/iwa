@@ -171,6 +171,10 @@ class ServiceManager:
             logger.error(f"prepare_create_tx failed: {e}")
             return None
 
+        if not create_tx:
+            logger.error("prepare_create_tx returned None (preparation failed)")
+            return None
+
         logger.info(f"Prepared create_tx: to={create_tx.get('to')}, value={create_tx.get('value')}")
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=create_tx,
