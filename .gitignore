@@ -9,35 +9,30 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment files (outside data/)
 *.env
 
 .python-version
 
-wallet.json
+# Data directory (wallet, secrets, config, db)
+data/
 
 .coverage
 
 *.log
-
-activity.db
-
-activity.db-shm
 
 debug_trace.txt
 
 TODO.md
 
 *.db-wal
+*.db-shm
 
 tenderly_1.yaml
-
 tenderly_2.yaml
+tenderly_3.yaml
 
 config.toml
-
-config.yaml
-
-tenderly_3.yaml
 
 iwa.code-workspace
 

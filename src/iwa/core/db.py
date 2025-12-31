@@ -13,12 +13,10 @@ from peewee import (
 )
 from playhouse.migrate import SqliteMigrator, migrate
 
-from iwa.core.constants import WALLET_PATH
+from iwa.core.constants import DATA_DIR
 
-# Determine DB path (sibling to wallet.json)
-# Assuming WALLET_PATH is like ~/.iwa/wallet.json
-# DB will be ~/.iwa/activity.db
-DB_PATH = Path(WALLET_PATH).parent / "activity.db"
+# Database stored in data directory alongside other data files
+DB_PATH = DATA_DIR / "activity.db"
 
 db = SqliteDatabase(
     str(DB_PATH),
