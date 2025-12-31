@@ -1180,6 +1180,7 @@ document.addEventListener("DOMContentLoaded", () => {
           state: details.state,
           accounts: details.accounts,
           staking: details.staking,
+          agent_bond: details.agent_bond,
         };
         cachedServices[serviceIndex] = updatedService;
         state.olasServicesCache[state.activeChain] = cachedServices;
@@ -1655,7 +1656,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     `
         : service.state === "DEPLOYED"
           ? `
-                        <button class="btn-danger btn-sm" onclick="showStakeModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
+                        <button class="btn-danger btn-sm" disabled
+                                style="opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
+                                title="Cannot stake a deployed service. Terminate first to change staking configuration.">
                             Stake
                         </button>
                     `
