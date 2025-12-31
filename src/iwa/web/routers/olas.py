@@ -167,8 +167,8 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
                     )
                     bond_amount = Web3.to_wei(50, "ether")
             else:
-                # Default to 50 OLAS if no staking contract specified
-                bond_amount = Web3.to_wei(50, "ether")
+                # Default to 1 wei of the service token if no staking contract specified
+                bond_amount = Web3.to_wei(1, "wei")
 
         # Step 1: Create the service (PRE_REGISTRATION state)
         logger.info(
