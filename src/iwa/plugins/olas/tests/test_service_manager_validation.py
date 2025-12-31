@@ -47,8 +47,8 @@ def test_drain_service_partial_failures(sm, mock_wallet):
 
     with patch.object(sm, "claim_rewards", return_value=(True, 10**18)):
         # Wallet.drain is called for Safe and Agent
-        def mock_drain(from_tag_or_address, **kwargs):
-            if from_tag_or_address == VALID_ADDR_2:  # Safe
+        def mock_drain(from_address_or_tag=None, to_address_or_tag=None, chain_name=None):
+            if from_address_or_tag == VALID_ADDR_2:  # Safe
                 raise Exception("Safe drain failed")
             return {"native": 0.5}
 

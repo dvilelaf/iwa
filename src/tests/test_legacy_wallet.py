@@ -236,7 +236,7 @@ def test_sign_and_send_transaction_account_not_found(wallet, mock_account_servic
     assert success is False
     assert receipt == {}
     wallet.transaction_service.sign_and_send.assert_called_with(
-        {"to": "0x123"}, "unknown-tag", "gnosis"
+        {"to": "0x123"}, "unknown-tag", "gnosis", None
     )
 
 
@@ -252,7 +252,7 @@ def test_sign_and_send_transaction_success(wallet, mock_key_storage):
     # Assert
     assert success is True
     assert receipt["status"] == 1
-    wallet.transaction_service.sign_and_send.assert_called_with(tx, "tag", "gnosis")
+    wallet.transaction_service.sign_and_send.assert_called_with(tx, "tag", "gnosis", None)
 
 
 def test_get_accounts_balances(wallet, mock_key_storage, mock_chain_interfaces):

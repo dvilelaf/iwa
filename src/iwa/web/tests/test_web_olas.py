@@ -160,3 +160,253 @@ def test_olas_actions(client, mock_olas_config):
             response = client.post("/api/olas/checkpoint/gnosis:1")
             assert response.status_code == 200
             assert response.json()["status"] == "success"
+
+
+# --- Additional tests for uncovered endpoints ---
+
+
+def test_get_staking_contracts(client):
+    """Test /api/olas/staking-contracts endpoint - returns empty list on error."""
+    # The endpoint internally catches exceptions and returns []
+    response = client.get("/api/olas/staking-contracts?chain=gnosis")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+def test_create_service(client, mock_olas_config):
+    """Test /api/olas/create endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.create.return_value = 123
+        mock_sm.spin_up.return_value = True
+        mock_sm.service = MagicMock()
+        mock_sm.service.service_id = 123
+
+        response = client.post(
+            "/api/olas/create",
+            json={
+                "service_name": "Test Service",
+                "chain": "gnosis",
+                "bond_amount_olas": 100,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+
+
+def test_create_service_failure(client, mock_olas_config):
+    """Test /api/olas/create when creation fails."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.create.return_value = None  # Creation fails
+
+        response = client.post(
+            "/api/olas/create",
+            json={
+                "service_name": "Test Service",
+                "chain": "gnosis",
+            },
+        )
+        # API returns 400 on creation failure
+        assert response.status_code == 400
+
+
+def test_deploy_service(client, mock_olas_config):
+    """Test /api/olas/deploy/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.spin_up.return_value = True
+        mock_sm.service = mock_olas_config.services["gnosis:1"]
+        mock_sm.get_service_state.return_value = "PRE_REGISTRATION"
+
+        response = client.post("/api/olas/deploy/gnosis:1")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_deploy_service_failure(client, mock_olas_config):
+    """Test /api/olas/deploy/{service_key} when deployment fails."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.spin_up.return_value = False
+        mock_sm.get_service_state.return_value = "PRE_REGISTRATION"
+
+        response = client.post("/api/olas/deploy/gnosis:1")
+        # API returns 400 on spin_up failure
+        assert response.status_code == 400
+
+
+def test_activate_registration(client, mock_olas_config):
+    """Test /api/olas/activate/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.activate_registration.return_value = True
+
+        response = client.post("/api/olas/activate/gnosis:1")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_register_agent(client, mock_olas_config):
+    """Test /api/olas/register/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.register_agent.return_value = True
+
+        # Correct URL is /register/ not /register-agent/
+        response = client.post("/api/olas/register/gnosis:1")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_deploy_step(client, mock_olas_config):
+    """Test /api/olas/deploy-step/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.deploy.return_value = "0xMultisig123"  # Returns multisig address
+
+        response = client.post("/api/olas/deploy-step/gnosis:1")
+        assert response.status_code == 200
+        data = response.json()
+        # API only returns {"status": "success"}, not multisig
+        assert data["status"] == "success"
+
+
+def test_stake_service(client, mock_olas_config):
+    """Test /api/olas/stake/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+        patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.stake.return_value = True
+
+        response = client.post(
+            "/api/olas/stake/gnosis:1?staking_contract=0x1234567890123456789012345678901234567890"
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_terminate_service(client, mock_olas_config):
+    """Test /api/olas/terminate/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+        patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.wind_down.return_value = True
+
+        response = client.post("/api/olas/terminate/gnosis:1")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_fund_service(client, mock_olas_config):
+    """Test /api/olas/fund/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.wallet") as mock_wallet,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_wallet.send.return_value = "0xTxHash"
+
+        response = client.post(
+            "/api/olas/fund/gnosis:1",
+            json={"agent_amount_eth": 1.0, "safe_amount_eth": 2.0},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+
+
+def test_drain_service(client, mock_olas_config):
+    """Test /api/olas/drain/{service_key} endpoint."""
+    with (
+        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
+    ):
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": mock_olas_config.model_dump()}
+
+        mock_sm = mock_sm_cls.return_value
+        mock_sm.drain_service.return_value = {
+            "safe": {"native": 1.5, "olas": 100.0},
+            "agent": {"native": 0.5},
+        }
+
+        response = client.post("/api/olas/drain/gnosis:1")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "safe" in data["drained"]
+
+
+def test_service_not_found(client):
+    """Test endpoints return 404 when service not found."""
+    with patch("iwa.web.routers.olas.Config") as mock_config_cls:
+        mock_config = mock_config_cls.return_value
+        mock_config.plugins = {"olas": OlasConfig().model_dump()}
+
+        response = client.post("/api/olas/activate/gnosis:999")
+        assert response.status_code == 404
+
+        response = client.post("/api/olas/register/gnosis:999")
+        assert response.status_code == 404
+
+        response = client.post("/api/olas/deploy-step/gnosis:999")
+        assert response.status_code == 404

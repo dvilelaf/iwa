@@ -160,7 +160,7 @@ def test_sign_and_send_transaction(wallet, mock_keys_and_services):
     """Test sign_and_send_transaction."""
     wallet.sign_and_send_transaction({"to": "0x1"}, "owner", "gnosis")
     mock_keys_and_services["transaction_service"].return_value.sign_and_send.assert_called_with(
-        {"to": "0x1"}, "owner", "gnosis"
+        {"to": "0x1"}, "owner", "gnosis", None
     )
 
 

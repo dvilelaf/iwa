@@ -873,3 +873,146 @@ def test_wind_down_unbond_fails(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
 
     assert service_manager.wind_down() is False
+
+
+# --- REGRESSION TESTS for activate_registration (Dec 2025 bug fix) ---
+# These tests ensure the value parameter is ALWAYS set to security_deposit
+# and that the master account is used as signer, preventing the regression
+# where value=0 was incorrectly sent for token-based services.
+
+
+def test_activate_registration_token_service_sends_security_deposit_as_value(
+    service_manager, mock_wallet
+):
+    """REGRESSION TEST: Token services MUST send security_deposit as msg.value.
+
+    Bug context: A previous change incorrectly set value=0 for token-based services,
+    but the ServiceManager contract REQUIRES msg.value == security_deposit even for
+    token services (where security_deposit is typically 1 wei).
+    """
+    security_deposit = 1  # 1 wei for token services
+    service_manager.service.token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"  # OLAS
+
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": security_deposit,
+    }
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
+
+    # Mock balance check to pass
+    mock_wallet.balance_service = MagicMock()
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18  # Plenty of balance
+
+    service_manager.activate_registration()
+
+    # Verify the CRITICAL parameter - value MUST equal security_deposit
+    call_args = service_manager.manager.prepare_activate_registration_tx.call_args
+    assert call_args is not None, "prepare_activate_registration_tx was not called"
+    assert call_args.kwargs.get("value") == security_deposit, (
+        f"REGRESSION: value should be {security_deposit} (security_deposit), "
+        f"got {call_args.kwargs.get('value')}"
+    )
+
+
+def test_activate_registration_native_service_sends_security_deposit_as_value(
+    service_manager, mock_wallet
+):
+    """REGRESSION TEST: Native services MUST send security_deposit as msg.value."""
+    security_deposit = 50000000000000000000  # 50 xDAI for native services
+    service_manager.service.token_address = None  # Native service
+
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": security_deposit,
+    }
+    service_manager.registry.get_token.return_value = (
+        "0x0000000000000000000000000000000000000000"
+    )
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
+
+    service_manager.activate_registration()
+
+    # Verify the CRITICAL parameter - value MUST equal security_deposit
+    call_args = service_manager.manager.prepare_activate_registration_tx.call_args
+    assert call_args is not None, "prepare_activate_registration_tx was not called"
+    assert call_args.kwargs.get("value") == security_deposit, (
+        f"REGRESSION: value should be {security_deposit} (security_deposit), "
+        f"got {call_args.kwargs.get('value')}"
+    )
+
+
+def test_activate_registration_uses_master_account_as_from_address(service_manager, mock_wallet):
+    """REGRESSION TEST: activate_registration MUST use master_account.address as from_address.
+
+    Bug context: A previous change used service_owner_address instead of master_account,
+    which could fail if they differ or if master_account is the only funded account.
+    """
+    master_address = mock_wallet.master_account.address
+
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 1,
+    }
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
+
+    service_manager.activate_registration()
+
+    # Verify master_account is used as from_address
+    call_args = service_manager.manager.prepare_activate_registration_tx.call_args
+    assert call_args is not None, "prepare_activate_registration_tx was not called"
+    assert call_args.kwargs.get("from_address") == master_address, (
+        f"REGRESSION: from_address should be master_account.address ({master_address}), "
+        f"got {call_args.kwargs.get('from_address')}"
+    )
+
+
+def test_activate_registration_uses_master_account_as_signer(service_manager, mock_wallet):
+    """REGRESSION TEST: activate_registration MUST use master_account.address as signer.
+
+    Bug context: A previous change used service_owner_address as signer,
+    which could fail transaction signing.
+    """
+    master_address = mock_wallet.master_account.address
+
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 1,
+    }
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
+
+    service_manager.activate_registration()
+
+    # Verify master_account is used as signer
+    call_args = mock_wallet.sign_and_send_transaction.call_args
+    assert call_args is not None, "sign_and_send_transaction was not called"
+    assert call_args.kwargs.get("signer_address_or_tag") == master_address, (
+        f"REGRESSION: signer should be master_account.address ({master_address}), "
+        f"got {call_args.kwargs.get('signer_address_or_tag')}"
+    )
+
+
+def test_activate_registration_token_service_approves_token_utility(service_manager, mock_wallet):
+    """TEST: Token services should trigger TokenUtility approval when allowance is low."""
+    service_manager.service.token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"  # OLAS
+
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 1,
+    }
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
+
+    # Mock low allowance to trigger approval
+    mock_wallet.balance_service = MagicMock()
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.transfer_service.get_erc20_allowance.return_value = 0  # Low allowance
+    mock_wallet.transfer_service.approve_erc20.return_value = True
+
+    service_manager.activate_registration()
+
+    # Verify approval was called
+    mock_wallet.transfer_service.approve_erc20.assert_called()
