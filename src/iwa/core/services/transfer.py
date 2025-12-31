@@ -983,7 +983,7 @@ class TransferService:
         logger.info(
             f"Draining {len(transactions)} assets from {from_address_or_tag} to {to_address_or_tag}..."
         )
-        self.multi_send(
+        return self.multi_send(
             from_address_or_tag=from_address_or_tag,
             transactions=transactions,
             chain_name=chain_name,

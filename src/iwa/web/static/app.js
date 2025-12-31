@@ -727,13 +727,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  function showToast(msg, type = "info") {
+  function showToast(msg, type = "info", duration = 4000) {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
     toast.innerText = msg;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    setTimeout(() => toast.remove(), duration);
   }
 
   // Custom themed confirm dialog
