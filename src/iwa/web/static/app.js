@@ -1168,6 +1168,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Merge details into cached service
         const updatedService = {
           ...serviceData,
+          state: details.state,
           accounts: details.accounts,
           staking: details.staking,
         };
@@ -1271,6 +1272,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (serviceIndex !== -1) {
           const updatedService = {
             ...newService,
+            state: details.state,
             accounts: details.accounts,
             staking: details.staking,
           };
