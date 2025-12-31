@@ -9,7 +9,7 @@ from web3.types import Wei
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
-from iwa.core.models import Config
+from iwa.core.models import Config, EthereumAddress
 from iwa.core.utils import configure_logger
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import (
@@ -458,7 +458,7 @@ class ServiceManager:
             logger.error("Agent registration event not found")
             return False
 
-        self.service.agent_address = agent_account_address
+        self.service.agent_address = EthereumAddress(agent_account_address)
         self._update_and_save_service_state()
         return True
 
@@ -505,7 +505,7 @@ class ServiceManager:
             logger.error("Multisig address not found in deployment events")
             return None
 
-        self.service.multisig_address = multisig_address
+        self.service.multisig_address = EthereumAddress(multisig_address)
         self._update_and_save_service_state()
 
         # Register multisig in wallet KeyStorage
@@ -640,7 +640,8 @@ class ServiceManager:
         reqs = staking_contract.get_requirements()
         min_deposit = reqs["min_staking_deposit"]
         required_bond = reqs["required_agent_bond"]
-        staking_token = reqs["staking_token"].lower()
+        staking_token = Web3.to_checksum_address(reqs["staking_token"])
+        staking_token_lower = staking_token.lower()  # For comparison only
 
         erc20_contract = ERC20Contract(staking_token)
         print(f"[STAKE-SM] Checking requirements for service {self.service.service_id}", flush=True)
@@ -666,16 +667,16 @@ class ServiceManager:
         # Check token compatibility - service must be created with same token as staking contract expects
         service_token = (self.service.token_address or "").lower()
         print(
-            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token}", flush=True
+            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token_lower}", flush=True
         )
-        if service_token != staking_token:
+        if service_token != staking_token_lower:
             print(
                 "[STAKE-SM] FAIL: Token mismatch! Service token != staking contract token",
                 flush=True,
             )
             logger.error(
                 f"Token mismatch: service was created with {service_token or 'native'}, "
-                f"but staking contract requires {staking_token}"
+                f"but staking contract requires {staking_token_lower}"
             )
             return False
 
@@ -826,7 +827,7 @@ class ServiceManager:
             logger.error("Service is not staked after transaction")
             return False
 
-        self.service.staking_contract_address = staking_contract.address
+        self.service.staking_contract_address = EthereumAddress(staking_contract.address)
         self._update_and_save_service_state()
         print("[STAKE-SM] SUCCESS: Service staked and config saved", flush=True)
         logger.info("Service staked successfully")

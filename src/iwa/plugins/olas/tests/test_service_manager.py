@@ -11,6 +11,12 @@ from iwa.plugins.olas.contracts.staking import StakingState
 from iwa.plugins.olas.models import OlasConfig, Service
 from iwa.plugins.olas.service_manager import ServiceManager
 
+# Valid test addresses (checksummed)
+TEST_MULTISIG_ADDR = "0x5555555555555555555555555555555555555555"
+TEST_STAKING_ADDR = "0x6666666666666666666666666666666666666666"
+TEST_AGENT_ADDR = "0x7777777777777777777777777777777777777777"
+TEST_EXISTING_AGENT_ADDR = "0x8888888888888888888888888888888888888888"
+
 
 @pytest.fixture
 def mock_service():
@@ -221,11 +227,11 @@ def test_deploy_success(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [
         {"name": "DeployService"},
-        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
     ]
 
-    assert service_manager.deploy() == "0xMultisig"
-    assert service_manager.service.multisig_address == "0xMultisig"
+    assert service_manager.deploy() == TEST_MULTISIG_ADDR
+    assert service_manager.service.multisig_address == TEST_MULTISIG_ADDR
 
 
 def test_terminate_success(service_manager, mock_wallet):
@@ -263,7 +269,7 @@ def test_stake_success(service_manager, mock_wallet):
     staking_contract.get_service_ids.return_value = []
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
-    staking_contract.address = "0xStaking"
+    staking_contract.address = TEST_STAKING_ADDR
 
     service_manager.registry.get_service.return_value = {
         "state": ServiceState.DEPLOYED,
@@ -281,7 +287,7 @@ def test_stake_success(service_manager, mock_wallet):
         service_manager.registry.prepare_approve_tx.return_value = {"to": "0xApprove"}
 
         assert service_manager.stake(staking_contract) is True
-        assert service_manager.service.staking_contract_address == "0xStaking"
+        assert service_manager.service.staking_contract_address == TEST_STAKING_ADDR
 
 
 def test_unstake_success(service_manager, mock_wallet):
@@ -309,9 +315,9 @@ def test_register_agent_with_existing_address(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "RegisterInstance"}]
 
-    existing_agent = "0xExistingAgent1234567890123456789012345678"
+    existing_agent = TEST_EXISTING_AGENT_ADDR
     assert service_manager.register_agent(agent_address=existing_agent) is True
-    assert service_manager.service.agent_address == existing_agent
+    assert service_manager.service.agent_address == TEST_EXISTING_AGENT_ADDR
     # Should NOT create a new account
     mock_wallet.key_storage.create_account.assert_not_called()
     # Should NOT fund the agent (only for new accounts)
@@ -402,7 +408,7 @@ def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
         [{"name": "RegisterInstance"}],
         [
             {"name": "DeployService"},
-            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
         ],
     ]
 
@@ -450,7 +456,7 @@ def test_spin_up_from_active_registration(service_manager, mock_wallet):
         [{"name": "RegisterInstance"}],
         [
             {"name": "DeployService"},
-            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
         ],
     ]
 
@@ -482,7 +488,7 @@ def test_spin_up_from_finished_registration(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [
         {"name": "DeployService"},
-        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
     ]
 
     assert service_manager.spin_up() is True
@@ -523,7 +529,7 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
     staking_contract.get_service_ids.return_value = []
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
-    staking_contract.address = "0xStaking"
+    staking_contract.address = TEST_STAKING_ADDR
 
     with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
         mock_erc20.return_value.balance_of_wei.return_value = 200
@@ -633,11 +639,11 @@ def test_spin_up_with_existing_agent(service_manager, mock_wallet):
         [{"name": "RegisterInstance"}],
         [
             {"name": "DeployService"},
-            {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+            {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
         ],
     ]
 
-    existing_agent = "0xExistingAgent999999999999999999999999999"
+    existing_agent = TEST_EXISTING_AGENT_ADDR
     assert service_manager.spin_up(agent_address=existing_agent) is True
     # Verify agent address was not newly created
     mock_wallet.key_storage.create_account.assert_not_called()
@@ -731,7 +737,7 @@ def test_wind_down_from_staked(service_manager, mock_wallet):
         },  # final verification
     ]
     service_manager.registry.get_service.side_effect = state_sequence
-    service_manager.service.staking_contract_address = "0xStaking"
+    service_manager.service.staking_contract_address = TEST_STAKING_ADDR
 
     staking_contract = MagicMock()
     staking_contract.get_staking_state.return_value = StakingState.STAKED
@@ -802,7 +808,7 @@ def test_wind_down_staked_no_contract_provided(service_manager, mock_wallet):
         "state": ServiceState.DEPLOYED,
         "security_deposit": 50000000000000000000,
     }
-    service_manager.service.staking_contract_address = "0xStaking"
+    service_manager.service.staking_contract_address = TEST_STAKING_ADDR
 
     # No staking_contract provided
     assert service_manager.wind_down() is False
@@ -814,7 +820,7 @@ def test_wind_down_unstake_fails(service_manager, mock_wallet):
         "state": ServiceState.DEPLOYED,
         "security_deposit": 50000000000000000000,
     }
-    service_manager.service.staking_contract_address = "0xStaking"
+    service_manager.service.staking_contract_address = TEST_STAKING_ADDR
 
     staking_contract = MagicMock()
     staking_contract.get_staking_state.return_value = StakingState.STAKED
