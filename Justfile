@@ -12,6 +12,10 @@ dev:
 reset-tenderly profile="1":
     PYTHONPATH=src uv run src/iwa/tools/reset_tenderly.py --profile {{profile}}
 
+# Reset everything (tenderly, config, wallet)
+reset-all:
+    PYTHONPATH=src uv run src/iwa/tools/reset_env.py
+
 # Format code
 format:
     uv run ruff format src/
