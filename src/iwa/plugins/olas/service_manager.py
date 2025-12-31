@@ -413,27 +413,10 @@ class ServiceManager:
                     "No bond amount provided for token bonding. Agent might fail to bond."
                 )
             else:
-                # 1. Fund Agent with Bond Amount (Token)
-                logger.info(
-                    f"Funding agent {agent_account_address} with {bond_amount_wei} of token {token_address}"
-                )
-                fund_success = self.wallet.transfer_service.send(
-                    from_address_or_tag=self.wallet.master_account.address,
-                    to_address_or_tag=agent_account_address,
-                    token_address_or_name=token_address,
-                    amount_wei=bond_amount_wei,
-                    chain_name=self.service.chain_name,
-                )
-                if not fund_success:
-                    logger.error("Failed to fund agent with bond tokens")
-                    return False
+                # 1. Service Owner Approves Token Utility (for Bond)
+                # The service owner (operator) pays the bond, not the agent.
+                logger.info(f"Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
 
-                # 2. Agent Approves Token Utility
-                logger.info(f"Agent {agent_account_address} approving Token Utility for bond")
-                # Need to use agent account as signer. It's stored in key_storage.
-                # Wallet doesn't expose 'approve_erc20' with custom signer object directly?
-                # TransferService.approve_erc20 takes 'owner_address_or_tag'.
-                # Assuming 'agent_account_address' is recognized by wallet key_storage (it is, created there).
                 utility_address = str(
                     OLAS_CONTRACTS[self.service.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
                 )
