@@ -1668,6 +1668,28 @@ document.addEventListener("DOMContentLoaded", () => {
           let terminateTitle =
             "Wind down service: unstake (if staked) → terminate → unbond";
 
+          // If staked, check if we can unstake
+          if (isStaked) {
+            const canUnstake =
+              !staking.unstake_available_at ||
+              new Date() >= new Date(staking.unstake_available_at);
+
+            if (!canUnstake) {
+              terminateDisabled = "disabled";
+              terminateStyle =
+                "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
+
+              const diffMs =
+                new Date(staking.unstake_available_at) - new Date();
+              const diffMins = Math.ceil(diffMs / 60000);
+              const timeText = diffMins > 60
+                ? `~${Math.ceil(diffMins / 60)}h`
+                : `${diffMins}m`;
+
+              terminateTitle = `Cannot terminate yet (must unstake first). Minimum staking duration ends in ${timeText}`;
+            }
+          }
+
           if (isLoading) {
             terminateTitle = "Loading...";
           }
@@ -2313,7 +2335,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Funding service...", "info");
 
       try {
-        const resp = await authFetch(`/ api / olas / fund / ${serviceKey} `, {
+        const resp = await authFetch(`/api/olas/fund/${serviceKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
