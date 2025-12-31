@@ -733,7 +733,11 @@ document.addEventListener("DOMContentLoaded", () => {
     toast.className = `toast ${type}`;
     toast.innerText = msg;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), duration);
+    const remove = () => {
+      if (toast.parentElement) toast.remove();
+    };
+    setTimeout(remove, duration);
+    return remove;
   }
 
   // Custom themed confirm dialog
@@ -1072,7 +1076,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // Cache price
       state.olasPriceCache = priceData.price_eur;
 
-      if (!basicServices || basicServices.length === 0) {
+      // Handle API error response - if not OK, basicServices is an error object, not an array
+      if (!basicResp.ok) {
+        throw new Error(basicServices.detail || "Failed to load services");
+      }
+
+      if (!Array.isArray(basicServices) || basicServices.length === 0) {
         container.innerHTML = `<div class="empty-state glass"><p>No Olas services found for ${state.activeChain}.</p></div>`;
         return;
       }
@@ -1879,23 +1888,34 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     if (!confirmed) return;
 
-    showToast("Draining service...", "info");
+    const removeLoadingToast = showToast("Draining service... This may take up to 30 seconds.", "info", 60000);
+
     try {
       const resp = await authFetch(`/api/olas/drain/${serviceKey}`, {
         method: "POST",
       });
-      const result = await resp.json();
+
+      removeLoadingToast();
+
       if (resp.ok) {
+        const result = await resp.json();
         showToast("Service drained successfully!", "success");
-        refreshSingleService(serviceKey);
-        // Refresh main accounts too
-        state.balanceCache = {};
-        loadAccounts();
+
+        // SRE Fix: Wait for RPC to index new balances before refreshing
+        console.log("Waiting for RPC indexer...");
+        setTimeout(async () => {
+          await refreshSingleService(serviceKey);
+          loadAccounts(); // Refresh main accounts list too
+        }, 5000);
+
       } else {
-        showToast(`Error: ${result.detail} `, "error");
+        const result = await resp.json();
+        showToast(`Drain failed: ${result.detail}`, "error");
       }
     } catch (err) {
-      showToast("Error draining service", "error");
+      removeLoadingToast();
+      console.error(err);
+      showToast(`Error draining service: ${err.message}`, "error");
     }
   };
 
