@@ -35,7 +35,7 @@ import math
 import time
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from iwa.core.contracts.contract import ContractInstance
 from iwa.plugins.olas.contracts.activity_checker import ActivityCheckerContract
