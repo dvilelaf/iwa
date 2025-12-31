@@ -1025,7 +1025,8 @@ textarea:focus {
   font-weight: 500;
 }
 
-.staking-row .value.staked {
+.staking-row .value.staked,
+.staking-row .value.deployed {
   color: var(--success);
 }
 

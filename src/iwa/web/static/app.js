@@ -1096,6 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Merge details into service
             return {
               ...service,
+              state: details.state || service.state,
               accounts: details.accounts,
               staking: details.staking,
             };
@@ -1508,12 +1509,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="staking-info">
                     <div class="staking-row">
                         <span class="label">Status:</span>
-                        <span class="value ${isLoading ? "" : isStaked ? "staked" : "not-staked"}">
+                        <span class="value ${isLoading
+        ? ""
+        : isStaked
+          ? "staked"
+          : service.state === "DEPLOYED"
+            ? "deployed"
+            : "not-staked"
+      }">
                             ${isLoading ? '<span class="cell-spinner"></span>' : service.state ? service.state : isStaked ? "✓ STAKED" : "○ NOT STAKED"}
                         </span>
                     </div>
                     <div class="staking-row">
-                        <span class="label">Contract:</span>
+                        <span class="label">Staking contract:</span>
                         <span class="value address-cell">
                             ${isLoading
         ? '<span class="cell-spinner"></span>'
