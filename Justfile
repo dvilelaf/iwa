@@ -16,6 +16,10 @@ reset-tenderly profile="1":
 reset-all:
     PYTHONPATH=src uv run src/iwa/tools/reset_env.py
 
+# Check active tenderly profile
+check-tenderly-profile:
+    PYTHONPATH=src uv run src/iwa/tools/check_profile.py
+
 # Format code
 format:
     uv run ruff format src/
