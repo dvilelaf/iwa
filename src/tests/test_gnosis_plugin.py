@@ -29,7 +29,7 @@ def test_get_cli_commands(plugin):
 def test_create_safe_command_success(plugin):
     """Test create_safe_command with successful creation."""
     with (
-        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.plugins.gnosis.plugin.KeyStorage"),
         patch("iwa.core.services.AccountService"),
         patch("iwa.core.services.SafeService") as mock_safe_service,
     ):
@@ -55,7 +55,7 @@ def test_create_safe_command_success(plugin):
 def test_create_safe_command_error(plugin):
     """Test create_safe_command handles ValueError."""
     with (
-        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.plugins.gnosis.plugin.KeyStorage"),
         patch("iwa.core.services.AccountService"),
         patch("iwa.core.services.SafeService") as mock_safe_service,
     ):
@@ -75,7 +75,7 @@ def test_create_safe_command_error(plugin):
 def test_create_safe_command_no_tag(plugin):
     """Test create_safe_command without tag."""
     with (
-        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.plugins.gnosis.plugin.KeyStorage"),
         patch("iwa.core.services.AccountService"),
         patch("iwa.core.services.SafeService") as mock_safe_service,
     ):
@@ -96,7 +96,7 @@ def test_create_safe_command_no_tag(plugin):
 def test_create_safe_command_multiple_owners(plugin):
     """Test create_safe_command with multiple owners."""
     with (
-        patch("iwa.core.keys.KeyStorage"),
+        patch("iwa.plugins.gnosis.plugin.KeyStorage"),
         patch("iwa.core.services.AccountService"),
         patch("iwa.core.services.SafeService") as mock_safe_service,
     ):

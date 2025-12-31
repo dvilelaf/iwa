@@ -187,7 +187,7 @@ def test_service_contracts():
         assert isinstance(payload, str)
 
 
-def test_staking_contract():  # noqa: C901
+def test_staking_contract(tmp_path):  # noqa: C901
     """Test StakingContract logic and integration."""
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
@@ -254,7 +254,8 @@ def test_staking_contract():  # noqa: C901
 
                 # Trigger original_open hit
                 try:
-                    with builtins.open("nonexistent_test_file.txt", "w") as f:
+                    test_file = tmp_path / "test_lookup.txt"
+                    with builtins.open(str(test_file), "w") as f:
                         f.write("test")
                 except Exception:
                     pass

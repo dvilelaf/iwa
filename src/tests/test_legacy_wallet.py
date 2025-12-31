@@ -950,8 +950,15 @@ def test_drain_native_safe(wallet, mock_key_storage, mock_chain_interfaces, mock
     mock_balance_service.get_native_balance_wei.return_value = 2000000000000000000
     chain_interface.web3.from_wei.return_value = 2.0
 
-    wallet.drain("safe")
-    wallet.safe_service.execute_safe_transaction.assert_called_once()
+    with patch("iwa.core.services.transfer.MultiSendContract") as mock_multisend:
+        mock_multisend.return_value.prepare_tx.return_value = {
+            "to": "0xMultiSend",
+            "data": b"multisend_data",
+            "value": 0,
+        }
+
+        wallet.drain("safe")
+        wallet.safe_service.execute_safe_transaction.assert_called_once()
 
 
 def test_drain_not_enough_native_balance(
