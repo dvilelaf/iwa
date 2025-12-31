@@ -1784,7 +1784,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     showToast("Claiming rewards...", "info");
     try {
-      const resp = await authFetch(`/ api / olas / claim / ${serviceKey} `, {
+      const resp = await authFetch(`/api/olas/claim/${serviceKey}`, {
         method: "POST",
       });
       const result = await resp.json();
@@ -1808,7 +1808,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     showToast("Unstaking service...", "info");
     try {
-      const resp = await authFetch(`/ api / olas / unstake / ${serviceKey} `, {
+      const resp = await authFetch(`/api/olas/unstake/${serviceKey}`, {
         method: "POST",
       });
       const result = await resp.json();
@@ -1827,7 +1827,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("Calling checkpoint...", "info");
     try {
       const resp = await authFetch(
-        `/ api / olas / checkpoint / ${serviceKey} `,
+        `/api/olas/checkpoint/${serviceKey}`,
         { method: "POST" },
       );
       const result = await resp.json();
@@ -1879,7 +1879,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     showToast("Draining service...", "info");
     try {
-      const resp = await authFetch(`/ api / olas / drain / ${serviceKey} `, {
+      const resp = await authFetch(`/api/olas/drain/${serviceKey}`, {
         method: "POST",
       });
       const result = await resp.json();
@@ -1921,7 +1921,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Terminating service...", "info");
       try {
         const resp = await authFetch(
-          `/ api / olas / terminate / ${serviceKey} `,
+          `/api/olas/terminate/${serviceKey}`,
           { method: "POST" },
         );
         const result = await resp.json();
@@ -1955,7 +1955,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const resp = await authFetch(
-        `/ api / olas / staking - contracts ? chain = ${chain} `,
+        `/api/olas/staking-contracts?chain=${chain}`,
       );
       const contracts = await resp.json();
 
@@ -2102,7 +2102,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         const resp = await authFetch(
-          `/ api / olas / stake / ${serviceKey}?staking_contract = ${encodeURIComponent(contractAddress)} `,
+          `/api/olas/stake/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`,
           {
             method: "POST",
           },
