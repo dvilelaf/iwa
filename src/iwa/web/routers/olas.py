@@ -171,15 +171,26 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
                 bond_amount = Web3.to_wei(50, "ether")
 
         # Step 1: Create the service (PRE_REGISTRATION state)
-        service_id = manager.create(
-            chain_name=req.chain,
-            service_name=req.service_name,
-            token_address_or_tag=req.token_address,
-            bond_amount_wei=bond_amount,
+        logger.info(
+            f"Calling manager.create with: chain={req.chain}, name={req.service_name}, "
+            f"token={req.token_address}, bond={bond_amount}"
         )
+        try:
+            service_id = manager.create(
+                chain_name=req.chain,
+                service_name=req.service_name,
+                token_address_or_tag=req.token_address,
+                bond_amount_wei=bond_amount,
+            )
+        except Exception as create_error:
+            logger.error(f"manager.create raised exception: {create_error}")
+            raise HTTPException(
+                status_code=400, detail=f"Service creation error: {create_error}"
+            ) from None
 
         if not service_id:
-            raise HTTPException(status_code=400, detail="Failed to create service")
+            logger.error("manager.create returned None - check service_manager logs")
+            raise HTTPException(status_code=400, detail="Failed to create service - see server logs")
 
         logger.info(f"Service {service_id} created. Running spin_up...")
 

@@ -152,15 +152,26 @@ class ServiceManager:
         # Use dictionary for explicit struct encoding
         agent_params = [{"slots": 1, "bond": bond_amount_wei} for _ in agent_id_values]
 
-        create_tx = self.manager.prepare_create_tx(
-            from_address=self.wallet.master_account.address,
-            service_owner=service_owner_account.address,
-            token_address=token_address if token_address else NATIVE_CURRENCY_ADDRESS,
-            config_hash=bytes.fromhex(TRADER_CONFIG_HASH),
-            agent_ids=agent_id_values,
-            agent_params=agent_params,
-            threshold=1,
+        logger.info(
+            f"Preparing create tx: owner={service_owner_account.address}, "
+            f"token={token_address}, agent_ids={agent_id_values}, agent_params={agent_params}"
         )
+
+        try:
+            create_tx = self.manager.prepare_create_tx(
+                from_address=self.wallet.master_account.address,
+                service_owner=service_owner_account.address,
+                token_address=token_address if token_address else NATIVE_CURRENCY_ADDRESS,
+                config_hash=bytes.fromhex(TRADER_CONFIG_HASH),
+                agent_ids=agent_id_values,
+                agent_params=agent_params,
+                threshold=1,
+            )
+        except Exception as e:
+            logger.error(f"prepare_create_tx failed: {e}")
+            return None
+
+        logger.info(f"Prepared create_tx: to={create_tx.get('to')}, value={create_tx.get('value')}")
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=create_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -169,7 +180,7 @@ class ServiceManager:
         )
 
         if not success:
-            logger.error("Failed to create service")
+            logger.error(f"Failed to create service - sign_and_send returned False. Receipt: {receipt}")
             return None
 
         logger.info("Service creation transaction sent successfully")

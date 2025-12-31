@@ -85,6 +85,26 @@ class KeyStorage(BaseModel):
     def __init__(self, path: Path = Path(WALLET_PATH), password: Optional[str] = None):
         """Initialize key storage."""
         super().__init__()
+
+        # PROTECTION: Prevent tests from accidentally using real wallet.json
+        import sys
+
+        is_test = "pytest" in sys.modules or "unittest" in sys.modules
+        if is_test:
+            real_wallet = Path(WALLET_PATH).resolve()
+            given_path = Path(path).resolve()
+            # Block if path points to the real wallet (even if mocked)
+            if given_path == real_wallet or str(given_path).endswith("wallet.json"):
+                # Check if we're in a temp directory (allowed)
+                import tempfile
+
+                temp_base = Path(tempfile.gettempdir()).resolve()
+                if not str(given_path).startswith(str(temp_base)):
+                    raise RuntimeError(
+                        f"SECURITY: Tests cannot use real wallet path '{path}'. "
+                        f"Use tmp_path fixture instead: KeyStorage(tmp_path / 'wallet.json')"
+                    )
+
         self._path = path
         if password is None:
             password = settings.wallet_password.get_secret_value()
