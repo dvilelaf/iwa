@@ -1781,8 +1781,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 `
         : ""
       }
-            </div >
-            </div >
+            </div>
+            </div>
     `;
   }
 
@@ -1987,7 +1987,7 @@ document.addEventListener("DOMContentLoaded", () => {
         select.innerHTML = contracts
           .map(
             (c) =>
-              `< option value = "${escapeHtml(c.address)}" > ${escapeHtml(c.name)}</option > `,
+              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage?.available_slots ?? "?"} slots)</option>`,
           )
           .join("");
       }

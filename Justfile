@@ -32,6 +32,7 @@ check: types
     uv run ruff check src/
     uv run djlint src/ --check
     npx -y prettier 'src/**/*.{js,css}' --check
+    uv run python scripts/lint_js_html.py
 
 # Run security checks
 security:
