@@ -184,7 +184,7 @@ class TransferService:
 
         An address is whitelisted if it's:
         1. One of our own accounts (from wallets.json)
-        2. In the explicit whitelist in config.toml [core.whitelist]
+        2. In the explicit whitelist in config.yaml [core.whitelist]
 
         Returns:
             True if allowed, False if blocked.
@@ -210,7 +210,7 @@ class TransferService:
         # Not in whitelist - block transaction
         logger.error(
             f"SECURITY: Destination {to_address} is NOT whitelisted. "
-            "Transaction blocked. Add to config.toml [core.whitelist] to allow."
+            "Transaction blocked. Add to config.yaml [core.whitelist] to allow."
         )
         return False
 
@@ -249,7 +249,7 @@ class TransferService:
         logger.error(
             f"SECURITY: Token '{token_address_or_name}' is NOT supported on {chain_name}. "
             f"Supported tokens: {supported_list}. "
-            "Add to config.toml [core.custom_tokens] to allow."
+            "Add to config.yaml [core.custom_tokens] to allow."
         )
         return False
 

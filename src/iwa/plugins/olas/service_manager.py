@@ -88,11 +88,11 @@ class ServiceManager:
         self.chain_name = chain_interface.chain.name.lower()
 
     def _save_config(self) -> None:
-        """Persist configuration to config.toml."""
+        """Persist configuration to config.yaml."""
         self.global_config.save_config()
 
     def _update_and_save_service_state(self) -> None:
-        """Update the service object in olas_config and persist to config.toml."""
+        """Update the service object in olas_config and persist to config.yaml."""
         if self.service:
             # Update the service object in the configuration dictionary
             # This ensures that changes to self.service (which comes from the Router)

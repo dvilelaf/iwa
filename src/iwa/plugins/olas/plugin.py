@@ -102,7 +102,7 @@ class OlasPlugin(Plugin):
         - Agent private keys (re-encrypted with your wallet password)
         - Operator/owner private keys
         - Safe multisig accounts
-        - Service configuration to config.toml
+        - Service configuration to config.yaml
         """
         from rich.console import Console
         from rich.table import Table
