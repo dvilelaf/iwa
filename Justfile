@@ -6,11 +6,11 @@ install:
 
 # Run the dev environment
 dev:
-    uv run python -m iwa
+    PYTHONPATH=src uv run python -m iwa
 
 # Reset tenderly
 reset-tenderly profile="1":
-    uv run src/iwa/tools/reset_tenderly.py --profile {{profile}}
+    PYTHONPATH=src uv run src/iwa/tools/reset_tenderly.py --profile {{profile}}
 
 # Format code
 format:
@@ -78,4 +78,4 @@ tui:
 # Launch Web Server (kills any existing process on the port first)
 web port="8080" host="127.0.0.1":
     -fuser -k {{port}}/tcp 2>/dev/null || true
-    uv run iwa web --port {{port}} --host {{host}}
+    PYTHONPATH=src uv run python -m iwa.core.cli web --port {{port}} --host {{host}}

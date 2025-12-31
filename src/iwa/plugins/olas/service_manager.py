@@ -252,9 +252,20 @@ class ServiceManager:
         security_deposit = service_info["security_deposit"]
 
         # Ensure Approval: If using tokens, check allowance and approve if needed
-        is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
+        is_native = str(token_address).lower() == "0x0000000000000000000000000000000000000000"
+
         if not is_native:
             try:
+                # Check Master Balance first
+                balance = self.wallet.balance_service.get_erc20_balance_wei(
+                    account_address_or_tag=self.service.service_owner_address,
+                    token_address_or_name=token_address,
+                    chain_name=self.service.chain_name
+                )
+
+                if balance < security_deposit:
+                    logger.error(f"[ACTIVATE] FAIL: Owner balance {balance} < required {security_deposit}")
+
                 protocol_contracts = OLAS_CONTRACTS.get(self.service.chain_name.lower(), {})
                 utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
@@ -289,20 +300,19 @@ class ServiceManager:
 
         # Prepare activation transaction
         # NOTE: For token-based services, the security deposit is handled by the TokenUtility via transferFrom.
-        # We should NOT send native value (msg.value) for token-secured services, as security_deposit
-        # represents the Token amount, not native currency. Sending 1000 OLAS as 1000 xDAI will fail.
-        value_to_send = security_deposit if is_native else 0
-
+        # However, the ServiceManager (and Registry) REQUIRES that msg.value == security_deposit
+        # even for token-based services (where security_deposit is typically 1 wei).
+        # This native value (1 wei) acts as a protocol validation or fee and MUST be sent.
+        # The 'value' parameter here corresponds to msg.value in the transaction.
         activate_tx = self.manager.prepare_activate_registration_tx(
-            from_address=self.service.service_owner_address,
+            from_address=self.wallet.master_account.address,
             service_id=service_id,
-            value=value_to_send,
+            value=security_deposit,
         )
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
-            signer_address_or_tag=self.service.service_owner_address,
+            signer_address_or_tag=self.wallet.master_account.address,
             chain_name=self.service.chain_name,
-            tags=["olas_activate_registration"],
         )
 
         if not success:
@@ -1278,8 +1288,13 @@ class ServiceManager:
         logger.info(f"Spinning up service {service_id}")
 
         # Get current state
-        current_state = self.registry.get_service(service_id)["state"]
-        logger.info(f"Service {service_id} current state: {current_state.name}")
+        try:
+            service_info_debug = self.registry.get_service(service_id)
+            current_state = service_info_debug["state"]
+            logger.info(f"Service {service_id} current state: {current_state.name}")
+        except Exception as e:
+            logger.error(f"Could not get service info for {service_id}: {e}")
+            return False
 
         # Step 1: Activate registration if in PRE_REGISTRATION
         if current_state == ServiceState.PRE_REGISTRATION:
@@ -1288,7 +1303,7 @@ class ServiceManager:
                 logger.error("Failed to activate registration")
                 return False
 
-            # Verify state changed
+            # Refresh state
             current_state = self.registry.get_service(service_id)["state"]
             if current_state != ServiceState.ACTIVE_REGISTRATION:
                 logger.error(
@@ -1487,6 +1502,7 @@ class ServiceManager:
                     logger.info(f"Claimed {amount / 1e18:.4f} OLAS rewards")
             except Exception as e:
                 logger.warning(f"Could not claim rewards: {e}")
+
 
         # Step 2: Drain the Safe
         if self.service.multisig_address:
