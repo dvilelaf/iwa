@@ -60,7 +60,6 @@ def get_staking_contracts(  # noqa: C901
         from iwa.plugins.olas.service_manager import ServiceManager
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
-        print(f"DEBUG: Staking Contracts for {chain}: {contracts}")
 
         # Get service bond and token if filtered
         service_bond = None
@@ -97,7 +96,6 @@ def get_staking_contracts(  # noqa: C901
 
         # Get correct web3 instance
         w3 = ChainInterface(chain).web3
-        print(f"DEBUG: Web3 Instance: {w3}")
 
         def check_availability(name, address):
             try:
@@ -107,8 +105,6 @@ def get_staking_contracts(  # noqa: C901
                 min_deposit = contract.functions.minStakingDeposit().call()
                 staking_token = contract.functions.stakingToken().call()
                 used = len(service_ids)
-
-                print(f"DEBUG: {name}: {used}/{max_services} (min: {min_deposit}, token: {staking_token})")
 
                 return {
                     "name": name,
@@ -123,7 +119,6 @@ def get_staking_contracts(  # noqa: C901
                     "staking_token": staking_token,
                 }
             except Exception as e:
-                print(f"DEBUG: Failed for {name}: {e}")
                 logger.warning(f"Failed to check availability for {name} ({address}): {e}")
                 # Don't need full traceback here, just the error
                 # import traceback
@@ -143,8 +138,6 @@ def get_staking_contracts(  # noqa: C901
             ]
             for future in futures:
                 results.append(future.result())
-
-        print(f"DEBUG: Final Results: {results}")
 
         # Filter valid contracts (fetched info) OR unverified (RPC failed)
         # But exclude contracts KNOWN to be full (usage exists AND available <= 0)
@@ -182,7 +175,6 @@ def get_staking_contracts(  # noqa: C901
         }
 
     except Exception as e:
-        print(f"DEBUG: Top Level Error: {e}")
         import traceback
 
         traceback.print_exc()

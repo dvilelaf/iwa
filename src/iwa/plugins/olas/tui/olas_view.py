@@ -386,9 +386,13 @@ class OlasView(Static):
             button_list.append(Button("Unstake", id=f"unstake-{safe_key}", variant="primary"))
         elif is_deployed and not is_staked:
             button_list.append(Button("Stake", id=f"stake-{safe_key}", variant="primary"))
+
         if not is_pre_registration:
             button_list.append(Button("Drain", id=f"drain-{safe_key}", variant="warning"))
-            button_list.append(Button("Terminate", id=f"terminate-{safe_key}", variant="error"))
+            # Can only terminate if not staked
+            if not is_staked:
+                button_list.append(Button("Terminate", id=f"terminate-{safe_key}", variant="error"))
+
         buttons = Horizontal(*button_list, classes="action-buttons")
 
         # Build card
