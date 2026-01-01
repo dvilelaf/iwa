@@ -944,9 +944,7 @@ def test_activate_registration_native_service_sends_security_deposit_as_value(
         "state": ServiceState.PRE_REGISTRATION,
         "security_deposit": security_deposit,
     }
-    service_manager.registry.get_token.return_value = (
-        "0x0000000000000000000000000000000000000000"
-    )
+    service_manager.registry.get_token.return_value = "0x0000000000000000000000000000000000000000"
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "ActivateRegistration"}]
 

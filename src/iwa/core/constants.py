@@ -25,4 +25,3 @@ DEFAULT_MECH_CONTRACT_ADDRESS = EthereumAddress("0x77af31De935740567Cf4FF1986D04
 def get_tenderly_config_path(profile: int = 1) -> Path:
     """Get the path to a profile-specific Tenderly config file."""
     return PROJECT_ROOT / f"tenderly_{profile}.yaml"
-

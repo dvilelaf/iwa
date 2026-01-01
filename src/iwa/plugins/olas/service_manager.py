@@ -108,7 +108,7 @@ class ServiceManager:
             return None
         return self.registry.get_service(self.service.service_id)
 
-    def create(
+    def create(  # noqa: C901
         self,
         chain_name: str = "gnosis",
         service_name: Optional[str] = None,
@@ -184,7 +184,9 @@ class ServiceManager:
         )
 
         if not success:
-            logger.error(f"Failed to create service - sign_and_send returned False. Receipt: {receipt}")
+            logger.error(
+                f"Failed to create service - sign_and_send returned False. Receipt: {receipt}"
+            )
             return None
 
         logger.info("Service creation transaction sent successfully")
@@ -275,11 +277,13 @@ class ServiceManager:
                 balance = self.wallet.balance_service.get_erc20_balance_wei(
                     account_address_or_tag=self.service.service_owner_address,
                     token_address_or_name=token_address,
-                    chain_name=self.service.chain_name
+                    chain_name=self.service.chain_name,
                 )
 
                 if balance < security_deposit:
-                    logger.error(f"[ACTIVATE] FAIL: Owner balance {balance} < required {security_deposit}")
+                    logger.error(
+                        f"[ACTIVATE] FAIL: Owner balance {balance} < required {security_deposit}"
+                    )
 
                 protocol_contracts = OLAS_CONTRACTS.get(self.service.chain_name.lower(), {})
                 utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
@@ -415,7 +419,9 @@ class ServiceManager:
             else:
                 # 1. Service Owner Approves Token Utility (for Bond)
                 # The service owner (operator) pays the bond, not the agent.
-                logger.info(f"Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
+                logger.info(
+                    f"Service Owner approving Token Utility for bond: {bond_amount_wei} wei"
+                )
 
                 utility_address = str(
                     OLAS_CONTRACTS[self.service.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
@@ -611,7 +617,7 @@ class ServiceManager:
         logger.info("Service unbonded successfully")
         return True
 
-    def stake(self, staking_contract) -> bool:
+    def stake(self, staking_contract) -> bool:  # noqa: C901
         """Stake the service in a staking contract.
 
         Token Flow:
@@ -667,7 +673,8 @@ class ServiceManager:
         # Check token compatibility - service must be created with same token as staking contract expects
         service_token = (self.service.token_address or "").lower()
         print(
-            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token_lower}", flush=True
+            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token_lower}",
+            flush=True,
         )
         if service_token != staking_token_lower:
             print(
@@ -695,7 +702,10 @@ class ServiceManager:
             agent_params = self.registry.get_agent_params(self.service.service_id, agent_id)
             current_bond = agent_params["bond"]
 
-            print(f"[STAKE-SM] Bond check: current={current_bond}, required={required_bond}", flush=True)
+            print(
+                f"[STAKE-SM] Bond check: current={current_bond}, required={required_bond}",
+                flush=True,
+            )
             logger.info(f"Agent bond check: current={current_bond}, required={required_bond}")
 
             if current_bond < required_bond:
@@ -1540,7 +1550,6 @@ class ServiceManager:
             except Exception as e:
                 logger.warning(f"Could not claim rewards: {e}")
 
-
         # Step 2: Drain the Safe
         if self.service.multisig_address:
             safe_addr = str(self.service.multisig_address)
@@ -1556,7 +1565,9 @@ class ServiceManager:
                         to_address_or_tag=target,
                         chain_name=chain,
                     )
-                    logger.info(f"[DRAIN-DEBUG] Safe drain result (attempt {attempt+1}): {result}")
+                    logger.info(
+                        f"[DRAIN-DEBUG] Safe drain result (attempt {attempt + 1}): {result}"
+                    )
 
                     if result:
                         # Normalize result (handle Tuple[bool, dict] from EOA/TransactionService)
@@ -1577,16 +1588,21 @@ class ServiceManager:
                             break
 
                     if attempt < max_retries - 1:
-                        logger.info(f"Waiting for rewards to appear in balance (attempt {attempt+1})...")
+                        logger.info(
+                            f"Waiting for rewards to appear in balance (attempt {attempt + 1})..."
+                        )
                         import time
+
                         time.sleep(3)
 
                 except Exception as e:
                     logger.warning(f"Could not drain Safe: {e}")
                     import traceback
+
                     logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
                     if attempt < max_retries - 1:
                         import time
+
                         time.sleep(3)
 
         # Step 3: Drain the Agent account

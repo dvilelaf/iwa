@@ -185,7 +185,9 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
 
         if not service_id:
             logger.error("manager.create returned None - check service_manager logs")
-            raise HTTPException(status_code=400, detail="Failed to create service - see server logs")
+            raise HTTPException(
+                status_code=400, detail="Failed to create service - see server logs"
+            )
 
         logger.info(f"Service {service_id} created. Running spin_up...")
 
@@ -607,7 +609,9 @@ def stake_service(
 
         # Ensure staking_contract is a valid address format
         if not staking_contract.startswith("0x"):
-             raise HTTPException(status_code=400, detail=f"Invalid staking contract address: {staking_contract}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid staking contract address: {staking_contract}"
+            )
 
         staking = StakingContract(staking_contract, service.chain_name)
         success = manager.stake(staking)

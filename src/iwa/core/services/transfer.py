@@ -681,7 +681,9 @@ class TransferService:
                 operation=SafeOperationEnum.DELEGATE_CALL.value,
             )
         else:
-            return self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)
+            return self.transaction_service.sign_and_send(
+                transaction, from_address_or_tag, chain_name
+            )
 
     def get_erc20_allowance(
         self,

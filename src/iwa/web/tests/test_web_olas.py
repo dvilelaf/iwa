@@ -321,7 +321,7 @@ def test_stake_service(client, mock_olas_config):
     with (
         patch("iwa.web.routers.olas.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-        patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls,
+        patch("iwa.plugins.olas.contracts.staking.StakingContract"),
     ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
@@ -341,7 +341,7 @@ def test_terminate_service(client, mock_olas_config):
     with (
         patch("iwa.web.routers.olas.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-        patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls,
+        patch("iwa.plugins.olas.contracts.staking.StakingContract"),
     ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}

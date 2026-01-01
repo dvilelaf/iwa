@@ -26,8 +26,7 @@ def test_get_swap_quote_invalid_account(client):
         mock_wallet.account_service.resolve_account.return_value = None
 
         response = client.get(
-            "/api/swap/quote?"
-            "account=invalid&sell_token=WXDAI&buy_token=OLAS&amount=1.0"
+            "/api/swap/quote?account=invalid&sell_token=WXDAI&buy_token=OLAS&amount=1.0"
         )
         assert response.status_code == 400
 
@@ -52,8 +51,7 @@ def test_swap_tokens_invalid_order_type(client):
 def test_swap_quote_invalid_mode(client):
     """Test /api/swap/quote with invalid mode."""
     response = client.get(
-        "/api/swap/quote?"
-        "account=master&sell_token=WXDAI&buy_token=OLAS&amount=1.0&mode=invalid"
+        "/api/swap/quote?account=master&sell_token=WXDAI&buy_token=OLAS&amount=1.0&mode=invalid"
     )
     assert response.status_code == 400
 

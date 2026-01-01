@@ -212,7 +212,9 @@ def test_keystorage_sign_message(tmp_path, mock_secrets, mock_account, mock_aesg
     assert result == b"signature"
 
 
-def test_keystorage_sign_transaction(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+def test_keystorage_sign_transaction(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt
+):
     """Test transaction signing."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
@@ -260,7 +262,9 @@ def test_keystorage_get_account(tmp_path, mock_secrets, mock_account, mock_aesgc
     assert acct.address == acc1.address
 
 
-def test_keystorage_get_tag_by_address(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+def test_keystorage_get_tag_by_address(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt
+):
     """Test getting tag by address."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
@@ -272,7 +276,9 @@ def test_keystorage_get_tag_by_address(tmp_path, mock_secrets, mock_account, moc
     assert storage.get_tag_by_address("0x3333333333333333333333333333333333333333") is None
 
 
-def test_keystorage_get_address_by_tag(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
+def test_keystorage_get_address_by_tag(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt
+):
     """Test getting address by tag."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")

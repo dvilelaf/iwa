@@ -23,3 +23,9 @@
 427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:411
 427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_importer.py:hashicorp-tf-password:57
 427a999d4b1ec7f9a0b7df409f49037c70922e75:src/iwa/plugins/olas/tests/test_service_lifecycle.py:generic-api-key:48
+# New fingerprints from recent test updates (OLAS token addresses - not secrets)
+0bd846564807770072fed7b3c370c0f84e20335c:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:274
+0bd846564807770072fed7b3c370c0f84e20335c:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:540
+0bd846564807770072fed7b3c370c0f84e20335c:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:421
+6af0ed1a72d2ba704fc9963f84cdee03f02ae554:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:894
+6af0ed1a72d2ba704fc9963f84cdee03f02ae554:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:1000

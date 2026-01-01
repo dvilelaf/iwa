@@ -287,7 +287,10 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     }
     mock_registry_inst.extract_events.return_value = [
         {"name": "DeployService"},
-        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"}},
+        {
+            "name": "CreateMultisigWithAgents",
+            "args": {"multisig": "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"},
+        },
     ]
 
     manager = ServiceManager(mock_wallet, service_key="gnosis:123")

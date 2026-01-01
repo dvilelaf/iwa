@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Tool to reset the full environment:
+"""Tool to reset the full environment.
+
 1. Resets Tenderly networks (based on active profile).
 2. Clears Olas services from config.yaml.
 3. Clears all accounts from wallet.json except 'master'.
 """
 
 import json
-import subprocess
+import subprocess  # nosec B404
 import sys
 
 import yaml
@@ -15,7 +16,8 @@ from iwa.core.constants import CONFIG_PATH, WALLET_PATH
 from iwa.core.settings import settings
 
 
-def main():
+def main():  # noqa: C901
+    """Reset the environment by clearing networks, services, and accounts."""
     # 1. Get profile from settings
     profile = settings.tenderly_profile
     print(f"Detected Tenderly profile: {profile}")
@@ -24,7 +26,7 @@ def main():
     cmd = ["just", "reset-tenderly", str(profile)]
     print(f"Running: {' '.join(cmd)}")
     try:
-        subprocess.check_call(cmd)
+        subprocess.check_call(cmd)  # nosec B603
     except subprocess.CalledProcessError as e:
         print(f"Error running reset-tenderly: {e}")
         sys.exit(1)
@@ -68,14 +70,18 @@ def main():
 
             if master_addr:
                 if len(accounts) > 1:
-                    print(f"Preserving master account ({master_addr}), removing {len(accounts) - 1} other accounts...")
+                    print(
+                        f"Preserving master account ({master_addr}), removing {len(accounts) - 1} other accounts..."
+                    )
                     data["accounts"] = {master_addr: master_acct}
                     with open(WALLET_PATH, "w") as f:
                         json.dump(data, f, indent=4)
                 else:
                     print("Only master account exists in wallet.json.")
             else:
-                print("Warning: Master account not found in wallet.json! Skipping cleanup to avoid data loss.")
+                print(
+                    "Warning: Master account not found in wallet.json! Skipping cleanup to avoid data loss."
+                )
         except Exception as e:
             print(f"Error cleaning wallet.json: {e}")
 

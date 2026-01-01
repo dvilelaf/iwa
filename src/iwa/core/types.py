@@ -49,10 +49,11 @@ class EthereumAddress(str):
 
 
 # Register YAML representer so EthereumAddress serializes as plain string
-def _ethereum_address_representer(dumper: yaml.SafeDumper, data: EthereumAddress) -> yaml.ScalarNode:
+def _ethereum_address_representer(
+    dumper: yaml.SafeDumper, data: EthereumAddress
+) -> yaml.ScalarNode:
     """Represent EthereumAddress as a plain YAML string."""
     return dumper.represent_str(str.__str__(data))
 
 
 yaml.add_representer(EthereumAddress, _ethereum_address_representer, Dumper=yaml.SafeDumper)
-
