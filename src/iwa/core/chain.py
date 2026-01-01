@@ -21,6 +21,15 @@ T = TypeVar("T")
 DEFAULT_RPC_TIMEOUT = 10
 
 
+class TenderlyQuotaExceededError(Exception):
+    """Raised when Tenderly virtual network quota is exceeded (403 Forbidden).
+
+    This is a fatal error that should halt execution and prompt the user to
+    reset the Tenderly network.
+    """
+    pass
+
+
 class RPCRateLimiter:
     """Token bucket rate limiter for RPC calls.
 
@@ -360,7 +369,77 @@ class ChainInterface:
                 f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS."
             )
 
+        self._initial_block = 0
         self._init_web3()
+
+    @property
+    def is_tenderly(self) -> bool:
+        """Check if connected to Tenderly vNet."""
+        # Simple heuristic: check if RPC URL contains 'tenderly'
+        rpc = self.chain.rpc or ""
+        return "tenderly" in rpc.lower() or "virtual" in rpc.lower()
+
+    def init_block_tracking(self):
+        """Initialize block tracking for limit detection."""
+        try:
+            # Default to current block (session-relative)
+            self._initial_block = self.web3.eth.block_number
+
+            if self.is_tenderly:
+                try:
+                    from iwa.core.constants import get_tenderly_config_path
+                    from iwa.core.models import TenderlyConfig
+                    from iwa.core.settings import settings
+
+                    profile = settings.tenderly_profile
+                    config_path = get_tenderly_config_path(profile)
+
+                    if config_path.exists():
+                        t_config = TenderlyConfig.load(config_path)
+                        # Case insensitive lookup + fallback
+                        vnet = t_config.vnets.get(self.chain.name)
+                        if not vnet:
+                             vnet = t_config.vnets.get(self.chain.name.lower())
+
+                        if vnet and vnet.initial_block > 0:
+                            self._initial_block = vnet.initial_block
+                            logger.info(f"Tenderly detected! Limit tracking relative to genesis block: {self._initial_block}")
+                        else:
+                             logger.warning(f"Tenderly detected but no initial_block in config. using session start: {self._initial_block}")
+
+                    logger.warning("Monitoring Tenderly vNet block usage (Limit ~50 blocks from vNet start)")
+                except Exception as ex:
+                    logger.warning(f"Failed to load Tenderly config for block tracking: {ex}")
+        except Exception as e:
+            logger.warning(f"Failed to init block tracking: {e}")
+
+    def check_block_limit(self):
+        """Check if approaching block limit (heuristic)."""
+        if not self.is_tenderly or self._initial_block == 0:
+            return
+
+        try:
+            current = self.web3.eth.block_number
+            delta = current - self._initial_block
+
+            # Critical warning if limit reached
+            if delta >= 50:
+                logger.error(
+                    f"🛑 CRITICAL TENDERLY LIMIT REACHED: {delta} blocks processed. "
+                    f"The vNet has likely expired (limit 50). Transactions WILL fail. "
+                    f"Please run `just reset-tenderly` immediately."
+                )
+            # Warn if we've processed > 40 blocks
+            elif delta > 40:
+                logger.warning(
+                    f"⚠️ TENDERLY LIMIT WARNING: {delta} blocks processed since vNet creation. "
+                    f"vNet limit is usually 50 blocks. You may experience errors soon."
+                )
+            elif delta > 0 and delta % 10 == 0:
+                 logger.info(f"Tenderly Usage: {delta} blocks processed in session.")
+
+        except Exception:
+            pass
 
     def _init_web3(self):
         """Initialize Web3 with current RPC."""
@@ -370,6 +449,14 @@ class ChainInterface:
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """Check if error is a rate limit (429) error."""
+        # Check limit on every error? Or better to hook into request cycle.
+        # For now, let's hook into the _wrap_with_rate_limit equivalent or just rely on periodical checks.
+        # But for robustness, let's call check_block_limit() here blindly? No, might slow down.
+        # Ideally, check_block_limit() is called by the server background task or periodically.
+        # Since we don't have a background task loop easily accessible here,
+        # let's just piggyback on _handle_rpc_error or similar?
+        # Actually, simpler is to call it when transactions are sent or mined.
+
         err_text = str(error).lower()
         rate_limit_signals = ["429", "rate limit", "too many requests", "ratelimit"]
         return any(signal in err_text for signal in rate_limit_signals)
@@ -398,6 +485,18 @@ class ChainInterface:
             "broken pipe",
         ]
         return any(signal in err_text for signal in connection_signals)
+
+    def _is_tenderly_quota_exceeded(self, error: Exception) -> bool:
+        """Check if error indicates Tenderly quota exceeded (403 Forbidden).
+
+        This is a fatal error that cannot be recovered by retrying or rotating RPCs.
+        """
+        err_text = str(error).lower()
+        # Check for 403 Forbidden specifically on Tenderly URLs
+        if "403" in err_text and "forbidden" in err_text:
+            if "tenderly" in err_text or "virtual" in err_text:
+                return True
+        return False
 
     def _is_server_error(self, error: Exception) -> bool:
         """Check if error is a server-side error (5xx)."""
@@ -436,9 +535,21 @@ class ChainInterface:
             "is_rate_limit": self._is_rate_limit_error(error),
             "is_connection_error": self._is_connection_error(error),
             "is_server_error": self._is_server_error(error),
+            "is_tenderly_quota": self._is_tenderly_quota_exceeded(error),
             "rotated": False,
             "should_retry": False,
         }
+
+        # FATAL: Tenderly quota exceeded - raise exception immediately
+        if result["is_tenderly_quota"]:
+            logger.error(
+                "TENDERLY QUOTA EXCEEDED! The virtual network has reached its limit. "
+                "Please run 'uv run -m iwa.tools.reset_tenderly' to reset the network."
+            )
+            raise TenderlyQuotaExceededError(
+                "Tenderly virtual network quota exceeded (403 Forbidden). "
+                "Run 'uv run -m iwa.tools.reset_tenderly' to reset."
+            )
 
         # Track failure for current RPC
         self._rpc_failure_counts[self._current_rpc_index] = (

@@ -259,6 +259,16 @@ def main() -> None:  # noqa: C901
         vnet.public_rpc = public_rpc
         vnet.vnet_slug = vnet_slug
 
+        # Capture initial block for limit tracking
+        try:
+            w3 = Web3(Web3.HTTPProvider(public_rpc))
+            start_block = w3.eth.block_number
+            vnet.initial_block = start_block
+            print(f"Captured initial block for {vnet_name}: {start_block}")
+        except Exception as e:
+            print(f"Failed to capture initial block: {e}")
+            vnet.initial_block = 0
+
         tenderly_config.save()
         update_rpc_variables(tenderly_config)
 
