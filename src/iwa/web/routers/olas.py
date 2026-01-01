@@ -77,24 +77,14 @@ def get_staking_contracts(  # noqa: C901
                     service_token = (manager.service.token_address or "").lower()
                     service_id_int = manager.service.service_id
 
-
-                    # Get Agent Bond (checking first agent)
-                    # We need the bond the agent actually has, to compare with what the contract REQUIRES
-                    agent_ids = manager.service.agent_ids
-                    if not agent_ids:
-                         # Fallback to registry lookup if local model doesn't have agent details
-                         try:
-                             service_info = manager.registry.get_service_info(service_id_int)
-                             agent_ids = service_info.get("agent_ids", [])
-                         except Exception as registry_error:
-                             logger.warning(f"Failed to fetch service info from registry: {registry_error}")
-                             agent_ids = []
-
-                    if agent_ids:
-                        first_agent_id = agent_ids[0]
-                        agent_params = manager.registry.get_agent_params(service_id_int, first_agent_id)
-                        service_bond = agent_params.get("bond")
-                        logger.info(f"Filtering for service {service_key}: bond={service_bond}, token={service_token}")
+                    # Get security deposit from registry - this is the actual bond value
+                    # Note: get_agent_params returns incorrect bond=1 due to web3 struct decoding bug
+                    try:
+                        service_info = manager.registry.get_service(service_id_int)
+                        service_bond = service_info.get("security_deposit", 0)
+                        logger.info(f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}")
+                    except Exception as e:
+                        logger.warning(f"Failed to get service info for filtering: {e}")
 
             except Exception as e:
                 logger.warning(f"Could not fetch service details for filtering: {e}")
@@ -179,7 +169,17 @@ def get_staking_contracts(  # noqa: C901
 
             filtered_results.append(r)
 
-        return filtered_results
+        # Return with filter metadata so frontend can explain filtering
+        return {
+            "contracts": filtered_results,
+            "filter_info": {
+                "service_bond": service_bond,
+                "service_bond_olas": service_bond / 10**18 if service_bond else None,
+                "total_contracts": len(results),
+                "filtered_count": len(filtered_results),
+                "is_filtered": service_key is not None,
+            }
+        }
 
     except Exception as e:
         print(f"DEBUG: Top Level Error: {e}")

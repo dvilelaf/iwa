@@ -1993,10 +1993,37 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await authFetch(
         `/api/olas/staking-contracts?chain=${chain}&service_key=${encodeURIComponent(serviceKey)}`,
       );
-      const contracts = await resp.json();
+      const data = await resp.json();
+      // Handle new response format with filter_info
+      const contracts = data.contracts || data; // Fallback for backwards compat
+      const filterInfo = data.filter_info;
+
+      // Remove any existing help text
+      const existingHelp = select.parentNode.querySelector(".stake-help-text");
+      if (existingHelp) existingHelp.remove();
+
+      // Create help text element
+      const helpText = document.createElement("small");
+      helpText.className = "stake-help-text";
+      helpText.style.color = "#888";
+      helpText.style.display = "block";
+      helpText.style.marginTop = "8px";
+      helpText.style.fontSize = "12px";
 
       if (contracts.length === 0) {
-        select.innerHTML = '<option value="">No contracts available</option>';
+        select.innerHTML = '<option value="">No compatible contracts</option>';
+        if (filterInfo && filterInfo.service_bond_olas !== null) {
+          helpText.innerHTML = `
+            <strong>Why?</strong> Your service bond (<strong>${filterInfo.service_bond_olas.toFixed(0)} OLAS</strong>)
+            is lower than what staking contracts require.<br>
+            <em>Tip: Recreate the service with a higher bond (e.g., 5000 OLAS) to enable staking.</em>
+          `;
+        } else {
+          helpText.textContent =
+            "No staking contracts available for this chain.";
+        }
+        select.parentNode.appendChild(helpText);
+        confirmBtn.disabled = true;
       } else {
         select.innerHTML = contracts
           .map(
@@ -2004,12 +2031,25 @@ document.addEventListener("DOMContentLoaded", () => {
               `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage?.available_slots ?? "?"} slots)</option>`,
           )
           .join("");
+
+        // Show filter info if some contracts were filtered
+        if (
+          filterInfo &&
+          filterInfo.total_contracts > filterInfo.filtered_count
+        ) {
+          const hidden = filterInfo.total_contracts - filterInfo.filtered_count;
+          helpText.innerHTML = `
+            Showing <strong>${filterInfo.filtered_count}</strong> of ${filterInfo.total_contracts} contracts
+            (${hidden} hidden - require higher bond than your <strong>${filterInfo.service_bond_olas?.toFixed(0) || "?"} OLAS</strong>).
+          `;
+          select.parentNode.appendChild(helpText);
+        }
+        confirmBtn.disabled = false;
       }
 
-      // Show select, hide spinner, enable button
+      // Show select, hide spinner
       select.style.display = "";
       spinnerDiv.style.display = "none";
-      confirmBtn.disabled = false;
     } catch (err) {
       select.innerHTML = '<option value="">Error loading contracts</option>';
       select.style.display = "";
@@ -2077,31 +2117,71 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await authFetch(
         `/api/olas/staking-contracts?chain=${chain}&service_key=${encodeURIComponent(serviceKey)}`,
       );
-      const contracts = await resp.json();
-      // Filter out contracts with no available slots if they come unfiltered?
-      // Assuming backend filters, but let's be safe if we can see slots.
-      // Actually, backend should filter.
-      contractSelect.innerHTML =
-        '<option value="">None (don\'t stake)</option>' +
-        contracts
-          .map((c) => {
-            const usage = c.usage;
-            const slots = usage ? usage.available_slots : null;
+      const data = await resp.json();
+      // Handle new response format with filter_info
+      const contracts = Array.isArray(data) ? data : data.contracts || [];
+      const filterInfo = data.filter_info;
 
-            const isDisabled = slots !== null && slots <= 0;
-            const disabledStr = isDisabled ? "disabled" : "";
+      // Remove any existing help text
+      const existingHelp =
+        contractSelect.parentNode.querySelector(".stake-help-text");
+      if (existingHelp) existingHelp.remove();
 
-            let slotText = "Status Unknown";
-            if (slots !== null) {
-              slotText = `${slots} slots`;
-            }
+      // Create help text element for filter explanation
+      const helpText = document.createElement("small");
+      helpText.className = "stake-help-text";
+      helpText.style.color = "#888";
+      helpText.style.display = "block";
+      helpText.style.marginTop = "8px";
+      helpText.style.fontSize = "12px";
 
-            const text = `${escapeHtml(c.name)} (${slotText})`;
-            const style = isDisabled ? "color: #999;" : "";
+      if (contracts.length === 0) {
+        contractSelect.innerHTML =
+          '<option value="">No compatible contracts</option>';
+        if (filterInfo && filterInfo.service_bond_olas !== null) {
+          helpText.innerHTML = `
+            <strong>Why?</strong> Your service bond (<strong>${filterInfo.service_bond_olas.toFixed(0)} OLAS</strong>)
+            is lower than what staking contracts require.<br>
+            <em>You can still deploy without staking.</em>
+          `;
+        } else {
+          helpText.textContent =
+            "No staking contracts available for this chain.";
+        }
+        contractSelect.parentNode.appendChild(helpText);
+      } else {
+        contractSelect.innerHTML =
+          '<option value="">None (don\'t stake)</option>' +
+          contracts
+            .map((c) => {
+              const usage = c.usage;
+              const slots = usage ? usage.available_slots : null;
+              const isDisabled = slots !== null && slots <= 0;
+              const disabledStr = isDisabled ? "disabled" : "";
+              let slotText = "Status Unknown";
+              if (slots !== null) {
+                slotText = `${slots} slots`;
+              }
+              const text = `${escapeHtml(c.name)} (${slotText})`;
+              const style = isDisabled ? "color: #999;" : "";
+              return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
+            })
+            .join("");
 
-            return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
-          })
-          .join("");
+        // Show filter info if some contracts were filtered
+        if (
+          filterInfo &&
+          filterInfo.total_contracts > filterInfo.filtered_count
+        ) {
+          const hidden = filterInfo.total_contracts - filterInfo.filtered_count;
+          helpText.innerHTML = `
+            Showing <strong>${filterInfo.filtered_count}</strong> of ${filterInfo.total_contracts} contracts
+            (${hidden} hidden - require higher bond than your <strong>${filterInfo.service_bond_olas?.toFixed(0) || "?"} OLAS</strong>).
+          `;
+          contractSelect.parentNode.appendChild(helpText);
+        }
+      }
+
       contractSelect.style.display = "";
       spinnerDiv.style.display = "none";
       submitBtn.disabled = false;
@@ -2168,8 +2248,11 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   const createServiceForm = document.getElementById("create-service-form");
 
-  // Helper to render contract options
-  function renderContractOptions(contracts) {
+  // Helper to render contract options - handles both new {contracts, filter_info} and old array format
+  function renderContractOptions(data) {
+    // Extract contracts array from new format or use directly if array
+    const contracts = Array.isArray(data) ? data : data.contracts || [];
+
     if (!contracts.length)
       return '<option value="">No contracts available</option>';
 
