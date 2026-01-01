@@ -38,11 +38,11 @@ def get_olas_price(auth: bool = Depends(verify_auth)):
     summary="Get Staking Contracts",
     description="Get the list of available OLAS staking contracts for a specific chain.",
 )
-def get_staking_contracts(
+def get_staking_contracts(  # noqa: C901
     chain: str = "gnosis",
     service_key: Optional[str] = None,
-    auth: bool = Depends(verify_auth),
-    config: Config = Depends(get_config),
+    auth: bool = Depends(verify_auth),  # noqa: B008
+    config: Config = Depends(get_config),  # noqa: B008
 ):
     """Get available staking contracts for a chain, optionally filtered by service bond."""
     if not chain.replace("-", "").isalnum():
@@ -71,7 +71,6 @@ def get_staking_contracts(
                 # Need to use ServiceManager to get accurate info including security deposit
                 chain_name, service_id = service_key.split(":")
                 # Initialize wallet dependencies for ServiceManager
-                from iwa.core.constants import ZERO_ADDRESS
                 manager = ServiceManager(wallet, service_key)
                 if manager.service:
                     # Get service requirements
