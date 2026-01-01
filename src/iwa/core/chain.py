@@ -27,6 +27,7 @@ class TenderlyQuotaExceededError(Exception):
     This is a fatal error that should halt execution and prompt the user to
     reset the Tenderly network.
     """
+
     pass
 
 

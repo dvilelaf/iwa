@@ -46,9 +46,10 @@ async def verify_auth(
 
 def get_config():
     """Dependency to provide the Config object."""
+    import yaml
+
     from iwa.core.constants import CONFIG_PATH
     from iwa.core.models import Config
-    import yaml
 
     if not CONFIG_PATH.exists():
         return Config()
