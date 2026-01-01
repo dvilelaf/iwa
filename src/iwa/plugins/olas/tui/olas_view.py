@@ -412,9 +412,12 @@ class OlasView(Static):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
-    def stake_service(self, service_key: str) -> None:
-        """Stake a service."""
+    def stake_service(self, service_key: str) -> None:  # noqa: C901
+        """Stake a service with bond-compatible contracts only."""
+        from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+        from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
+        from iwa.plugins.olas.service_manager import ServiceManager
         from iwa.tui.modals.base import StakeServiceModal
 
         contracts_dict = OLAS_TRADER_STAKING_CONTRACTS.get(self._chain, {})
@@ -422,7 +425,67 @@ class OlasView(Static):
             self.notify(f"No staking contracts for {self._chain}", severity="error")
             return
 
-        contracts = [(name, str(addr)) for name, addr in contracts_dict.items()]
+        # Get service bond (security_deposit) for filtering
+        service_bond = None
+        service_bond_olas = None
+        try:
+            manager = ServiceManager(self._wallet, service_key=service_key)
+            if manager.service:
+                service_info = manager.registry.get_service(manager.service.service_id)
+                service_bond = service_info.get("security_deposit", 0)
+                service_bond_olas = service_bond / 10**18 if service_bond else 0
+        except Exception as e:
+            self.notify(f"Warning: Could not fetch service bond: {e}", severity="warning")
+
+        # Filter contracts by bond compatibility
+        import json
+        w3 = ChainInterface(self._chain).web3
+        with open(OLAS_ABI_PATH / "staking.json", "r") as f:
+            abi = json.load(f)
+
+        filtered_contracts = []
+        total_contracts = len(contracts_dict)
+
+        for name, addr in contracts_dict.items():
+            try:
+                contract = w3.eth.contract(address=str(addr), abi=abi)
+                min_deposit = contract.functions.minStakingDeposit().call()
+
+                # Skip if service bond is too low
+                if service_bond is not None and service_bond < min_deposit:
+                    continue
+
+                # Check available slots
+                service_ids = contract.functions.getServiceIds().call()
+                max_services = contract.functions.maxNumServices().call()
+                available_slots = max_services - len(service_ids)
+
+                if available_slots > 0:
+                    filtered_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
+            except Exception:
+                # If we can't check, include it
+                filtered_contracts.append((name, str(addr)))
+
+        if not filtered_contracts:
+            if service_bond_olas is not None:
+                self.notify(
+                    f"No compatible contracts! Your service bond ({service_bond_olas:.0f} OLAS) "
+                    "is lower than what staking contracts require.",
+                    severity="warning",
+                    timeout=10,
+                )
+            else:
+                self.notify("No staking contracts available", severity="error")
+            return
+
+        # Show info if some contracts were filtered
+        if len(filtered_contracts) < total_contracts:
+            hidden = total_contracts - len(filtered_contracts)
+            self.notify(
+                f"Showing {len(filtered_contracts)} of {total_contracts} contracts "
+                f"({hidden} hidden - require higher bond)",
+                severity="information",
+            )
 
         def on_modal_result(contract_address: Optional[str]) -> None:
             if not contract_address:
@@ -431,7 +494,6 @@ class OlasView(Static):
             self.notify("Staking...", severity="information")
             try:
                 from iwa.plugins.olas.contracts.staking import StakingContract
-                from iwa.plugins.olas.service_manager import ServiceManager
 
                 manager = ServiceManager(self._wallet, service_key=service_key)
                 staking = StakingContract(contract_address, self._chain)
@@ -445,7 +507,7 @@ class OlasView(Static):
             except Exception as e:
                 self.notify(f"Error: {e}", severity="error")
 
-        self.app.push_screen(StakeServiceModal(contracts), on_modal_result)
+        self.app.push_screen(StakeServiceModal(filtered_contracts), on_modal_result)
 
     def unstake_service(self, service_key: str) -> None:
         """Unstake a service."""
@@ -492,19 +554,42 @@ class OlasView(Static):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
-    def show_create_service_modal(self) -> None:
+    def show_create_service_modal(self) -> None:  # noqa: C901
         """Show modal to create a new service."""
         from iwa.tui.modals.base import CreateServiceModal
 
         chains = ["gnosis"]  # Only gnosis has staking contracts
 
-        # Get staking contracts list (don't check slots to avoid blocking UI)
+        # Get staking contracts list with available slots
         staking_contracts = []
         try:
+            import json
+
+            from iwa.core.chain import ChainInterface
             from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+            from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
             contracts_dict = OLAS_TRADER_STAKING_CONTRACTS.get(self._chain, {})
-            staking_contracts = [(name, str(addr)) for name, addr in contracts_dict.items()]
+
+            # Load ABI and check slots for each contract
+            w3 = ChainInterface(self._chain).web3
+            with open(OLAS_ABI_PATH / "staking.json", "r") as f:
+                abi = json.load(f)
+
+            for name, addr in contracts_dict.items():
+                try:
+                    contract = w3.eth.contract(address=str(addr), abi=abi)
+                    service_ids = contract.functions.getServiceIds().call()
+                    max_services = contract.functions.maxNumServices().call()
+                    available_slots = max_services - len(service_ids)
+
+                    if available_slots > 0:
+                        staking_contracts.append(
+                            (f"{name} ({available_slots} slots)", str(addr))
+                        )
+                except Exception:
+                    # If we can't check, include it without slot info
+                    staking_contracts.append((name, str(addr)))
         except Exception:
             pass  # If fetch fails, just use empty list
 

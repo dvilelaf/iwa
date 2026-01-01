@@ -166,12 +166,16 @@ def test_olas_actions(client, mock_olas_config):
 
 
 def test_get_staking_contracts(client):
-    """Test /api/olas/staking-contracts endpoint - returns empty list on error."""
-    # The endpoint internally catches exceptions and returns []
+    """Test /api/olas/staking-contracts endpoint - returns response with contracts and filter_info."""
     response = client.get("/api/olas/staking-contracts?chain=gnosis")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
+    # New format: {contracts: [...], filter_info: {...}}
+    assert isinstance(data, dict)
+    assert "contracts" in data
+    assert "filter_info" in data
+    assert isinstance(data["contracts"], list)
+    assert isinstance(data["filter_info"], dict)
 
 
 def test_create_service(client, mock_olas_config):
