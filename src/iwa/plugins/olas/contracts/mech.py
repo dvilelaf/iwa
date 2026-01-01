@@ -3,6 +3,7 @@
 from typing import Dict, Optional
 
 from iwa.core.contracts.contract import ContractInstance
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
 
@@ -11,7 +12,7 @@ class MechContract(ContractInstance):
 
     def __init__(
         self,
-        address: str,
+        address: EthereumAddress,
         chain_name: str,
         use_new_abi: bool = False,
     ):
@@ -33,7 +34,7 @@ class MechContract(ContractInstance):
 
     def prepare_request_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         data: bytes,
         value: Optional[int] = None,
     ) -> Optional[Dict]:

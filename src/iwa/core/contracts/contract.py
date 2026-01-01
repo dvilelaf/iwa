@@ -196,6 +196,21 @@ class ContractInstance:
                     )
             raise
 
+    def _sanitize_for_web3(self, value: Any) -> Any:
+        """Convert EthereumAddress subclass to pure str for eth_abi encoding.
+
+        eth_abi encoder cannot handle custom str subclasses; this ensures
+        all address strings are pure str instances.
+        """
+        if isinstance(value, str) and type(value) is not str:
+            # It's a str subclass (like EthereumAddress), convert to pure str
+            return str.__str__(value)
+        if isinstance(value, dict):
+            return {k: self._sanitize_for_web3(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return type(value)(self._sanitize_for_web3(v) for v in value)
+        return value
+
     def prepare_transaction(
         self, method_name: str, method_kwargs: Dict, tx_params: Dict
     ) -> Optional[dict]:
@@ -210,6 +225,10 @@ class ContractInstance:
             The prepared transaction dict, or None if preparation failed.
 
         """
+        # Sanitize kwargs and params to convert EthereumAddress to pure str
+        method_kwargs = self._sanitize_for_web3(method_kwargs)
+        tx_params = self._sanitize_for_web3(tx_params)
+
         method = getattr(self.contract.functions, method_name)
         built_method = method(*method_kwargs.values())
 

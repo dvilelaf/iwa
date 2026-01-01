@@ -7,7 +7,7 @@ from web3 import Web3
 from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
-from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
+from iwa.core.constants import NATIVE_CURRENCY_ADDRESS, ZERO_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.models import Config, EthereumAddress
 from iwa.core.utils import configure_logger
@@ -262,12 +262,12 @@ class ServiceManager:
                 token_address = self.registry.get_token(service_id)
             except Exception:
                 # Default to native if query fails
-                token_address = "0x0000000000000000000000000000000000000000"
+                token_address = ZERO_ADDRESS
 
         security_deposit = service_info["security_deposit"]
 
         # Ensure Approval: If using tokens, check allowance and approve if needed
-        is_native = str(token_address).lower() == "0x0000000000000000000000000000000000000000"
+        is_native = str(token_address).lower() == str(ZERO_ADDRESS).lower()
 
         if not is_native:
             try:
@@ -402,10 +402,10 @@ class ServiceManager:
             try:
                 token_address = self.registry.get_token(service_id)
             except Exception:
-                token_address = "0x0000000000000000000000000000000000000000"
+                token_address = ZERO_ADDRESS
 
         security_deposit = service_info["security_deposit"]
-        is_native = str(token_address) == "0x0000000000000000000000000000000000000000"
+        is_native = str(token_address) == str(ZERO_ADDRESS)
 
         if not is_native:
             if not bond_amount_wei:
@@ -1807,7 +1807,7 @@ class ServiceManager:
         # Validate priority mech is registered on marketplace
         try:
             mech_multisig = marketplace.call("checkMech", priority_mech)
-            if mech_multisig == "0x0000000000000000000000000000000000000000":
+            if mech_multisig == ZERO_ADDRESS:
                 logger.error(f"Priority mech {priority_mech} is NOT registered on marketplace")
                 return None
             logger.debug(f"Priority mech {priority_mech} -> multisig {mech_multisig}")
@@ -1818,7 +1818,7 @@ class ServiceManager:
         # Get mech's payment info for validation
         try:
             mech_factory = marketplace.call("mapAgentMechFactories", priority_mech)
-            if mech_factory == "0x0000000000000000000000000000000000000000":
+            if mech_factory == ZERO_ADDRESS:
                 logger.warning(
                     f"Priority mech {priority_mech} has no factory (may be unregistered)"
                 )
@@ -1859,7 +1859,7 @@ class ServiceManager:
         # Validate payment type has balance tracker
         try:
             balance_tracker = marketplace.call("mapPaymentTypeBalanceTrackers", payment_type)
-            if balance_tracker == "0x0000000000000000000000000000000000000000":
+            if balance_tracker == ZERO_ADDRESS:
                 logger.error(f"No balance tracker for payment type 0x{payment_type.hex()}")
                 return None
             logger.debug(f"Payment type balance tracker: {balance_tracker}")

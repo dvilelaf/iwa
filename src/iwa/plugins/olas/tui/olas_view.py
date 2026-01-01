@@ -10,6 +10,8 @@ from textual.widgets import Button, DataTable, Label, Select, Static
 if TYPE_CHECKING:
     from iwa.core.wallet import Wallet
 
+from iwa.core.types import EthereumAddress
+
 
 class OlasView(Static):
     """Olas services view for TUI."""
@@ -357,7 +359,7 @@ class OlasView(Static):
 
         return card
 
-    def _get_balance(self, address: str, token: str) -> str:
+    def _get_balance(self, address: EthereumAddress, token: str) -> str:
         """Get balance for an address."""
         if not self._wallet:
             return "-"
@@ -373,7 +375,7 @@ class OlasView(Static):
         except Exception:
             return "-"
 
-    def _get_tag(self, address: str) -> Optional[str]:
+    def _get_tag(self, address: EthereumAddress) -> Optional[str]:
         """Get tag for an address if it exists."""
         if not self._wallet:
             return None

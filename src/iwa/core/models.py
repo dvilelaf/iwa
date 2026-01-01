@@ -1,7 +1,6 @@
 """Core models"""
 
 import json
-import re
 from pathlib import Path
 from typing import Dict, List, Optional, Type, TypeVar
 
@@ -10,36 +9,9 @@ import tomli_w
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_core import core_schema
-from web3 import Web3
 
+from iwa.core.types import EthereumAddress  # noqa: F401 - re-exported for backwards compatibility
 from iwa.core.utils import singleton
-
-ETHEREUM_ADDRESS_REGEX = r"0x[0-9a-fA-F]{40}"
-
-
-class EthereumAddress(str):
-    """EthereumAddress"""
-
-    def __new__(cls, value: str):
-        """Create a new EthereumAddress instance."""
-        if not re.fullmatch(ETHEREUM_ADDRESS_REGEX, value):
-            raise ValueError(f"Invalid Ethereum address: {value}")
-        return str.__new__(cls, Web3.to_checksum_address(value))
-
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source, _handler):
-        """Get the Pydantic core schema for EthereumAddress."""
-        return core_schema.with_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema(),
-        )
-
-    @classmethod
-    def validate(cls, value: str, _info) -> str:
-        """Validate that the value is a valid Ethereum address."""
-        if not re.fullmatch(ETHEREUM_ADDRESS_REGEX, value):
-            raise ValueError(f"Invalid Ethereum address: {value}")
-        return Web3.to_checksum_address(value)
 
 
 class StoredAccount(BaseModel):

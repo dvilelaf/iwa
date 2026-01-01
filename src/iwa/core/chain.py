@@ -578,7 +578,7 @@ class ChainInterface:
         # Fallback if loop finishes without error (should cover based on logic)
         raise RuntimeError(f"{operation_name} failed unexpectedly")
 
-    def is_contract(self, address: str) -> bool:
+    def is_contract(self, address: EthereumAddress) -> bool:
         """Check if address is a contract"""
         code = self.web3.eth.get_code(address)
         return code != b""
@@ -600,7 +600,7 @@ class ChainInterface:
 
         return defaults
 
-    def get_token_symbol(self, address: str) -> str:
+    def get_token_symbol(self, address: EthereumAddress) -> str:
         """Get token symbol for an address."""
         # 1. Check known tokens in Chain model
         for symbol, addr in self.chain.tokens.items():
@@ -616,7 +616,7 @@ class ChainInterface:
         except Exception:
             return address[:6] + "..." + address[-4:]
 
-    def get_token_decimals(self, address: str) -> int:
+    def get_token_decimals(self, address: EthereumAddress) -> int:
         """Get token decimals for an address."""
         try:
             from iwa.core.contracts.erc20 import ERC20Contract
@@ -626,11 +626,11 @@ class ChainInterface:
         except Exception:
             return 18
 
-    def get_native_balance_wei(self, address: str):
+    def get_native_balance_wei(self, address: EthereumAddress):
         """Get the native balance in wei"""
         return self.web3.eth.get_balance(address)
 
-    def get_native_balance_eth(self, address: str):
+    def get_native_balance_eth(self, address: EthereumAddress):
         """Get the native balance in ether"""
         balance_wei = self.get_native_balance_wei(address)
         balance_ether = self.web3.from_wei(balance_wei, "ether")
@@ -695,7 +695,7 @@ class ChainInterface:
         return params
 
     def wait_for_no_pending_tx(
-        self, from_address: str, max_wait_seconds: int = 60, poll_interval: float = 2.0
+        self, from_address: EthereumAddress, max_wait_seconds: int = 60, poll_interval: float = 2.0
     ):
         """Wait for no pending transactions for a specified time."""
         start_time = time.time()
@@ -716,7 +716,7 @@ class ChainInterface:
 
     def send_native_transfer(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         to_address: EthereumAddress,
         value_wei: int,
         sign_callback: Callable[[dict], SignedTransaction],

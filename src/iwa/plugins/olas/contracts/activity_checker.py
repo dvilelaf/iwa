@@ -11,6 +11,7 @@ requests relative to the time elapsed since the last checkpoint.
 from typing import Tuple
 
 from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH, ContractInstance
 
 
@@ -32,7 +33,7 @@ class ActivityCheckerContract(ContractInstance):
     name = "activity_checker"
     abi_path = OLAS_ABI_PATH / "activity_checker.json"
 
-    def __init__(self, address: str, chain_name: str = "gnosis"):
+    def __init__(self, address: EthereumAddress, chain_name: str = "gnosis"):
         """Initialize ActivityCheckerContract.
 
         Args:
@@ -51,7 +52,7 @@ class ActivityCheckerContract(ContractInstance):
         # Get liveness ratio (requests per second * 1e18)
         self.liveness_ratio = self.contract.functions.livenessRatio().call()
 
-    def get_multisig_nonces(self, multisig: str) -> Tuple[int, int]:
+    def get_multisig_nonces(self, multisig: EthereumAddress) -> Tuple[int, int]:
         """Get the nonces for a multisig address.
 
         Args:

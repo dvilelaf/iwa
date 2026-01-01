@@ -38,6 +38,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Union
 
 from iwa.core.contracts.contract import ContractInstance
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.activity_checker import ActivityCheckerContract
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
@@ -62,7 +63,7 @@ class StakingContract(ContractInstance):
     name = "staking"
     abi_path = OLAS_ABI_PATH / "staking.json"
 
-    def __init__(self, address: str, chain_name: str = "gnosis"):
+    def __init__(self, address: EthereumAddress, chain_name: str = "gnosis"):
         """Initialize StakingContract.
 
         Args:
@@ -285,7 +286,7 @@ class StakingContract(ContractInstance):
 
     def prepare_stake_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
     ) -> Optional[Dict]:
         """Prepare a stake transaction."""
@@ -300,7 +301,7 @@ class StakingContract(ContractInstance):
 
     def prepare_unstake_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
     ) -> Optional[Dict]:
         """Prepare an unstake transaction."""
@@ -315,7 +316,7 @@ class StakingContract(ContractInstance):
 
     def prepare_claim_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
     ) -> Optional[Dict]:
         """Prepare a claim transaction to claim staking rewards.

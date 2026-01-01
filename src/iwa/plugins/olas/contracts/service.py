@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Dict, Optional
 
 from iwa.core.contracts.contract import ContractInstance
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.constants import (
     DEFAULT_DEPLOY_PAYLOAD,
 )
@@ -70,8 +71,8 @@ class ServiceRegistryContract(ContractInstance):
 
     def prepare_approve_tx(
         self,
-        from_address: str,
-        spender: str,
+        from_address: EthereumAddress,
+        spender: EthereumAddress,
         id_: int,
     ) -> Optional[Dict]:
         """Approve."""
@@ -90,9 +91,9 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_create_tx(
         self,
-        from_address: str,
-        service_owner: str,
-        token_address: str,
+        from_address: EthereumAddress,
+        service_owner: EthereumAddress,
+        token_address: EthereumAddress,
         config_hash: str,
         agent_ids: list,
         agent_params: list,
@@ -114,7 +115,7 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_activate_registration_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
         value: int = 1,
     ) -> Optional[Dict]:
@@ -130,7 +131,7 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_register_agents_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
         agent_instances: list,
         agent_ids: list,
@@ -150,7 +151,7 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_deploy_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
         multisig_implementation_address: Optional[str] = None,
         fallback_handler: Optional[str] = None,
@@ -185,7 +186,7 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_terminate_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
     ) -> Optional[Dict]:
         """Terminate a service."""
@@ -200,7 +201,7 @@ class ServiceManagerContract(ContractInstance):
 
     def prepare_unbond_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         service_id: int,
     ) -> Optional[Dict]:
         """Terminate a service."""

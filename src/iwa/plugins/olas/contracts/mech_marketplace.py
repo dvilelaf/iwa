@@ -3,6 +3,7 @@
 from typing import Dict, Optional
 
 from iwa.core.contracts.contract import ContractInstance
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
 
@@ -14,9 +15,9 @@ class MechMarketplaceContract(ContractInstance):
 
     def prepare_request_tx(
         self,
-        from_address: str,
+        from_address: EthereumAddress,
         request_data: bytes,
-        priority_mech: str,
+        priority_mech: EthereumAddress,
         response_timeout: int = 300,
         max_delivery_rate: int = 10_000,
         payment_type: bytes = b"\x00" * 32,

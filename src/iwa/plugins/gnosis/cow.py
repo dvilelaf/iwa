@@ -21,6 +21,7 @@ from web3 import Web3
 from web3.types import Wei
 
 from iwa.core.chain import SupportedChain
+from iwa.core.types import EthereumAddress
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()
@@ -128,7 +129,7 @@ ORDER_ENDPOINT_URL = "/api/v1/orders/"
 COW_EXPLORER_URL = "https://explorer.cow.fi/gc/orders/"
 HTTP_OK = 200
 
-COWSWAP_GPV2_VAULT_RELAYER_ADDRESS = "0xC92E8bdf79f0507f65a392b0ab4667716BFE0110"
+COWSWAP_GPV2_VAULT_RELAYER_ADDRESS = EthereumAddress("0xC92E8bdf79f0507f65a392b0ab4667716BFE0110")
 MAX_APPROVAL = 2**256 - 1
 
 # Placeholders for cowdao_cowpy functions/classes to allow patching in tests

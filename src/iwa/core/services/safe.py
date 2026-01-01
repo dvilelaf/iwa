@@ -8,6 +8,7 @@ from safe_eth.safe import Safe, SafeOperationEnum
 from safe_eth.safe.proxy_factory import ProxyFactory
 from safe_eth.safe.safe_tx import SafeTx
 
+from iwa.core.constants import ZERO_ADDRESS
 from iwa.core.db import log_transaction
 from iwa.core.models import StoredSafeAccount
 from iwa.core.settings import settings
@@ -80,12 +81,12 @@ class SafeService:
             setup_data = empty_safe.contract.functions.setup(
                 owner_addresses,
                 threshold,
-                "0x0000000000000000000000000000000000000000",
+                str(ZERO_ADDRESS),
                 b"",
-                "0x0000000000000000000000000000000000000000",
-                "0x0000000000000000000000000000000000000000",
+                str(ZERO_ADDRESS),
+                str(ZERO_ADDRESS),
                 0,
-                "0x0000000000000000000000000000000000000000",
+                str(ZERO_ADDRESS),
             ).build_transaction({"gas": 0, "gasPrice": 0})["data"]
 
             gas_price = ethereum_client.w3.eth.gas_price
