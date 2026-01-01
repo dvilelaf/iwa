@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>IWA Terminal</title>
-        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-        <link rel="stylesheet" href="/static/style.css">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+        <link rel="stylesheet" href="/static/style.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
-              rel="stylesheet">
+              rel="stylesheet" />
     </head>
     <body>
         <div class="background-blobs">
@@ -118,7 +118,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Amount</label>
-                                    <input type="number" id="tx-amount" step="1" placeholder="0.00" required>
+                                    <input type="number" id="tx-amount" step="1" placeholder="0.00" required />
                                 </div>
                                 <div class="form-group">
                                     <label>Token</label>
@@ -205,11 +205,11 @@
                             <form id="swap-form">
                                 <div class="swap-mode-toggle">
                                     <label class="radio-item">
-                                        <input type="radio" name="swap-mode" value="sell" checked>
+                                        <input type="radio" name="swap-mode" value="sell" checked />
                                         <span>Sell exact amount</span>
                                     </label>
                                     <label class="radio-item">
-                                        <input type="radio" name="swap-mode" value="buy">
+                                        <input type="radio" name="swap-mode" value="buy" />
                                         <span>Buy exact amount</span>
                                     </label>
                                 </div>
@@ -227,7 +227,7 @@
                                                    id="swap-sell-amount"
                                                    step="1"
                                                    min="0"
-                                                   placeholder="0.00">
+                                                   placeholder="0.00" />
                                             <button type="button" id="swap-max-sell" class="btn-max">Max</button>
                                         </div>
                                     </div>
@@ -253,7 +253,7 @@
                                                    step="1"
                                                    min="0"
                                                    placeholder="0.00"
-                                                   readonly>
+                                                   readonly />
                                             <button type="button" id="swap-max-buy" class="btn-max" style="display: none">Max</button>
                                         </div>
                                     </div>
@@ -281,11 +281,11 @@
                 <form id="create-safe-form">
                     <div class="form-group mb-1">
                         <label>Tag Name</label>
-                        <input type="text" id="safe-tag" placeholder="e.g. Treasury Safe" required>
+                        <input type="text" id="safe-tag" placeholder="e.g. Treasury Safe" required />
                     </div>
                     <div class="form-group mb-1">
                         <label>Threshold (Signatures needed)</label>
-                        <input type="number" id="safe-threshold" min="1" value="1" required>
+                        <input type="number" id="safe-threshold" min="1" value="1" required />
                     </div>
                     <div class="form-group mb-1">
                         <label>Select Owners</label>
@@ -313,7 +313,7 @@
                 <form id="create-eoa-form">
                     <div class="form-group mb-1">
                         <label>Tag Name (optional)</label>
-                        <input type="text" id="eoa-tag" placeholder="e.g. Trading Account">
+                        <input type="text" id="eoa-tag" placeholder="e.g. Trading Account" />
                     </div>
                     <div class="modal-actions mt-2">
                         <button type="button" class="btn-secondary" id="close-eoa-modal">Cancel</button>
@@ -324,7 +324,7 @@
         </div>
         <!-- Confirmation Modal -->
         <div id="confirm-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 400px;">
+            <div class="modal-content glass" style="max-width: 400px">
                 <h2 id="confirm-title">Confirm Action</h2>
                 <p id="confirm-message"
                    style="color: var(--text-muted);
@@ -337,10 +337,10 @@
         </div>
         <!-- Stake Modal -->
         <div id="stake-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px;">
+            <div class="modal-content glass" style="max-width: 450px">
                 <h2>Stake Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">Select a staking contract for this service:</p>
-                <input type="hidden" id="stake-service-key">
+                <p style="color: var(--text-muted); margin-bottom: 1rem">Select a staking contract for this service:</p>
+                <input type="hidden" id="stake-service-key" />
                 <div class="form-group mb-1">
                     <label>Staking Contract</label>
                     <div id="stake-contract-spinner"
@@ -360,7 +360,7 @@
         </div>
         <!-- Create Service Modal -->
         <div id="create-service-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px;">
+            <div class="modal-content glass" style="max-width: 450px">
                 <h2>Create Olas Service</h2>
                 <form id="create-service-form">
                     <div class="form-group mb-1">
@@ -368,7 +368,7 @@
                         <input type="text"
                                id="new-service-name"
                                placeholder="e.g. My Trader"
-                               required>
+                               required />
                     </div>
                     <div class="form-group mb-1">
                         <label>Chain</label>
@@ -403,13 +403,10 @@
         </div>
         <!-- Fund Service Modal -->
         <div id="fund-service-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px;">
+            <div class="modal-content glass" style="max-width: 450px">
                 <h2>Fund Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">
-                    Send native tokens from master wallet to service
-                    accounts:
-                </p>
-                <input type="hidden" id="fund-service-key">
+                <p style="color: var(--text-muted); margin-bottom: 1rem">Send native tokens from master wallet to service accounts:</p>
+                <input type="hidden" id="fund-service-key" />
                 <div class="form-group mb-1">
                     <label>
                         Agent Amount (<span id="fund-native-symbol">xDAI</span>)
@@ -419,7 +416,7 @@
                            step="0.01"
                            min="0"
                            value="0"
-                           placeholder="0.00">
+                           placeholder="0.00" />
                 </div>
                 <div class="form-group mb-1">
                     <label>
@@ -430,7 +427,7 @@
                            step="0.01"
                            min="0"
                            value="0"
-                           placeholder="0.00">
+                           placeholder="0.00" />
                 </div>
                 <div class="modal-actions mt-2">
                     <button type="button" class="btn-secondary" id="close-fund-modal">Cancel</button>
@@ -440,25 +437,45 @@
         </div>
         <!-- Terminate Service Modal -->
         <div id="terminate-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px;">
-                <h2 style="color: var(--error);">⚠️ Terminate Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            <div class="modal-content glass" style="max-width: 450px">
+                <h2 style="color: var(--error)">⚠️ Terminate Service</h2>
+                <p style="color: var(--text-muted); margin-bottom: 1rem">
                     This action will:
-                    <br>
+                    <br />
                     • Unstake the service (if staked)
-                    <br>
+                    <br />
                     • Terminate the service
-                    <br>
+                    <br />
                     • Unbond all operators
-                    <br>
-                    <br>
+                    <br />
+                    <br />
                     The service will return to PRE_REGISTRATION state.
                 </p>
-                <input type="hidden" id="terminate-service-key">
+                <input type="hidden" id="terminate-service-key" />
                 <div class="modal-actions mt-2">
                     <button type="button" class="btn-secondary" id="terminate-cancel">Cancel</button>
                     <button type="button" class="btn-danger" id="terminate-confirm">Terminate</button>
                 </div>
+            </div>
+        </div>
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content glass" style="max-width: 380px">
+                <h2>🔐 Authentication Required</h2>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem">Enter your Web UI password to continue:</p>
+                <form id="login-form">
+                    <div class="form-group mb-1">
+                        <label>Password</label>
+                        <input type="password"
+                               id="login-password"
+                               placeholder="Enter password"
+                               required
+                               autocomplete="current-password" />
+                    </div>
+                    <div class="modal-actions mt-2">
+                        <button type="submit" class="btn-primary" style="width: 100%">Login</button>
+                    </div>
+                </form>
             </div>
         </div>
         <!-- Modals (minimal implementation for now) -->

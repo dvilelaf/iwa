@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     nativeCurrencies: {},
     accounts: [], // Basic account info
     balanceCache: {}, // { address: { native: "1.00", OLAS: "50.00", ... } }
-    authToken: localStorage.getItem("iwa_auth_token") || "",
+    authToken: sessionStorage.getItem("iwa_auth_token") || "",
     activeTokens: new Set(["native", "OLAS"]), // Default: native and OLAS
     olasServicesCache: {}, // { chain: [services] }
     stakingContractsCache: null, // Cached staking contracts
@@ -44,6 +44,46 @@ document.addEventListener("DOMContentLoaded", () => {
   const sendForm = document.getElementById("send-tx-form");
   const tokenTogglesContainer = document.getElementById("token-toggles");
 
+  // Login modal handling
+  let loginResolver = null;
+  const loginModal = document.getElementById("login-modal");
+  const loginForm = document.getElementById("login-form");
+  const loginPasswordInput = document.getElementById("login-password");
+
+  function showLoginModal() {
+    return new Promise((resolve) => {
+      loginResolver = resolve;
+      loginPasswordInput.value = "";
+      loginModal.classList.add("active");
+      loginPasswordInput.focus();
+    });
+  }
+
+  if (loginForm) {
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const pwd = loginPasswordInput.value;
+      loginModal.classList.remove("active");
+      if (loginResolver) {
+        loginResolver(pwd);
+        loginResolver = null;
+      }
+    });
+  }
+
+  // Close login modal on backdrop click
+  if (loginModal) {
+    loginModal.addEventListener("click", (e) => {
+      if (e.target === loginModal) {
+        loginModal.classList.remove("active");
+        if (loginResolver) {
+          loginResolver(null);
+          loginResolver = null;
+        }
+      }
+    });
+  }
+
   // Unified Fetch with Auth
   async function authFetch(url, options = {}) {
     if (state.authToken) {
@@ -56,10 +96,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const resp = await fetch(url, options);
 
     if (resp.status === 401) {
-      const pwd = prompt("Enter Web UI Password:");
+      const pwd = await showLoginModal();
       if (pwd) {
         state.authToken = pwd;
-        localStorage.setItem("iwa_auth_token", pwd);
+        sessionStorage.setItem("iwa_auth_token", pwd);
         return authFetch(url, options);
       }
     }

@@ -6,14 +6,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 # We need to mock Wallet and ChainInterfaces BEFORE importing app from server
+# Also mock _get_webui_password to bypass authentication in tests
 with (
     patch("iwa.core.wallet.Wallet"),
     patch("iwa.core.chain.ChainInterfaces"),
     patch("iwa.core.wallet.init_db"),
+    patch("iwa.web.dependencies._get_webui_password", return_value=None),
 ):
+    from iwa.web.dependencies import verify_auth
     from iwa.web.server import app
 
 from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
+
+
+# Override auth for all tests
+async def override_verify_auth():
+    return True
+
+
+app.dependency_overrides[verify_auth] = override_verify_auth
 
 
 @pytest.fixture

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     web_enabled: bool = False
     web_port: int = 8080
+    webui_password: Optional[SecretStr] = None
 
     model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
 
