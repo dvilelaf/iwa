@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tool to reset the full environment:
+"""Tool to reset the full environment:
 1. Resets Tenderly networks (based on active profile).
 2. Clears Olas services from config.yaml.
 3. Clears all accounts from wallet.json except 'master'.
@@ -9,7 +8,9 @@ Tool to reset the full environment:
 import json
 import subprocess
 import sys
+
 import yaml
+
 from iwa.core.constants import CONFIG_PATH, WALLET_PATH
 from iwa.core.settings import settings
 

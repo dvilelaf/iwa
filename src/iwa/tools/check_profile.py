@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
+"""Tool to check the active Tenderly profile.
 """
-Tool to check the active Tenderly profile.
-"""
+import requests
+
 from iwa.core.settings import settings
 
-import requests
-from iwa.core.settings import settings
 
 def check_rpc_status(rpc_url):
     if not rpc_url:

@@ -105,6 +105,7 @@ class StakingContract(ContractInstance):
                 - staking_token: address of the token required
                 - min_staking_deposit: amount required to be paid during stake()
                 - required_agent_bond: amount required to be set during service creation
+
         """
         # For Olas Trader contracts (Hobbyist, Alpha, Beta, etc.),
         # the total OLAS is split 50/50:

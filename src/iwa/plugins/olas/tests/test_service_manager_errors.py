@@ -115,6 +115,12 @@ def test_service_manager_lifecycle_failures(mock_wallet):
     manager.registry.get_service.return_value = {"state": ServiceState.PRE_REGISTRATION}
     mock_staking = MagicMock()
     mock_staking.staking_token_address = VALID_ADDR
+    mock_staking.get_requirements.return_value = {
+        "staking_token": VALID_ADDR,
+        "min_staking_deposit": 50000000000000000000,
+        "num_agent_instances": 1,
+        "required_agent_bond": 50000000000000000000,
+    }
     with patch("iwa.plugins.olas.service_manager.ERC20Contract"):
         assert manager.stake(mock_staking) is False
 

@@ -102,6 +102,12 @@ def test_sm_stake_fail(sm):
         mock_stk = mock_stk_cls.return_value
         mock_stk.get_service_info.return_value = {"staking_state": 1}
         mock_stk.staking_token_address = addr
+        mock_stk.get_requirements.return_value = {
+            "staking_token": addr,
+            "min_staking_deposit": 50000000000000000000,
+            "num_agent_instances": 1,
+            "required_agent_bond": 50000000000000000000,
+        }
         success = sm.stake(mock_stk)
         assert success is False
 

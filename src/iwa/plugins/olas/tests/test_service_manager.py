@@ -270,6 +270,12 @@ def test_stake_success(service_manager, mock_wallet):
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
     staking_contract.address = TEST_STAKING_ADDR
+    staking_contract.get_requirements.return_value = {
+        "staking_token": "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f",  # OLAS token
+        "min_staking_deposit": 50000000000000000000,
+        "num_agent_instances": 1,
+        "required_agent_bond": 50000000000000000000,  # 50 OLAS
+    }
 
     service_manager.registry.get_service.return_value = {
         "state": ServiceState.DEPLOYED,
@@ -277,7 +283,7 @@ def test_stake_success(service_manager, mock_wallet):
     }
 
     with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
-        mock_erc20.return_value.balance_of_wei.return_value = 200
+        mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
 
         mock_wallet.sign_and_send_transaction.return_value = (True, {})
         staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
@@ -530,9 +536,15 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
     staking_contract.max_num_services = 10
     staking_contract.min_staking_deposit = 100
     staking_contract.address = TEST_STAKING_ADDR
+    staking_contract.get_requirements.return_value = {
+        "staking_token": "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f",
+        "min_staking_deposit": 50000000000000000000,
+        "num_agent_instances": 1,
+        "required_agent_bond": 50000000000000000000,  # 50 OLAS
+    }
 
     with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
-        mock_erc20.return_value.balance_of_wei.return_value = 200
+        mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
         mock_wallet.sign_and_send_transaction.return_value = (True, {})
         staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
         staking_contract.get_staking_state.return_value = StakingState.STAKED

@@ -17,6 +17,9 @@ def mock_wallet():
     wallet.key_storage.get_account.return_value.address = (
         "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     )
+    wallet.key_storage.create_account.return_value.address = (
+        "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    )
     wallet.sign_and_send_transaction.return_value = (True, {"status": 1})
     wallet.send.return_value = (True, {"status": 1})
     return wallet
@@ -284,14 +287,13 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
     }
     mock_registry_inst.extract_events.return_value = [
         {"name": "DeployService"},
-        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xMultisig"}},
+        {"name": "CreateMultisigWithAgents", "args": {"multisig": "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"}},
     ]
 
     manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     multisig = manager.deploy()
-    assert multisig == "0xMultisig"
-    assert manager.service.multisig_address == "0xMultisig"
+    assert multisig == "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
     mock_config_inst.save_config.assert_called()
 
     # Failures
@@ -409,20 +411,26 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
     # Mock Staking Contract
     mock_staking = MagicMock()
     mock_staking.staking_token_address = "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
-    mock_staking.address = "0xStaking"
+    mock_staking.address = "0xDDdDddDdDdddDDddDDddDDDDdDdDDdDDdDDDDDDd"
     mock_staking.get_service_ids.return_value = []  # Not full
     mock_staking.max_num_services = 10
     mock_staking.min_staking_deposit = 100
     mock_staking.extract_events.return_value = [{"name": "ServiceStaked"}]
     mock_staking.get_staking_state.return_value = StakingState.STAKED
+    mock_staking.get_requirements.return_value = {
+        "staking_token": "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f",
+        "min_staking_deposit": 50000000000000000000,
+        "num_agent_instances": 1,
+        "required_agent_bond": 50000000000000000000,
+    }
 
-    # Mock ERC20 balance check
+    # Mock ERC20 balance check (100 OLAS = 100e18 wei, enough for 50 min deposit)
     mock_erc20_inst = mock_erc20.return_value
-    mock_erc20_inst.balance_of_wei.return_value = 200  # Enough balance
+    mock_erc20_inst.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
 
     success = manager.stake(mock_staking)
     assert success is True
-    assert manager.service.staking_contract_address == "0xStaking"
+    assert manager.service.staking_contract_address == "0xDDdDddDdDdddDDddDDddDDDDdDdDDdDDdDDDDDDd"
     mock_config_inst.save_config.assert_called()
 
     # Failures
