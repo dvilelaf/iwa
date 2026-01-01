@@ -42,3 +42,21 @@ async def verify_auth(
         detail="Invalid authentication credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def get_config():
+    """Dependency to provide the Config object."""
+    from iwa.core.constants import CONFIG_PATH
+    from iwa.core.models import Config
+    import yaml
+
+    if not CONFIG_PATH.exists():
+        return Config()
+
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            data = yaml.safe_load(f) or {}
+        return Config(**data)
+    except Exception as e:
+        logger.error(f"Error loading config: {e}")
+        return Config()

@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
     """Lifecycle events."""
     logger.info("Starting up check operations...")
     init_db()
+
+    # Initialize block tracking for Tenderly monitoring
+    from iwa.core.chain import ChainInterfaces
+    ChainInterfaces().gnosis.init_block_tracking()
+
     yield
     logger.info("Shutting down...")
 

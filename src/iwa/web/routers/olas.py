@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
-from iwa.web.dependencies import verify_auth, wallet
+from iwa.web.dependencies import get_config, verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/olas", tags=["olas"])
@@ -38,8 +38,13 @@ def get_olas_price(auth: bool = Depends(verify_auth)):
     summary="Get Staking Contracts",
     description="Get the list of available OLAS staking contracts for a specific chain.",
 )
-def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
-    """Get available staking contracts for a chain."""
+def get_staking_contracts(
+    chain: str = "gnosis",
+    service_key: Optional[str] = None,
+    auth: bool = Depends(verify_auth),
+    config: Config = Depends(get_config),
+):
+    """Get available staking contracts for a chain, optionally filtered by service bond."""
     if not chain.replace("-", "").isalnum():
         from fastapi import HTTPException
 
@@ -52,9 +57,50 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
         from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
         from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
+        from iwa.plugins.olas.service_manager import ServiceManager
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
         print(f"DEBUG: Staking Contracts for {chain}: {contracts}")
+
+        # Get service bond and token if filtered
+        service_bond = None
+        service_token = None
+
+        if service_key:
+            try:
+                # Need to use ServiceManager to get accurate info including security deposit
+                chain_name, service_id = service_key.split(":")
+                # Initialize wallet dependencies for ServiceManager
+                from iwa.core.constants import ZERO_ADDRESS
+                manager = ServiceManager(wallet, service_key)
+                if manager.service:
+                    # Get service requirements
+                    service_token = (manager.service.token_address or "").lower()
+                    service_id_int = manager.service.service_id
+
+
+                    # Get Agent Bond (checking first agent)
+                    # We need the bond the agent actually has, to compare with what the contract REQUIRES
+                    agent_ids = manager.service.agent_ids
+                    if not agent_ids:
+                         # Fallback to registry lookup if local model doesn't have agent details
+                         try:
+                             service_info = manager.registry.get_service_info(service_id_int)
+                             agent_ids = service_info.get("agent_ids", [])
+                         except Exception as registry_error:
+                             logger.warning(f"Failed to fetch service info from registry: {registry_error}")
+                             agent_ids = []
+
+                    if agent_ids:
+                        first_agent_id = agent_ids[0]
+                        agent_params = manager.registry.get_agent_params(service_id_int, first_agent_id)
+                        service_bond = agent_params.get("bond")
+                        logger.info(f"Filtering for service {service_key}: bond={service_bond}, token={service_token}")
+
+            except Exception as e:
+                logger.warning(f"Could not fetch service details for filtering: {e}")
+                # Don't fail the request, just skip filtering
+                pass
 
         # Load ABI once
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
@@ -69,9 +115,11 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
                 contract = w3.eth.contract(address=address, abi=abi)
                 service_ids = contract.functions.getServiceIds().call()
                 max_services = contract.functions.maxNumServices().call()
+                min_deposit = contract.functions.minStakingDeposit().call()
+                staking_token = contract.functions.stakingToken().call()
                 used = len(service_ids)
 
-                print(f"DEBUG: {name}: {used}/{max_services}")
+                print(f"DEBUG: {name}: {used}/{max_services} (min: {min_deposit}, token: {staking_token})")
 
                 return {
                     "name": name,
@@ -82,18 +130,21 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
                         "available_slots": max_services - used,
                         "available": used < max_services,
                     },
+                    "min_staking_deposit": min_deposit,
+                    "staking_token": staking_token,
                 }
             except Exception as e:
                 print(f"DEBUG: Failed for {name}: {e}")
                 logger.warning(f"Failed to check availability for {name} ({address}): {e}")
-                import traceback
-
-                traceback.print_exc()
+                # Don't need full traceback here, just the error
+                # import traceback
+                # traceback.print_exc()
                 # Return basic info with assumed availability (or not)
                 return {
                     "name": name,
                     "address": address,
                     "usage": None,  # Could not verify
+                    "min_staking_deposit": None,
                 }
 
         results = []
@@ -108,7 +159,28 @@ def get_staking_contracts(chain: str = "gnosis", auth: bool = Depends(verify_aut
 
         # Filter valid contracts (fetched info) OR unverified (RPC failed)
         # But exclude contracts KNOWN to be full (usage exists AND available <= 0)
-        return [r for r in results if r["usage"] is None or r["usage"]["available"] > 0]
+        filtered_results = []
+        for r in results:
+            # 1. Availability check
+            if r["usage"] is not None and not r["usage"]["available"]:
+                continue
+
+            # 2. Compatibility check (if service info is known)
+            if service_bond is not None and r.get("min_staking_deposit") is not None:
+                # Bond Check
+                if service_bond < r["min_staking_deposit"]:
+                    # Incompatible: Service bond is too low for this contract
+                    continue
+
+                # Token Check
+                contract_token = str(r.get("staking_token", "")).lower()
+                if service_token and contract_token and service_token != contract_token:
+                     # Incompatible: Tokens do not match
+                    continue
+
+            filtered_results.append(r)
+
+        return filtered_results
 
     except Exception as e:
         print(f"DEBUG: Top Level Error: {e}")
