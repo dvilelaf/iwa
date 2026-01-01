@@ -91,6 +91,13 @@ class OlasView(Static):
         color: $text-muted;
         padding: 2;
     }
+
+    .olas-price {
+        text-align: center;
+        color: $success;
+        padding: 1 0;
+        text-style: bold;
+    }
     """
 
     def __init__(self, wallet: Optional["Wallet"] = None):
@@ -114,6 +121,7 @@ class OlasView(Static):
             yield Button("Refresh", id="olas-refresh-btn", variant="default")
 
         # Services container
+        yield Label("OLAS: --", id="olas-price-label", classes="olas-price")
         yield ScrollableContainer(id="services-container")
 
     def on_mount(self) -> None:
@@ -210,7 +218,17 @@ class OlasView(Static):
                 service_state = manager.get_service_state()
                 services_data.append((service_key, service, staking_status, service_state))
 
-            self.app.call_from_thread(self._render_services, services_data)
+            # Fetch OLAS price
+            olas_price = None
+            try:
+                from iwa.core.pricing import PriceService
+
+                price_service = PriceService()
+                olas_price = price_service.get_token_price("autonolas", "eur")
+            except Exception:
+                pass  # Price fetch is optional
+
+            self.app.call_from_thread(self._render_services, services_data, olas_price)
 
         except Exception as e:
             import traceback
@@ -220,9 +238,21 @@ class OlasView(Static):
         finally:
             self._loading = False
 
-    async def _render_services(self, services_data: list) -> None:
+    async def _render_services(
+        self, services_data: list, olas_price: Optional[float] = None
+    ) -> None:
         """Create and mount service cards in UI thread."""
         try:
+            # Update OLAS price label
+            try:
+                price_label = self.query_one("#olas-price-label", Label)
+                if olas_price:
+                    price_label.update(f"OLAS: €{olas_price:.2f}")
+                else:
+                    price_label.update("OLAS: --")
+            except Exception:
+                pass  # Label might not exist yet
+
             container = self.query_one("#services-container", ScrollableContainer)
             # Synchronously (as much as possible) clear children
             # Querying and removing is safer than remove_children() when mounting immediately
