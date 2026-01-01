@@ -120,7 +120,7 @@ class OlasView(Static):
         """Load services when mounted."""
         self.load_services()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:  # noqa: C901
         """Handle button presses."""
         button_id = event.button.id
         if button_id == "olas-refresh-btn":
@@ -149,6 +149,9 @@ class OlasView(Static):
         elif button_id and button_id.startswith("checkpoint-"):
             service_key = button_id.replace("checkpoint-", "").replace("_", ":", 1)
             self.checkpoint_service(service_key)
+        elif button_id and button_id.startswith("deploy-"):
+            service_key = button_id.replace("deploy-", "").replace("_", ":", 1)
+            self.deploy_service(service_key)
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle chain selection change."""
@@ -204,7 +207,8 @@ class OlasView(Static):
                 manager = ServiceManager(self._wallet)
                 manager.service = service
                 staking_status = manager.get_staking_status()
-                services_data.append((service_key, service, staking_status))
+                service_state = manager.get_service_state()
+                services_data.append((service_key, service, staking_status, service_state))
 
             self.app.call_from_thread(self._render_services, services_data)
 
@@ -234,8 +238,8 @@ class OlasView(Static):
                     Label("No services found on this chain.", classes="empty-state")
                 )
             else:
-                for service_key, service, staking_status in services_data:
-                    card = self._create_service_card(service_key, service, staking_status)
+                for service_key, service, staking_status, service_state in services_data:
+                    card = self._create_service_card(service_key, service, staking_status, service_state)
                     await container.mount(card)
 
             await container.mount(
@@ -272,7 +276,9 @@ class OlasView(Static):
 
             print(f"[OLAS DEBUG] Error mounting error: {e}", file=sys.stderr)
 
-    def _create_service_card(self, service_key: str, service, staking_status) -> Container:
+    def _create_service_card(
+        self, service_key: str, service, staking_status, service_state: str = "UNKNOWN"
+    ) -> Container:
         """Create a service card widget."""
         from iwa.plugins.olas.models import Service
 
@@ -328,20 +334,31 @@ class OlasView(Static):
             )
         staking_section = Vertical(*staking_widgets, classes="staking-section")
 
-        # Build action buttons
-        button_list = [Button("Fund", id=f"fund-{safe_key}", variant="primary")]
+        # Build action buttons based on service state
+        is_pre_registration = service_state == "PRE_REGISTRATION"
+        is_deployed = service_state == "DEPLOYED"
+
+        button_list = []
+
+        # Deploy button for PRE_REGISTRATION services
+        if is_pre_registration:
+            button_list.append(Button("Deploy", id=f"deploy-{safe_key}", variant="success"))
+        else:
+            button_list.append(Button("Fund", id=f"fund-{safe_key}", variant="primary"))
+
         if is_staked and checkpoint_pending:
             button_list.append(Button("Checkpoint", id=f"checkpoint-{safe_key}", variant="warning"))
         if is_staked and rewards > 0:
             button_list.append(
                 Button(f"Claim {rewards:.2f} OLAS", id=f"claim-{safe_key}", variant="primary")
             )
-        if is_staked:
+        if is_deployed and is_staked:
             button_list.append(Button("Unstake", id=f"unstake-{safe_key}", variant="primary"))
-        else:
+        elif is_deployed and not is_staked:
             button_list.append(Button("Stake", id=f"stake-{safe_key}", variant="primary"))
-        button_list.append(Button("Drain", id=f"drain-{safe_key}", variant="warning"))
-        button_list.append(Button("Terminate", id=f"terminate-{safe_key}", variant="error"))
+        if not is_pre_registration:
+            button_list.append(Button("Drain", id=f"drain-{safe_key}", variant="warning"))
+            button_list.append(Button("Terminate", id=f"terminate-{safe_key}", variant="error"))
         buttons = Horizontal(*button_list, classes="action-buttons")
 
         # Build card
@@ -751,6 +768,43 @@ class OlasView(Static):
                 self.notify("Checkpoint failed", severity="error")
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
+
+    def deploy_service(self, service_key: str) -> None:
+        """Deploy a service from PRE_REGISTRATION to DEPLOYED state."""
+        from iwa.core.models import Config
+        from iwa.plugins.olas.models import OlasConfig
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        self.notify("Deploying service...", severity="information")
+
+        try:
+            config = Config()
+            if "olas" not in config.plugins:
+                self.notify("Olas plugin not configured", severity="error")
+                return
+
+            olas_config = OlasConfig.model_validate(config.plugins["olas"])
+            if service_key not in olas_config.services:
+                self.notify(f"Service {service_key} not found", severity="error")
+                return
+
+            service = olas_config.services[service_key]
+
+            manager = ServiceManager(self._wallet)
+            manager.service = service
+
+            success = manager.spin_up()
+
+            if success:
+                self.notify(
+                    "Service deployed successfully! State: DEPLOYED",
+                    severity="information",
+                )
+                self.load_services()
+            else:
+                self.notify("Deployment failed", severity="error")
+        except Exception as e:
+            self.notify(f"Deployment error: {e}", severity="error")
 
     def _build_accounts_data(self, service) -> List[tuple]:
         """Build accounts data list."""

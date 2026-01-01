@@ -53,6 +53,7 @@ async def test_olas_view_initial_load(mock_wallet, mock_olas_config):
                 epoch_number=1,
                 unstake_available_at="2025-12-24T12:00:00Z",
             )
+            mock_sm.get_service_state.return_value = "DEPLOYED"
 
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
@@ -85,6 +86,7 @@ async def test_olas_view_chain_change(mock_wallet, mock_olas_config):
             mock_sm.get_staking_status.return_value = StakingStatus(
                 is_staked=False, staking_state="NOT_STAKED", remaining_epoch_seconds=3600
             )
+            mock_sm.get_service_state.return_value = "DEPLOYED"
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
                 view = app.query_one(OlasView)
@@ -133,6 +135,7 @@ async def test_olas_view_actions(mock_wallet, mock_olas_config):
                 accrued_reward_wei=10**18,
                 remaining_epoch_seconds=0,  # Checkpoint pending
             )
+            mock_sm.get_service_state.return_value = "DEPLOYED"
 
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
@@ -166,6 +169,7 @@ async def test_olas_view_create_service(mock_wallet, mock_olas_config):
             mock_sm.get_staking_status.return_value = StakingStatus(
                 is_staked=False, staking_state="NOT_STAKED"
             )
+            mock_sm.get_service_state.return_value = "DEPLOYED"
 
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
@@ -199,6 +203,7 @@ async def test_olas_view_fund_service(mock_wallet, mock_olas_config):
             mock_sm.get_staking_status.return_value = StakingStatus(
                 is_staked=False, staking_state="NOT_STAKED"
             )
+            mock_sm.get_service_state.return_value = "DEPLOYED"
 
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
