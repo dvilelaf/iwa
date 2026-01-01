@@ -308,6 +308,7 @@ class VirtualNet(BaseModel):
     )
     admin_rpc: Optional[str] = Field(default=None, description="Admin RPC URL for the vNet")
     public_rpc: Optional[str] = Field(default=None, description="Public RPC URL for the vNet")
+    initial_block: int = Field(default=0, description="Block number at vNet creation")
 
     @classmethod
     def __get_pydantic_core_schema__(cls, _source, _handler):
