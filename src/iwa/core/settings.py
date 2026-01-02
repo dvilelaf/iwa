@@ -84,6 +84,10 @@ class Settings(BaseSettings):
             if self.base_test_rpc:
                 self.base_rpc = self.base_test_rpc
 
+        # Convert empty webui_password to None (no auth required)
+        if self.webui_password and not self.webui_password.get_secret_value():
+            self.webui_password = None
+
         return self
 
 
