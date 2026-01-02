@@ -599,14 +599,33 @@ class WalletsScreen(VerticalScroll):
     def send_tx_worker(self, f, t, token, amount) -> None:
         """Background worker for sending transactions."""
         try:
-            tx_hash = self.wallet.send(f, t, int(amount * 10**18), token, self.active_chain)
+            # Let Wallet.send handle the conversion - it knows the token's decimals
+            # For native currency, use standard 18 decimals
+            # For ERC20, Wallet.send should handle it based on the token
+            from web3 import Web3
+
+            if token == "native":
+                amount_wei = Web3.to_wei(amount, "ether")
+            else:
+                # For ERC20, get the token's decimals
+                from iwa.core.chain import ChainInterfaces
+                from iwa.core.contracts.erc20 import ERC20Contract
+
+                chain_interface = ChainInterfaces().get(self.active_chain)
+                token_address = chain_interface.chain.get_token_address(token)
+                if token_address:
+                    erc20 = ERC20Contract(token_address, self.active_chain)
+                    amount_wei = int(amount * (10 ** erc20.decimals))
+                else:
+                    # Fallback to 18 decimals if token not found
+                    amount_wei = Web3.to_wei(amount, "ether")
+
+            tx_hash = self.wallet.send(f, t, amount_wei, token, self.active_chain)
             self.app.call_from_thread(self.notify, "Transaction sent!", severity="success")
             self.app.call_from_thread(
                 self.add_tx_history_row, f, t, token, amount, "Pending", tx_hash
             )
         except Exception as e:
-            self.app.call_from_thread(self.notify, f"Error: {escape(str(e))}", severity="error")
-
             self.app.call_from_thread(self.notify, f"Error: {escape(str(e))}", severity="error")
 
     def load_recent_txs(self):
