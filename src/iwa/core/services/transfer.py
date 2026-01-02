@@ -827,7 +827,7 @@ class TransferService:
         else:
             self.transaction_service.sign_and_send(transaction, from_address_or_tag, chain_name)
 
-    async def swap(
+    async def swap(  # noqa: C901
         self,
         account_address_or_tag: str,
         amount_eth: Optional[float],
@@ -870,7 +870,16 @@ class TransferService:
                 chain=chain,
             )
 
-            approval_amount_wei = (
+            # Check current allowance first
+            current_allowance = self.get_erc20_allowance(
+                owner_address_or_tag=account_address_or_tag,
+                spender_address=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
+                token_address_or_name=sell_token_name,
+                chain_name="gnosis",
+            ) or 0
+
+            # Calculate required amount
+            required_amount = (
                 amount_wei
                 if order_type == OrderType.SELL
                 else cow.get_max_sell_amount_wei(
@@ -880,13 +889,18 @@ class TransferService:
                 )
             )
 
-            self.approve_erc20(
-                owner_address_or_tag=account_address_or_tag,
-                spender_address_or_tag=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
-                token_address_or_name=sell_token_name,
-                amount_wei=approval_amount_wei,
-                chain_name="gnosis",
-            )
+            # If allowance is insufficient, approve EXACT amount (No Infinite)
+            if current_allowance < required_amount:
+                logger.info(f"Insufficient allowance ({current_allowance} < {required_amount}). Approving EXACT amount.")
+                self.approve_erc20(
+                    owner_address_or_tag=account_address_or_tag,
+                    spender_address_or_tag=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
+                    token_address_or_name=sell_token_name,
+                    amount_wei=required_amount,
+                    chain_name="gnosis",
+                )
+            else:
+                logger.info(f"Allowance sufficient ({current_allowance} >= {required_amount}). Skipping approval.")
 
             result = await cow.swap(
                 amount_wei=amount_wei,
@@ -897,6 +911,67 @@ class TransferService:
 
             if result:
                 logger.info("Swap successful")
+
+                # Log transaction and analytics
+                try:
+                    # Extract Data
+                    executed_sell = float(result.get("executedSellAmount", 0))
+                    executed_buy = float(result.get("executedBuyAmount", 0))
+                    quote = result.get("quote", {})
+                    sell_price_usd = float(quote.get("sellTokenPrice", 0) or 0)
+                    buy_price_usd = float(quote.get("buyTokenPrice", 0) or 0)
+                    tx_hash = result.get("txHash") or result.get("uid")
+
+                    # Calculate Analytics
+                    execution_price = 0.0
+                    if executed_sell > 0:
+                        execution_price = executed_buy / executed_sell # Raw ratio
+
+                    value_sold = (executed_sell / 1e18) * sell_price_usd
+                    value_bought = (executed_buy / 1e18) * buy_price_usd
+
+                    value_change_pct = None
+                    if value_sold > 0 and buy_price_usd > 0:
+                        value_change_pct = ((value_bought - value_sold) / value_sold) * 100
+
+                    # Prepare extra_data
+                    analytics = {
+                        "type": "swap",
+                        "platform": "cowswap",
+                        "sell_token": sell_token_name,
+                        "buy_token": buy_token_name,
+                        "executed_sell_amount": executed_sell,
+                        "executed_buy_amount": executed_buy,
+                        "sell_price_usd": sell_price_usd,
+                        "buy_price_usd": buy_price_usd,
+                        "execution_price": execution_price,
+                        "value_change_pct": value_change_pct if value_change_pct is not None else "N/A"
+                    }
+
+                    # Log to DB if we have a tx_hash (CowSwap usually provides it in order info if confirmed)
+                    if tx_hash:
+                         from iwa.core.db import log_transaction
+                         log_transaction(
+                            tx_hash=tx_hash,
+                            from_addr=account.address,
+                            to_addr=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, # Or settlement contract
+                            token=sell_token_name,
+                            amount_wei=int(executed_sell),
+                            chain=chain_name,
+                            from_tag=account_address_or_tag,
+                            tags=["swap", "cowswap", sell_token_name, buy_token_name],
+                            gas_cost="0", # User doesn't pay gas for settlement (solver does)
+                            gas_value_eur=0.0,
+                            value_eur=float(value_sold) if value_sold > 0 else None, # Approximate as USD
+                            extra_data=analytics
+                         )
+
+                    # Inject analytics back into result for API/Frontend
+                    result["analytics"] = analytics
+
+                except Exception as log_err:
+                    logger.warning(f"Failed to log swap analytics: {log_err}")
+
                 return result
 
             logger.error(f"Swap try {retries}/{max_retries}] failed")
