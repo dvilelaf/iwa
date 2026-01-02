@@ -599,7 +599,14 @@ class TransferService:
                     token_address = self.account_service.get_token_address(
                         token_addr_or_tag, chain_interface.chain
                     )
-                    amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
+                    # Support both amount_wei (preferred) and amount (legacy)
+                    if "amount_wei" in tx:
+                        amount_wei = tx["amount_wei"]
+                    elif "amount" in tx:
+                        erc20_temp = ERC20Contract(token_address, chain_name)
+                        amount_wei = int(tx["amount"] * (10 ** erc20_temp.decimals))
+                    else:
+                        continue
                     erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
 
             for token_addr, total_amount in erc20_totals.items():
@@ -618,21 +625,28 @@ class TransferService:
             recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
             token_address_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
 
-            # Calculate amount_wei respecting the token's decimals
-            if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
-                amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
+            # Prefer amount_wei if provided (no precision loss), else convert from amount
+            if "amount_wei" in tx:
+                amount_wei = tx["amount_wei"]
+            elif "amount" in tx:
+                # Calculate amount_wei respecting the token's decimals
+                if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
+                    amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
+                else:
+                    token_address = self.account_service.get_token_address(
+                        token_address_or_tag, chain_interface.chain
+                    )
+                    erc20_temp = ERC20Contract(token_address, chain_name)
+                    # Use the token's actual decimals
+                    amount_wei = int(tx["amount"] * (10 ** erc20_temp.decimals))
             else:
-                token_address = self.account_service.get_token_address(
-                    token_address_or_tag, chain_interface.chain
-                )
-                erc20 = ERC20Contract(token_address, chain_name)
-                # Use the token's actual decimals
-                amount_wei = int(tx["amount"] * (10 ** erc20.decimals))
+                logger.error(f"Transaction missing amount or amount_wei: {tx}")
+                continue
 
-            if "amount" in tx:
-                del tx["amount"]
-            if "token" in tx:
-                del tx["token"]
+            # Clean up transaction dict
+            tx.pop("amount", None)
+            tx.pop("amount_wei", None)
+            tx.pop("token", None)
 
             if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
                 tx["to"] = recipient_address
@@ -640,7 +654,11 @@ class TransferService:
                 tx["data"] = b""
                 tx["operation"] = SafeOperationEnum.CALL
             else:
-                # erc20 was already created above for decimal calculation
+                # Create ERC20 contract instance for the transfer
+                token_address = self.account_service.get_token_address(
+                    token_address_or_tag, chain_interface.chain
+                )
+                erc20 = ERC20Contract(token_address, chain_name)
 
                 if is_safe:
                     # Safe uses transfer() because it DelegateCalls the MultiSend (sender identity preserved)
@@ -1038,16 +1056,15 @@ class TransferService:
                 from_address_or_tag, token_name, chain_name
             )
             if balance_wei and balance_wei > 0:
-                # Convert to ether for multi_send (which expects amount in ether)
-                amount_ether = chain_interface.web3.from_wei(balance_wei, "ether")
+                # Use amount_wei directly for zero precision loss
                 transactions.append(
                     {
                         "to": to_address,
-                        "amount": float(amount_ether),
+                        "amount_wei": balance_wei,
                         "token": token_name,
                     }
                 )
-                logger.info(f"Queued {amount_ether} {token_name} for drain.")
+                logger.info(f"Queued {balance_wei} wei of {token_name} for drain.")
             else:
                 logger.debug(f"No {token_name} to drain on {from_address_or_tag}.")
 
@@ -1066,15 +1083,15 @@ class TransferService:
                 drainable_balance_wei = native_balance_wei - gas_cost_wei
 
             if drainable_balance_wei > 0:
-                amount_ether = chain_interface.web3.from_wei(drainable_balance_wei, "ether")
+                # Use amount_wei directly for zero precision loss
                 transactions.append(
                     {
                         "to": to_address,
-                        "amount": float(amount_ether),
+                        "amount_wei": drainable_balance_wei,
                         # No "token" key = native currency
                     }
                 )
-                logger.info(f"Queued {amount_ether} native for drain.")
+                logger.info(f"Queued {drainable_balance_wei} wei native for drain.")
             else:
                 logger.info(
                     f"Not enough native balance to cover gas fees for draining from {from_address_or_tag}."
