@@ -76,7 +76,7 @@ def test_prepare_transfer_from_tx(mock_contract_instance):
     assert tx == {"data": "0x"}
     mock_prep.assert_called_with(
         method_name="transferFrom",
-        method_kwargs={"sender": "0xSender", "recipient": "0xRecipient", "amount": 100},
+        method_kwargs={"_sender": "0xSender", "_recipient": "0xRecipient", "_amount": 100},
         tx_params={"from": "0xFrom"},
     )
 
