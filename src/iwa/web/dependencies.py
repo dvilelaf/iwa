@@ -20,7 +20,8 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def _get_webui_password() -> Optional[str]:
     """Get WEBUI_PASSWORD from settings (lazy load to ensure secrets.env is loaded)."""
     from iwa.core.settings import settings
-    if hasattr(settings, 'webui_password') and settings.webui_password:
+
+    if hasattr(settings, "webui_password") and settings.webui_password:
         return settings.webui_password.get_secret_value()
     return None
 

@@ -196,14 +196,14 @@ class CowSwap:
         raise ValueError(f"Unsupported SupportedChainId: {self.supported_chain_id}")
 
     @staticmethod
-    def check_cowswap_order(order: "CompletedOrder") -> bool:
+    def check_cowswap_order(order: "CompletedOrder") -> dict | None:
         """Check if a CowSwap order has been executed by polling the Explorer API.
 
         Args:
             order: The executed order object containing UID and URL.
 
         Returns:
-            bool: True if order executed successfully, False if expired or timed out.
+            dict | None: The full order data if executed successfully, None otherwise.
 
         """
         logger.info(f"Checking order status for UID: {order.uid}")
@@ -214,8 +214,16 @@ class CowSwap:
 
         while retries < max_retries:
             retries += 1
-            # ... (polling logic)
-            response = requests.get(order.url, timeout=60)
+            # In a real app we might want to use asyncio.sleep but this is a sync/blocking check
+            # intended to be run in a thread or separate process usually.
+            # But the caller (transfer service) waits for it.
+
+            try:
+                response = requests.get(order.url, timeout=60)
+            except Exception as e:
+                logger.warning(f"Error checking order status: {e}")
+                time.sleep(sleep_between_retries)
+                continue
 
             if response.status_code != HTTP_OK:
                 logger.debug(
@@ -228,7 +236,7 @@ class CowSwap:
             status = order_data.get("status", "unknown")
             if status == "expired":
                 logger.error("Order expired without execution.")
-                return False
+                return None
 
             executed_sell = int(order_data.get("executedSellAmount", "0"))
             executed_buy = int(order_data.get("executedBuyAmount", "0"))
@@ -244,7 +252,7 @@ class CowSwap:
                 if buy_price is not None:
                     logger.debug(f"Buy price: ${float(buy_price):.2f}")
 
-                return True
+                return order_data
 
             logger.info(
                 f"Order pending... ({retries}/{max_retries}). Retry in {sleep_between_retries}s"
@@ -252,7 +260,7 @@ class CowSwap:
             time.sleep(sleep_between_retries)
 
         logger.warning("Max retries reached. Order status unknown.")
-        return False
+        return None
 
     async def swap(
         self,
@@ -261,7 +269,7 @@ class CowSwap:
         buy_token_name: str,
         safe_address: ChecksumAddress | None = None,
         order_type: OrderType = OrderType.SELL,
-    ) -> bool:
+    ) -> dict | None:
         """Execute a token swap on CoW Protocol.
 
         Args:
@@ -272,7 +280,7 @@ class CowSwap:
             order_type: SELL or BUY.
 
         Returns:
-            bool: True if swap initiated and verified successfully.
+            dict | None: The order data if swap initiated and verified successfully.
 
         """
         amount_eth = Web3.from_wei(amount_wei, "ether")
@@ -325,7 +333,7 @@ class CowSwap:
 
         except Exception as e:
             logger.error(f"Error during token swap: {e}")
-            return False
+            return None
 
     async def get_max_sell_amount_wei(
         self,

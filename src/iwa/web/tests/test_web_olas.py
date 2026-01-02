@@ -21,6 +21,7 @@ from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
 
 # Override auth for all tests
 async def override_verify_auth():
+    """Override auth for testing."""
     return True
 
 

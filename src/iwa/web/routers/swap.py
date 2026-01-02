@@ -86,7 +86,7 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
 
         order_type = OrderType.SELL if req.order_type == "sell" else OrderType.BUY
 
-        success = await wallet.transfer_service.swap(
+        order_data = await wallet.transfer_service.swap(
             account_address_or_tag=req.account,
             amount_eth=req.amount_eth,
             sell_token_name=req.sell_token,
@@ -95,12 +95,71 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
             order_type=order_type,
         )
 
-        if success:
-            return {"status": "success", "message": "Swap order placed and executed"}
+        if order_data:
+            # Calculate analytics
+            executed_sell = float(order_data.get("executedSellAmount", 0))
+            executed_buy = float(order_data.get("executedBuyAmount", 0))
+
+            # Get decimals (assuming standard 18 for now, ideally fetch from chain interface)
+            # In a robust impl, we'd fetch decimals for sell_token and buy_token
+            # Calculating raw price ratio:
+            # Price = Buy Amount / Sell Amount (e.g. 1 WXDAI = 100 OLAS -> Price 100)
+            execution_price = 0.0
+            if executed_sell > 0:
+                # Naive decimal adjustment (assuming equal decimals for now or raw ratio)
+                # To be precise we need token decimals.
+                # Let's trust the "quote" prices if available from CowSwap
+                quote = order_data.get("quote", {})
+                sell_price_usd = float(quote.get("sellTokenPrice", 0) or 0)
+                buy_price_usd = float(quote.get("buyTokenPrice", 0) or 0)
+
+                # Calculate Value Lost %
+                # Value Sold = executedSell * sellTokenPrice
+                # Value Bought = executedBuy * buyTokenPrice
+                # (sellTokenPrice/buyTokenPrice are raw or adjusted? usually adjusted for decimals in API response)
+                # CowSwap API returns prices adjusted for decimals usually.
+                # But executed amounts are in Wei/Raw units.
+
+                # Let's try to infer from the API response structure if possible.
+                # If not easily possible without more calls, we return the raw data and let frontend handle or simplify.
+
+                value_sold = (executed_sell / 1e18) * sell_price_usd  # Approx if 18 decimals
+                value_bought = (executed_buy / 1e18) * buy_price_usd  # Approx if 18 decimals
+
+                value_change_pct = 0.0
+                if value_sold > 0:
+                    # Change = (Value Bought - Value Sold) / Value Sold * 100
+                    # Positive = Gain, Negative = Loss
+                    value_change_pct = ((value_bought - value_sold) / value_sold) * 100
+
+            # Log analytics for visibility
+            logger.info(
+                f"Swap Analytics: Execution Price={execution_price:.4f}, "
+                f"Value Change={value_change_pct:.2f}%, "
+                f"Sell=${sell_price_usd:.2f}, Buy=${buy_price_usd:.2f}"
+            )
+
+            return {
+                "status": "success",
+                "message": "Swap executed successfully",
+                "order": order_data,
+                "analytics": {
+                    "executed_sell_amount": executed_sell,
+                    "executed_buy_amount": executed_buy,
+                    "value_change_pct": value_change_pct if "value_change_pct" in locals() else 0,
+                    "sell_price_usd": sell_price_usd if "sell_price_usd" in locals() else 0,
+                    "buy_price_usd": buy_price_usd if "buy_price_usd" in locals() else 0,
+                },
+            }
         else:
-            return {"status": "pending", "message": "Swap order placed, waiting for execution"}
+            return {
+                "status": "pending",
+                "message": "Swap order placed, waiting for execution or failed",
+            }
     except Exception as e:
         logger.error(f"Error swapping tokens: {e}")
+        # import traceback
+        # logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 

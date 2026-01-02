@@ -84,7 +84,7 @@ async def test_olas_view_chain_change(mock_wallet, mock_olas_config):
         with (
             patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
             patch("iwa.plugins.olas.constants.OLAS_TRADER_STAKING_CONTRACTS", {"ethereum": []}),
-            patch("iwa.core.pricing.PriceService") as mock_price_cls,
+            patch("iwa.core.pricing.PriceService"),
         ):
             mock_sm = mock_sm_cls.return_value
             mock_sm.get_services_full.return_value = []
@@ -134,7 +134,7 @@ async def test_olas_view_actions(mock_wallet, mock_olas_config):
 
         with (
             patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-            patch("iwa.core.pricing.PriceService") as mock_price_cls,
+            patch("iwa.core.pricing.PriceService"),
         ):
             mock_sm = mock_sm_cls.return_value
             mock_sm.get_staking_status.return_value = StakingStatus(
@@ -174,7 +174,7 @@ async def test_olas_view_create_service(mock_wallet, mock_olas_config):
 
         with (
             patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-            patch("iwa.core.pricing.PriceService") as mock_price_cls,
+            patch("iwa.core.pricing.PriceService"),
         ):
             mock_sm = mock_sm_cls.return_value
             mock_sm.get_staking_status.return_value = StakingStatus(
@@ -211,7 +211,7 @@ async def test_olas_view_fund_service(mock_wallet, mock_olas_config):
 
         with (
             patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-            patch("iwa.core.pricing.PriceService") as mock_price_cls,
+            patch("iwa.core.pricing.PriceService"),
         ):
             mock_sm = mock_sm_cls.return_value
             mock_sm.get_staking_status.return_value = StakingStatus(

@@ -81,7 +81,9 @@ def get_staking_contracts(  # noqa: C901
                     try:
                         service_info = manager.registry.get_service(service_id_int)
                         service_bond = service_info.get("security_deposit", 0)
-                        logger.info(f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}")
+                        logger.info(
+                            f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}"
+                        )
                     except Exception as e:
                         logger.warning(f"Failed to get service info for filtering: {e}")
 
@@ -157,7 +159,7 @@ def get_staking_contracts(  # noqa: C901
                 # Token Check
                 contract_token = str(r.get("staking_token", "")).lower()
                 if service_token and contract_token and service_token != contract_token:
-                     # Incompatible: Tokens do not match
+                    # Incompatible: Tokens do not match
                     continue
 
             filtered_results.append(r)
@@ -171,7 +173,7 @@ def get_staking_contracts(  # noqa: C901
                 "total_contracts": len(results),
                 "filtered_count": len(filtered_results),
                 "is_filtered": service_key is not None,
-            }
+            },
         }
 
     except Exception as e:

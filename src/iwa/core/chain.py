@@ -400,15 +400,21 @@ class ChainInterface:
                         # Case insensitive lookup + fallback
                         vnet = t_config.vnets.get(self.chain.name)
                         if not vnet:
-                             vnet = t_config.vnets.get(self.chain.name.lower())
+                            vnet = t_config.vnets.get(self.chain.name.lower())
 
                         if vnet and vnet.initial_block > 0:
                             self._initial_block = vnet.initial_block
-                            logger.info(f"Tenderly detected! Limit tracking relative to genesis block: {self._initial_block}")
+                            logger.info(
+                                f"Tenderly detected! Limit tracking relative to genesis block: {self._initial_block}"
+                            )
                         else:
-                             logger.warning(f"Tenderly detected but no initial_block in config. using session start: {self._initial_block}")
+                            logger.warning(
+                                f"Tenderly detected but no initial_block in config. using session start: {self._initial_block}"
+                            )
 
-                    logger.warning("Monitoring Tenderly vNet block usage (Limit ~50 blocks from vNet start)")
+                    logger.warning(
+                        "Monitoring Tenderly vNet block usage (Limit ~50 blocks from vNet start)"
+                    )
                 except Exception as ex:
                     logger.warning(f"Failed to load Tenderly config for block tracking: {ex}")
         except Exception as e:
@@ -437,7 +443,7 @@ class ChainInterface:
                     f"vNet limit is usually 50 blocks. You may experience errors soon."
                 )
             elif delta > 0 and delta % 10 == 0:
-                 logger.info(f"Tenderly Usage: {delta} blocks processed in session.")
+                logger.info(f"Tenderly Usage: {delta} blocks processed in session.")
 
         except Exception:
             pass

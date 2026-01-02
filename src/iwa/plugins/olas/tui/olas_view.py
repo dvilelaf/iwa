@@ -269,7 +269,9 @@ class OlasView(Static):
                 )
             else:
                 for service_key, service, staking_status, service_state in services_data:
-                    card = self._create_service_card(service_key, service, staking_status, service_state)
+                    card = self._create_service_card(
+                        service_key, service, staking_status, service_state
+                    )
                     await container.mount(card)
 
             await container.mount(
@@ -490,6 +492,7 @@ class OlasView(Static):
 
         # Filter contracts by bond compatibility
         import json
+
         w3 = ChainInterface(self._chain).web3
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
             abi = json.load(f)
@@ -635,9 +638,7 @@ class OlasView(Static):
                     available_slots = max_services - len(service_ids)
 
                     if available_slots > 0:
-                        staking_contracts.append(
-                            (f"{name} ({available_slots} slots)", str(addr))
-                        )
+                        staking_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
                 except Exception:
                     # If we can't check, include it without slot info
                     staking_contracts.append((name, str(addr)))

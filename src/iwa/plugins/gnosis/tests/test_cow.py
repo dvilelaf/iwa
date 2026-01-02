@@ -109,9 +109,9 @@ async def test_swap_defaults(cowswap, mock_cowpy_modules):
     mock_cowpy_modules["swap_tokens"].return_value = MagicMock(uid=MagicMock(root="0x123"))
 
     # Mock verify order to return True immediately to avoid sleep
-    with patch.object(CowSwap, "check_cowswap_order", return_value=True):
+    with patch.object(CowSwap, "check_cowswap_order", return_value={"status": "fulfilled"}):
         result = await cowswap.swap(100, "OLAS", "WXDAI", order_type=OrderType.SELL)
-        assert result is True
+        assert result is not None
         mock_cowpy_modules["swap_tokens"].assert_called()
 
 
@@ -126,9 +126,9 @@ async def test_swap_buy_order_type(cowswap, mock_cowpy_modules):
             CowSwap, "swap_tokens_to_exact_tokens", new_callable=AsyncMock
         ) as mock_custom_swap:
             mock_custom_swap.return_value = MagicMock(uid=MagicMock(root="0x123"))
-            with patch.object(CowSwap, "check_cowswap_order", return_value=True):
+            with patch.object(CowSwap, "check_cowswap_order", return_value={"status": "fulfilled"}):
                 result = await cowswap.swap(100, "OLAS", "WXDAI", order_type=OrderType.BUY)
-                assert result is True
+                assert result is not None
                 mock_custom_swap.assert_called()
 
 
@@ -178,7 +178,11 @@ def test_check_cowswap_order_success(cowswap):
             "executedBuyAmount": "90",
         }
 
-        assert cowswap.check_cowswap_order(mock_order) is True
+        assert cowswap.check_cowswap_order(mock_order) == {
+            "status": "fulfilled",
+            "executedSellAmount": "100",
+            "executedBuyAmount": "90",
+        }
 
 
 def test_check_cowswap_order_expired(cowswap):
@@ -190,7 +194,7 @@ def test_check_cowswap_order_expired(cowswap):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"status": "expired"}
 
-        assert cowswap.check_cowswap_order(mock_order) is False
+        assert cowswap.check_cowswap_order(mock_order) is None
 
 
 def test_check_cowswap_order_timeout(cowswap):
@@ -204,4 +208,4 @@ def test_check_cowswap_order_timeout(cowswap):
 
         # Speed up retry sleep
         with patch("time.sleep"):
-            assert cowswap.check_cowswap_order(mock_order) is False
+            assert cowswap.check_cowswap_order(mock_order) is None

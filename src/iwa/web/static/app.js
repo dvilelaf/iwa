@@ -835,7 +835,7 @@ document.addEventListener("DOMContentLoaded", () => {
       )
       .join("");
 
-    // Populate tokens (only ERC20, no native for CowSwap)
+    // Populate tokens (CowSwap supports ERC20s like WXDAI, but not native xDAI)
     const chainTokens = state.tokens[state.activeChain] || [];
     const tokenOptions = chainTokens
       .map(
@@ -847,8 +847,11 @@ document.addEventListener("DOMContentLoaded", () => {
     sellTokenSelect.innerHTML = tokenOptions;
     buyTokenSelect.innerHTML = tokenOptions;
 
-    // Set different default values for sell and buy
-    if (chainTokens.length >= 2) {
+    // Set default values (prefer WXDAI -> OLAS)
+    if (chainTokens.includes("WXDAI") && chainTokens.includes("OLAS")) {
+      sellTokenSelect.value = "WXDAI";
+      buyTokenSelect.value = "OLAS";
+    } else if (chainTokens.length >= 2) {
       sellTokenSelect.value = chainTokens[0];
       buyTokenSelect.value = chainTokens[1];
     }
@@ -1046,7 +1049,23 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const result = await resp.json();
         if (resp.ok) {
-          showToast(result.message || "Swap order placed!", "success");
+          let msg = result.message || "Swap executed!";
+          if (result.analytics) {
+            const execPrice =
+              result.analytics.execution_price ||
+              result.analytics.executed_buy_amount /
+                result.analytics.executed_sell_amount;
+            // value_change_pct comes from backend now
+
+            msg += `\nPrice: ${execPrice.toFixed(4)}`;
+
+            const valChange = result.analytics.value_change_pct;
+            if (valChange !== undefined) {
+              msg += `\nValue Change: ${valChange > 0 ? "+" : ""}${valChange.toFixed(2)}%`;
+            }
+          }
+          showToast(msg, "success", 7000); // Longer duration for reading
+
           sellAmountInput.value = "";
           buyAmountInput.value = "";
         } else {

@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize block tracking for Tenderly monitoring
     from iwa.core.chain import ChainInterfaces
+
     ChainInterfaces().gnosis.init_block_tracking()
 
     yield
