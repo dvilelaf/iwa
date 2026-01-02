@@ -21,7 +21,7 @@ def mock_chain():
 @pytest.fixture
 def mock_cowpy_modules():
     """Mock cowpy modules."""
-    with patch("iwa.plugins.gnosis.cow._get_cowpy_module") as mock_get:
+    with patch("iwa.plugins.gnosis.cow.get_cowpy_module") as mock_get:
         # Create mocks for all various modules
         mocks = {
             "SupportedChainId": MagicMock(),
@@ -165,7 +165,8 @@ async def test_swap_tokens_to_exact_tokens(cowswap, mock_cowpy_modules):
     mock_cowpy_modules["post_order"].assert_called()
 
 
-def test_check_cowswap_order_success(cowswap):
+@pytest.mark.asyncio
+async def test_check_cowswap_order_success(cowswap):
     """Test check_cowswap_order success path."""
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
@@ -178,14 +179,22 @@ def test_check_cowswap_order_success(cowswap):
             "executedBuyAmount": "90",
         }
 
-        assert cowswap.check_cowswap_order(mock_order) == {
+        # Need to mock loop.run_in_executor since check_cowswap_order uses it
+        # Or just let it run if requests.get is mocked?
+        # check_cowswap_order calls loop.run_in_executor(None, lambda: requests.get(...))
+        # This will run the lambda in a thread. The mock should work.
+
+        result = await cowswap.check_cowswap_order(mock_order)
+
+        assert result == {
             "status": "fulfilled",
             "executedSellAmount": "100",
             "executedBuyAmount": "90",
         }
 
 
-def test_check_cowswap_order_expired(cowswap):
+@pytest.mark.asyncio
+async def test_check_cowswap_order_expired(cowswap):
     """Test check_cowswap_order expiration."""
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
@@ -194,10 +203,12 @@ def test_check_cowswap_order_expired(cowswap):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"status": "expired"}
 
-        assert cowswap.check_cowswap_order(mock_order) is None
+        result = await cowswap.check_cowswap_order(mock_order)
+        assert result is None
 
 
-def test_check_cowswap_order_timeout(cowswap):
+@pytest.mark.asyncio
+async def test_check_cowswap_order_timeout(cowswap):
     """Test check_cowswap_order timeout."""
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
@@ -206,6 +217,7 @@ def test_check_cowswap_order_timeout(cowswap):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"status": "open", "executedSellAmount": "0"}
 
-        # Speed up retry sleep
-        with patch("time.sleep"):
-            assert cowswap.check_cowswap_order(mock_order) is None
+        # Speed up retry sleep (asyncio.sleep)
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await cowswap.check_cowswap_order(mock_order)
+            assert result is None

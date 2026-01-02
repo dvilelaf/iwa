@@ -26,96 +26,7 @@ from iwa.core.utils import configure_logger
 
 logger = configure_logger()
 
-# Lazy import cache for cowdao_cowpy modules to avoid asyncio.run() conflict
-_cowpy_cache: dict[str, Any] = {}
-
-
-def _get_cowpy_module(name: str) -> Any:  # noqa: C901
-    """Lazily import cowdao_cowpy submodules to avoid asyncio conflict at import time."""
-    if name not in _cowpy_cache:
-        if name == "DEFAULT_APP_DATA_HASH":
-            from cowdao_cowpy.app_data.utils import DEFAULT_APP_DATA_HASH
-
-            _cowpy_cache[name] = DEFAULT_APP_DATA_HASH
-        elif name == "Chain":
-            from cowdao_cowpy.common.chains import Chain
-
-            _cowpy_cache[name] = Chain
-        elif name == "SupportedChainId":
-            from cowdao_cowpy.common.chains import SupportedChainId
-
-            _cowpy_cache[name] = SupportedChainId
-        elif name == "Order":
-            from cowdao_cowpy.contracts.order import Order
-
-            _cowpy_cache[name] = Order
-        elif name == "PreSignSignature":
-            from cowdao_cowpy.contracts.sign import PreSignSignature
-
-            _cowpy_cache[name] = PreSignSignature
-        elif name == "SigningScheme":
-            from cowdao_cowpy.contracts.sign import SigningScheme
-
-            _cowpy_cache[name] = SigningScheme
-        elif name == "CompletedOrder":
-            from cowdao_cowpy.cow.swap import CompletedOrder
-
-            _cowpy_cache[name] = CompletedOrder
-        elif name == "get_order_quote":
-            from cowdao_cowpy.cow.swap import get_order_quote
-
-            _cowpy_cache[name] = get_order_quote
-        elif name == "post_order":
-            from cowdao_cowpy.cow.swap import post_order
-
-            _cowpy_cache[name] = post_order
-        elif name == "sign_order":
-            from cowdao_cowpy.cow.swap import sign_order
-
-            _cowpy_cache[name] = sign_order
-        elif name == "swap_tokens":
-            from cowdao_cowpy.cow.swap import swap_tokens
-
-            _cowpy_cache[name] = swap_tokens
-        elif name == "OrderBookApi":
-            from cowdao_cowpy.order_book.api import OrderBookApi
-
-            _cowpy_cache[name] = OrderBookApi
-        elif name == "Envs":
-            from cowdao_cowpy.order_book.config import Envs
-
-            _cowpy_cache[name] = Envs
-        elif name == "OrderBookAPIConfigFactory":
-            from cowdao_cowpy.order_book.config import OrderBookAPIConfigFactory
-
-            _cowpy_cache[name] = OrderBookAPIConfigFactory
-        elif name == "OrderQuoteRequest":
-            from cowdao_cowpy.order_book.generated.model import OrderQuoteRequest
-
-            _cowpy_cache[name] = OrderQuoteRequest
-        elif name == "OrderQuoteSide3":
-            from cowdao_cowpy.order_book.generated.model import OrderQuoteSide3
-
-            _cowpy_cache[name] = OrderQuoteSide3
-        elif name == "OrderQuoteSideKindBuy":
-            from cowdao_cowpy.order_book.generated.model import OrderQuoteSideKindBuy
-
-            _cowpy_cache[name] = OrderQuoteSideKindBuy
-        elif name == "TokenAmount":
-            from cowdao_cowpy.order_book.generated.model import TokenAmount
-
-            _cowpy_cache[name] = TokenAmount
-        elif name == "OrderQuoteSide1":
-            from cowdao_cowpy.order_book.generated.model import OrderQuoteSide1
-
-            _cowpy_cache[name] = OrderQuoteSide1
-        elif name == "OrderQuoteSideKindSell":
-            from cowdao_cowpy.order_book.generated.model import OrderQuoteSideKindSell
-
-            _cowpy_cache[name] = OrderQuoteSideKindSell
-        else:
-            raise ValueError(f"Unknown cowpy module: {name}")
-    return _cowpy_cache[name]
+from iwa.plugins.gnosis.cow_utils import get_cowpy_module
 
 
 # Type hints for cowdao_cowpy types (only used for type checking)
@@ -177,26 +88,26 @@ class CowSwap:
         else:
             self.account = private_key_or_signer
         self.chain = chain
-        supported_chain_id_cls = _get_cowpy_module("SupportedChainId")
+        supported_chain_id_cls = get_cowpy_module("SupportedChainId")
         self.supported_chain_id = supported_chain_id_cls(chain.chain_id)
         self.cow_chain = self.get_chain()
         self.cowswap_api_url = COW_API_URLS.get(chain.chain_id)
-        order_book_api_cls = _get_cowpy_module("OrderBookApi")
-        order_book_api_config_factory_cls = _get_cowpy_module("OrderBookAPIConfigFactory")
+        order_book_api_cls = get_cowpy_module("OrderBookApi")
+        order_book_api_config_factory_cls = get_cowpy_module("OrderBookAPIConfigFactory")
         self.order_book_api = order_book_api_cls(
             order_book_api_config_factory_cls.get_config(self.env, chain.chain_id)
         )
 
     def get_chain(self) -> "Chain":
         """Get the Chain enum based on the supported chain ID."""
-        chain_cls = _get_cowpy_module("Chain")
+        chain_cls = get_cowpy_module("Chain")
         for chain in chain_cls:
             if chain.value[0] == self.supported_chain_id:
                 return chain
         raise ValueError(f"Unsupported SupportedChainId: {self.supported_chain_id}")
 
     @staticmethod
-    def check_cowswap_order(order: "CompletedOrder") -> dict | None:
+    async def check_cowswap_order(order: "CompletedOrder") -> dict | None:
         """Check if a CowSwap order has been executed by polling the Explorer API.
 
         Args:
@@ -206,6 +117,7 @@ class CowSwap:
             dict | None: The full order data if executed successfully, None otherwise.
 
         """
+        import asyncio
         logger.info(f"Checking order status for UID: {order.uid}")
 
         max_retries = 8
@@ -214,28 +126,32 @@ class CowSwap:
 
         while retries < max_retries:
             retries += 1
-            # In a real app we might want to use asyncio.sleep but this is a sync/blocking check
-            # intended to be run in a thread or separate process usually.
-            # But the caller (transfer service) waits for it.
 
             try:
-                response = requests.get(order.url, timeout=60)
+                # Use a thread executor for blocking requests.get
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, lambda: requests.get(order.url, timeout=60))
             except Exception as e:
                 logger.warning(f"Error checking order status: {e}")
-                time.sleep(sleep_between_retries)
+                await asyncio.sleep(sleep_between_retries)
                 continue
 
             if response.status_code != HTTP_OK:
                 logger.debug(
                     f"Order status check {retries}/{max_retries}: HTTP {response.status_code}. Retry in {sleep_between_retries}s"
                 )
-                time.sleep(sleep_between_retries)
+                await asyncio.sleep(sleep_between_retries)
                 continue
 
             order_data = response.json()
+
+
             status = order_data.get("status", "unknown")
-            if status == "expired":
-                logger.error("Order expired without execution.")
+            valid_to = int(order_data.get("validTo", 0))
+            current_time = int(time.time())
+
+            if status == "expired" or (valid_to > 0 and current_time > valid_to):
+                logger.error(f"Order expired without execution (Status: {status}, ValidTo: {valid_to}, Now: {current_time}).")
                 return None
 
             executed_sell = int(order_data.get("executedSellAmount", "0"))
@@ -257,7 +173,7 @@ class CowSwap:
             logger.info(
                 f"Order pending... ({retries}/{max_retries}). Retry in {sleep_between_retries}s"
             )
-            time.sleep(sleep_between_retries)
+            await asyncio.sleep(sleep_between_retries)
 
         logger.warning("Max retries reached. Order status unknown.")
         return None
@@ -306,7 +222,7 @@ class CowSwap:
             )
         else:
             # Normal execution, lazy load
-            actual_swap_tokens = _get_cowpy_module("swap_tokens")
+            actual_swap_tokens = get_cowpy_module("swap_tokens")
             swap_function = (
                 self.swap_tokens_to_exact_tokens
                 if order_type == OrderType.BUY
@@ -329,7 +245,7 @@ class CowSwap:
 
             logger.info(f"Swap order placed: {COW_EXPLORER_URL}{order.uid.root}")
 
-            return self.check_cowswap_order(order)
+            return await self.check_cowswap_order(order)
 
         except Exception as e:
             logger.error(f"Error during token swap: {e}")
@@ -363,7 +279,7 @@ class CowSwap:
 
         """
         if app_data is None:
-            app_data = _get_cowpy_module("DEFAULT_APP_DATA_HASH")
+            app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
 
         # In testing context, these might be patched
         global \
@@ -376,16 +292,16 @@ class CowSwap:
             OrderBookApi, \
             OrderBookAPIConfigFactory
 
-        _get_order_quote = get_order_quote or _get_cowpy_module("get_order_quote")
-        _order_quote_request_cls = OrderQuoteRequest or _get_cowpy_module("OrderQuoteRequest")
-        _order_quote_side_cls = OrderQuoteSide3 or _get_cowpy_module("OrderQuoteSide3")
-        _order_quote_side_kind_buy_cls = OrderQuoteSideKindBuy or _get_cowpy_module(
+        _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
+        _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
+        _order_quote_side_cls = OrderQuoteSide3 or get_cowpy_module("OrderQuoteSide3")
+        _order_quote_side_kind_buy_cls = OrderQuoteSideKindBuy or get_cowpy_module(
             "OrderQuoteSideKindBuy"
         )
-        _token_amount_cls = TokenAmount or _get_cowpy_module("TokenAmount")
-        _supported_chain_id_cls = SupportedChainId or _get_cowpy_module("SupportedChainId")
-        _order_book_api_cls = OrderBookApi or _get_cowpy_module("OrderBookApi")
-        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or _get_cowpy_module(
+        _token_amount_cls = TokenAmount or get_cowpy_module("TokenAmount")
+        _supported_chain_id_cls = SupportedChainId or get_cowpy_module("SupportedChainId")
+        _order_book_api_cls = OrderBookApi or get_cowpy_module("OrderBookApi")
+        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or get_cowpy_module(
             "OrderBookAPIConfigFactory"
         )
 
@@ -437,7 +353,7 @@ class CowSwap:
 
         """
         if app_data is None:
-            app_data = _get_cowpy_module("DEFAULT_APP_DATA_HASH")
+            app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
 
         global \
             get_order_quote, \
@@ -449,16 +365,16 @@ class CowSwap:
             OrderBookApi, \
             OrderBookAPIConfigFactory
 
-        _get_order_quote = get_order_quote or _get_cowpy_module("get_order_quote")
-        _order_quote_request_cls = OrderQuoteRequest or _get_cowpy_module("OrderQuoteRequest")
-        _order_quote_side_cls = OrderQuoteSide1 or _get_cowpy_module("OrderQuoteSide1")
-        _order_quote_side_kind_sell_cls = OrderQuoteSideKindSell or _get_cowpy_module(
+        _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
+        _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
+        _order_quote_side_cls = OrderQuoteSide1 or get_cowpy_module("OrderQuoteSide1")
+        _order_quote_side_kind_sell_cls = OrderQuoteSideKindSell or get_cowpy_module(
             "OrderQuoteSideKindSell"
         )
-        _token_amount_cls = TokenAmount or _get_cowpy_module("TokenAmount")
-        _supported_chain_id_cls = SupportedChainId or _get_cowpy_module("SupportedChainId")
-        _order_book_api_cls = OrderBookApi or _get_cowpy_module("OrderBookApi")
-        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or _get_cowpy_module(
+        _token_amount_cls = TokenAmount or get_cowpy_module("TokenAmount")
+        _supported_chain_id_cls = SupportedChainId or get_cowpy_module("SupportedChainId")
+        _order_book_api_cls = OrderBookApi or get_cowpy_module("OrderBookApi")
+        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or get_cowpy_module(
             "OrderBookAPIConfigFactory"
         )
 
@@ -523,7 +439,7 @@ class CowSwap:
         """
         # Lazy imports
         if app_data is None:
-            app_data = _get_cowpy_module("DEFAULT_APP_DATA_HASH")
+            app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
 
         global \
             get_order_quote, \
@@ -541,24 +457,24 @@ class CowSwap:
             post_order, \
             CompletedOrder
 
-        _get_order_quote = get_order_quote or _get_cowpy_module("get_order_quote")
-        _order_quote_request_cls = OrderQuoteRequest or _get_cowpy_module("OrderQuoteRequest")
-        _order_quote_side_cls = OrderQuoteSide3 or _get_cowpy_module("OrderQuoteSide3")
-        _order_quote_side_kind_buy_cls = OrderQuoteSideKindBuy or _get_cowpy_module(
+        _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
+        _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
+        _order_quote_side_cls = OrderQuoteSide3 or get_cowpy_module("OrderQuoteSide3")
+        _order_quote_side_kind_buy_cls = OrderQuoteSideKindBuy or get_cowpy_module(
             "OrderQuoteSideKindBuy"
         )
-        _token_amount_cls = TokenAmount or _get_cowpy_module("TokenAmount")
-        _supported_chain_id_cls = SupportedChainId or _get_cowpy_module("SupportedChainId")
-        _order_book_api_cls = OrderBookApi or _get_cowpy_module("OrderBookApi")
-        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or _get_cowpy_module(
+        _token_amount_cls = TokenAmount or get_cowpy_module("TokenAmount")
+        _supported_chain_id_cls = SupportedChainId or get_cowpy_module("SupportedChainId")
+        _order_book_api_cls = OrderBookApi or get_cowpy_module("OrderBookApi")
+        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or get_cowpy_module(
             "OrderBookAPIConfigFactory"
         )
-        _order_cls = Order or _get_cowpy_module("Order")
-        _pre_sign_signature_cls = PreSignSignature or _get_cowpy_module("PreSignSignature")
-        _signing_scheme_cls = SigningScheme or _get_cowpy_module("SigningScheme")
-        _sign_order = sign_order or _get_cowpy_module("sign_order")
-        _post_order = post_order or _get_cowpy_module("post_order")
-        _completed_order_cls = CompletedOrder or _get_cowpy_module("CompletedOrder")
+        _order_cls = Order or get_cowpy_module("Order")
+        _pre_sign_signature_cls = PreSignSignature or get_cowpy_module("PreSignSignature")
+        _signing_scheme_cls = SigningScheme or get_cowpy_module("SigningScheme")
+        _sign_order = sign_order or get_cowpy_module("sign_order")
+        _post_order = post_order or get_cowpy_module("post_order")
+        _completed_order_cls = CompletedOrder or get_cowpy_module("CompletedOrder")
 
         chain_id = _supported_chain_id_cls(chain.value[0])
         order_book_api = _order_book_api_cls(
