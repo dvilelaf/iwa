@@ -100,31 +100,35 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
             executed_sell = float(order_data.get("executedSellAmount", 0))
             executed_buy = float(order_data.get("executedBuyAmount", 0))
 
-            # Get decimals (assuming standard 18 for now, ideally fetch from chain interface)
-            # In a robust impl, we'd fetch decimals for sell_token and buy_token
-            # Calculating raw price ratio:
-            # Price = Buy Amount / Sell Amount (e.g. 1 WXDAI = 100 OLAS -> Price 100)
+            # Get actual token decimals for accurate calculations
+            sell_decimals = 18
+            buy_decimals = 18
+            try:
+                from iwa.core.chain import ChainInterfaces
+                from iwa.core.contracts.erc20 import ERC20Contract
+
+                chain_interface = ChainInterfaces().get(req.chain)
+                if chain_interface:
+                    sell_addr = chain_interface.chain.get_token_address(req.sell_token)
+                    buy_addr = chain_interface.chain.get_token_address(req.buy_token)
+                    if sell_addr:
+                        sell_decimals = ERC20Contract(sell_addr, req.chain).decimals
+                    if buy_addr:
+                        buy_decimals = ERC20Contract(buy_addr, req.chain).decimals
+            except Exception:
+                pass  # Default to 18 if we can't get decimals
+
+            # Calculating price ratio with actual decimals
             execution_price = 0.0
             if executed_sell > 0:
-                # Naive decimal adjustment (assuming equal decimals for now or raw ratio)
-                # To be precise we need token decimals.
-                # Let's trust the "quote" prices if available from CowSwap
+                # Get quote prices from CowSwap API (already adjusted for decimals)
                 quote = order_data.get("quote", {})
                 sell_price_usd = float(quote.get("sellTokenPrice", 0) or 0)
                 buy_price_usd = float(quote.get("buyTokenPrice", 0) or 0)
 
-                # Calculate Value Lost %
-                # Value Sold = executedSell * sellTokenPrice
-                # Value Bought = executedBuy * buyTokenPrice
-                # (sellTokenPrice/buyTokenPrice are raw or adjusted? usually adjusted for decimals in API response)
-                # CowSwap API returns prices adjusted for decimals usually.
-                # But executed amounts are in Wei/Raw units.
-
-                # Let's try to infer from the API response structure if possible.
-                # If not easily possible without more calls, we return the raw data and let frontend handle or simplify.
-
-                value_sold = (executed_sell / 1e18) * sell_price_usd  # Approx if 18 decimals
-                value_bought = (executed_buy / 1e18) * buy_price_usd  # Approx if 18 decimals
+                # Calculate value using correct decimals
+                value_sold = (executed_sell / (10 ** sell_decimals)) * sell_price_usd
+                value_bought = (executed_buy / (10 ** buy_decimals)) * buy_price_usd
 
                 value_change_pct = 0.0
                 if value_sold > 0:

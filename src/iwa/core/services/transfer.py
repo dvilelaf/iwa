@@ -966,8 +966,23 @@ class TransferService:
                     if executed_sell > 0:
                         execution_price = executed_buy / executed_sell # Raw ratio
 
-                    value_sold = (executed_sell / 1e18) * sell_price_usd
-                    value_bought = (executed_buy / 1e18) * buy_price_usd
+                    # Get actual token decimals
+                    sell_decimals = 18
+                    buy_decimals = 18
+                    try:
+                        chain_interface = ChainInterfaces().get(chain_name)
+                        if chain_interface:
+                            sell_addr = chain_interface.chain.get_token_address(sell_token_name)
+                            buy_addr = chain_interface.chain.get_token_address(buy_token_name)
+                            if sell_addr:
+                                sell_decimals = ERC20Contract(sell_addr, chain_name).decimals
+                            if buy_addr:
+                                buy_decimals = ERC20Contract(buy_addr, chain_name).decimals
+                    except Exception as e:
+                        logger.warning(f"Could not get decimals for analytics: {e}")
+
+                    value_sold = (executed_sell / (10 ** sell_decimals)) * sell_price_usd
+                    value_bought = (executed_buy / (10 ** buy_decimals)) * buy_price_usd
 
                     value_change_pct = None
                     if value_sold > 0 and buy_price_usd > 0:

@@ -90,6 +90,24 @@ def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
 
     result = []
     for tx in recent:
+        # Get token decimals for proper display
+        token_decimals = 18  # Default for native
+        if tx.token and tx.token.lower() not in ["native", "native currency"]:
+            try:
+                from iwa.core.chain import ChainInterfaces
+                from iwa.core.contracts.erc20 import ERC20Contract
+
+                chain_interface = ChainInterfaces().get(chain)
+                if chain_interface:
+                    token_address = chain_interface.chain.get_token_address(tx.token)
+                    if token_address:
+                        erc20 = ERC20Contract(token_address, chain)
+                        token_decimals = erc20.decimals
+            except Exception:
+                pass  # Default to 18 if we can't get decimals
+
+        amount_display = float(tx.amount_wei or 0) / (10 ** token_decimals)
+
         result.append(
             {
                 "timestamp": tx.timestamp.isoformat(),
@@ -97,7 +115,7 @@ def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
                 "from": tx.from_tag or tx.from_address,
                 "to": tx.to_tag or tx.to_address,
                 "token": tx.token,
-                "amount": f"{float(tx.amount_wei or 0) / 10**18:.2f}",
+                "amount": f"{amount_display:.2f}",
                 "value_eur": f"€{(tx.value_eur or 0.0):.2f}",
                 "status": "Confirmed",
                 "hash": tx.tx_hash,

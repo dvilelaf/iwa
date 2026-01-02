@@ -653,7 +653,22 @@ class WalletsScreen(VerticalScroll):
                 if symbol and symbol.upper() in ["NATIVE", "NATIVE CURRENCY"]:
                     interface = ChainInterfaces().get(tx.chain)
                     symbol = interface.chain.native_currency if interface else "Native"
-                amt = f"{float(tx.amount_wei or 0) / 10**18:.4f}"
+                    token_decimals = 18  # Native always 18
+                else:
+                    # Get token decimals for proper display
+                    token_decimals = 18  # Default
+                    try:
+                        interface = ChainInterfaces().get(tx.chain)
+                        if interface and tx.token:
+                            token_address = interface.chain.get_token_address(tx.token)
+                            if token_address:
+                                from iwa.core.contracts.erc20 import ERC20Contract
+                                erc20 = ERC20Contract(token_address, tx.chain)
+                                token_decimals = erc20.decimals
+                    except Exception:
+                        pass  # Default to 18
+
+                amt = f"{float(tx.amount_wei or 0) / (10 ** token_decimals):.4f}"
                 val_eur = f"€{(tx.value_eur or 0.0):.2f}"
                 gas_eur = f"€{tx.gas_value_eur:.4f}" if tx.gas_value_eur else "?"
                 table.add_row(
