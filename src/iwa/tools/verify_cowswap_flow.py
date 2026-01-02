@@ -4,7 +4,6 @@ import logging
 
 from web3 import Web3
 
-from iwa.core.chain import ChainInterfaces
 from iwa.core.wallet import Wallet
 from iwa.plugins.gnosis.cow import OrderType
 

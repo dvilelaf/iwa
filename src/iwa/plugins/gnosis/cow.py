@@ -4,7 +4,7 @@
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
 warnings.filterwarnings(
@@ -27,7 +27,6 @@ from iwa.core.utils import configure_logger
 logger = configure_logger()
 
 from iwa.plugins.gnosis.cow_utils import get_cowpy_module
-
 
 # Type hints for cowdao_cowpy types (only used for type checking)
 if TYPE_CHECKING:
