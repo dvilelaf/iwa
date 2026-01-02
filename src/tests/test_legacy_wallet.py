@@ -184,8 +184,13 @@ def wallet(
 
         # Mock internal transfer service methods to return 0 by default for numeric comparisons,
         # but allow side_effect to handle tests that expect None.
-        def get_allowance_side_effect(owner, spender, token, chain="gnosis"):
-            if owner == "unknown" or token == "INVALID":
+        def get_allowance_side_effect(
+            owner_address_or_tag,
+            spender_address,
+            token_address_or_name,
+            chain_name="gnosis",
+        ):
+            if owner_address_or_tag == "unknown" or token_address_or_name == "INVALID":
                 return None
             return 0
 
