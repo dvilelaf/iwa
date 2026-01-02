@@ -3,6 +3,8 @@
 import base64
 import json
 import os
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -143,7 +145,17 @@ class KeyStorage(BaseModel):
         return master_account
 
     def save(self):
-        """Save"""
+        """Save with automatic backup."""
+        # Backup existing file before overwriting
+        if self._path.exists():
+            # Use backup directory relative to wallet path (supports tests with tmp_path)
+            backup_dir = self._path.parent / "backup"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"wallet.json.{timestamp}.bkp"
+            shutil.copy2(self._path, backup_path)
+            logger.debug(f"Backed up wallet to {backup_path}")
+
         # Ensure directory exists
         self._path.parent.mkdir(parents=True, exist_ok=True)
 

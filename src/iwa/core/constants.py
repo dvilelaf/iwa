@@ -12,6 +12,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 SECRETS_PATH = DATA_DIR / "secrets.env"
 CONFIG_PATH = DATA_DIR / "config.yaml"
 WALLET_PATH = DATA_DIR / "wallet.json"
+BACKUP_DIR = DATA_DIR / "backup"
 TENDERLY_CONFIG_PATH = PROJECT_ROOT / "tenderly.yaml"
 
 ABI_PATH = PROJECT_ROOT / "src" / "iwa" / "core" / "contracts" / "abis"

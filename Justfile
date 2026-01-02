@@ -88,3 +88,11 @@ tui:
 web port="8080" host="127.0.0.1":
     -fuser -k {{port}}/tcp 2>/dev/null || true
     PYTHONPATH=src uv run python -m iwa.core.cli web --port {{port}} --host {{host}}
+
+# List wallet backups
+list-backups:
+    @ls -la data/backup/*.bkp 2>/dev/null || echo "No backups found"
+
+# Restore wallet from backup (use just list-backups to see available backups)
+restore-wallet backup:
+    PYTHONPATH=src uv run python src/iwa/tools/restore_backup.py {{backup}}
