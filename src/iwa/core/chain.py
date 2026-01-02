@@ -295,7 +295,7 @@ class Gnosis(SupportedChain):
         "WXDAI": EthereumAddress("0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d"),
         "USDC": EthereumAddress("0x2a22f9c3b484c3629090FeED35F17Ff8F88f76F0"),
         "SDAI": EthereumAddress("0xaf204776c7245bF4147c2612BF6e5972Ee483701"),
-        "EURE": EthereumAddress("0x420CA0f9B9b604cE0fd9C18EF134C705e5Fa3430"),
+        "EURE": EthereumAddress("0xcB444e90D8198415266c6a2724b7900fb12FC56E"),  # v1 legacy - has CowSwap liquidity
     }
     contracts: Dict[str, EthereumAddress] = {
         "GNOSIS_SAFE_MULTISIG_IMPLEMENTATION": EthereumAddress(
