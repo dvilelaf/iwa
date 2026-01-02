@@ -58,12 +58,12 @@ class SentTransaction(BaseModel):
     gas_cost = CharField(null=True)  # Wei
     gas_value_eur = FloatField(null=True)
     tags = CharField(null=True)  # JSON-encoded list of strings
+    extra_data = CharField(null=True)  # JSON-encoded dictionary for arbitrary metadata
 
 
-def run_migrations(columns):
+def run_migrations(columns):  # noqa: C901
     """Run database migrations."""
     migrator = SqliteMigrator(db)
-
     # Deprecated column cleanup
     if "token_symbol" in columns:
         try:
@@ -98,6 +98,12 @@ def run_migrations(columns):
         except Exception as e:
             print(f"Migration (tags) failed: {e}")
 
+    if "extra_data" not in columns:
+        try:
+            migrate(migrator.add_column("senttransaction", "extra_data", CharField(null=True)))
+        except Exception as e:
+            print(f"Migration (extra_data) failed: {e}")
+
 
 def init_db():
     """Initialize the database."""
@@ -115,8 +121,7 @@ def init_db():
     if not db.is_closed():
         db.close()
 
-
-def log_transaction(  # noqa: D103
+def log_transaction(  # noqa: D103, C901
     tx_hash,
     from_addr,
     to_addr,
@@ -130,24 +135,37 @@ def log_transaction(  # noqa: D103
     gas_cost=None,
     gas_value_eur=None,
     tags=None,
+    extra_data=None,
 ):
     try:
         if tx_hash and not tx_hash.startswith("0x"):
             tx_hash = "0x" + tx_hash
 
         with db:
-            # Try to get existing transaction to preserve tags
+            # Try to get existing transaction to preserve tags/extra_data
             existing = SentTransaction.get_or_none(SentTransaction.tx_hash == tx_hash)
             existing_tags = []
-            if existing and existing.tags:
-                try:
-                    existing_tags = json.loads(existing.tags)
-                except Exception:
-                    existing_tags = []
+            existing_extra = {}
+
+            if existing:
+                if existing.tags:
+                    try:
+                        existing_tags = json.loads(existing.tags)
+                    except Exception:
+                        existing_tags = []
+                if existing.extra_data:
+                    try:
+                        existing_extra = json.loads(existing.extra_data)
+                    except Exception:
+                        existing_extra = {}
 
             # Merge tags
             new_tags = list(tags) if tags else []
             merged_tags = list(set(existing_tags + new_tags))
+
+            # Merge extra_data
+            new_extra = extra_data if extra_data else {}
+            merged_extra = {**existing_extra, **new_extra}
 
             # Smart token resolution: don't let native currency updates overwrite ERC20 tokens
             final_token = token
@@ -193,6 +211,9 @@ def log_transaction(  # noqa: D103
                 "tags": json.dumps(merged_tags)
                 if merged_tags
                 else (existing.tags if existing else None),
+                "extra_data": json.dumps(merged_extra)
+                if merged_extra
+                else (existing.extra_data if existing else None),
             }
 
             SentTransaction.insert(**data).on_conflict_replace().execute()

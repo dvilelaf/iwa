@@ -90,6 +90,13 @@ class TransactionService:
 
                         # Determine tags
                         final_tags = tags or []
+                        # Detect approval (ERC20 approve selector: 0x095ea7b3)
+                        data_hex = tx.get("data", "")
+                        if isinstance(data_hex, bytes):
+                            data_hex = data_hex.hex()
+                        if data_hex.startswith("0x095ea7b3") or data_hex.startswith("095ea7b3"):
+                            final_tags.append("approve")
+
                         if "olas" in str(tx.get("to", "")).lower():
                             final_tags.append("olas")
 
