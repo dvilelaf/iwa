@@ -616,8 +616,19 @@ class TransferService:
             recipient_address = to.address if to else tx["to"]
             # Ensure recipient address is checksummed for Web3 compatibility
             recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
-            amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
             token_address_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
+
+            # Calculate amount_wei respecting the token's decimals
+            if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
+                amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
+            else:
+                token_address = self.account_service.get_token_address(
+                    token_address_or_tag, chain_interface.chain
+                )
+                erc20 = ERC20Contract(token_address, chain_name)
+                # Use the token's actual decimals
+                amount_wei = int(tx["amount"] * (10 ** erc20.decimals))
+
             if "amount" in tx:
                 del tx["amount"]
             if "token" in tx:
@@ -629,10 +640,7 @@ class TransferService:
                 tx["data"] = b""
                 tx["operation"] = SafeOperationEnum.CALL
             else:
-                token_address = self.account_service.get_token_address(
-                    token_address_or_tag, chain_interface.chain
-                )
-                erc20 = ERC20Contract(token_address, chain_name)
+                # erc20 was already created above for decimal calculation
 
                 if is_safe:
                     # Safe uses transfer() because it DelegateCalls the MultiSend (sender identity preserved)
