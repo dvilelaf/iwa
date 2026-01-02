@@ -614,6 +614,8 @@ class TransferService:
         for tx in transactions:
             to = self.account_service.resolve_account(tx["to"])
             recipient_address = to.address if to else tx["to"]
+            # Ensure recipient address is checksummed for Web3 compatibility
+            recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
             amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
             token_address_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
             if "amount" in tx:
@@ -648,10 +650,21 @@ class TransferService:
                         amount_wei=amount_wei,
                     )
 
+                if not transfer_tx:
+                    logger.error(f"Failed to prepare transfer transaction for {token_address_or_tag}")
+                    continue
+
                 tx["to"] = erc20.address
                 tx["value"] = 0
                 tx["data"] = transfer_tx["data"]
                 tx["operation"] = SafeOperationEnum.CALL
+
+        # Filter out malformed transactions (those that failed to prepare)
+        valid_transactions = [tx for tx in transactions if tx.get("operation") is not None]
+
+        if not valid_transactions:
+            logger.error("No valid transactions to send")
+            return
 
         multi_send_normal_contract = MultiSendContract(
             address=MULTISEND_ADDRESS, chain_name=chain_name
@@ -664,7 +677,7 @@ class TransferService:
             multi_send_normal_contract if is_safe else multi_send_call_only_contract
         )
         transaction = multi_send_contract.prepare_tx(
-            from_address=from_account.address, transactions=transactions
+            from_address=from_account.address, transactions=valid_transactions
         )
         if not transaction:
             return

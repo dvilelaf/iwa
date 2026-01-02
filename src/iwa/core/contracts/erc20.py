@@ -61,7 +61,7 @@ class ERC20Contract(ContractInstance):
         """Transfer from."""
         return self.prepare_transaction(
             method_name="transferFrom",
-            method_kwargs={"sender": sender, "recipient": recipient, "amount": amount_wei},
+            method_kwargs={"_sender": sender, "_recipient": recipient, "_amount": amount_wei},
             tx_params={"from": from_address},
         )
 
