@@ -80,13 +80,13 @@ def test_generate_vnet_slug():
 
 
 def test_update_rpc_variables(mock_tenderly_config):
-    mock_file_content = "gnosis_rpc=old_url\nother_var=1"
+    mock_file_content = "gnosis_test_rpc=old_url\nother_var=1"
     with patch("builtins.open", mock_open(read_data=mock_file_content)) as mock_file:
         update_rpc_variables(mock_tenderly_config)
 
         mock_file().write.assert_called_once()
         written_content = mock_file().write.call_args[0][0]
-        assert "gnosis_rpc=https://rpc.com" in written_content
+        assert "gnosis_test_rpc=https://rpc.com" in written_content
 
 
 def test_update_rpc_variables_new(mock_tenderly_config):
@@ -96,7 +96,7 @@ def test_update_rpc_variables_new(mock_tenderly_config):
 
         mock_file().write.assert_called_once()
         written_content = mock_file().write.call_args[0][0]
-        assert "gnosis_rpc=https://rpc.com" in written_content
+        assert "gnosis_test_rpc=https://rpc.com" in written_content
 
 
 def test_fund_wallet_native(mock_requests):

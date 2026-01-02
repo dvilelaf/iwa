@@ -144,19 +144,19 @@ def update_rpc_variables(tenderly_config: TenderlyConfig) -> None:
         content = file.read()
 
     for chain_name, vnet in tenderly_config.vnets.items():
-        pattern = rf"{chain_name.lower()}_rpc=(\S+)"
+        pattern = rf"{chain_name.lower()}_test_rpc=(\S+)"
 
         if re.search(pattern, content, re.MULTILINE):
             content = re.sub(
                 pattern,
-                f"{chain_name.lower()}_rpc={vnet.public_rpc}",
+                f"{chain_name.lower()}_test_rpc={vnet.public_rpc}",
                 content,
                 flags=re.MULTILINE,
             )
         else:
             if content and not content.endswith("\n"):
                 content += "\n"
-            content += f"{chain_name.lower()}_rpc={vnet.public_rpc}\n"
+            content += f"{chain_name.lower()}_test_rpc={vnet.public_rpc}\n"
 
     with open(SECRETS_PATH, "w", encoding="utf-8") as file:
         file.write(content)

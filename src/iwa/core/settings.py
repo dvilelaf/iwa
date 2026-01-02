@@ -15,9 +15,20 @@ from iwa.core.utils import singleton
 class Settings(BaseSettings):
     """Application Settings loaded from environment and secrets file."""
 
+    # Testing mode - when True, uses Tenderly test RPCs; when False, uses production RPCs
+    testing: bool = True
+
+    # RPC endpoints (loaded from gnosis_rpc/ethereum_rpc/base_rpc in secrets.env)
+    # When testing=True, these get overwritten with *_test_rpc values
     gnosis_rpc: Optional[SecretStr] = None
     base_rpc: Optional[SecretStr] = None
     ethereum_rpc: Optional[SecretStr] = None
+
+    # Test RPCs
+    gnosis_test_rpc: Optional[SecretStr] = None
+    ethereum_test_rpc: Optional[SecretStr] = None
+    base_test_rpc: Optional[SecretStr] = None
+
     gnosisscan_api_key: Optional[SecretStr] = None
     coingecko_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
@@ -63,6 +74,15 @@ class Settings(BaseSettings):
             self.tenderly_project_slug = SecretStr(project)
         if access_key:
             self.tenderly_access_key = SecretStr(access_key)
+
+        # When in testing mode, override RPCs with test RPCs (Tenderly)
+        if self.testing:
+            if self.gnosis_test_rpc:
+                self.gnosis_rpc = self.gnosis_test_rpc
+            if self.ethereum_test_rpc:
+                self.ethereum_rpc = self.ethereum_test_rpc
+            if self.base_test_rpc:
+                self.base_rpc = self.base_test_rpc
 
         return self
 
