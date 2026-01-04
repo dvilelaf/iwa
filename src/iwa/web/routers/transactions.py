@@ -4,8 +4,10 @@ import datetime
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from web3 import Web3
 
 from iwa.core.db import SentTransaction
@@ -13,6 +15,9 @@ from iwa.web.dependencies import verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["transactions"])
+
+# Rate limiter for this router
+limiter = Limiter(key_func=get_remote_address)
 
 
 class TransactionRequest(BaseModel):
@@ -132,7 +137,8 @@ def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
     summary="Send Transaction",
     description="Send native currency or ERC20 tokens from a managed account.",
 )
-def send_transaction(req: TransactionRequest, auth: bool = Depends(verify_auth)):
+@limiter.limit("10/minute")
+def send_transaction(request: Request, req: TransactionRequest, auth: bool = Depends(verify_auth)):
     """Send a transaction from an account."""
     try:
         tx_hash = wallet.send(

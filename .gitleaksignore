@@ -29,3 +29,6 @@
 0bd846564807770072fed7b3c370c0f84e20335c:src/iwa/plugins/olas/tests/test_service_manager_flows.py:generic-api-key:421
 6af0ed1a72d2ba704fc9963f84cdee03f02ae554:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:894
 6af0ed1a72d2ba704fc9963f84cdee03f02ae554:src/iwa/plugins/olas/tests/test_service_manager.py:generic-api-key:1000
+# erc20.decimals false positives (method call, not a secret)
+8cb2d0591cab5e040032011d92cb9a5fa0424fdc:src/iwa/tui/screens/wallets.py:generic-api-key:667
+8cb2d0591cab5e040032011d92cb9a5fa0424fdc:src/iwa/web/routers/transactions.py:generic-api-key:105

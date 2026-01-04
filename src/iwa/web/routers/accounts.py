@@ -3,13 +3,18 @@
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from iwa.web.dependencies import verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+# Rate limiter for this router
+limiter = Limiter(key_func=get_remote_address)
 
 
 # --- Models (Temporary: will move to shared models file later) ---
@@ -132,7 +137,8 @@ def get_accounts(
     summary="Create EOA",
     description="Create a new Externally Owned Account (EOA) with a unique tag.",
 )
-def create_eoa(req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
+@limiter.limit("5/minute")
+def create_eoa(request: Request, req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
     """Create a new EOA account with the given tag."""
     try:
         wallet.key_storage.create_account(req.tag)
@@ -146,7 +152,8 @@ def create_eoa(req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
     summary="Create Safe",
     description="Deploy a new Gnosis Safe multisig wallet on selected chains.",
 )
-def create_safe(req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
+@limiter.limit("3/minute")
+def create_safe(request: Request, req: SafeCreateRequest, auth: bool = Depends(verify_auth)):
     """Create a new Safe multisig account."""
     try:
         # We use a timestamp-based salt to avoid collisions

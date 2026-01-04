@@ -1,6 +1,7 @@
 """Shared dependencies for Web API routers."""
 
 import logging
+import secrets
 from typing import Optional
 
 from fastapi import Header, HTTPException, Security
@@ -29,21 +30,24 @@ def _get_webui_password() -> Optional[str]:
 async def verify_auth(
     x_api_key: Optional[str] = Security(api_key_header), authorization: Optional[str] = Header(None)
 ) -> bool:
-    """Verify authentication via API key or Password."""
+    """Verify authentication via API key or Password.
+
+    Uses timing-safe comparison to prevent timing attacks.
+    """
     password = _get_webui_password()
 
     # If no password configured, allow everything
     if not password:
         return True
 
-    # Check X-API-Key header (simple password check)
-    if x_api_key == password:
+    # Check X-API-Key header (timing-safe comparison)
+    if x_api_key and secrets.compare_digest(x_api_key, password):
         return True
 
     # Check Authorization header (Bearer token)
     if authorization:
         scheme, _, param = authorization.partition(" ")
-        if scheme.lower() == "bearer" and param == password:
+        if scheme.lower() == "bearer" and param and secrets.compare_digest(param, password):
             return True
 
     raise HTTPException(
