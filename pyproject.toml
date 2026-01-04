@@ -20,7 +20,6 @@ dependencies = [
     "safe-eth-py>=7.14.0",
     "twine>=6.2.0",
     "cowdao-cowpy>=1.0.1",
-    "cowdao-cowpy>=1.0.1",
     "pytest>=9.0.1",
     "textual>=0.47.1",
     "pyperclip>=1.8.2",
