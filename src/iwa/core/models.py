@@ -225,6 +225,10 @@ class Config(StorableModel):
         except Exception as e:
             logger.warning(f"Failed to load config from {CONFIG_PATH}: {e}")
 
+        # Ensure core config always exists
+        if self.core is None:
+            self.core = CoreConfig()
+
     def register_plugin_config(self, plugin_name: str, model_class: type) -> None:
         """Register a plugin's config model class.
 
