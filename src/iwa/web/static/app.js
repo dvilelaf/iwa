@@ -1287,7 +1287,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Add a newly created service card without reloading all services
-  window.addNewServiceCard = async (serviceId, chain) => {
+  window.addNewServiceCard = async (serviceId, chain, serviceName) => {
     const container = document.getElementById("olas-services-container");
     if (!container) {
       console.error("Container not found, falling back to full reload");
@@ -1301,7 +1301,7 @@ document.addEventListener("DOMContentLoaded", () => {
       key: serviceKey,
       service_id: serviceId,
       chain: chain,
-      name: `Service #${serviceId}`,
+      name: serviceName || `Service #${serviceId}`,
       accounts: {},
       staking: {},
     };
@@ -2435,7 +2435,11 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast(`Service created! ID: ${result.service_id}`, "success");
             createServiceModal.classList.remove("active");
             createServiceForm.reset();
-            addNewServiceCard(result.service_id, payload.chain);
+            addNewServiceCard(
+              result.service_id,
+              payload.chain,
+              payload.service_name,
+            );
           } else {
             showToast(`Error: ${result.detail}`, "error");
           }
