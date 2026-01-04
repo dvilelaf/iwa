@@ -2,8 +2,7 @@ services:
   iwa:
     build: .
     volumes:
-      - ./wallet.json:/app/wallet.json
-      - ./secrets.env:/app/secrets.env
+      - ./data:/app/data
     env_file:
       - .env
-    command: [ "--help" ]
+    command: [ "web", "--host", "0.0.0.0" ]

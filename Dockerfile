@@ -11,10 +11,14 @@ COPY src ./src
 COPY README.md ./
 
 # Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN uv sync --frozen --no-dev
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
 ENTRYPOINT ["python", "-m", "iwa"]
-CMD ["--help"]
+CMD ["web", "--host", "0.0.0.0"]
