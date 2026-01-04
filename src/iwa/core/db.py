@@ -121,6 +121,7 @@ def init_db():
     if not db.is_closed():
         db.close()
 
+
 def log_transaction(  # noqa: D103, C901
     tx_hash,
     from_addr,

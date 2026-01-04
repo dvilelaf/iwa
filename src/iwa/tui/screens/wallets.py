@@ -615,7 +615,7 @@ class WalletsScreen(VerticalScroll):
                 token_address = chain_interface.chain.get_token_address(token)
                 if token_address:
                     erc20 = ERC20Contract(token_address, self.active_chain)
-                    amount_wei = int(amount * (10 ** erc20.decimals))
+                    amount_wei = int(amount * (10**erc20.decimals))
                 else:
                     # Fallback to 18 decimals if token not found
                     amount_wei = Web3.to_wei(amount, "ether")
@@ -663,12 +663,13 @@ class WalletsScreen(VerticalScroll):
                             token_address = interface.chain.get_token_address(tx.token)
                             if token_address:
                                 from iwa.core.contracts.erc20 import ERC20Contract
+
                                 erc20 = ERC20Contract(token_address, tx.chain)
                                 token_decimals = erc20.decimals
                     except Exception:
                         pass  # Default to 18
 
-                amt = f"{float(tx.amount_wei or 0) / (10 ** token_decimals):.4f}"
+                amt = f"{float(tx.amount_wei or 0) / (10**token_decimals):.4f}"
                 val_eur = f"€{(tx.value_eur or 0.0):.2f}"
                 gas_eur = f"€{tx.gas_value_eur:.4f}" if tx.gas_value_eur else "?"
                 table.add_row(

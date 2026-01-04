@@ -117,6 +117,7 @@ class CowSwap:
 
         """
         import asyncio
+
         logger.info(f"Checking order status for UID: {order.uid}")
 
         max_retries = 8
@@ -129,7 +130,9 @@ class CowSwap:
             try:
                 # Use a thread executor for blocking requests.get
                 loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, lambda: requests.get(order.url, timeout=60))
+                response = await loop.run_in_executor(
+                    None, lambda: requests.get(order.url, timeout=60)
+                )
             except Exception as e:
                 logger.warning(f"Error checking order status: {e}")
                 await asyncio.sleep(sleep_between_retries)
@@ -144,13 +147,14 @@ class CowSwap:
 
             order_data = response.json()
 
-
             status = order_data.get("status", "unknown")
             valid_to = int(order_data.get("validTo", 0))
             current_time = int(time.time())
 
             if status == "expired" or (valid_to > 0 and current_time > valid_to):
-                logger.error(f"Order expired without execution (Status: {status}, ValidTo: {valid_to}, Now: {current_time}).")
+                logger.error(
+                    f"Order expired without execution (Status: {status}, ValidTo: {valid_to}, Now: {current_time})."
+                )
                 return None
 
             executed_sell = int(order_data.get("executedSellAmount", "0"))

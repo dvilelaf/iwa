@@ -127,8 +127,8 @@ async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
                 buy_price_usd = float(quote.get("buyTokenPrice", 0) or 0)
 
                 # Calculate value using correct decimals
-                value_sold = (executed_sell / (10 ** sell_decimals)) * sell_price_usd
-                value_bought = (executed_buy / (10 ** buy_decimals)) * buy_price_usd
+                value_sold = (executed_sell / (10**sell_decimals)) * sell_price_usd
+                value_bought = (executed_buy / (10**buy_decimals)) * buy_price_usd
 
                 value_change_pct = 0.0
                 if value_sold > 0:

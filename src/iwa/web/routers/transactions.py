@@ -106,7 +106,7 @@ def get_transactions(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
             except Exception:
                 pass  # Default to 18 if we can't get decimals
 
-        amount_display = float(tx.amount_wei or 0) / (10 ** token_decimals)
+        amount_display = float(tx.amount_wei or 0) / (10**token_decimals)
 
         result.append(
             {

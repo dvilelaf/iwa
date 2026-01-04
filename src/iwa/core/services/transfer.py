@@ -604,7 +604,7 @@ class TransferService:
                         amount_wei = tx["amount_wei"]
                     elif "amount" in tx:
                         erc20_temp = ERC20Contract(token_address, chain_name)
-                        amount_wei = int(tx["amount"] * (10 ** erc20_temp.decimals))
+                        amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
                     else:
                         continue
                     erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
@@ -638,7 +638,7 @@ class TransferService:
                     )
                     erc20_temp = ERC20Contract(token_address, chain_name)
                     # Use the token's actual decimals
-                    amount_wei = int(tx["amount"] * (10 ** erc20_temp.decimals))
+                    amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
             else:
                 logger.error(f"Transaction missing amount or amount_wei: {tx}")
                 continue
@@ -677,7 +677,9 @@ class TransferService:
                     )
 
                 if not transfer_tx:
-                    logger.error(f"Failed to prepare transfer transaction for {token_address_or_tag}")
+                    logger.error(
+                        f"Failed to prepare transfer transaction for {token_address_or_tag}"
+                    )
                     continue
 
                 tx["to"] = erc20.address
@@ -910,12 +912,15 @@ class TransferService:
             )
 
             # Check current allowance first
-            current_allowance = self.get_erc20_allowance(
-                owner_address_or_tag=account_address_or_tag,
-                spender_address=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
-                token_address_or_name=sell_token_name,
-                chain_name="gnosis",
-            ) or 0
+            current_allowance = (
+                self.get_erc20_allowance(
+                    owner_address_or_tag=account_address_or_tag,
+                    spender_address=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
+                    token_address_or_name=sell_token_name,
+                    chain_name="gnosis",
+                )
+                or 0
+            )
 
             # Calculate required amount
             required_amount = (
@@ -930,7 +935,9 @@ class TransferService:
 
             # If allowance is insufficient, approve EXACT amount (No Infinite)
             if current_allowance < required_amount:
-                logger.info(f"Insufficient allowance ({current_allowance} < {required_amount}). Approving EXACT amount.")
+                logger.info(
+                    f"Insufficient allowance ({current_allowance} < {required_amount}). Approving EXACT amount."
+                )
                 self.approve_erc20(
                     owner_address_or_tag=account_address_or_tag,
                     spender_address_or_tag=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,
@@ -939,7 +946,9 @@ class TransferService:
                     chain_name="gnosis",
                 )
             else:
-                logger.info(f"Allowance sufficient ({current_allowance} >= {required_amount}). Skipping approval.")
+                logger.info(
+                    f"Allowance sufficient ({current_allowance} >= {required_amount}). Skipping approval."
+                )
 
             result = await cow.swap(
                 amount_wei=amount_wei,
@@ -964,7 +973,7 @@ class TransferService:
                     # Calculate Analytics
                     execution_price = 0.0
                     if executed_sell > 0:
-                        execution_price = executed_buy / executed_sell # Raw ratio
+                        execution_price = executed_buy / executed_sell  # Raw ratio
 
                     # Get actual token decimals
                     sell_decimals = 18
@@ -981,8 +990,8 @@ class TransferService:
                     except Exception as e:
                         logger.warning(f"Could not get decimals for analytics: {e}")
 
-                    value_sold = (executed_sell / (10 ** sell_decimals)) * sell_price_usd
-                    value_bought = (executed_buy / (10 ** buy_decimals)) * buy_price_usd
+                    value_sold = (executed_sell / (10**sell_decimals)) * sell_price_usd
+                    value_bought = (executed_buy / (10**buy_decimals)) * buy_price_usd
 
                     value_change_pct = None
                     if value_sold > 0 and buy_price_usd > 0:
@@ -999,26 +1008,31 @@ class TransferService:
                         "sell_price_usd": sell_price_usd,
                         "buy_price_usd": buy_price_usd,
                         "execution_price": execution_price,
-                        "value_change_pct": value_change_pct if value_change_pct is not None else "N/A"
+                        "value_change_pct": value_change_pct
+                        if value_change_pct is not None
+                        else "N/A",
                     }
 
                     # Log to DB if we have a tx_hash (CowSwap usually provides it in order info if confirmed)
                     if tx_hash:
-                         from iwa.core.db import log_transaction
-                         log_transaction(
+                        from iwa.core.db import log_transaction
+
+                        log_transaction(
                             tx_hash=tx_hash,
                             from_addr=account.address,
-                            to_addr=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS, # Or settlement contract
+                            to_addr=COWSWAP_GPV2_VAULT_RELAYER_ADDRESS,  # Or settlement contract
                             token=sell_token_name,
                             amount_wei=int(executed_sell),
                             chain=chain_name,
                             from_tag=account_address_or_tag,
                             tags=["swap", "cowswap", sell_token_name, buy_token_name],
-                            gas_cost="0", # User doesn't pay gas for settlement (solver does)
+                            gas_cost="0",  # User doesn't pay gas for settlement (solver does)
                             gas_value_eur=0.0,
-                            value_eur=float(value_sold) if value_sold > 0 else None, # Approximate as USD
-                            extra_data=analytics
-                         )
+                            value_eur=float(value_sold)
+                            if value_sold > 0
+                            else None,  # Approximate as USD
+                            extra_data=analytics,
+                        )
 
                     # Inject analytics back into result for API/Frontend
                     result["analytics"] = analytics
