@@ -1193,14 +1193,17 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Resultado**: check_activity() debe tener <20 líneas (Actual: ~20 líneas de orquestación)
 - [x] Eliminar `# noqa: C901`
 
-#### 3.2 Refactorizar create_safe() (SAFE-C1) - **P1**
-- [ ] **Archivo**: `src/iwa/core/services/safe.py`
-- [ ] **Línea**: Método `create_safe()` (~línea 40, 150 líneas)
-- [ ] **Acción**: Dividir en:
-  - [ ] `_prepare_safe_deployment()`: validación y preparación
-  - [ ] `_execute_deployment()`: transacción de deploy
-  - [ ] `_save_safe_to_wallet()`: persistencia
-- [ ] Eliminar `# noqa: C901`
+#### 3.2 Refactorizar create_safe() (SAFE-C1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/services/safe.py`
+- [x] **Línea**: Método `create_safe()` (~línea 40, ~150 líneas)
+- [x] **Acción**: Dividir en:
+  - [x] `_prepare_deployer_account(tag_or_addr)`
+  - [x] `_resolve_owner_addresses(owners)`
+  - [x] `_deploy_safe_contract(deployer, owners, ...)`
+  - [x] `_log_safe_deployment(...)`
+  - [x] `_store_safe_account(...)`
+- [x] **Resultado**: Método principal orquestador de alto nivel
+- [x] Eliminar `# noqa: C901`
 
 #### 3.3 Refactorizar sign_and_send() (TXN-C1) - **P1**
 - [ ] **Archivo**: `src/iwa/core/services/transaction.py`

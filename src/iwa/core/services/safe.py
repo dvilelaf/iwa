@@ -37,7 +37,7 @@ class SafeService:
         self.key_storage = key_storage
         self.account_service = account_service
 
-    def create_safe(  # noqa: C901
+    def create_safe(
         self,
         deployer_tag_or_address: str,
         owner_tags_or_addresses: List[str],
@@ -47,6 +47,44 @@ class SafeService:
         salt_nonce: Optional[int] = None,
     ) -> Tuple[StoredSafeAccount, str]:
         """Deploy a new Safe."""
+        deployer_account = self._prepare_deployer_account(deployer_tag_or_address)
+        owner_addresses = self._resolve_owner_addresses(owner_tags_or_addresses)
+
+        ethereum_client = self._get_ethereum_client(chain_name)
+
+        contract_address, tx_hash = self._deploy_safe_contract(
+            deployer_account,
+            owner_addresses,
+            threshold,
+            salt_nonce,
+            ethereum_client
+        )
+
+        logger.info(
+            f"Safe {tag} [{contract_address}] deployed on {chain_name} on transaction: {tx_hash}"
+        )
+
+        self._log_safe_deployment(
+            deployer_account,
+            deployer_tag_or_address,
+            contract_address,
+            tx_hash,
+            chain_name,
+            ethereum_client,
+            tag
+        )
+
+        safe_account = self._store_safe_account(
+            contract_address,
+            chain_name,
+            owner_addresses,
+            threshold,
+            tag
+        )
+
+        return safe_account, tx_hash
+
+    def _prepare_deployer_account(self, deployer_tag_or_address: str):
         deployer_stored_account = self.key_storage.find_stored_account(deployer_tag_or_address)
         if not deployer_stored_account or not isinstance(deployer_stored_account, EncryptedAccount):
             raise ValueError(
@@ -57,18 +95,29 @@ class SafeService:
         deployer_private_key = self.key_storage._get_private_key(deployer_stored_account.address)
         if not deployer_private_key:
             raise ValueError("Deployer private key not available.")
-        deployer_account = Account.from_key(deployer_private_key)
+        return Account.from_key(deployer_private_key)
 
+    def _resolve_owner_addresses(self, owner_tags_or_addresses: List[str]) -> List[str]:
         owner_addresses = []
         for tag_or_address in owner_tags_or_addresses:
             owner_stored_account = self.key_storage.find_stored_account(tag_or_address)
             if not owner_stored_account:
                 raise ValueError(f"Owner account '{tag_or_address}' not found in wallet.")
             owner_addresses.append(owner_stored_account.address)
+        return owner_addresses
 
+    def _get_ethereum_client(self, chain_name: str) -> EthereumClient:
         rpc_secret = getattr(settings, f"{chain_name}_rpc")
-        ethereum_client = EthereumClient(rpc_secret.get_secret_value())
+        return EthereumClient(rpc_secret.get_secret_value())
 
+    def _deploy_safe_contract(
+        self,
+        deployer_account,
+        owner_addresses: List[str],
+        threshold: int,
+        salt_nonce: Optional[int],
+        ethereum_client: EthereumClient
+    ) -> Tuple[str, str]:
         master_copy = get_safe_master_copy_address("1.4.1")
         proxy_factory_address = get_safe_proxy_factory_address("1.4.1")
 
@@ -100,8 +149,7 @@ class SafeService:
                 gas=5_000_000,
                 gas_price=gas_price,
             )
-            contract_address = tx_sent.contract_address
-            tx_hash = tx_sent.tx_hash.hex()
+            return tx_sent.contract_address, tx_sent.tx_hash.hex()
 
         else:
             # Standard random salt via Safe.create
@@ -113,13 +161,18 @@ class SafeService:
                 threshold=threshold,
                 proxy_factory_address=proxy_factory_address,
             )
-            contract_address = create_tx.contract_address
-            tx_hash = create_tx.tx_hash.hex()
+            return create_tx.contract_address, create_tx.tx_hash.hex()
 
-        logger.info(
-            f"Safe {tag} [{contract_address}] deployed on {chain_name} on transaction: {tx_hash}"
-        )
-
+    def _log_safe_deployment(
+        self,
+        deployer_account,
+        deployer_tag_or_address: str,
+        contract_address: str,
+        tx_hash: str,
+        chain_name: str,
+        ethereum_client: EthereumClient,
+        tag: Optional[str]
+    ):
         # Resolve tag for logging
         resolved_from_tag = self.account_service.get_tag_by_address(deployer_account.address)
 
@@ -167,6 +220,14 @@ class SafeService:
             tags=["safe-deployment"],
         )
 
+    def _store_safe_account(
+        self,
+        contract_address: str,
+        chain_name: str,
+        owner_addresses: List[str],
+        threshold: int,
+        tag: Optional[str]
+    ) -> StoredSafeAccount:
         # Check if already exists
         accounts = self.key_storage.accounts
         if contract_address in accounts and isinstance(
@@ -186,7 +247,7 @@ class SafeService:
             accounts[contract_address] = safe_account
 
         self.key_storage.save()
-        return safe_account, tx_hash
+        return safe_account
 
     def redeploy_safes(self):
         """Redeploy all safes to ensure they exist on all chains."""
