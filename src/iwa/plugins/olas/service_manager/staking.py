@@ -91,14 +91,14 @@ class StakingManagerMixin:
         # Helper to safely get min_staking_duration
         try:
             min_duration = staking.min_staking_duration
-            logger.info(f"[DEBUG-STAKE] min_staking_duration: {min_duration}")
+            logger.info(f"min_staking_duration: {min_duration}")
         except Exception as e:
-            logger.error(f"[DEBUG-STAKE] Failed to get min_staking_duration: {e}")
+            logger.error(f"Failed to get min_staking_duration: {e}")
             min_duration = 0
 
         unstake_at = None
         ts_start = info.get("ts_start", 0)
-        logger.info(f"[DEBUG-STAKE] ts_start: {ts_start}")
+        logger.info(f"ts_start: {ts_start}")
 
         if ts_start > 0:
             try:
@@ -107,12 +107,12 @@ class StakingManagerMixin:
                     unstake_ts,
                     tz=timezone.utc,
                 ).isoformat()
-                logger.info(f"[DEBUG-STAKE] unstake_available_at: {unstake_at} (ts={unstake_ts})")
+                logger.info(f"unstake_available_at: {unstake_at} (ts={unstake_ts})")
             except Exception as e:
-                logger.error(f"[DEBUG-STAKE] calc error: {e}")
+                logger.error(f"calc error: {e}")
                 pass
         else:
-            logger.warning("[DEBUG-STAKE] ts_start is 0, cannot calculate unstake time")
+            logger.warning("ts_start is 0, cannot calculate unstake time")
 
         return StakingStatus(
             is_staked=True,
@@ -171,21 +171,15 @@ class StakingManagerMixin:
         staking_token_lower = staking_token.lower()  # For comparison only
 
         erc20_contract = ERC20Contract(staking_token)
-        print(f"[STAKE-SM] Checking requirements for service {self.service.service_id}", flush=True)
         logger.info(f"Checking stake requirements for service {self.service.service_id}")
 
         # Check that she service is deployed
         service_info = self.registry.get_service(self.service.service_id)
         service_state = service_info["state"]
-        print(f"[STAKE-SM] Service state: {service_state.name}", flush=True)
-        print(f"[STAKE-SM] Service multisig: {self.service.multisig_address}", flush=True)
-        print(
-            f"[STAKE-SM] Service registry info: multisig={service_info.get('multisig')}, threshold={service_info.get('threshold')}",
-            flush=True,
-        )
+
         logger.info(f"Service state: {service_state.name}")
         if service_state != ServiceState.DEPLOYED:
-            print("[STAKE-SM] FAIL: Service not deployed", flush=True)
+
             logger.error("Service is not deployed, cannot stake")
             return False
 
@@ -193,15 +187,8 @@ class StakingManagerMixin:
 
         # Check token compatibility - service must be created with same token as staking contract expects
         service_token = (self.service.token_address or "").lower()
-        print(
-            f"[STAKE-SM] Token check: service={service_token}, staking={staking_token_lower}",
-            flush=True,
-        )
         if service_token != staking_token_lower:
-            print(
-                "[STAKE-SM] FAIL: Token mismatch! Service token != staking contract token",
-                flush=True,
-            )
+
             logger.error(
                 f"Token mismatch: service was created with {service_token or 'native'}, "
                 f"but staking contract requires {staking_token_lower}"
@@ -223,10 +210,6 @@ class StakingManagerMixin:
             agent_params = self.registry.get_agent_params(self.service.service_id, agent_id)
             current_bond = agent_params["bond"]
 
-            print(
-                f"[STAKE-SM] Bond check: current={current_bond}, required={required_bond}",
-                flush=True,
-            )
             logger.info(f"Agent bond check: current={current_bond}, required={required_bond}")
 
             if current_bond < required_bond:
@@ -234,7 +217,7 @@ class StakingManagerMixin:
                     f"Service agent bond is too low ({current_bond} < {required_bond}). "
                     "Service must be created with the correct bond amount to be stakeable."
                 )
-                print(f"[STAKE-SM] FAIL: {error_msg}", flush=True)
+
                 logger.error(error_msg)
                 return False
         except Exception as e:
@@ -243,96 +226,82 @@ class StakingManagerMixin:
         # Check that there are free slots
         staked_count = len(staking_contract.get_service_ids())
         max_services = staking_contract.max_num_services
-        print(f"[STAKE-SM] Slots: {staked_count}/{max_services}", flush=True)
         logger.info(f"Staking contract slots: {staked_count}/{max_services}")
         if staked_count >= max_services:
-            print("[STAKE-SM] FAIL: No free slots", flush=True)
+
             logger.error("Staking contract is full, no free slots available")
             return False
 
         # Check that there are enough OLAS for the deposit
         master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
-        print(
-            f"[STAKE-SM] OLAS balance: {master_balance} wei, min_deposit: {min_deposit} wei",
-            flush=True,
-        )
         logger.info(f"OLAS balance check: master={master_balance}, min_deposit={min_deposit}")
         if master_balance < min_deposit:
-            print("[STAKE-SM] FAIL: Not enough OLAS", flush=True)
+
             logger.error(
                 f"Not enough tokens to stake service (have {master_balance}, need {min_deposit})"
             )
             return False
 
-        print("[STAKE-SM] All checks passed, proceeding with stake...", flush=True)
-
         # Approve the staking contract to move the service token (NFT)
-        print("[STAKE-SM] Preparing service NFT approval transaction...", flush=True)
+
         approve_tx = self.registry.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
             id_=self.service.service_id,
         )
 
-        print("[STAKE-SM] Sending service NFT approval transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_approve_service_nft"],
         )
         logger.info("Approving service token for staking contract")
-        print(f"[STAKE-SM] Service NFT approval result: success={success}", flush=True)
 
         if not success:
-            print("[STAKE-SM] FAIL: Service NFT approval transaction failed", flush=True)
+
             logger.error("Failed to approve staking contract [Service Registry]")
             return False
 
         logger.info("Service token approved for staking contract")
 
         # Approve the staking contract to transfer OLAS tokens
-        print("[STAKE-SM] Preparing OLAS token approval transaction...", flush=True)
         olas_approve_tx = erc20_contract.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
             amount_wei=min_deposit,
         )
 
-        print("[STAKE-SM] Sending OLAS token approval transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=olas_approve_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_approve_olas_token"],
         )
-        print(f"[STAKE-SM] OLAS token approval result: success={success}", flush=True)
+
 
         if not success:
-            print("[STAKE-SM] FAIL: OLAS token approval transaction failed", flush=True)
+
             logger.error("Failed to approve OLAS tokens for staking contract")
             return False
 
         logger.info("OLAS tokens approved for staking contract")
 
         # Stake the service
-        print("[STAKE-SM] Preparing stake transaction...", flush=True)
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=self.wallet.master_account.address,
             service_id=self.service.service_id,
         )
 
-        print("[STAKE-SM] Sending stake transaction...", flush=True)
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=stake_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_stake_service"],
         )
-        print(f"[STAKE-SM] Stake tx result: success={success}", flush=True)
 
         if not success:
-            print("[STAKE-SM] FAIL: Stake transaction failed", flush=True)
+
             if receipt and "status" in receipt and receipt["status"] == 0:
                 logger.error(f"Stake transaction reverted. Receipt: {receipt}")
                 # Try to decode error if possible (though for status 0 receipt it's too late for simple decoding without re-tracing)
@@ -341,26 +310,22 @@ class StakingManagerMixin:
 
         logger.info("Service stake transaction sent successfully")
 
-        print("[STAKE-SM] Extracting events from receipt...", flush=True)
         events = staking_contract.extract_events(receipt)
         event_names = [event["name"] for event in events]
-        print(f"[STAKE-SM] Events found: {event_names}", flush=True)
 
         if "ServiceStaked" not in event_names:
-            print("[STAKE-SM] FAIL: ServiceStaked event not found", flush=True)
             logger.error("Stake service event not found")
             return False
 
         staking_state = staking_contract.get_staking_state(self.service.service_id)
-        print(f"[STAKE-SM] Final staking state: {staking_state}", flush=True)
         if staking_state != StakingState.STAKED:
-            print("[STAKE-SM] FAIL: Service not in STAKED state", flush=True)
+
             logger.error("Service is not staked after transaction")
             return False
 
         self.service.staking_contract_address = EthereumAddress(staking_contract.address)
         self._update_and_save_service_state()
-        print("[STAKE-SM] SUCCESS: Service staked and config saved", flush=True)
+
         logger.info("Service staked successfully")
         return True
 
@@ -414,8 +379,7 @@ class StakingManagerMixin:
                 service_id=self.service.service_id,
             )
             logger.info("Unstake transaction prepared successfully")
-            logger.info(f"[SM-UNSTAKE] Unstake TX To: {unstake_tx.get('to')}")
-            logger.info(f"[SM-UNSTAKE] Staking Contract Address: {staking_contract.address}")
+
         except Exception as e:
             logger.exception(f"Failed to prepare unstake tx: {e}")
             return False
@@ -423,7 +387,7 @@ class StakingManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=unstake_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_unstake_service"],
         )
 

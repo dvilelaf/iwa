@@ -170,7 +170,7 @@ class ERC20TransferMixin:
         if not transaction:
             return False
 
-        is_safe = isinstance(owner_account, StoredSafeAccount)
+        is_safe = getattr(owner_account, "threshold", None) is not None
         amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
 
         logger.info(
@@ -231,7 +231,7 @@ class ERC20TransferMixin:
         if not transaction:
             return
 
-        is_safe = isinstance(from_account, StoredSafeAccount)
+        is_safe = getattr(from_account, "threshold", None) is not None
 
         logger.info("Transferring ERC20 tokens via TransferFrom")
 

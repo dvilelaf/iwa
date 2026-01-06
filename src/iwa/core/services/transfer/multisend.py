@@ -64,6 +64,11 @@ class MultiSendMixin:
         chain_interface,
     ):
         """Check allowances and approve ERC20s if needed (for EOAs)."""
+        from_account = self.account_service.resolve_account(from_address_or_tag)
+
+        if getattr(from_account, "threshold", None) is not None:
+            return
+
         is_all_native = all(
             tx.get("token", NATIVE_CURRENCY_ADDRESS) == NATIVE_CURRENCY_ADDRESS
             for tx in transactions
@@ -242,7 +247,7 @@ class MultiSendMixin:
         to_account = self.account_service.resolve_account(to_address_or_tag)
         to_address = to_account.address if to_account else to_address_or_tag
 
-        is_safe = isinstance(from_account, StoredSafeAccount)
+        is_safe = getattr(from_account, "threshold", None) is not None
         chain_interface = ChainInterfaces().get(chain_name)
 
         # If this is a Safe, check if it's an Olas service multisig and claim rewards

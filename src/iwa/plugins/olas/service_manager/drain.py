@@ -38,7 +38,7 @@ class DrainManagerMixin:
             try:
                 staking_contract = StakingContract(
                     str(self.service.staking_contract_address),
-                    chain_name=self.service.chain_name,
+                    chain_name=self.chain_name,
                 )
             except Exception as e:
                 logger.error(f"Failed to load staking contract: {e}")
@@ -72,7 +72,7 @@ class DrainManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             claim_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_claim_rewards"],
         )
         if not success:
@@ -114,7 +114,7 @@ class DrainManagerMixin:
         # Get OLAS balance of the Safe
         olas_token = ERC20Contract(
             str(OLAS_TOKEN_ADDRESS_GNOSIS),
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
         )
 
         olas_balance = olas_token.balance_of_wei(multisig_address)
@@ -133,7 +133,7 @@ class DrainManagerMixin:
             to_address_or_tag=withdrawal_address,
             amount_wei=olas_balance,
             token_address_or_name=str(OLAS_TOKEN_ADDRESS_GNOSIS),
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
         )
 
         if not tx_hash:
@@ -175,7 +175,7 @@ class DrainManagerMixin:
             return {}
 
         target = target_address or self.wallet.master_account.address
-        chain = self.service.chain_name
+        chain = self.chain_name
         drained = {}
 
         logger.info(f"Draining service {self.service.key} to {target}")
@@ -194,7 +194,7 @@ class DrainManagerMixin:
         # Step 2: Drain the Safe
         if self.service.multisig_address:
             safe_addr = str(self.service.multisig_address)
-            logger.info(f"[DRAIN-DEBUG] Attempting to drain Safe: {safe_addr}")
+            logger.info(f"Attempting to drain Safe: {safe_addr}")
 
             # Retry loop if we claimed rewards to allow for RPC indexing
             max_retries = 6 if claimed_rewards > 0 else 1
@@ -207,7 +207,7 @@ class DrainManagerMixin:
                         chain_name=chain,
                     )
                     logger.info(
-                        f"[DRAIN-DEBUG] Safe drain result (attempt {attempt + 1}): {result}"
+                        f"Safe drain result (attempt {attempt + 1}): {result}"
                     )
 
                     if result:
@@ -240,7 +240,7 @@ class DrainManagerMixin:
                     logger.warning(f"Could not drain Safe: {e}")
                     import traceback
 
-                    logger.warning(f"[DRAIN-DEBUG] Safe traceback: {traceback.format_exc()}")
+                    logger.warning(f"Safe traceback: {traceback.format_exc()}")
                     if attempt < max_retries - 1:
                         import time
 
@@ -249,14 +249,14 @@ class DrainManagerMixin:
         # Step 3: Drain the Agent account
         if self.service.agent_address:
             agent_addr = str(self.service.agent_address)
-            logger.info(f"[DRAIN-DEBUG] Attempting to drain Agent: {agent_addr}")
+            logger.info(f"Attempting to drain Agent: {agent_addr}")
             try:
                 result = self.wallet.drain(
                     from_address_or_tag=agent_addr,
                     to_address_or_tag=target,
                     chain_name=chain,
                 )
-                logger.info(f"[DRAIN-DEBUG] Agent drain result: {result}")
+                logger.info(f"Agent drain result: {result}")
                 if result:
                     # Normalize result
                     if isinstance(result, tuple) and len(result) >= 2:
@@ -274,24 +274,24 @@ class DrainManagerMixin:
                         drained["agent"] = result
                         logger.info(f"Drained Agent: {result}")
                 else:
-                    logger.warning("[DRAIN-DEBUG] Agent drain returned None/empty")
+                    logger.warning("Agent drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Agent: {e}")
                 import traceback
 
-                logger.warning(f"[DRAIN-DEBUG] Agent traceback: {traceback.format_exc()}")
+                logger.warning(f"Agent traceback: {traceback.format_exc()}")
 
         # Step 4: Drain the Owner account
         if self.service.service_owner_address:
             owner_addr = str(self.service.service_owner_address)
-            logger.info(f"[DRAIN-DEBUG] Attempting to drain Owner: {owner_addr}")
+            logger.info(f"Attempting to drain Owner: {owner_addr}")
             try:
                 result = self.wallet.drain(
                     from_address_or_tag=owner_addr,
                     to_address_or_tag=target,
                     chain_name=chain,
                 )
-                logger.info(f"[DRAIN-DEBUG] Owner drain result: {result}")
+                logger.info(f"Owner drain result: {result}")
                 if result:
                     # Normalize result
                     if isinstance(result, tuple) and len(result) >= 2:
@@ -309,12 +309,12 @@ class DrainManagerMixin:
                         drained["owner"] = result
                         logger.info(f"Drained Owner: {result}")
                 else:
-                    logger.warning("[DRAIN-DEBUG] Owner drain returned None/empty")
+                    logger.warning("Owner drain returned None/empty")
             except Exception as e:
                 logger.warning(f"Could not drain Owner: {e}")
                 import traceback
 
-                logger.warning(f"[DRAIN-DEBUG] Owner traceback: {traceback.format_exc()}")
+                logger.warning(f"Owner traceback: {traceback.format_exc()}")
 
         if not drained and claimed_rewards > 0:
             logger.info("Drain returned empty but rewards were claimed. Reporting partial success.")
