@@ -1,6 +1,6 @@
 """Swap mixin module."""
 
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
 from web3 import Web3
@@ -56,7 +56,7 @@ class SwapMixin:
             )
 
             # Check and approve allowance if needed
-            required_amount = await self._ensure_allowance_for_swap(
+            await self._ensure_allowance_for_swap(
                 account_address_or_tag, sell_token_name, buy_token_name, chain_name, amount_wei, order_type, cow
             )
 
