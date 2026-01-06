@@ -1,6 +1,9 @@
+"""Service Manager package for OLAS services."""
+
 from iwa.core.chain import ChainInterfaces
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.models import Config
+from iwa.plugins.olas.constants import OLAS_CONTRACTS
 from iwa.plugins.olas.contracts.mech import MechContract
 from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 from iwa.plugins.olas.contracts.service import (
@@ -10,7 +13,6 @@ from iwa.plugins.olas.contracts.service import (
 )
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.plugins.olas.models import OlasConfig, Service, StakingStatus
-from iwa.plugins.olas.constants import OLAS_CONTRACTS
 from iwa.plugins.olas.service_manager.base import ServiceManagerBase
 from iwa.plugins.olas.service_manager.drain import DrainManagerMixin
 from iwa.plugins.olas.service_manager.lifecycle import LifecycleManagerMixin
@@ -36,3 +38,23 @@ class ServiceManager(
     """
 
     pass
+
+
+__all__ = [
+    "ServiceManager",
+    # Re-export commonly used types for backward compatibility
+    "Service",
+    "StakingStatus",
+    "OlasConfig",
+    "ServiceState",
+    "StakingState",
+    "StakingContract",
+    "ServiceRegistryContract",
+    "ServiceManagerContract",
+    "MechContract",
+    "MechMarketplaceContract",
+    "ERC20Contract",
+    "ChainInterfaces",
+    "Config",
+    "OLAS_CONTRACTS",
+]

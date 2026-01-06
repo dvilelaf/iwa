@@ -8,17 +8,28 @@ from web3.types import Wei
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
-from iwa.core.models import StoredSafeAccount
 from iwa.core.contracts.multisend import (
     MultiSendCallOnlyContract,
     MultiSendContract,
 )
+from iwa.core.models import StoredSafeAccount
 from iwa.core.services.transfer.base import TransferServiceBase
 from iwa.core.services.transfer.erc20 import ERC20TransferMixin
 from iwa.core.services.transfer.multisend import MultiSendMixin
 from iwa.core.services.transfer.native import NativeTransferMixin
 from iwa.core.services.transfer.swap import SwapMixin
 from iwa.plugins.gnosis.cow import CowSwap, OrderType
+
+__all__ = [
+    "TransferService",
+    # Re-export for backward compatibility
+    "MultiSendCallOnlyContract",
+    "MultiSendContract",
+    "StoredSafeAccount",
+    "CowSwap",
+    "OrderType",
+    "ERC20Contract",
+]
 
 
 class TransferService(
