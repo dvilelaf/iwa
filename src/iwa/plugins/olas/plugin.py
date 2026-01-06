@@ -79,130 +79,59 @@ class OlasPlugin(Plugin):
             # Query failed - Safe likely doesn't exist
             return [], False
 
-    def import_services(  # noqa: C901
-        self,
-        path: str = typer.Argument(..., help="Directory to scan for Olas services"),
-        dry_run: bool = typer.Option(
-            False, "--dry-run", "-n", help="Show what would be imported without making changes"
-        ),
-        password: Optional[str] = typer.Option(
-            None, "--password", "-p", help="Password for encrypted keys (will prompt if needed)"
-        ),
-        yes: bool = typer.Option(
-            False, "--yes", "-y", help="Import all without confirmation prompts"
-        ),
-    ):
-        """Import Olas services and keys from external directories.
-
-        Scans the given path recursively for Olas service directories in supported formats:
-        - .trader_runner (trader_alpha style)
-        - .operate (trader_xi style)
-
-        For each discovered service, imports:
-        - Agent private keys (re-encrypted with your wallet password)
-        - Operator/owner private keys
-        - Safe multisig accounts
-        - Service configuration to config.yaml
-        """
-        from rich.console import Console
+    def _display_service_table(self, console, service, index: int) -> None:
+        """Display a single discovered service as a Rich table."""
         from rich.table import Table
 
-        from iwa.plugins.olas.importer import OlasServiceImporter
+        table = Table(
+            title=f"Service {index}: {service.service_name or 'Unknown'}", show_header=False
+        )
+        table.add_column("Property", style="cyan")
+        table.add_column("Value")
 
-        console = Console()
+        table.add_row("Format", service.format)
+        table.add_row("Source", str(service.source_folder))
+        table.add_row("Service ID", str(service.service_id) if service.service_id else "N/A")
+        table.add_row("Chain", service.chain_name)
 
-        # Scan directory
-        console.print(f"\n[bold]Scanning[/bold] {path}...")
-        importer = OlasServiceImporter()
-        discovered = importer.scan_directory(Path(path))
-
-        if not discovered:
-            console.print("[yellow]No Olas services found.[/yellow]")
-            raise typer.Exit(code=0)
-
-        # Display discovered services
-        console.print(f"\n[bold green]Found {len(discovered)} service(s):[/bold green]\n")
-
-        for i, service in enumerate(discovered, 1):
-            table = Table(
-                title=f"Service {i}: {service.service_name or 'Unknown'}", show_header=False
+        # Verify Safe and display
+        on_chain_signers, safe_exists = None, None
+        if service.safe_address:
+            on_chain_signers, safe_exists = self._get_safe_signers(
+                service.safe_address, service.chain_name
             )
-            table.add_column("Property", style="cyan")
-            table.add_column("Value")
-
-            table.add_row("Format", service.format)
-            table.add_row("Source", str(service.source_folder))
-            table.add_row("Service ID", str(service.service_id) if service.service_id else "N/A")
-            table.add_row("Chain", service.chain_name)
-
-            # Verify Safe exists on-chain and get signers
-            on_chain_signers = None
-            safe_exists = None
-            if service.safe_address:
-                on_chain_signers, safe_exists = self._get_safe_signers(
-                    service.safe_address, service.chain_name
-                )
-
-                # Display Safe with warning if it doesn't exist
-                if safe_exists is None:
-                    table.add_row("Safe", service.safe_address)
-                elif safe_exists:
-                    table.add_row("Safe", f"{service.safe_address} [green]✓[/green]")
-                else:
-                    table.add_row(
-                        "Safe",
-                        f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]",
-                    )
+            if safe_exists is None:
+                table.add_row("Safe", service.safe_address)
+            elif safe_exists:
+                table.add_row("Safe", f"{service.safe_address} [green]✓[/green]")
             else:
-                table.add_row("Safe", "N/A")
+                table.add_row(
+                    "Safe",
+                    f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]",
+                )
+        else:
+            table.add_row("Safe", "N/A")
 
-            for key in service.keys:
-                status = "🔒 encrypted" if key.is_encrypted else "🔓 plaintext"
-                key_info = f"{key.address} {status}"
+        # Display keys with signer verification
+        for key in service.keys:
+            status = "🔒 encrypted" if key.is_encrypted else "🔓 plaintext"
+            key_info = f"{key.address} {status}"
 
-                # Check if agent is actually a signer of the Safe
-                if key.role == "agent" and service.safe_address:
-                    if safe_exists is None:
-                        # Could not verify (no RPC)
-                        pass  # Keep normal display
-                    elif not safe_exists:
-                        # Safe doesn't exist, so agent can't be a signer
-                        key_info = (
-                            f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
-                        )
-                    elif on_chain_signers is not None:
-                        is_signer = key.address.lower() in [s.lower() for s in on_chain_signers]
-                        if not is_signer:
-                            key_info = (
-                                f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
-                            )
+            if key.role == "agent" and service.safe_address:
+                if not safe_exists:
+                    key_info = f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                elif on_chain_signers is not None:
+                    is_signer = key.address.lower() in [s.lower() for s in on_chain_signers]
+                    if not is_signer:
+                        key_info = f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
 
-                table.add_row(f"Key ({key.role})", key_info)
+            table.add_row(f"Key ({key.role})", key_info)
 
-            console.print(table)
-            console.print()
+        console.print(table)
+        console.print()
 
-        if dry_run:
-            console.print("[yellow]Dry run mode - no changes made.[/yellow]")
-            raise typer.Exit(code=0)
-
-        # Confirm import
-        if not yes:
-            confirm = typer.confirm("Import these services?")
-            if not confirm:
-                console.print("[yellow]Aborted.[/yellow]")
-                raise typer.Exit(code=0)
-
-        # Check if we need a password for encrypted keys
-        needs_password = any(key.is_encrypted for service in discovered for key in service.keys)
-
-        if needs_password and not password:
-            console.print(
-                "\n[yellow]Some keys are encrypted. Please enter the source password.[/yellow]"
-            )
-            password = typer.prompt("Password", hide_input=True)
-
-        # Import each service
+    def _import_and_print_results(self, console, importer, discovered, password) -> tuple:
+        """Import all discovered services and print results."""
         total_keys = 0
         total_safes = 0
         total_services = 0
@@ -222,23 +151,75 @@ class OlasPlugin(Plugin):
             all_errors.extend(result.errors)
 
             if result.imported_keys:
-                console.print(
-                    f"  [green]✓[/green] Imported keys: {', '.join(result.imported_keys)}"
-                )
+                console.print(f"  [green]✓[/green] Imported keys: {', '.join(result.imported_keys)}")
             if result.imported_safes:
-                console.print(
-                    f"  [green]✓[/green] Imported safes: {', '.join(result.imported_safes)}"
-                )
+                console.print(f"  [green]✓[/green] Imported safes: {', '.join(result.imported_safes)}")
             if result.imported_services:
-                console.print(
-                    f"  [green]✓[/green] Imported services: {', '.join(result.imported_services)}"
-                )
+                console.print(f"  [green]✓[/green] Imported services: {', '.join(result.imported_services)}")
             if result.skipped:
                 for item in result.skipped:
                     console.print(f"  [yellow]⊘[/yellow] Skipped: {item}")
             if result.errors:
                 for error in result.errors:
                     console.print(f"  [red]✗[/red] Error: {error}")
+
+        return total_keys, total_safes, total_services, all_skipped, all_errors
+
+    def import_services(
+        self,
+        path: str = typer.Argument(..., help="Directory to scan for Olas services"),
+        dry_run: bool = typer.Option(
+            False, "--dry-run", "-n", help="Show what would be imported without making changes"
+        ),
+        password: Optional[str] = typer.Option(
+            None, "--password", "-p", help="Password for encrypted keys (will prompt if needed)"
+        ),
+        yes: bool = typer.Option(
+            False, "--yes", "-y", help="Import all without confirmation prompts"
+        ),
+    ):
+        """Import Olas services and keys from external directories."""
+        from rich.console import Console
+
+        from iwa.plugins.olas.importer import OlasServiceImporter
+
+        console = Console()
+
+        # Scan directory
+        console.print(f"\n[bold]Scanning[/bold] {path}...")
+        importer = OlasServiceImporter()
+        discovered = importer.scan_directory(Path(path))
+
+        if not discovered:
+            console.print("[yellow]No Olas services found.[/yellow]")
+            raise typer.Exit(code=0)
+
+        # Display discovered services
+        console.print(f"\n[bold green]Found {len(discovered)} service(s):[/bold green]\n")
+        for i, service in enumerate(discovered, 1):
+            self._display_service_table(console, service, i)
+
+        if dry_run:
+            console.print("[yellow]Dry run mode - no changes made.[/yellow]")
+            raise typer.Exit(code=0)
+
+        # Confirm import
+        if not yes:
+            confirm = typer.confirm("Import these services?")
+            if not confirm:
+                console.print("[yellow]Aborted.[/yellow]")
+                raise typer.Exit(code=0)
+
+        # Check if we need a password for encrypted keys
+        needs_password = any(key.is_encrypted for service in discovered for key in service.keys)
+        if needs_password and not password:
+            console.print("\n[yellow]Some keys are encrypted. Please enter the source password.[/yellow]")
+            password = typer.prompt("Password", hide_input=True)
+
+        # Import services
+        total_keys, total_safes, total_services, all_skipped, all_errors = (
+            self._import_and_print_results(console, importer, discovered, password)
+        )
 
         # Summary
         console.print("\n[bold]Summary:[/bold]")
@@ -250,3 +231,4 @@ class OlasPlugin(Plugin):
         if all_errors:
             console.print(f"  [red]Errors: {len(all_errors)}[/red]")
             raise typer.Exit(code=1)
+
