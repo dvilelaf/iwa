@@ -2,7 +2,6 @@
 
 import json
 from datetime import datetime
-from typing import Any
 
 from loguru import logger
 from peewee import (
