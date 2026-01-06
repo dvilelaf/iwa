@@ -235,8 +235,8 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 5.1 `drain_service()` (L146)
 
-- [ ] **Problema**: Método largo con múltiples tipos de drain
-- [ ] **Solución**: Estrategia pattern:
+- [x] **Problema**: Método largo con múltiples tipos de drain
+- [x] **Solución**: Estrategia pattern:
   ```python
   def drain_service(self, ...):
       results = {}
@@ -245,7 +245,7 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
       results["agent"] = self._drain_agent_account(...)
       return results
   ```
-- [ ] Eliminar `# noqa: C901`
+- [x] Eliminar `# noqa: C901`
 
 ---
 
