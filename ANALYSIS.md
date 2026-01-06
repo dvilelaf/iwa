@@ -253,9 +253,9 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 6.1 `swap()` (L20)
 
-- [ ] **Problema**: Método async largo
-- [ ] **Solución**: Extraer `_prepare_swap()`, `_execute_swap()`, `_log_swap_result()`
-- [ ] Eliminar `# noqa: C901`
+- [x] **Problema**: Método async largo
+- [x] **Solución**: Extraer `_prepare_swap()`, `_execute_swap()`, `_log_swap_result()`
+- [x] Eliminar `# noqa: C901`
 
 ---
 
