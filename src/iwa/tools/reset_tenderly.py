@@ -206,7 +206,95 @@ def _fund_wallet(  # nosec
             pass
 
 
-def main() -> None:  # noqa: C901
+def _process_vnet(
+    vnet_name: str,
+    vnet,
+    tenderly_access_key: str,
+    account_slug: str,
+    project_slug: str,
+    tenderly_config,
+) -> bool:
+    """Process a single vnet: delete old, create new, capture block."""
+    # Delete existing vnet
+    if vnet.vnet_id:
+        _delete_vnet(
+            tenderly_access_key=tenderly_access_key,
+            account_slug=account_slug,
+            project_slug=project_slug,
+            vnet_id=vnet.vnet_id,
+        )
+
+    # Create new network
+    vnet_slug = _generate_vnet_slug(preffix=vnet_name.lower())
+    vnet_id, admin_rpc, public_rpc = _create_vnet(
+        tenderly_access_key=tenderly_access_key,
+        account_slug=account_slug,
+        project_slug=project_slug,
+        network_id=vnet.chain_id,
+        chain_id=vnet.chain_id,
+        vnet_slug=vnet_slug,
+        vnet_display_name=vnet_slug,
+    )
+
+    if not vnet_id or not admin_rpc or not public_rpc:
+        print(f"Failed to create valid vnet for {vnet_name}")
+        return False
+
+    vnet.vnet_id = vnet_id
+    vnet.admin_rpc = admin_rpc
+    vnet.public_rpc = public_rpc
+    vnet.vnet_slug = vnet_slug
+
+    # Capture initial block
+    try:
+        w3 = Web3(Web3.HTTPProvider(public_rpc))
+        start_block = w3.eth.block_number
+        vnet.initial_block = start_block
+        print(f"Captured initial block for {vnet_name}: {start_block}")
+    except Exception as e:
+        print(f"Failed to capture initial block: {e}")
+        vnet.initial_block = 0
+
+    tenderly_config.save()
+    update_rpc_variables(tenderly_config)
+    return True
+
+
+def _fund_vnet_accounts(vnet, keys) -> None:
+    """Fund all accounts for a vnet based on requirements."""
+    for account_tags, requirement in vnet.funds_requirements.items():
+        tags = account_tags.split(",")
+        if account_tags != "all":
+            addresses = []
+            for tag in tags:
+                if acc := keys.get_account(tag):
+                    addresses.append(acc.address)
+        else:
+            addresses = list(keys.accounts.keys())
+
+        if not addresses:
+            continue
+
+        if requirement.native_eth > 0:
+            _fund_wallet(
+                admin_rpc=vnet.admin_rpc,
+                wallet_addresses=addresses,
+                amount_eth=requirement.native_eth,
+                native_or_token_address="native",
+            )
+            print(f"Funded {tags} with {requirement.native_eth} native")
+
+        for token in requirement.tokens:
+            _fund_wallet(
+                admin_rpc=vnet.admin_rpc,
+                wallet_addresses=addresses,
+                amount_eth=token.amount_eth,
+                native_or_token_address=str(token.address),
+            )
+            print(f"Funded {tags} with {token.amount_eth} {token.symbol}")
+
+
+def main() -> None:
     """Main - uses tenderly_profile from settings."""
     profile = settings.tenderly_profile
     print(f"Recreating Tenderly Networks (Profile {profile})")
@@ -220,7 +308,6 @@ def main() -> None:  # noqa: C901
     config_path = get_tenderly_config_path(profile)
 
     if not config_path.exists():
-        # Generate new config from scratch
         print(f"Generating new config file: {config_path}")
         tenderly_config = _generate_default_config()
         tenderly_config.save(config_path)
@@ -228,49 +315,10 @@ def main() -> None:  # noqa: C901
     tenderly_config = TenderlyConfig.load(config_path)
 
     for vnet_name, vnet in tenderly_config.vnets.items():
-        # Delete existing vnets
-        if vnet.vnet_id:
-            _delete_vnet(
-                tenderly_access_key=tenderly_access_key,
-                account_slug=account_slug,
-                project_slug=project_slug,
-                vnet_id=vnet.vnet_id,
-            )
-
-        # Create new network
-        vnet_slug = _generate_vnet_slug(preffix=vnet_name.lower())
-
-        vnet_id, admin_rpc, public_rpc = _create_vnet(
-            tenderly_access_key=tenderly_access_key,
-            account_slug=account_slug,
-            project_slug=project_slug,
-            network_id=vnet.chain_id,
-            chain_id=vnet.chain_id,
-            vnet_slug=vnet_slug,
-            vnet_display_name=vnet_slug,
-        )
-
-        if not vnet_id or not admin_rpc or not public_rpc:
-            print(f"Failed to create valid vnet for {vnet_name}")
+        if not _process_vnet(
+            vnet_name, vnet, tenderly_access_key, account_slug, project_slug, tenderly_config
+        ):
             continue
-
-        vnet.vnet_id = vnet_id
-        vnet.admin_rpc = admin_rpc
-        vnet.public_rpc = public_rpc
-        vnet.vnet_slug = vnet_slug
-
-        # Capture initial block for limit tracking
-        try:
-            w3 = Web3(Web3.HTTPProvider(public_rpc))
-            start_block = w3.eth.block_number
-            vnet.initial_block = start_block
-            print(f"Captured initial block for {vnet_name}: {start_block}")
-        except Exception as e:
-            print(f"Failed to capture initial block: {e}")
-            vnet.initial_block = 0
-
-        tenderly_config.save()
-        update_rpc_variables(tenderly_config)
 
         # Fund wallets
         keys = KeyStorage()
@@ -279,38 +327,9 @@ def main() -> None:  # noqa: C901
         account_service = AccountService(keys)
         safe_service = SafeService(keys, account_service)
 
-        for account_tags, requirement in vnet.funds_requirements.items():
-            tags = account_tags.split(",")
-            if account_tags != "all":
-                addresses = []
-                for tag in tags:
-                    if acc := keys.get_account(tag):
-                        addresses.append(acc.address)
-            else:
-                addresses = list(keys.accounts.keys())
+        _fund_vnet_accounts(vnet, keys)
 
-            if not addresses:
-                continue
-
-            if requirement.native_eth > 0:
-                _fund_wallet(
-                    admin_rpc=vnet.admin_rpc,
-                    wallet_addresses=addresses,
-                    amount_eth=requirement.native_eth,
-                    native_or_token_address="native",
-                )
-                print(f"Funded {tags} with {requirement.native_eth} native")
-
-            for token in requirement.tokens:
-                _fund_wallet(
-                    admin_rpc=vnet.admin_rpc,
-                    wallet_addresses=addresses,
-                    amount_eth=token.amount_eth,
-                    native_or_token_address=str(token.address),
-                )
-                print(f"Funded {tags} with {token.amount_eth} {token.symbol}")
-
-        # Redeploy safes
+        # Redeploy safes for Gnosis
         if vnet_name == "Gnosis":
             safe_service.redeploy_safes()
 
