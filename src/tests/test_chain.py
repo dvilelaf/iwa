@@ -17,8 +17,8 @@ from iwa.core.models import EthereumAddress
 def mock_web3():
     """Mock Web3 and RateLimitedWeb3 to bypass rate limiting wrapper in tests."""
     with (
-        patch("iwa.core.chain.Web3") as mock_web3_class,
-        patch("iwa.core.chain.RateLimitedWeb3") as mock_rl_web3,
+        patch("iwa.core.chain.interface.Web3") as mock_web3_class,
+        patch("iwa.core.chain.interface.RateLimitedWeb3") as mock_rl_web3,
     ):
         # Make RateLimitedWeb3 just return the raw web3 instance passed to it
         mock_rl_web3.side_effect = lambda w3, rl, ci: w3
@@ -27,7 +27,7 @@ def mock_web3():
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.core.chain.settings") as mock:
+    with patch("iwa.core.chain.models.settings") as mock:
         yield mock
 
 
@@ -311,7 +311,7 @@ def test_chain_interface_with_real_chains():
     valid_addr_2 = Account.create().address
 
     # Patch RateLimitedWeb3 to bypass rate limiting wrapper
-    with patch("iwa.core.chain.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
+    with patch("iwa.core.chain.interface.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
         # Use Gnosis() directly (SupportedChain), not ChainInterfaces().gnosis (ChainInterface)
         interface = ChainInterface(Gnosis())
         interface.chain.rpcs = ["http://rpc1", "http://rpc2"]

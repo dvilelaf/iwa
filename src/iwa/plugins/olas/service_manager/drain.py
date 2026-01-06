@@ -1,6 +1,6 @@
 """Drain manager mixin."""
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
 
@@ -143,7 +143,7 @@ class DrainManagerMixin:
         logger.info(f"Withdrew {olas_amount:.4f} OLAS to {withdrawal_address}")
         return True, olas_amount
 
-    def drain_service(  # noqa: C901
+    def drain_service(
         self,
         target_address: Optional[str] = None,
         claim_rewards: bool = True,
@@ -163,11 +163,7 @@ class DrainManagerMixin:
             claim_rewards: Whether to claim staking rewards before draining.
 
         Returns:
-            Dict with drained amounts per account: {
-                "safe": {"native": 1.5, "olas": 100.0},
-                "agent": {"native": 0.5, "olas": 0},
-                "owner": {"native": 0.1, "olas": 50.0}
-            }
+            Dict with drained amounts per account.
 
         """
         if not self.service:
@@ -176,149 +172,159 @@ class DrainManagerMixin:
 
         target = target_address or self.wallet.master_account.address
         chain = self.chain_name
-        drained = {}
+        drained: Dict[str, Any] = {}
 
         logger.info(f"Draining service {self.service.key} to {target}")
 
         # Step 1: Claim rewards if staked
-        claimed_rewards = 0
-        if claim_rewards and self.service.staking_contract_address:
-            try:
-                success, amount = self.claim_rewards()
-                if success and amount > 0:
-                    claimed_rewards = amount
-                    logger.info(f"Claimed {amount / 1e18:.4f} OLAS rewards")
-            except Exception as e:
-                logger.warning(f"Could not claim rewards: {e}")
+        claimed_rewards = self._claim_rewards_if_needed(claim_rewards)
 
         # Step 2: Drain the Safe
-        if self.service.multisig_address:
-            safe_addr = str(self.service.multisig_address)
-            logger.info(f"Attempting to drain Safe: {safe_addr}")
-
-            # Retry loop if we claimed rewards to allow for RPC indexing
-            max_retries = 6 if claimed_rewards > 0 else 1
-
-            for attempt in range(max_retries):
-                try:
-                    result = self.wallet.drain(
-                        from_address_or_tag=safe_addr,
-                        to_address_or_tag=target,
-                        chain_name=chain,
-                    )
-                    logger.info(
-                        f"Safe drain result (attempt {attempt + 1}): {result}"
-                    )
-
-                    if result:
-                        # Normalize result (handle Tuple[bool, dict] from EOA/TransactionService)
-                        if isinstance(result, tuple) and len(result) >= 2:
-                            success, receipt = result
-                            if success:
-                                tx_hash = receipt.get("transactionHash")
-                                if hasattr(tx_hash, "hex"):
-                                    result = tx_hash.hex()
-                                else:
-                                    result = str(tx_hash)
-                            else:
-                                result = None
-
-                        if result:
-                            drained["safe"] = result
-                            logger.info(f"Drained Safe: {result}")
-                            break
-
-                    if attempt < max_retries - 1:
-                        logger.info(
-                            f"Waiting for rewards to appear in balance (attempt {attempt + 1})..."
-                        )
-                        import time
-
-                        time.sleep(3)
-
-                except Exception as e:
-                    logger.warning(f"Could not drain Safe: {e}")
-                    import traceback
-
-                    logger.warning(f"Safe traceback: {traceback.format_exc()}")
-                    if attempt < max_retries - 1:
-                        import time
-
-                        time.sleep(3)
+        safe_result = self._drain_safe_account(target, chain, claimed_rewards)
+        if safe_result:
+            drained["safe"] = safe_result
 
         # Step 3: Drain the Agent account
-        if self.service.agent_address:
-            agent_addr = str(self.service.agent_address)
-            logger.info(f"Attempting to drain Agent: {agent_addr}")
-            try:
-                result = self.wallet.drain(
-                    from_address_or_tag=agent_addr,
-                    to_address_or_tag=target,
-                    chain_name=chain,
-                )
-                logger.info(f"Agent drain result: {result}")
-                if result:
-                    # Normalize result
-                    if isinstance(result, tuple) and len(result) >= 2:
-                        success, receipt = result
-                        if success:
-                            tx_hash = receipt.get("transactionHash")
-                            if hasattr(tx_hash, "hex"):
-                                result = tx_hash.hex()
-                            else:
-                                result = str(tx_hash)
-                        else:
-                            result = None
-
-                    if result:
-                        drained["agent"] = result
-                        logger.info(f"Drained Agent: {result}")
-                else:
-                    logger.warning("Agent drain returned None/empty")
-            except Exception as e:
-                logger.warning(f"Could not drain Agent: {e}")
-                import traceback
-
-                logger.warning(f"Agent traceback: {traceback.format_exc()}")
+        agent_result = self._drain_agent_account(target, chain)
+        if agent_result:
+            drained["agent"] = agent_result
 
         # Step 4: Drain the Owner account
-        if self.service.service_owner_address:
-            owner_addr = str(self.service.service_owner_address)
-            logger.info(f"Attempting to drain Owner: {owner_addr}")
-            try:
-                result = self.wallet.drain(
-                    from_address_or_tag=owner_addr,
-                    to_address_or_tag=target,
-                    chain_name=chain,
-                )
-                logger.info(f"Owner drain result: {result}")
-                if result:
-                    # Normalize result
-                    if isinstance(result, tuple) and len(result) >= 2:
-                        success, receipt = result
-                        if success:
-                            tx_hash = receipt.get("transactionHash")
-                            if hasattr(tx_hash, "hex"):
-                                result = tx_hash.hex()
-                            else:
-                                result = str(tx_hash)
-                        else:
-                            result = None
+        owner_result = self._drain_owner_account(target, chain)
+        if owner_result:
+            drained["owner"] = owner_result
 
-                    if result:
-                        drained["owner"] = result
-                        logger.info(f"Drained Owner: {result}")
-                else:
-                    logger.warning("Owner drain returned None/empty")
-            except Exception as e:
-                logger.warning(f"Could not drain Owner: {e}")
-                import traceback
-
-                logger.warning(f"Owner traceback: {traceback.format_exc()}")
-
+        # Handle partial success (rewards claimed but no drain)
         if not drained and claimed_rewards > 0:
             logger.info("Drain returned empty but rewards were claimed. Reporting partial success.")
             drained["safe_rewards_only"] = {"olas": claimed_rewards / 1e18}
 
         logger.info(f"Drain complete. Accounts drained: {list(drained.keys())}")
         return drained
+
+    def _claim_rewards_if_needed(self, claim_rewards: bool) -> int:
+        """Claim rewards if applicable."""
+        if claim_rewards and self.service.staking_contract_address:
+            try:
+                success, amount = self.claim_rewards()
+                if success and amount > 0:
+                    logger.info(f"Claimed {amount / 1e18:.4f} OLAS rewards")
+                    return amount
+            except Exception as e:
+                logger.warning(f"Could not claim rewards: {e}")
+        return 0
+
+    def _drain_safe_account(self, target: str, chain: str, claimed_rewards: int) -> Optional[Any]:
+        """Drain the Safe account with retry logic for rewards."""
+        if not self.service.multisig_address:
+            return None
+
+        safe_addr = str(self.service.multisig_address)
+        logger.info(f"Attempting to drain Safe: {safe_addr}")
+
+        # Retry loop if we claimed rewards to allow for RPC indexing
+        max_retries = 6 if claimed_rewards > 0 else 1
+
+        for attempt in range(max_retries):
+            try:
+                result = self.wallet.drain(
+                    from_address_or_tag=safe_addr,
+                    to_address_or_tag=target,
+                    chain_name=chain,
+                )
+                logger.info(f"Safe drain result (attempt {attempt + 1}): {result}")
+
+                normalized_result = self._normalize_drain_result(result)
+                if normalized_result:
+                    logger.info(f"Drained Safe: {normalized_result}")
+                    return normalized_result
+
+                if attempt < max_retries - 1:
+                    logger.info(
+                        f"Waiting for rewards to appear in balance (attempt {attempt + 1})..."
+                    )
+                    import time
+
+                    time.sleep(3)
+
+            except Exception as e:
+                logger.warning(f"Could not drain Safe: {e}")
+                import traceback
+
+                logger.warning(f"Safe traceback: {traceback.format_exc()}")
+                if attempt < max_retries - 1:
+                    import time
+
+                    time.sleep(3)
+        return None
+
+    def _drain_agent_account(self, target: str, chain: str) -> Optional[Any]:
+        """Drain the Agent account."""
+        if not self.service.agent_address:
+            return None
+
+        agent_addr = str(self.service.agent_address)
+        logger.info(f"Attempting to drain Agent: {agent_addr}")
+        try:
+            result = self.wallet.drain(
+                from_address_or_tag=agent_addr,
+                to_address_or_tag=target,
+                chain_name=chain,
+            )
+            logger.info(f"Agent drain result: {result}")
+            normalized = self._normalize_drain_result(result)
+            if normalized:
+                logger.info(f"Drained Agent: {normalized}")
+                return normalized
+            else:
+                logger.warning("Agent drain returned None/empty")
+        except Exception as e:
+            logger.warning(f"Could not drain Agent: {e}")
+            import traceback
+
+            logger.warning(f"Agent traceback: {traceback.format_exc()}")
+        return None
+
+    def _drain_owner_account(self, target: str, chain: str) -> Optional[Any]:
+        """Drain the Owner account."""
+        if not self.service.service_owner_address:
+            return None
+
+        owner_addr = str(self.service.service_owner_address)
+        logger.info(f"Attempting to drain Owner: {owner_addr}")
+        try:
+            result = self.wallet.drain(
+                from_address_or_tag=owner_addr,
+                to_address_or_tag=target,
+                chain_name=chain,
+            )
+            logger.info(f"Owner drain result: {result}")
+            normalized = self._normalize_drain_result(result)
+            if normalized:
+                logger.info(f"Drained Owner: {normalized}")
+                return normalized
+            else:
+                logger.warning("Owner drain returned None/empty")
+        except Exception as e:
+            logger.warning(f"Could not drain Owner: {e}")
+            import traceback
+
+            logger.warning(f"Owner traceback: {traceback.format_exc()}")
+        return None
+
+    def _normalize_drain_result(self, result: Any) -> Any:
+        """Normalize the result from wallet.drain to a transaction hash string or dict."""
+        if not result:
+            return None
+
+        # Handle Tuple[bool, dict] from EOA/TransactionService
+        if isinstance(result, tuple) and len(result) >= 2:
+            success, receipt = result
+            if success:
+                tx_hash = receipt.get("transactionHash")
+                if hasattr(tx_hash, "hex"):
+                    return tx_hash.hex()
+                return str(tx_hash)
+            return None
+
+        return result

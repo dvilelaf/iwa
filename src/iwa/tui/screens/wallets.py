@@ -155,7 +155,50 @@ class WalletsScreen(VerticalScroll):
         self.refresh_table_structure_and_data()
         self.load_recent_txs()
 
-    def refresh_table_structure_and_data(self) -> None:  # noqa: C901
+    def _build_account_row(
+        self, account, current_chain: str, token_names: list
+    ) -> tuple[list, bool]:
+        """Build a row for a single account. Returns (cells, needs_fetch)."""
+        needs_fetch = False
+
+        if isinstance(account, StoredSafeAccount):
+            if current_chain not in account.chains:
+                return [], False  # Skip this account
+            acct_type = "Safe"
+        else:
+            acct_type = "EOA"
+
+        if account.address not in self.balance_cache[current_chain]:
+            self.balance_cache[current_chain][account.address] = {}
+
+        cached_native = self.balance_cache[current_chain][account.address].get("NATIVE")
+        if cached_native:
+            native_cell = cached_native
+        else:
+            native_cell = "Loading..."
+            needs_fetch = True
+
+        cells = [
+            Text(account.tag, style="green"),
+            escape(account.address),
+            acct_type,
+            native_cell,
+        ]
+
+        for token in token_names:
+            if token in self.chain_token_states.get(current_chain, set()):
+                cached_token = self.balance_cache[current_chain][account.address].get(token)
+                if cached_token:
+                    cells.append(cached_token)
+                else:
+                    cells.append("Loading...")
+                    needs_fetch = True
+            else:
+                cells.append("")
+
+        return cells, needs_fetch
+
+    def refresh_table_structure_and_data(self) -> None:
         """Rebuild the accounts table structure and data."""
         table = self.query_one(AccountTable)
         chain_interface = ChainInterfaces().get(self.active_chain)
@@ -171,41 +214,12 @@ class WalletsScreen(VerticalScroll):
         needs_fetch = False
         for account in self.wallet.account_service.get_account_data().values():
             try:
-                if isinstance(account, StoredSafeAccount):
-                    if current_chain not in account.chains:
-                        continue
-                    acct_type = "Safe"
-                else:
-                    acct_type = "EOA"
-
-                if account.address not in self.balance_cache[current_chain]:
-                    self.balance_cache[current_chain][account.address] = {}
-
-                cached_native = self.balance_cache[current_chain][account.address].get("NATIVE")
-                if cached_native:
-                    native_cell = cached_native
-                else:
-                    native_cell = "Loading..."
-                    needs_fetch = True
-
-                cells = [
-                    Text(account.tag, style="green"),
-                    escape(account.address),
-                    acct_type,
-                    native_cell,
-                ]
-
-                for token in token_names:
-                    if token in self.chain_token_states.get(current_chain, set()):
-                        cached_token = self.balance_cache[current_chain][account.address].get(token)
-                        if cached_token:
-                            cells.append(cached_token)
-                        else:
-                            cells.append("Loading...")
-                            needs_fetch = True
-                    else:
-                        cells.append("")
-
+                cells, row_needs_fetch = self._build_account_row(
+                    account, current_chain, token_names
+                )
+                if not cells:
+                    continue  # Account skipped (e.g., Safe not on this chain)
+                needs_fetch = needs_fetch or row_needs_fetch
                 table.add_row(*cells, key=account.address)
             except Exception as e:
                 logger.error(f"Error processing account {account.address}: {e}")

@@ -128,38 +128,43 @@ class OlasView(Static):
         """Load services when mounted."""
         self.load_services()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:  # noqa: C901
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         button_id = event.button.id
+        if not button_id:
+            return
+
         if button_id == "olas-refresh-btn":
             self.load_services()
         elif button_id == "olas-create-service-btn":
             self.show_create_service_modal()
-        elif button_id and button_id.startswith("claim-"):
-            # Convert sanitized ID back to original key format (gnosis_2594 -> gnosis:2594)
-            service_key = button_id.replace("claim-", "").replace("_", ":", 1)
-            self.claim_rewards(service_key)
-        elif button_id and button_id.startswith("unstake-"):
-            service_key = button_id.replace("unstake-", "").replace("_", ":", 1)
-            self.unstake_service(service_key)
-        elif button_id and button_id.startswith("stake-"):
-            service_key = button_id.replace("stake-", "").replace("_", ":", 1)
-            self.stake_service(service_key)
-        elif button_id and button_id.startswith("drain-"):
-            service_key = button_id.replace("drain-", "").replace("_", ":", 1)
-            self.drain_service(service_key)
-        elif button_id and button_id.startswith("fund-"):
-            service_key = button_id.replace("fund-", "").replace("_", ":", 1)
-            self.show_fund_service_modal(service_key)
-        elif button_id and button_id.startswith("terminate-"):
-            service_key = button_id.replace("terminate-", "").replace("_", ":", 1)
-            self.terminate_service(service_key)
-        elif button_id and button_id.startswith("checkpoint-"):
-            service_key = button_id.replace("checkpoint-", "").replace("_", ":", 1)
-            self.checkpoint_service(service_key)
-        elif button_id and button_id.startswith("deploy-"):
-            service_key = button_id.replace("deploy-", "").replace("_", ":", 1)
-            self.deploy_service(service_key)
+        else:
+            self._handle_service_action_button(button_id)
+
+    def _handle_service_action_button(self, button_id: str) -> None:
+        """Handle service-specific action buttons.
+
+        Maps button ID prefixes to handler methods.
+        """
+        # Map prefixes to handler methods
+        handlers = {
+            "claim-": self.claim_rewards,
+            "unstake-": self.unstake_service,
+            "stake-": self.stake_service,
+            "drain-": self.drain_service,
+            "fund-": self.show_fund_service_modal,
+            "terminate-": self.terminate_service,
+            "checkpoint-": self.checkpoint_service,
+            "deploy-": self.deploy_service,
+        }
+
+        for prefix, handler in handlers.items():
+            if button_id.startswith(prefix):
+                # Convert sanitized ID back to original key format
+                # e.g. gnosis_2594 -> gnosis:2594
+                service_key = button_id.replace(prefix, "").replace("_", ":", 1)
+                handler(service_key)
+                return
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle chain selection change."""
@@ -463,41 +468,76 @@ class OlasView(Static):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
-    def stake_service(self, service_key: str) -> None:  # noqa: C901
+    def stake_service(self, service_key: str) -> None:
         """Stake a service with bond-compatible contracts only."""
-        from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
-        from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
-        from iwa.plugins.olas.service_manager import ServiceManager
-        from iwa.tui.modals.base import StakeServiceModal
 
         contracts_dict = OLAS_TRADER_STAKING_CONTRACTS.get(self._chain, {})
         if not contracts_dict:
             self.notify(f"No staking contracts for {self._chain}", severity="error")
             return
 
-        # Get service bond (security_deposit) for filtering
-        service_bond = None
-        service_bond_olas = None
+        # 1. Get service bond (security_deposit)
+        service_bond = self._get_service_bond(service_key)
+        service_bond_olas = service_bond / 10**18 if service_bond else 0
+
+        # 2. Filter contracts
+        filtered_contracts = self._get_compatible_staking_contracts(
+            contracts_dict, service_bond
+        )
+
+        if not filtered_contracts:
+            if service_bond_olas is not None:
+                self.notify(
+                    f"No compatible contracts! Your service bond ({service_bond_olas:.0f} OLAS) "
+                    "is lower than what staking contracts require.",
+                    severity="warning",
+                    timeout=10,
+                )
+            else:
+                self.notify("No staking contracts available", severity="error")
+            return
+
+        # 3. Show info if some contracts were filtered
+        total_contracts = len(contracts_dict)
+        if len(filtered_contracts) < total_contracts:
+            hidden = total_contracts - len(filtered_contracts)
+            self.notify(
+                f"Showing {len(filtered_contracts)} of {total_contracts} contracts "
+                f"({hidden} hidden - require higher bond)",
+                severity="information",
+            )
+
+        # 4. Show modal
+        self._show_stake_contracts_modal(filtered_contracts, service_key)
+
+    def _get_service_bond(self, service_key: str) -> Optional[int]:
+        """Fetch the security deposit (bond) for a service."""
+        from iwa.plugins.olas.service_manager import ServiceManager
+
         try:
             manager = ServiceManager(self._wallet, service_key=service_key)
             if manager.service:
                 service_info = manager.registry.get_service(manager.service.service_id)
-                service_bond = service_info.get("security_deposit", 0)
-                service_bond_olas = service_bond / 10**18 if service_bond else 0
+                return service_info.get("security_deposit", 0)
         except Exception as e:
             self.notify(f"Warning: Could not fetch service bond: {e}", severity="warning")
+        return None
 
-        # Filter contracts by bond compatibility
+    def _get_compatible_staking_contracts(
+        self, contracts_dict: dict, service_bond: Optional[int]
+    ) -> List[tuple]:
+        """Filter staking contracts based on bond requirements and slots."""
         import json
+
+        from iwa.core.chain import ChainInterface
+        from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
         w3 = ChainInterface(self._chain).web3
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
             abi = json.load(f)
 
         filtered_contracts = []
-        total_contracts = len(contracts_dict)
-
         for name, addr in contracts_dict.items():
             try:
                 contract = w3.eth.contract(address=str(addr), abi=abi)
@@ -517,49 +557,39 @@ class OlasView(Static):
             except Exception:
                 # If we can't check, include it
                 filtered_contracts.append((name, str(addr)))
+        return filtered_contracts
 
-        if not filtered_contracts:
-            if service_bond_olas is not None:
-                self.notify(
-                    f"No compatible contracts! Your service bond ({service_bond_olas:.0f} OLAS) "
-                    "is lower than what staking contracts require.",
-                    severity="warning",
-                    timeout=10,
-                )
-            else:
-                self.notify("No staking contracts available", severity="error")
-            return
-
-        # Show info if some contracts were filtered
-        if len(filtered_contracts) < total_contracts:
-            hidden = total_contracts - len(filtered_contracts)
-            self.notify(
-                f"Showing {len(filtered_contracts)} of {total_contracts} contracts "
-                f"({hidden} hidden - require higher bond)",
-                severity="information",
-            )
+    def _show_stake_contracts_modal(
+        self, filtered_contracts: List[tuple], service_key: str
+    ) -> None:
+        """Show the modal to select a staking contract."""
+        from iwa.tui.modals.base import StakeServiceModal
 
         def on_modal_result(contract_address: Optional[str]) -> None:
             if not contract_address:
                 return
-
-            self.notify("Staking...", severity="information")
-            try:
-                from iwa.plugins.olas.contracts.staking import StakingContract
-
-                manager = ServiceManager(self._wallet, service_key=service_key)
-                staking = StakingContract(contract_address, self._chain)
-                success = manager.stake(staking)
-
-                if success:
-                    self.notify("Service staked!", severity="information")
-                    self.load_services()
-                else:
-                    self.notify("Stake failed", severity="error")
-            except Exception as e:
-                self.notify(f"Error: {e}", severity="error")
+            self._execute_stake_service(service_key, contract_address)
 
         self.app.push_screen(StakeServiceModal(filtered_contracts), on_modal_result)
+
+    def _execute_stake_service(self, service_key: str, contract_address: str) -> None:
+        """Execute the staking transaction."""
+        self.notify("Staking...", severity="information")
+        try:
+            from iwa.plugins.olas.contracts.staking import StakingContract
+            from iwa.plugins.olas.service_manager import ServiceManager
+
+            manager = ServiceManager(self._wallet, service_key=service_key)
+            staking = StakingContract(contract_address, self._chain)
+            success = manager.stake(staking)
+
+            if success:
+                self.notify("Service staked!", severity="information")
+                self.load_services()
+            else:
+                self.notify("Stake failed", severity="error")
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")
 
     def unstake_service(self, service_key: str) -> None:
         """Unstake a service."""
@@ -606,13 +636,28 @@ class OlasView(Static):
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
-    def show_create_service_modal(self) -> None:  # noqa: C901
+    def show_create_service_modal(self) -> None:
         """Show modal to create a new service."""
         from iwa.tui.modals.base import CreateServiceModal
 
         chains = ["gnosis"]  # Only gnosis has staking contracts
 
-        # Get staking contracts list with available slots
+        # 1. Fetch staking contracts with available slots
+        staking_contracts = self._fetch_create_service_options()
+
+        # 2. Define callback
+        def on_modal_result(result) -> None:
+            if not result:
+                return
+            self._handle_create_service_result(result)
+
+        # 3. Show modal
+        self.app.push_screen(
+            CreateServiceModal(chains, self._chain, staking_contracts), on_modal_result
+        )
+
+    def _fetch_create_service_options(self) -> List[tuple]:
+        """Fetch staking contracts with available slots for creation modal."""
         staking_contracts = []
         try:
             import json
@@ -642,56 +687,51 @@ class OlasView(Static):
                     staking_contracts.append((name, str(addr)))
         except Exception:
             pass  # If fetch fails, just use empty list
+        return staking_contracts
 
-        def on_modal_result(result) -> None:
-            if not result:
+    def _handle_create_service_result(self, result: dict) -> None:
+        """Handle the result from the create service modal."""
+        self.notify("Creating and deploying service...", severity="information")
+        try:
+            from iwa.plugins.olas.service_manager import ServiceManager
+
+            manager = ServiceManager(self._wallet)
+            service_id = manager.create(
+                chain_name=result["chain"],
+                service_name=result["name"],
+            )
+
+            if not service_id:
+                self.notify("Failed to create service", severity="error")
                 return
 
-            self.notify("Creating and deploying service...", severity="information")
-            try:
-                from iwa.plugins.olas.service_manager import ServiceManager
+            # Spin up to fully deploy
+            spin_up_success = manager.spin_up()
 
-                manager = ServiceManager(self._wallet)
-                service_id = manager.create(
-                    chain_name=result["chain"],
-                    service_name=result["name"],
-                )
-
-                if not service_id:
-                    self.notify("Failed to create service", severity="error")
-                    return
-
-                # Spin up to fully deploy
-                spin_up_success = manager.spin_up()
-
-                if spin_up_success:
-                    # If staking contract was selected, stake the service
-                    if result.get("staking_contract"):
-                        try:
-                            manager.stake(result["staking_contract"])
-                            self.notify(
-                                f"Service deployed and staked! ID: {service_id}",
-                                severity="information",
-                            )
-                        except Exception as e:
-                            self.notify(
-                                f"Service deployed (ID: {service_id}) but staking failed: {e}",
-                                severity="warning",
-                            )
-                    else:
-                        self.notify(f"Service deployed! ID: {service_id}", severity="information")
+            if spin_up_success:
+                # If staking contract was selected, stake the service
+                if result.get("staking_contract"):
+                    try:
+                        manager.stake(result["staking_contract"])
+                        self.notify(
+                            f"Service deployed and staked! ID: {service_id}",
+                            severity="information",
+                        )
+                    except Exception as e:
+                        self.notify(
+                            f"Service deployed (ID: {service_id}) but staking failed: {e}",
+                            severity="warning",
+                        )
                 else:
-                    self.notify(
-                        f"Service created (ID: {service_id}) but deployment failed",
-                        severity="warning",
-                    )
-                self.load_services()
-            except Exception as e:
-                self.notify(f"Error: {e}", severity="error")
-
-        self.app.push_screen(
-            CreateServiceModal(chains, self._chain, staking_contracts), on_modal_result
-        )
+                    self.notify(f"Service deployed! ID: {service_id}", severity="information")
+            else:
+                self.notify(
+                    f"Service created (ID: {service_id}) but deployment failed",
+                    severity="warning",
+                )
+            self.load_services()
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")
 
     def show_fund_service_modal(self, service_key: str) -> None:
         """Show modal to fund a service."""

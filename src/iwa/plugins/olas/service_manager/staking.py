@@ -15,7 +15,7 @@ from iwa.plugins.olas.models import StakingStatus
 class StakingManagerMixin:
     """Mixin for staking operations."""
 
-    def get_staking_status(self) -> Optional[StakingStatus]:  # noqa: C901
+    def get_staking_status(self) -> Optional[StakingStatus]:
         """Get comprehensive staking status for the active service.
 
         Returns:
@@ -65,18 +65,8 @@ class StakingManagerMixin:
             info = staking.get_service_info(service_id)
             # Get current epoch number
             epoch_number = staking.get_epoch_counter()
-
-            # Look up contract name from constants
-            staking_name = None
-            from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
-
-            for chain_cts in OLAS_TRADER_STAKING_CONTRACTS.values():
-                for name, addr in chain_cts.items():
-                    if str(addr).lower() == str(staking_address).lower():
-                        staking_name = name
-                        break
-                if staking_name:
-                    break
+            # Identify contract name
+            staking_name = self._identify_staking_contract_name(staking_address)
         except Exception as e:
             logger.error(f"Failed to get service info for service {service_id}: {str(e)}")
             import traceback
@@ -88,6 +78,50 @@ class StakingManagerMixin:
                 staking_contract_address=str(staking_address),
             )
 
+        # Calculate unstake timing
+        unstake_at, ts_start, min_duration = self._calculate_unstake_time(staking, info)
+
+        return StakingStatus(
+            is_staked=True,
+            staking_state=staking_state.name,
+            staking_contract_address=str(staking_address),
+            staking_contract_name=staking_name,
+            mech_requests_this_epoch=info["mech_requests_this_epoch"],
+            required_mech_requests=info["required_mech_requests"],
+            remaining_mech_requests=info["remaining_mech_requests"],
+            has_enough_requests=info["has_enough_requests"],
+            liveness_ratio_passed=info["liveness_ratio_passed"],
+            accrued_reward_wei=info["accrued_reward_wei"],
+            accrued_reward_olas=float(Web3.from_wei(info["accrued_reward_wei"], "ether")),
+            epoch_number=epoch_number,
+            epoch_end_utc=info["epoch_end_utc"].isoformat() if info["epoch_end_utc"] else None,
+            remaining_epoch_seconds=info["remaining_epoch_seconds"],
+            activity_checker_address=staking.activity_checker_address,
+            liveness_ratio=staking.activity_checker.liveness_ratio,
+            ts_start=ts_start,
+            min_staking_duration=min_duration,
+            unstake_available_at=unstake_at,
+        )
+
+    def _identify_staking_contract_name(self, staking_address: str) -> Optional[str]:
+        """Identify the name of the staking contract from constants."""
+        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
+        for chain_cts in OLAS_TRADER_STAKING_CONTRACTS.values():
+            for name, addr in chain_cts.items():
+                if str(addr).lower() == str(staking_address).lower():
+                    return name
+        return None
+
+    def _calculate_unstake_time(
+        self, staking: StakingContract, info: dict
+    ) -> tuple[Optional[str], int, int]:
+        """Calculate unstake availability time.
+
+        Returns:
+            Tuple of (unstake_at_iso, ts_start, min_duration)
+
+        """
         # Helper to safely get min_staking_duration
         try:
             min_duration = staking.min_staking_duration
@@ -114,29 +148,9 @@ class StakingManagerMixin:
         else:
             logger.warning("ts_start is 0, cannot calculate unstake time")
 
-        return StakingStatus(
-            is_staked=True,
-            staking_state=staking_state.name,
-            staking_contract_address=str(staking_address),
-            staking_contract_name=staking_name,
-            mech_requests_this_epoch=info["mech_requests_this_epoch"],
-            required_mech_requests=info["required_mech_requests"],
-            remaining_mech_requests=info["remaining_mech_requests"],
-            has_enough_requests=info["has_enough_requests"],
-            liveness_ratio_passed=info["liveness_ratio_passed"],
-            accrued_reward_wei=info["accrued_reward_wei"],
-            accrued_reward_olas=float(Web3.from_wei(info["accrued_reward_wei"], "ether")),
-            epoch_number=epoch_number,
-            epoch_end_utc=info["epoch_end_utc"].isoformat() if info["epoch_end_utc"] else None,
-            remaining_epoch_seconds=info["remaining_epoch_seconds"],
-            activity_checker_address=staking.activity_checker_address,
-            liveness_ratio=staking.activity_checker.liveness_ratio,
-            ts_start=ts_start,
-            min_staking_duration=min_duration,
-            unstake_available_at=unstake_at,
-        )
+        return unstake_at, ts_start, min_duration
 
-    def stake(self, staking_contract) -> bool:  # noqa: C901
+    def stake(self, staking_contract) -> bool:
         """Stake the service in a staking contract.
 
         Token Flow:
@@ -161,6 +175,22 @@ class StakingManagerMixin:
             True if staking succeeded, False otherwise.
 
         """
+        # 1. Validation
+        requirements = self._check_stake_requirements(staking_contract)
+        if not requirements:
+            return False
+
+        min_deposit = requirements["min_deposit"]
+
+        # 2. Approve Tokens
+        if not self._approve_staking_tokens(staking_contract, min_deposit):
+            return False
+
+        # 3. Execute Stake Transaction
+        return self._execute_stake_transaction(staking_contract)
+
+    def _check_stake_requirements(self, staking_contract) -> Optional[dict]:
+        """Validate all conditions required for staking."""
         from iwa.plugins.olas.contracts.service import ServiceState
 
         # Check centralized staking requirements
@@ -168,82 +198,69 @@ class StakingManagerMixin:
         min_deposit = reqs["min_staking_deposit"]
         required_bond = reqs["required_agent_bond"]
         staking_token = Web3.to_checksum_address(reqs["staking_token"])
-        staking_token_lower = staking_token.lower()  # For comparison only
+        staking_token_lower = staking_token.lower()
 
-        erc20_contract = ERC20Contract(staking_token)
         logger.info(f"Checking stake requirements for service {self.service.service_id}")
 
-        # Check that she service is deployed
+        # Check service state
         service_info = self.registry.get_service(self.service.service_id)
         service_state = service_info["state"]
-
         logger.info(f"Service state: {service_state.name}")
+
         if service_state != ServiceState.DEPLOYED:
-
             logger.error("Service is not deployed, cannot stake")
-            return False
+            return None
 
-        logger.info("Service is deployed")
-
-        # Check token compatibility - service must be created with same token as staking contract expects
+        # Check token compatibility
         service_token = (self.service.token_address or "").lower()
         if service_token != staking_token_lower:
-
             logger.error(
                 f"Token mismatch: service was created with {service_token or 'native'}, "
                 f"but staking contract requires {staking_token_lower}"
             )
-            return False
+            return None
 
-        logger.info("Token compatibility check passed")
-
-        # Check that the service has enough agent bond
-        # We check for the first agent ID as Olas services usually have one type for traders
+        # Check agent bond
         try:
-            # Get the first agent ID for this service
             agent_ids = service_info["agent_ids"]
             if not agent_ids:
                 logger.error("No agent IDs found for service")
-                return False
+                return None
 
             agent_id = agent_ids[0]
             agent_params = self.registry.get_agent_params(self.service.service_id, agent_id)
             current_bond = agent_params["bond"]
 
-            logger.info(f"Agent bond check: current={current_bond}, required={required_bond}")
-
             if current_bond < required_bond:
-                error_msg = (
+                logger.error(
                     f"Service agent bond is too low ({current_bond} < {required_bond}). "
                     "Service must be created with the correct bond amount to be stakeable."
                 )
-
-                logger.error(error_msg)
-                return False
+                return None
         except Exception as e:
             logger.warning(f"Could not verify agent bond: {e}")
 
-        # Check that there are free slots
+        # Check free slots
         staked_count = len(staking_contract.get_service_ids())
         max_services = staking_contract.max_num_services
-        logger.info(f"Staking contract slots: {staked_count}/{max_services}")
         if staked_count >= max_services:
-
             logger.error("Staking contract is full, no free slots available")
-            return False
+            return None
 
-        # Check that there are enough OLAS for the deposit
+        # Check OLAS balance
+        erc20_contract = ERC20Contract(staking_token)
         master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
-        logger.info(f"OLAS balance check: master={master_balance}, min_deposit={min_deposit}")
         if master_balance < min_deposit:
-
             logger.error(
                 f"Not enough tokens to stake service (have {master_balance}, need {min_deposit})"
             )
-            return False
+            return None
 
-        # Approve the staking contract to move the service token (NFT)
+        return {"min_deposit": min_deposit, "staking_token": staking_token}
 
+    def _approve_staking_tokens(self, staking_contract, min_deposit: int) -> bool:
+        """Approve both the service NFT and OLAS tokens for staking."""
+        # Approve service NFT
         approve_tx = self.registry.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
@@ -256,16 +273,20 @@ class StakingManagerMixin:
             chain_name=self.chain_name,
             tags=["olas_approve_service_nft"],
         )
-        logger.info("Approving service token for staking contract")
 
         if not success:
-
             logger.error("Failed to approve staking contract [Service Registry]")
             return False
 
         logger.info("Service token approved for staking contract")
 
-        # Approve the staking contract to transfer OLAS tokens
+        # Approve OLAS tokens
+        # We need to get the token address from the contract requirements again or pass it
+        # Retching for simplicity and safety
+        reqs = staking_contract.get_requirements()
+        staking_token = Web3.to_checksum_address(reqs["staking_token"])
+        erc20_contract = ERC20Contract(staking_token)
+
         olas_approve_tx = erc20_contract.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
@@ -279,15 +300,15 @@ class StakingManagerMixin:
             tags=["olas_approve_olas_token"],
         )
 
-
         if not success:
-
             logger.error("Failed to approve OLAS tokens for staking contract")
             return False
 
         logger.info("OLAS tokens approved for staking contract")
+        return True
 
-        # Stake the service
+    def _execute_stake_transaction(self, staking_contract) -> bool:
+        """Send the stake transaction and verify the result."""
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=self.wallet.master_account.address,
             service_id=self.service.service_id,
@@ -301,10 +322,8 @@ class StakingManagerMixin:
         )
 
         if not success:
-
             if receipt and "status" in receipt and receipt["status"] == 0:
                 logger.error(f"Stake transaction reverted. Receipt: {receipt}")
-                # Try to decode error if possible (though for status 0 receipt it's too late for simple decoding without re-tracing)
             logger.error("Failed to stake service")
             return False
 
@@ -317,12 +336,13 @@ class StakingManagerMixin:
             logger.error("Stake service event not found")
             return False
 
+        # Verify state
         staking_state = staking_contract.get_staking_state(self.service.service_id)
         if staking_state != StakingState.STAKED:
-
             logger.error("Service is not staked after transaction")
             return False
 
+        # Update local state
         self.service.staking_contract_address = EthereumAddress(staking_contract.address)
         self._update_and_save_service_state()
 

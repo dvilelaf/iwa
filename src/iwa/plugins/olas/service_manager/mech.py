@@ -121,7 +121,62 @@ class MechManagerMixin:
             expected_event="Request",
         )
 
-    def _send_marketplace_mech_request(  # noqa: C901
+    def _validate_priority_mech(self, marketplace, priority_mech: str) -> bool:
+        """Validate priority mech is registered on marketplace."""
+        try:
+            mech_multisig = marketplace.call("checkMech", priority_mech)
+            if mech_multisig == ZERO_ADDRESS:
+                logger.error(f"Priority mech {priority_mech} is NOT registered on marketplace")
+                return False
+            logger.debug(f"Priority mech {priority_mech} -> multisig {mech_multisig}")
+        except Exception as e:
+            logger.error(f"Failed to verify priority mech registration: {e}")
+            return False
+
+        # Log mech factory info (optional validation)
+        try:
+            mech_factory = marketplace.call("mapAgentMechFactories", priority_mech)
+            if mech_factory == ZERO_ADDRESS:
+                logger.warning(f"Priority mech {priority_mech} has no factory (may be unregistered)")
+            else:
+                logger.debug(f"Priority mech factory: {mech_factory}")
+        except Exception as e:
+            logger.warning(f"Could not fetch mech factory: {e}")
+
+        return True
+
+    def _validate_marketplace_params(
+        self, marketplace, response_timeout: int, payment_type: bytes
+    ) -> bool:
+        """Validate marketplace parameters."""
+        # Validate response_timeout bounds
+        try:
+            min_timeout = marketplace.call("minResponseTimeout")
+            max_timeout = marketplace.call("maxResponseTimeout")
+            if response_timeout < min_timeout or response_timeout > max_timeout:
+                logger.error(
+                    f"response_timeout {response_timeout} out of bounds [{min_timeout}, {max_timeout}]"
+                )
+                return False
+            logger.debug(
+                f"Response timeout {response_timeout}s within bounds [{min_timeout}, {max_timeout}]"
+            )
+        except Exception as e:
+            logger.warning(f"Could not validate response_timeout bounds: {e}")
+
+        # Validate payment type has balance tracker
+        try:
+            balance_tracker = marketplace.call("mapPaymentTypeBalanceTrackers", payment_type)
+            if balance_tracker == ZERO_ADDRESS:
+                logger.error(f"No balance tracker for payment type 0x{payment_type.hex()}")
+                return False
+            logger.debug(f"Payment type balance tracker: {balance_tracker}")
+        except Exception as e:
+            logger.warning(f"Could not validate payment type: {e}")
+
+        return True
+
+    def _send_marketplace_mech_request(
         self,
         data: bytes,
         value: Optional[int] = None,
@@ -137,9 +192,7 @@ class MechManagerMixin:
             return None
 
         multisig_address = self.service.multisig_address
-        chain_name = (
-            self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
-        )
+        chain_name = self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
         protocol_contracts = OLAS_CONTRACTS.get(chain_name, {})
         marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
 
@@ -147,7 +200,6 @@ class MechManagerMixin:
             logger.error(f"Mech Marketplace address not found for chain {chain_name}")
             return None
 
-        # Validate priority_mech is provided
         if not priority_mech:
             logger.error("priority_mech is required for marketplace requests")
             return None
@@ -155,67 +207,23 @@ class MechManagerMixin:
         priority_mech = Web3.to_checksum_address(priority_mech)
         marketplace = MechMarketplaceContract(str(marketplace_address), chain_name=chain_name)
 
-        # Validate priority mech is registered on marketplace
-        try:
-            mech_multisig = marketplace.call("checkMech", priority_mech)
-            if mech_multisig == ZERO_ADDRESS:
-                logger.error(f"Priority mech {priority_mech} is NOT registered on marketplace")
-                return None
-            logger.debug(f"Priority mech {priority_mech} -> multisig {mech_multisig}")
-        except Exception as e:
-            logger.error(f"Failed to verify priority mech registration: {e}")
+        if not self._validate_priority_mech(marketplace, priority_mech):
             return None
-
-        # Get mech's payment info for validation
-        try:
-            mech_factory = marketplace.call("mapAgentMechFactories", priority_mech)
-            if mech_factory == ZERO_ADDRESS:
-                logger.warning(
-                    f"Priority mech {priority_mech} has no factory (may be unregistered)"
-                )
-            else:
-                logger.debug(f"Priority mech factory: {mech_factory}")
-        except Exception as e:
-            logger.warning(f"Could not fetch mech factory: {e}")
 
         # Set defaults for payment
         if payment_type is None:
             payment_type = bytes.fromhex(PAYMENT_TYPE_NATIVE)
 
-        # Default value: 0.01 xDAI
         if value is None:
             value = 10_000_000_000_000_000
             logger.info(f"Using default value: {value} wei (0.01 xDAI)")
 
-        # max_delivery_rate should match value for fixed-price mechs
         if max_delivery_rate is None:
             max_delivery_rate = value
             logger.info(f"Using value as max_delivery_rate: {max_delivery_rate}")
 
-        # Validate response_timeout is within marketplace bounds
-        try:
-            min_timeout = marketplace.call("minResponseTimeout")
-            max_timeout = marketplace.call("maxResponseTimeout")
-            if response_timeout < min_timeout or response_timeout > max_timeout:
-                logger.error(
-                    f"response_timeout {response_timeout} out of bounds [{min_timeout}, {max_timeout}]"
-                )
-                return None
-            logger.debug(
-                f"Response timeout {response_timeout}s within bounds [{min_timeout}, {max_timeout}]"
-            )
-        except Exception as e:
-            logger.warning(f"Could not validate response_timeout bounds: {e}")
-
-        # Validate payment type has balance tracker
-        try:
-            balance_tracker = marketplace.call("mapPaymentTypeBalanceTrackers", payment_type)
-            if balance_tracker == ZERO_ADDRESS:
-                logger.error(f"No balance tracker for payment type 0x{payment_type.hex()}")
-                return None
-            logger.debug(f"Payment type balance tracker: {balance_tracker}")
-        except Exception as e:
-            logger.warning(f"Could not validate payment type: {e}")
+        if not self._validate_marketplace_params(marketplace, response_timeout, payment_type):
+            return None
 
         # Prepare transaction
         tx_data = marketplace.prepare_request_tx(
