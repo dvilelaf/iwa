@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class MultiSendMixin:
     """Mixin for multisend and drain operations."""
 
-    def multi_send(  # noqa: C901
+    def multi_send(
         self: "TransferService",
         from_address_or_tag: str,
         transactions: list,
@@ -36,121 +36,159 @@ class MultiSendMixin:
             return
 
         is_safe = isinstance(from_account, StoredSafeAccount)
-
         chain_interface = ChainInterfaces().get(chain_name)
 
-        is_all_native = all(
-            tx.get("token", NATIVE_CURRENCY_ADDRESS) == NATIVE_CURRENCY_ADDRESS
-            for tx in transactions
-        )
-
-        # Group ERC20s by token to check allowances if EOA
-        erc20_totals = {}
-        if not is_safe and not is_all_native:
-            # Check allowances and approve if needed
-            for tx in transactions:
-                token_addr_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
-                if token_addr_or_tag != NATIVE_CURRENCY_ADDRESS:
-                    token_address = self.account_service.get_token_address(
-                        token_addr_or_tag, chain_interface.chain
-                    )
-                    # Support both amount_wei (preferred) and amount (legacy)
-                    if "amount_wei" in tx:
-                        amount_wei = tx["amount_wei"]
-                    elif "amount" in tx:
-                        erc20_temp = ERC20Contract(token_address, chain_name)
-                        amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
-                    else:
-                        continue
-                    erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
-
-            for token_addr, total_amount in erc20_totals.items():
-                self.approve_erc20(
-                    owner_address_or_tag=from_address_or_tag,
-                    spender_address_or_tag=MULTISEND_CALL_ONLY_ADDRESS,
-                    token_address_or_name=token_addr,
-                    amount_wei=total_amount,
-                    chain_name=chain_name,
-                )
+        if not is_safe:
+            self._handle_erc20_approvals(from_address_or_tag, transactions, chain_interface)
 
         valid_transactions = []
         for tx in transactions:
-            to = self.account_service.resolve_account(tx["to"])
-            recipient_address = to.address if to else tx["to"]
-            # Ensure recipient address is checksummed for Web3 compatibility
-            recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
-            token_address_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
-
-            # Prefer amount_wei if provided (no precision loss), else convert from amount
-            if "amount_wei" in tx:
-                amount_wei = tx["amount_wei"]
-            elif "amount" in tx:
-                # Calculate amount_wei respecting the token's decimals
-                if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
-                    amount_wei = chain_interface.web3.to_wei(tx["amount"], "ether")
-                else:
-                    token_address = self.account_service.get_token_address(
-                        token_address_or_tag, chain_interface.chain
-                    )
-                    erc20_temp = ERC20Contract(token_address, chain_name)
-                    # Use the token's actual decimals
-                    amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
-            else:
-                logger.error(f"Transaction missing amount or amount_wei: {tx}")
-                continue
-
-            # Clean up transaction dict
-            tx.pop("amount", None)
-            tx.pop("amount_wei", None)
-            tx.pop("token", None)
-
-            if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
-                tx["to"] = recipient_address
-                tx["value"] = amount_wei
-                tx["data"] = b""
-                tx["operation"] = SafeOperationEnum.CALL
-            else:
-                # Create ERC20 contract instance for the transfer
-                token_address = self.account_service.get_token_address(
-                    token_address_or_tag, chain_interface.chain
-                )
-                erc20 = ERC20Contract(token_address, chain_name)
-
-                if is_safe:
-                    # Safe uses transfer() because it DelegateCalls the MultiSend (sender identity preserved)
-                    transfer_tx = erc20.prepare_transfer_tx(
-                        from_address=from_account.address,
-                        to=recipient_address,
-                        amount_wei=amount_wei,
-                    )
-                else:
-                    # EOA uses transferFrom() because MultiSendCallOnly matches the calls (sender is MultiSend contract)
-                    transfer_tx = erc20.prepare_transfer_from_tx(
-                        from_address=from_account.address,
-                        sender=from_account.address,
-                        recipient=recipient_address,
-                        amount_wei=amount_wei,
-                    )
-
-                if not transfer_tx:
-                    logger.error(
-                        f"Failed to prepare transfer transaction for {token_address_or_tag}"
-                    )
-                    continue
-
-                tx["to"] = erc20.address
-                tx["value"] = 0
-                tx["data"] = transfer_tx["data"]
-                tx["operation"] = SafeOperationEnum.CALL
-
-            # Add to valid transactions list
-            if tx.get("operation") is not None:
-                valid_transactions.append(tx)
+            prepared_tx = self._prepare_multisend_transaction(
+                tx, from_account, chain_interface, is_safe
+            )
+            if prepared_tx:
+                valid_transactions.append(prepared_tx)
 
         if not valid_transactions:
             logger.error("No valid transactions to send")
             return
 
+        return self._execute_multisend(
+            from_account, from_address_or_tag, valid_transactions, chain_interface, is_safe
+        )
+
+    def _handle_erc20_approvals(
+        self: "TransferService",
+        from_address_or_tag: str,
+        transactions: list,
+        chain_interface,
+    ):
+        """Check allowances and approve ERC20s if needed (for EOAs)."""
+        is_all_native = all(
+            tx.get("token", NATIVE_CURRENCY_ADDRESS) == NATIVE_CURRENCY_ADDRESS
+            for tx in transactions
+        )
+        if is_all_native:
+            return
+
+        erc20_totals = {}
+        for tx in transactions:
+            token_addr_or_tag = tx.get("token", NATIVE_CURRENCY_ADDRESS)
+            if token_addr_or_tag == NATIVE_CURRENCY_ADDRESS:
+                continue
+
+            token_address = self.account_service.get_token_address(
+                token_addr_or_tag, chain_interface.chain
+            )
+            # Support both amount_wei (preferred) and amount (legacy)
+            if "amount_wei" in tx:
+                amount_wei = tx["amount_wei"]
+            elif "amount" in tx:
+                erc20_temp = ERC20Contract(token_address, chain_interface.chain.name)
+                amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
+            else:
+                continue
+            erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
+
+        for token_addr, total_amount in erc20_totals.items():
+            self.approve_erc20(
+                owner_address_or_tag=from_address_or_tag,
+                spender_address_or_tag=MULTISEND_CALL_ONLY_ADDRESS,
+                token_address_or_name=token_addr,
+                amount_wei=total_amount,
+                chain_name=chain_interface.chain.name,
+            )
+
+    def _prepare_multisend_transaction(
+        self: "TransferService",
+        tx: dict,
+        from_account,
+        chain_interface,
+        is_safe: bool,
+    ) -> Optional[dict]:
+        """Prepare a single transaction for multisend."""
+        tx_copy = dict(tx)
+        to = self.account_service.resolve_account(tx_copy["to"])
+        recipient_address = to.address if to else tx_copy["to"]
+        # Ensure recipient address is checksummed for Web3 compatibility
+        recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
+        token_address_or_tag = tx_copy.get("token", NATIVE_CURRENCY_ADDRESS)
+        chain_name = chain_interface.chain.name
+
+        # Prefer amount_wei if provided (no precision loss), else convert from amount
+        if "amount_wei" in tx_copy:
+            amount_wei = tx_copy["amount_wei"]
+        elif "amount" in tx_copy:
+            # Calculate amount_wei respecting the token's decimals
+            if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
+                amount_wei = chain_interface.web3.to_wei(tx_copy["amount"], "ether")
+            else:
+                token_address = self.account_service.get_token_address(
+                    token_address_or_tag, chain_interface.chain
+                )
+                erc20_temp = ERC20Contract(token_address, chain_name)
+                # Use the token's actual decimals
+                amount_wei = int(tx_copy["amount"] * (10**erc20_temp.decimals))
+        else:
+            logger.error(f"Transaction missing amount or amount_wei: {tx_copy}")
+            return None
+
+        # Clean up transaction dict
+        tx_copy.pop("amount", None)
+        tx_copy.pop("amount_wei", None)
+        tx_copy.pop("token", None)
+
+        if token_address_or_tag == NATIVE_CURRENCY_ADDRESS:
+            tx_copy["to"] = recipient_address
+            tx_copy["value"] = amount_wei
+            tx_copy["data"] = b""
+            tx_copy["operation"] = SafeOperationEnum.CALL
+        else:
+            # Create ERC20 contract instance for the transfer
+            token_address = self.account_service.get_token_address(
+                token_address_or_tag, chain_interface.chain
+            )
+            erc20 = ERC20Contract(token_address, chain_name)
+
+            if is_safe:
+                # Safe uses transfer() because it DelegateCalls the MultiSend (sender identity preserved)
+                transfer_tx = erc20.prepare_transfer_tx(
+                    from_address=from_account.address,
+                    to=recipient_address,
+                    amount_wei=amount_wei,
+                )
+            else:
+                # EOA uses transferFrom() because MultiSendCallOnly matches the calls (sender is MultiSend contract)
+                transfer_tx = erc20.prepare_transfer_from_tx(
+                    from_address=from_account.address,
+                    sender=from_account.address,
+                    recipient=recipient_address,
+                    amount_wei=amount_wei,
+                )
+
+            if not transfer_tx:
+                logger.error(
+                    f"Failed to prepare transfer transaction for {token_address_or_tag}"
+                )
+                return None
+
+            tx_copy["to"] = erc20.address
+            tx_copy["value"] = 0
+            tx_copy["data"] = transfer_tx["data"]
+            tx_copy["operation"] = SafeOperationEnum.CALL
+
+        return tx_copy
+
+    def _execute_multisend(
+        self: "TransferService",
+        from_account,
+        from_address_or_tag: str,
+        valid_transactions: list,
+        chain_interface,
+        is_safe: bool,
+    ):
+        """Build and execute the multisend transaction."""
+        chain_name = chain_interface.chain.name
         multi_send_normal_contract = MultiSendContract(
             address=MULTISEND_ADDRESS, chain_name=chain_name
         )

@@ -1224,11 +1224,13 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
   - [x] Simplificar lógica de filtrado
 - [x] Eliminar `# noqa: C901`
 
-#### 3.5 Refactorizar multi_send() (TRANS-A2) - **P2**
-- [ ] **Archivo**: `src/iwa/core/services/transfer.py`
-- [ ] **Línea**: Método `multi_send()` con `# noqa: C901`
-- [ ] **Acción**: Extraer helpers para validación y preparación
-- [ ] Eliminar `# noqa: C901`
+#### 3.5 Refactorizar multi_send() (TRANS-A2) - **P2** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/services/transfer/multisend.py`
+- [x] **Línea**: Método `multi_send()`
+- [x] **Acción**:
+  - [x] Extraer helpers para validación y preparación: `_prepare_multisend_transaction`, `_execute_multisend`
+  - [x] Extraer gestión de approvals: `_handle_erc20_approvals`
+- [x] Eliminar `# noqa: C901`
 
 ---
 
