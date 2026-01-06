@@ -1144,16 +1144,15 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 
 ### Sprint 2: Refactorización Arquitectónica
 
-#### 2.1 Dividir service_manager.py (SM-A1) - **P0**
-- [ ] **Archivo**: `src/iwa/plugins/olas/service_manager.py` (2000+ líneas)
-- [ ] **Paso 1**: Crear directorio `src/iwa/plugins/olas/service_manager/`
-- [ ] **Paso 2**: Crear `__init__.py` que re-exporte ServiceManager
-- [ ] **Paso 3**: Extraer a `lifecycle.py`: `create_service()`, `spin_up()`, `wind_down()`
-- [ ] **Paso 4**: Extraer a `staking.py`: `stake()`, `unstake()`, `checkpoint()`
-- [ ] **Paso 5**: Extraer a `drain.py`: `drain_service()`, `claim_rewards()`
-- [ ] **Paso 6**: Extraer a `validation.py`: todos los métodos `_validate_*`
-- [ ] **Paso 7**: Actualizar imports en archivos que usan ServiceManager
-- [ ] **Test**: Ejecutar `just test` para verificar que no hay regresiones
+#### 2.1 Dividir service_manager.py (SM-A1) - **P0** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/plugins/olas/service_manager.py` (2000+ líneas)
+- [x] **Paso 1**: Crear directorio `src/iwa/plugins/olas/service_manager/`
+- [x] **Paso 2**: Crear `__init__.py` que re-exporte ServiceManager
+- [x] **Paso 3**: Extraer `lifecycle.py`
+- [x] **Paso 4**: Extraer `staking.py`
+- [x] **Paso 5**: Extraer `drain.py`
+- [x] **Paso 6**: Extraer `mech.py`
+
 
 #### 2.2 Dividir transfer.py (TRANS-A1) - **P1**
 - [ ] **Archivo**: `src/iwa/core/services/transfer.py` (1357 líneas)
