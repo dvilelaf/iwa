@@ -132,7 +132,7 @@ class OlasServiceImporter:
         logger.info(f"Discovered {len(discovered)} Olas service(s)")
         return discovered
 
-    def _parse_trader_runner_format(self, folder: Path) -> Optional[DiscoveredService]:  # noqa: C901
+    def _parse_trader_runner_format(self, folder: Path) -> Optional[DiscoveredService]:
         """Parse a .trader_runner folder.
 
         Expected files:
@@ -146,47 +146,12 @@ class OlasServiceImporter:
         service = DiscoveredService(
             source_folder=folder,
             format="trader_runner",
+            service_name=folder.parent.name,
         )
 
-        # Parse service_id.txt
-        service_id_file = folder / "service_id.txt"
-        if service_id_file.exists():
-            try:
-                service.service_id = int(service_id_file.read_text().strip())
-            except ValueError:
-                logger.warning(f"Invalid service_id in {service_id_file}")
-
-        # Parse service_safe_address.txt
-        safe_file = folder / "service_safe_address.txt"
-        if safe_file.exists():
-            service.safe_address = safe_file.read_text().strip()
-
-        # Parse agent_pkey.txt (encrypted keystore in .txt)
-        agent_file = folder / "agent_pkey.txt"
-        if agent_file.exists():
-            key = self._parse_keystore_file(agent_file, role="agent")
-            if key:
-                service.keys.append(key)
-
-        # Parse operator_pkey.txt
-        operator_file = folder / "operator_pkey.txt"
-        if operator_file.exists():
-            key = self._parse_keystore_file(operator_file, role="operator")
-            if key:
-                service.keys.append(key)
-
-        # Also check keys.json (array of keystores)
-        keys_file = folder / "keys.json"
-        if keys_file.exists():
-            additional_keys = self._parse_keys_json(keys_file)
-            # Avoid duplicates by address
-            existing_addrs = {k.address.lower() for k in service.keys}
-            for key in additional_keys:
-                if key.address.lower() not in existing_addrs:
-                    service.keys.append(key)
-
-        # Set service name from parent folder
-        service.service_name = folder.parent.name
+        service.service_id = self._extract_service_id(folder)
+        service.safe_address = self._extract_safe_address(folder)
+        service.keys = self._extract_trader_keys(folder)
 
         if not service.keys and not service.service_id:
             logger.debug(f"No valid data found in {folder}")
@@ -194,7 +159,53 @@ class OlasServiceImporter:
 
         return service
 
-    def _parse_operate_format(self, folder: Path) -> List[DiscoveredService]:  # noqa: C901
+    def _extract_service_id(self, folder: Path) -> Optional[int]:
+        """Extract service ID from file."""
+        service_id_file = folder / "service_id.txt"
+        if service_id_file.exists():
+            try:
+                return int(service_id_file.read_text().strip())
+            except ValueError:
+                logger.warning(f"Invalid service_id in {service_id_file}")
+        return None
+
+    def _extract_safe_address(self, folder: Path) -> Optional[str]:
+        """Extract Safe address from file."""
+        safe_file = folder / "service_safe_address.txt"
+        if safe_file.exists():
+            return safe_file.read_text().strip()
+        return None
+
+    def _extract_trader_keys(self, folder: Path) -> List[DiscoveredKey]:
+        """Extract all keys from trader runner folder."""
+        keys = []
+
+        # Parse agent_pkey.txt (encrypted keystore in .txt)
+        agent_file = folder / "agent_pkey.txt"
+        if agent_file.exists():
+            key = self._parse_keystore_file(agent_file, role="agent")
+            if key:
+                keys.append(key)
+
+        # Parse operator_pkey.txt
+        operator_file = folder / "operator_pkey.txt"
+        if operator_file.exists():
+            key = self._parse_keystore_file(operator_file, role="operator")
+            if key:
+                keys.append(key)
+
+        # Also check keys.json (array of keystores)
+        keys_file = folder / "keys.json"
+        if keys_file.exists():
+            additional_keys = self._parse_keys_json(keys_file)
+            # Avoid duplicates by address
+            existing_addrs = {k.address.lower() for k in keys}
+            for key in additional_keys:
+                if key.address.lower() not in existing_addrs:
+                    keys.append(key)
+        return keys
+
+    def _parse_operate_format(self, folder: Path) -> List[DiscoveredService]:
         """Parse a .operate folder.
 
         Expected structure:
@@ -207,7 +218,21 @@ class OlasServiceImporter:
 
         discovered = []
 
-        # Parse services
+        # 1. Try to find services
+        services = self._discover_operate_services(folder)
+        discovered.extend(services)
+
+        # 2. If no services, try standalone wallet
+        if not discovered:
+            wallet_service = self._discover_standalone_wallet(folder)
+            if wallet_service:
+                discovered.append(wallet_service)
+
+        return discovered
+
+    def _discover_operate_services(self, folder: Path) -> List[DiscoveredService]:
+        """Discover services within .operate/services folder."""
+        services = []
         services_folder = folder / "services"
         if services_folder.exists():
             for service_folder in services_folder.iterdir():
@@ -216,42 +241,44 @@ class OlasServiceImporter:
                     if config_file.exists():
                         service = self._parse_operate_service_config(config_file)
                         if service:
-                            discovered.append(service)
+                            services.append(service)
+        return services
 
-        # If no services found, try to extract just the wallet keys
-        if not discovered:
-            wallets_folder = folder / "wallets"
-            if wallets_folder.exists():
-                # Create a placeholder service for standalone keys
-                service = DiscoveredService(
-                    source_folder=folder,
-                    format="operate",
-                    service_name=folder.parent.name,
-                )
+    def _discover_standalone_wallet(self, folder: Path) -> Optional[DiscoveredService]:
+        """Discover standalone wallet keys in .operate/wallets."""
+        wallets_folder = folder / "wallets"
+        if not wallets_folder.exists():
+            return None
 
-                # Parse ethereum.txt (plaintext key)
-                eth_txt = wallets_folder / "ethereum.txt"
-                if eth_txt.exists():
-                    key = self._parse_plaintext_key_file(eth_txt, role="owner")
-                    if key:
-                        service.keys.append(key)
+        # Create a placeholder service for standalone keys
+        service = DiscoveredService(
+            source_folder=folder,
+            format="operate",
+            service_name=folder.parent.name,
+        )
 
-                # Parse ethereum.json for Safe info
-                eth_json = wallets_folder / "ethereum.json"
-                if eth_json.exists():
-                    try:
-                        data = json.loads(eth_json.read_text())
-                        if "safes" in data and "gnosis" in data["safes"]:
-                            service.safe_address = data["safes"]["gnosis"]
-                    except (json.JSONDecodeError, KeyError):
-                        pass
+        # Parse ethereum.txt (plaintext key)
+        eth_txt = wallets_folder / "ethereum.txt"
+        if eth_txt.exists():
+            key = self._parse_plaintext_key_file(eth_txt, role="owner")
+            if key:
+                service.keys.append(key)
 
-                if service.keys:
-                    discovered.append(service)
+        # Parse ethereum.json for Safe info
+        eth_json = wallets_folder / "ethereum.json"
+        if eth_json.exists():
+            try:
+                data = json.loads(eth_json.read_text())
+                if "safes" in data and "gnosis" in data["safes"]:
+                    service.safe_address = data["safes"]["gnosis"]
+            except (json.JSONDecodeError, KeyError):
+                pass
 
-        return discovered
+        if service.keys:
+            return service
+        return None
 
-    def _parse_operate_service_config(self, config_file: Path) -> Optional[DiscoveredService]:  # noqa: C901
+    def _parse_operate_service_config(self, config_file: Path) -> Optional[DiscoveredService]:
         """Parse an operate service config.json file."""
         try:
             data = json.loads(config_file.read_text())
@@ -260,7 +287,6 @@ class OlasServiceImporter:
             return None
 
         # Use the folder name containing .operate (e.g., "trader_xi")
-        # This is more consistent than using the display name from config.json
         operate_folder = config_file.parent.parent.parent  # services/<uuid> -> .operate
         parent_folder = operate_folder.parent  # .operate -> trader_xi
 
@@ -270,7 +296,28 @@ class OlasServiceImporter:
             service_name=parent_folder.name,
         )
 
-        # Extract keys from config
+        # 1. Extract keys from config
+        config_keys = self._extract_keys_from_operate_config(data, config_file)
+        service.keys.extend(config_keys)
+
+        # 2. Extract chain info
+        self._enrich_service_with_chain_info(service, data)
+
+        # 3. Check for wallet/owner keys in parent .operate folder
+        parent_keys = self._extract_parent_wallet_keys(operate_folder)
+        self._merge_unique_keys(service, parent_keys)
+
+        # 4. Check for encrypted keys in keys folder
+        external_keys = self._extract_external_keys_folder(operate_folder)
+        self._merge_unique_keys(service, external_keys)
+
+        return service
+
+    def _extract_keys_from_operate_config(
+        self, data: dict, config_file: Path
+    ) -> List[DiscoveredKey]:
+        """Extract keys defined inside config.json."""
+        keys = []
         if "keys" in data:
             for key_data in data["keys"]:
                 if "private_key" in key_data and "address" in key_data:
@@ -278,7 +325,7 @@ class OlasServiceImporter:
                     # Remove 0x prefix if present
                     if private_key.startswith("0x"):
                         private_key = private_key[2:]
-                    service.keys.append(
+                    keys.append(
                         DiscoveredKey(
                             address=key_data["address"],
                             private_key=private_key,
@@ -287,8 +334,10 @@ class OlasServiceImporter:
                             is_encrypted=False,
                         )
                     )
+        return keys
 
-        # Extract service ID and Safe from chain_configs
+    def _enrich_service_with_chain_info(self, service: DiscoveredService, data: dict) -> None:
+        """Extract service ID and Safe address from chain configs."""
         chain_configs = data.get("chain_configs", {})
         for chain_name, chain_config in chain_configs.items():
             chain_data = chain_config.get("chain_data", {})
@@ -301,31 +350,37 @@ class OlasServiceImporter:
             if "multisig" in chain_data:
                 service.safe_address = chain_data["multisig"]
 
-        # Check for wallet/owner keys in parent .operate folder
-        operate_folder = config_file.parent.parent.parent  # services/<uuid> -> .operate
+    def _extract_parent_wallet_keys(self, operate_folder: Path) -> List[DiscoveredKey]:
+        """Extract owner keys from parent wallets folder."""
+        keys = []
         wallets_folder = operate_folder / "wallets"
         if wallets_folder.exists():
             eth_txt = wallets_folder / "ethereum.txt"
             if eth_txt.exists():
                 key = self._parse_plaintext_key_file(eth_txt, role="owner")
                 if key:
-                    # Avoid duplicate
-                    existing_addrs = {k.address.lower() for k in service.keys}
-                    if key.address.lower() not in existing_addrs:
-                        service.keys.append(key)
+                    keys.append(key)
+        return keys
 
-        # Check for encrypted keys in keys folder
+    def _extract_external_keys_folder(self, operate_folder: Path) -> List[DiscoveredKey]:
+        """Extract encrypted keys from the external keys folder."""
+        keys = []
         keys_folder = operate_folder / "keys"
         if keys_folder.exists():
             for key_file in keys_folder.iterdir():
                 if key_file.is_file() and key_file.name.startswith("0x"):
                     key = self._parse_keystore_file(key_file, role="agent")
                     if key:
-                        existing_addrs = {k.address.lower() for k in service.keys}
-                        if key.address.lower() not in existing_addrs:
-                            service.keys.append(key)
+                        keys.append(key)
+        return keys
 
-        return service
+    def _merge_unique_keys(self, service: DiscoveredService, new_keys: List[DiscoveredKey]):
+        """Merge new keys into service avoiding duplicates by address."""
+        existing_addrs = {k.address.lower() for k in service.keys}
+        for key in new_keys:
+            if key.address.lower() not in existing_addrs:
+                service.keys.append(key)
+                existing_addrs.add(key.address.lower())
 
     def _parse_keystore_file(
         self, file_path: Path, role: str = "unknown"
@@ -445,7 +500,7 @@ class OlasServiceImporter:
             logger.warning(f"Failed to decrypt {key.address}: {e}")
             return False
 
-    def import_service(  # noqa: C901
+    def import_service(
         self,
         service: DiscoveredService,
         password: Optional[str] = None,
@@ -462,7 +517,17 @@ class OlasServiceImporter:
         """
         result = ImportResult(success=True, message="")
 
-        # Import keys
+        self._import_discovered_keys(service, password, result)
+        self._import_discovered_safes(service, result)
+        self._import_discovered_service_config(service, result)
+        self._build_import_summary(result)
+
+        return result
+
+    def _import_discovered_keys(
+        self, service: DiscoveredService, password: Optional[str], result: ImportResult
+    ) -> None:
+        """Import keys from the service."""
         for key in service.keys:
             key_result = self._import_key(key, service.service_name, password)
             if key_result[0]:
@@ -473,7 +538,10 @@ class OlasServiceImporter:
                 result.errors.append(f"Key {key.address}: {key_result[1]}")
                 result.success = False
 
-        # Import Safe if present
+    def _import_discovered_safes(
+        self, service: DiscoveredService, result: ImportResult
+    ) -> None:
+        """Import Safe from the service if present."""
         if service.safe_address:
             safe_result = self._import_safe(service)
             if safe_result[0]:
@@ -483,7 +551,10 @@ class OlasServiceImporter:
             else:
                 result.errors.append(f"Safe {service.safe_address}: {safe_result[1]}")
 
-        # Import service config to OlasConfig if we have service_id
+    def _import_discovered_service_config(
+        self, service: DiscoveredService, result: ImportResult
+    ) -> None:
+        """Import service config to OlasConfig."""
         if service.service_id:
             svc_result = self._import_service_config(service)
             if svc_result[0]:
@@ -497,7 +568,8 @@ class OlasServiceImporter:
                     f"Service {service.chain_name}:{service.service_id}: {svc_result[1]}"
                 )
 
-        # Build summary message
+    def _build_import_summary(self, result: ImportResult) -> None:
+        """Build the summary message for the import result."""
         parts = []
         if result.imported_keys:
             parts.append(f"{len(result.imported_keys)} key(s)")
@@ -510,8 +582,6 @@ class OlasServiceImporter:
             result.message = f"Imported {', '.join(parts)}"
         else:
             result.message = "Nothing imported"
-
-        return result
 
     def _import_key(
         self, key: DiscoveredKey, service_name: Optional[str], password: Optional[str] = None
