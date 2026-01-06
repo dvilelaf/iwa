@@ -75,7 +75,7 @@ class LifecycleManagerMixin:
             chain_name=chain_name,
         )
 
-        if not receipt:
+        if receipt is None:
             return None
 
         service_id = self._extract_service_id_from_receipt(receipt)
