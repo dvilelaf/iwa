@@ -49,7 +49,7 @@ types:
 
 # Run tests
 test:
-    PYTHONPATH=src uv run pytest --cov=src --cov-report=term-missing src/
+    PYTHONPATH=src uv run pytest --cov=src/iwa --cov-report=term-missing src/
 
 # Build package
 build:
