@@ -21,7 +21,10 @@ def mock_chain():
 @pytest.fixture
 def mock_cowpy_modules():
     """Mock cowpy modules."""
-    with patch("iwa.plugins.gnosis.cow.get_cowpy_module") as mock_get:
+    with patch("iwa.plugins.gnosis.cow.swap.get_cowpy_module") as mock_get_swap, \
+         patch("iwa.plugins.gnosis.cow.quotes.get_cowpy_module") as mock_get_quotes:
+        mock_get = mock_get_swap
+
         # Create mocks for all various modules
         mocks = {
             "SupportedChainId": MagicMock(),
@@ -65,7 +68,8 @@ def mock_cowpy_modules():
         # Make Chain iterable
         mocks["Chain"].__iter__.return_value = [mock_chain_enum_item]
 
-        mock_get.side_effect = lambda name: mocks.get(name, MagicMock())
+        mock_get_swap.side_effect = lambda name: mocks.get(name, MagicMock())
+        mock_get_quotes.side_effect = mock_get_swap.side_effect
         yield mocks
 
 
@@ -121,7 +125,7 @@ async def test_swap_buy_order_type(cowswap, mock_cowpy_modules):
     # For BUY order type, it uses self.swap_tokens_to_exact_tokens
     # checking patching of global swap_tokens
 
-    with patch("iwa.plugins.gnosis.cow.swap_tokens", new=None):
+    with patch("iwa.plugins.gnosis.cow.swap.swap_tokens", new=None):
         with patch.object(
             CowSwap, "swap_tokens_to_exact_tokens", new_callable=AsyncMock
         ) as mock_custom_swap:

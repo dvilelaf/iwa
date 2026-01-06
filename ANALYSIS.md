@@ -1171,12 +1171,12 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Paso 4**: Actualizar `server.py` para incluir nuevos routers (Actualizado para usar `olas` package)
 - [x] **Test**: Probar endpoints manualmente o con tests
 
-#### 2.4 Dividir cow.py (COW-A1) - **P1**
-- [ ] **Archivo**: `src/iwa/plugins/gnosis/cow.py` (538 líneas)
-- [ ] **Paso 1**: Extraer a `cow_swap.py`: clase CowSwap y método swap()
-- [ ] **Paso 2**: Extraer a `cow_quotes.py`: métodos get_*_amount_wei
-- [ ] **Paso 3**: Mantener `cow.py` como re-exportador o eliminar
-- [ ] **Test**: Ejecutar tests de swap
+#### 2.4 Dividir cow.py (COW-A1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/plugins/gnosis/cow.py` (538 líneas)
+- [x] **Paso 1**: Extraer a `cow_swap.py`: clase CowSwap y método swap() (Implementado en `src/iwa/plugins/gnosis/cow/swap.py`)
+- [x] **Paso 2**: Extraer a `cow_quotes.py`: métodos get_*_amount_wei (Implementado en `src/iwa/plugins/gnosis/cow/quotes.py`)
+- [x] **Paso 3**: Mantener `cow.py` como re-exportador o eliminar (Eliminado, reemplazado por package)
+- [x] **Test**: Ejecutar tests de swap (`src/iwa/plugins/gnosis/tests/test_cow.py` verify OK)
 
 ---
 
