@@ -1236,11 +1236,11 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 
 ### Sprint 4: Mejoras Menores
 
-#### 4.1 Eliminar función trace() de TUI (TUI-C1) - **P2**
-- [ ] **Archivo**: `src/iwa/tui/app.py`
-- [ ] **Línea**: Función `trace()` (líneas 15-22)
-- [ ] **Acción**: Eliminar función y todas las llamadas a `trace()` en el archivo
-- [ ] Usar `logger.debug()` si se necesita debugging
+#### 4.1 Eliminar función trace() de TUI (TUI-C1) - **P2** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/tui/app.py`
+- [x] **Línea**: Función `trace()` (líneas 15-22)
+- [x] **Acción**: Eliminar función y todas las llamadas a `trace()` en el archivo
+- [x] Usar `logger.debug()` si se necesita debugging
 
 #### 4.2 Rate Limiting en Swap (SWAP-S1) - **P2**
 - [ ] **Archivo**: `src/iwa/web/routers/swap.py`
@@ -1268,21 +1268,21 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [ ] **Acción**: Refactorizar para usar nonces o eliminar JS inline
 - [ ] **Dependencia**: Primero mover JS inline de index.html a módulos (FE-S1)
 
-#### 4.5 Mover Modelos Web (ACC-A1) - **P3**
-- [ ] **Archivo origen**: `src/iwa/web/routers/accounts.py`
-- [ ] **Archivo destino**: Crear `src/iwa/web/models.py`
-- [ ] **Acción**: Mover `AccountCreateRequest` y `SafeCreateRequest`
-- [ ] Actualizar imports en `accounts.py`
+#### 4.5 Mover Modelos Web (ACC-A1) - **P3** - ✅ **COMPLETADO**
+- [x] **Archivo origen**: `src/iwa/web/routers/accounts.py`
+- [x] **Archivo destino**: Crear `src/iwa/web/models.py`
+- [x] **Acción**: Mover `AccountCreateRequest` y `SafeCreateRequest`
+- [x] Actualizar imports en `accounts.py`
 
-#### 4.6 Eliminar Comentario Duplicado (CLI-C1) - **P3**
-- [ ] **Archivo**: `src/iwa/core/cli.py`
-- [ ] **Líneas**: 193-194 (comentarios `# Load Plugins` duplicados)
-- [ ] **Acción**: Eliminar una de las líneas duplicadas
+#### 4.6 Eliminar Comentario Duplicado (CLI-C1) - **P3** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/cli.py`
+- [x] **Líneas**: 193-194 (comentarios `# Load Plugins` duplicados)
+- [x] **Acción**: Eliminar una de las líneas duplicadas
 
-#### 4.7 Mover Import de Time (ACC-C1) - **P3**
-- [ ] **Archivo**: `src/iwa/web/routers/accounts.py`
-- [ ] **Línea**: Dentro de `create_safe()` hay `import time`
-- [ ] **Acción**: Mover import al inicio del archivo
+#### 4.7 Mover Import de Time (ACC-C1) - **P3** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/web/routers/accounts.py`
+- [x] **Línea**: Dentro de `create_safe()` hay `import time`
+- [x] **Acción**: Mover import al inicio del archivo
 
 ---
 
