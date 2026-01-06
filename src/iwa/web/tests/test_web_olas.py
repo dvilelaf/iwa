@@ -60,7 +60,7 @@ def test_get_olas_price(client):
 
 def test_get_olas_services_basic(client, mock_olas_config):
     """Test /api/olas/services/basic endpoint."""
-    with patch("iwa.web.routers.olas.Config") as mock_config_cls:
+    with patch("iwa.web.routers.olas.services.Config") as mock_config_cls:
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
 
@@ -80,7 +80,7 @@ def test_get_olas_services_basic(client, mock_olas_config):
 def test_get_olas_service_details(client, mock_olas_config):
     """Test /api/olas/services/{service_key}/details endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -111,7 +111,7 @@ def test_get_olas_service_details(client, mock_olas_config):
 def test_get_olas_services_full(client, mock_olas_config):
     """Test /api/olas/services (full) endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -137,7 +137,7 @@ def test_get_olas_services_full(client, mock_olas_config):
 def test_olas_actions(client, mock_olas_config):
     """Test Olas action endpoints (claim, unstake, checkpoint)."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.staking.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -193,7 +193,7 @@ def test_get_staking_contracts(client):
 def test_create_service(client, mock_olas_config):
     """Test /api/olas/create endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,  # Not strictly used but kept for consistency if needed
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -221,7 +221,7 @@ def test_create_service(client, mock_olas_config):
 def test_create_service_failure(client, mock_olas_config):
     """Test /api/olas/create when creation fails."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -244,7 +244,7 @@ def test_create_service_failure(client, mock_olas_config):
 def test_deploy_service(client, mock_olas_config):
     """Test /api/olas/deploy/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -263,7 +263,7 @@ def test_deploy_service(client, mock_olas_config):
 def test_deploy_service_failure(client, mock_olas_config):
     """Test /api/olas/deploy/{service_key} when deployment fails."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -281,7 +281,7 @@ def test_deploy_service_failure(client, mock_olas_config):
 def test_activate_registration(client, mock_olas_config):
     """Test /api/olas/activate/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.admin.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -298,7 +298,7 @@ def test_activate_registration(client, mock_olas_config):
 def test_register_agent(client, mock_olas_config):
     """Test /api/olas/register/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.admin.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -316,7 +316,7 @@ def test_register_agent(client, mock_olas_config):
 def test_deploy_step(client, mock_olas_config):
     """Test /api/olas/deploy-step/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.admin.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -335,7 +335,7 @@ def test_deploy_step(client, mock_olas_config):
 def test_stake_service(client, mock_olas_config):
     """Test /api/olas/stake/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.staking.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
         patch("iwa.plugins.olas.contracts.staking.StakingContract"),
     ):
@@ -355,7 +355,7 @@ def test_stake_service(client, mock_olas_config):
 def test_terminate_service(client, mock_olas_config):
     """Test /api/olas/terminate/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.admin.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
         patch("iwa.plugins.olas.contracts.staking.StakingContract"),
     ):
@@ -373,8 +373,8 @@ def test_terminate_service(client, mock_olas_config):
 def test_fund_service(client, mock_olas_config):
     """Test /api/olas/fund/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
-        patch("iwa.web.routers.olas.wallet") as mock_wallet,
+        patch("iwa.web.routers.olas.funding.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.funding.wallet") as mock_wallet,
     ):
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": mock_olas_config.model_dump()}
@@ -393,7 +393,7 @@ def test_fund_service(client, mock_olas_config):
 def test_drain_service(client, mock_olas_config):
     """Test /api/olas/drain/{service_key} endpoint."""
     with (
-        patch("iwa.web.routers.olas.Config") as mock_config_cls,
+        patch("iwa.web.routers.olas.funding.Config") as mock_config_cls,
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value
@@ -414,7 +414,7 @@ def test_drain_service(client, mock_olas_config):
 
 def test_service_not_found(client):
     """Test endpoints return 404 when service not found."""
-    with patch("iwa.web.routers.olas.Config") as mock_config_cls:
+    with patch("iwa.web.routers.olas.admin.Config") as mock_config_cls:
         mock_config = mock_config_cls.return_value
         mock_config.plugins = {"olas": OlasConfig().model_dump()}
 

@@ -1163,13 +1163,13 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Paso 5**: Mantener `transfer.py` como facade que importa submódulos (Reemplazado por package `src/iwa/core/services/transfer/`)
 - [x] **Test**: Ejecutar tests relacionados con transfer
 
-#### 2.3 Dividir olas.py router (OLAS-R-A1) - **P0**
-- [ ] **Archivo**: `src/iwa/web/routers/olas.py` (975 líneas)
-- [ ] **Paso 1**: Crear `olas_services.py`: endpoints CRUD de servicios
-- [ ] **Paso 2**: Crear `olas_staking.py`: endpoints stake/unstake/checkpoint
-- [ ] **Paso 3**: Crear `olas_admin.py`: endpoints fund/drain
-- [ ] **Paso 4**: Actualizar `server.py` para incluir nuevos routers
-- [ ] **Test**: Probar endpoints manualmente o con tests
+#### 2.3 Dividir olas.py router (OLAS-R-A1) - **P0** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/web/routers/olas.py` (975 líneas)
+- [x] **Paso 1**: Crear `olas_services.py`: endpoints CRUD de servicios (Implementado en `olas/services.py`)
+- [x] **Paso 2**: Crear `olas_staking.py`: endpoints stake/unstake/checkpoint (Implementado en `olas/staking.py`)
+- [x] **Paso 3**: Crear `olas_admin.py`: endpoints fund/drain (Implementado en `olas/funding.py` y `olas/admin.py`)
+- [x] **Paso 4**: Actualizar `server.py` para incluir nuevos routers (Actualizado para usar `olas` package)
+- [x] **Test**: Probar endpoints manualmente o con tests
 
 #### 2.4 Dividir cow.py (COW-A1) - **P1**
 - [ ] **Archivo**: `src/iwa/plugins/gnosis/cow.py` (538 líneas)
