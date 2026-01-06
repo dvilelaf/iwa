@@ -653,13 +653,13 @@ def __init__(self, signer: LocalAccount, chain: SupportedChain):
 
 ---
 
-#### `src/iwa/plugins/olas/service_manager.py` (2000+ líneas)
+#### `src/iwa/plugins/olas/service_manager/` (Package)
 
 **ARQUITECTURA SÓLIDA**
 
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-A1 | P0 | **CRÍTICO**: Archivo extremadamente largo | Dividir en módulos:<br>`service_lifecycle.py` (create, spin_up, wind_down)<br>`staking_manager.py` (stake, unstake, checkpoint)<br>`drain_manager.py` (drain_service, claim)<br>`validation.py` (helpers de validación) |
+| ID | Prioridad | Problema | Solución Propuesta | Estado |
+|----|-----------|----------|-------------------|--------|
+| SM-A1 | P0 | **CRÍTICO**: Archivo extremadamente largo | Dividir en módulos (Mixins) | ✅ **RESUELTO** |
 | SM-A2 | P1 | Muchos métodos con `# noqa: C901` | Cada método largo debe refactorizarse |
 
 **SEGURIDAD**
@@ -794,7 +794,7 @@ def handle_service_errors(func):
 ### P0 (CRÍTICO) - 5 issues
 1. **KEYS-S4**: `get_signer()` expone claves
 2. **TRANS-S1**: Whitelist bypass si config.core es None
-3. **SM-A1**: service_manager.py tiene 2000+ líneas
+3. ~~**SM-A1**: service_manager.py tiene 2000+ líneas~~ (Resuelto)
 4. **SM-C1**: Métodos con >100 líneas
 5. **OLAS-R-A1**: olas.py router tiene 975 líneas
 
