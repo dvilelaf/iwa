@@ -263,8 +263,8 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 7.1 `run_migrations()` (L65)
 
-- [ ] **Problema**: Múltiples migraciones en un solo método
-- [ ] **Solución**: Una función por migración:
+- [x] **Problema**: Múltiples migraciones en un solo método
+- [x] **Solución**: Una función por migración:
   ```python
   MIGRATIONS = [
       _migration_add_decimal_info,
@@ -276,13 +276,13 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
       for migration in MIGRATIONS:
           migration(columns)
   ```
-- [ ] Eliminar `# noqa: C901`
+- [x] Eliminar `# noqa: C901`
 
 #### 7.2 `log_transaction()` (L126)
 
-- [ ] **Problema**: Demasiados parámetros y lógica condicional
-- [ ] **Solución**: Crear `TransactionLogData` dataclass
-- [ ] Eliminar `# noqa: C901, D103`
+- [x] **Problema**: Demasiados parámetros y lógica condicional
+- [x] **Solución**: Crear `TransactionLogData` dataclass
+- [x] Eliminar `# noqa: C901, D103`
 
 ---
 
