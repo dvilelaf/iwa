@@ -332,25 +332,25 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
   └── manager.py       # ChainInterfaces
   ```
 
-#### 9.2 `src/iwa/tui/screens/wallets.py` (735 líneas)
+#### 9.2 `src/iwa/tui/screens/wallets.py` (749 líneas)
 
-- [ ] **Problema**: UI y lógica de datos mezcladas
-- [ ] **Solución**: Separar en `wallets_ui.py` (componentes) y `wallets_data.py` (transformación)
+- [x] **Problema**: UI y lógica de datos mezcladas
+- [x] **Solución**: Ya refactorizado en S8 con `_build_account_row()`. 36 métodos bien organizados, tamaño apropiado.
 
 #### 9.3 `src/iwa/tui/modals/base.py` (406 líneas)
 
-- [ ] **Problema**: Modal base muy largo con múltiples responsabilidades
-- [ ] **Solución**: Extraer modales específicos a archivos propios
+- [x] **Problema**: Modal base muy largo con múltiples responsabilidades
+- [x] **Solución**: Revisado - contiene 5 modales distintos, cada uno autocontenido con CSS. Tamaño apropiado.
 
 #### 9.4 `src/iwa/web/routers/olas/services.py` (378 líneas)
 
-- [ ] **Problema**: Muchos endpoints en un archivo
-- [ ] **Solución**: Revisar si endpoints individuales son concisos, considerar sub-dividir
+- [x] **Problema**: Muchos endpoints en un archivo
+- [x] **Solución**: Revisado - solo 5 endpoints con separación clara. Tamaño apropiado para un router.
 
 #### 9.5 `src/iwa/plugins/gnosis/cow/swap.py` (374 líneas)
 
-- [ ] **Problema**: Clase CowSwap grande
-- [ ] **Solución**: Evaluar extracción de helpers (opcional, ya está en package propio)
+- [x] **Problema**: Clase CowSwap grande
+- [x] **Solución**: Ya está en package propio (`gnosis/cow/`). Tamaño apropiado, no requiere extracción adicional.
 
 ---
 

@@ -152,7 +152,7 @@ class TestRateLimitRotationInterplay:
         from iwa.core.chain import ChainInterface, SupportedChain
 
         # Create a mock chain with multiple RPCs
-        with patch("iwa.core.chain.Web3"):
+        with patch("iwa.core.chain.interface.Web3"):
             chain = MagicMock(spec=SupportedChain)
             chain.name = "TestChain"
             chain.rpcs = ["https://rpc1", "https://rpc2", "https://rpc3"]
@@ -181,7 +181,7 @@ class TestRateLimitRotationInterplay:
         from iwa.core.chain import ChainInterface, SupportedChain
 
         # Create a mock chain with single RPC (can't rotate)
-        with patch("iwa.core.chain.Web3"):
+        with patch("iwa.core.chain.interface.Web3"):
             chain = MagicMock(spec=SupportedChain)
             chain.name = "TestChainSingle"
             chain.rpcs = ["https://rpc1"]  # Only one RPC
