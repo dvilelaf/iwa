@@ -1283,11 +1283,11 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 
 ### Verificación Final
 
-- [ ] Ejecutar `just check` - debe pasar sin errores
-- [ ] Ejecutar `just test` - todos los tests deben pasar
-- [ ] Ejecutar `just format` - código formateado
-- [ ] Revisar que no hay nuevos `# noqa: C901`
-- [ ] Crear commit con mensaje descriptivo para cada sprint
+- [x] Ejecutar `just check` - debe pasar sin errores
+- [x] Ejecutar `just test` - todos los tests deben pasar
+- [x] Ejecutar `just format` - código formateado
+- [x] Revisar que no hay nuevos `# noqa: C901`
+- [x] Crear commit con mensaje descriptivo para cada sprint
 
 ---
 
