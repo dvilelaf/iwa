@@ -1,1307 +1,606 @@
-# ANALYSIS.md - Comprehensive Code Improvement Plan
+# ANALYSIS.md - Auditoría de Patrones de Código
 
-> **IMPORTANTE**: Este documento contiene el plan de mejoras detallado. NO implementar hasta revisión.
->
 > **Fecha**: 2026-01-06
-> **Analista**: Senior Engineer
-> **Objetivo**: Mejorar arquitectura, seguridad y código limpio
-
----
-
-## Índice
-
-1. [Resumen Ejecutivo](#resumen-ejecutivo)
-2. [Clasificación de Prioridades](#clasificación-de-prioridades)
-3. [Análisis por Archivo](#análisis-por-archivo)
-   - [Core](#core)
-   - [Contracts](#contracts)
-   - [Services](#services)
-   - [Plugins](#plugins)
-   - [Web](#web)
-   - [TUI](#tui)
-   - [Tools](#tools)
+> **Enfoque**: Return Early, Negative Programming, Reducción de Nesting, Eliminación de noqa
 
 ---
 
 ## Resumen Ejecutivo
 
-| Categoría | Archivos | Issues Críticos | Issues Medios | Issues Bajos |
-|-----------|----------|-----------------|---------------|--------------|
-| Core | 15 | 3 | 12 | 8 |
-| Services | 6 | 2 | 5 | 4 |
-| Contracts | 4 | 0 | 3 | 2 |
-| Plugins | 12 | 4 | 8 | 6 |
-| Web | 15 | 2 | 7 | 5 |
-| TUI | 6 | 0 | 3 | 4 |
-| Tools | 4 | 0 | 2 | 3 |
+Se identificaron **25 métodos con `# noqa: C901`** (complejidad ciclomática excesiva) en **15 archivos**.
 
----
-
-## Clasificación de Prioridades
-
-- **CRÍTICO (P0)**: Vulnerabilidad de seguridad o pérdida potencial de fondos
-- **ALTO (P1)**: Bug potencial o violación arquitectónica grave
-- **MEDIO (P2)**: Mejora de mantenibilidad o código limpio
-- **BAJO (P3)**: Optimización o mejora menor
-
----
-
-## Buenas Prácticas Ya Implementadas
-
-> El codebase tiene una base sólida de seguridad. Estas prácticas están correctamente implementadas:
-
-### Criptografía (`keys.py`, `mnemonic.py`)
-
-| Práctica | Implementación |
-|----------|----------------|
-| **KDF** | Scrypt (n=2^14, r=8, p=1) - recomendado por OWASP |
-| **Cifrado** | AES-256-GCM con autenticación |
-| **Aleatoridad** | `os.urandom()` para datos criptográficos |
-| **Permisos de archivo** | `os.chmod(0o600)` en wallet.json |
-| **Mnemónico** | BIP-39 con 24 palabras (máxima entropía) |
-| **Derivación HD** | BIP-44 con paths estándar |
-| **Aislamiento de tests** | Bloquea uso de wallet real en tests |
-| **Backups** | Auto-backup con timestamp antes de guardar |
-
-### Autenticación Web (`dependencies.py`, `server.py`)
-
-| Práctica | Implementación |
-|----------|----------------|
-| **Timing-safe** | `secrets.compare_digest()` para comparar passwords |
-| **HTTP 401** | Respuesta con header WWW-Authenticate |
-| **Bearer + API Key** | Soporta ambos métodos de auth |
-| **Security Headers** | X-Frame-Options, X-XSS-Protection, Referrer-Policy |
-| **CSP** | Content-Security-Policy configurado |
-| **HSTS** | Opcional via `ENABLE_HSTS` env var |
-| **Rate Limiting** | slowapi en endpoints críticos (/send, /eoa, /safe) |
-| **CORS** | Configurable via `ALLOWED_ORIGINS` |
-
-### Transacciones (`transaction.py`)
-
-| Práctica | Implementación |
-|----------|----------------|
-| **Retry logic** | 3 intentos con backoff exponencial |
-| **Gas handling** | Auto-incremento de gas 1.5x en fallos |
-| **RPC rotation** | Rotación a RPC backup en errores de conexión |
-| **Tx logging** | Todas las transacciones logueadas en DB |
-| **Sin exposición** | Usa `key_storage.sign_transaction()` interno |
-
----
-
-## Análisis por Archivo
-
----
-
-### CORE
-
----
-
-#### `src/iwa/core/chain.py` (947 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CHAIN-A1 | P2 | Archivo muy largo (947 líneas) | Dividir en módulos: `chain_interface.py`, `rate_limiter.py`, `rpc_manager.py` |
-| CHAIN-A2 | P2 | `ChainInterfaces` es singleton global | Considerar inyección de dependencias para testing |
-| CHAIN-A3 | P3 | Múltiples clases de cadenas (`Gnosis`, `Ethereum`) duplican código | Extraer clase base `SupportedChain` con configuración declarativa |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CHAIN-S1 | P1 | RPC URLs pueden contener API keys en logs | Sanitizar URLs antes de logging: `logger.info(f"Connecting to {sanitize_rpc_url(url)}")` |
-| CHAIN-S2 | P2 | `TenderlyQuotaExceededError` expone detalles internos | Mensaje genérico para usuarios, detalles solo en logs |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CHAIN-C1 | P2 | `get_token_decimals` tiene lógica compleja anidada | Extraer a métodos: `_get_decimals_from_cache()`, `_get_decimals_from_rpc()`, `_get_native_decimals()` |
-| CHAIN-C2 | P3 | Magic numbers: `DEFAULT_RPC_TIMEOUT = 10` | Mover a `constants.py` |
-| CHAIN-C3 | P2 | `ChainInterface.__init__` tiene >50 líneas | Extraer inicialización a métodos privados |
-
----
-
-#### `src/iwa/core/keys.py` (341 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| KEYS-A1 | P3 | `EncryptedAccount` y `KeyStorage` en mismo archivo | Separar en `encrypted_account.py` y `key_storage.py` |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| KEYS-S1 | P2 | `_password` almacenado como `str` en memoria | Usar `pydantic.SecretStr` para limitar exposición accidental |
-| KEYS-S2 | P3 | Sin mecanismo de rotación de claves | Documentar proceso manual o implementar `rotate_master_key()` |
-| KEYS-S3 | P1 | Scrypt n=2^14 puede ser bajo para ataques modernos | Considerar aumentar a n=2^17 o usar Argon2id |
-| KEYS-S4 | P0 | `get_signer()` devuelve `LocalAccount` con clave privada accesible | Documentar claramente que solo debe usarse para APIs que requieren signer (CowSwap). Considerar wrapper que no exponga `.key` |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| KEYS-C1 | P2 | `__init__` tiene lógica de protección de tests inline | Extraer a método `_validate_path_for_tests()` |
-| KEYS-C2 | P3 | Comentario `# ... (create_safe omitted for brevity...)` en línea 295 | Eliminar comentario obsoleto |
-
----
-
-#### `src/iwa/core/mnemonic.py` (384 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MNEM-A1 | P2 | `EncryptedMnemonic`, `MnemonicStorage`, `MnemonicManager` en mismo archivo | Mantener juntos (cohesión alta) pero considerar subdirectorio `crypto/` |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MNEM-S1 | P1 | `MnemonicStorage.save()` no aplica `os.chmod(0o600)` | Añadir después de `json.dump()`: `os.chmod(file_path, 0o600)` |
-| MNEM-S2 | P2 | `derive_eth_accounts_from_mnemonic` devuelve `private_key_hex` | Considerar devolver solo direcciones; claves solo bajo demanda |
-| MNEM-S3 | P3 | `del priv_bytes, acct, priv_hex` no garantiza limpieza (gc) | Usar `ctypes.memset` para limpiar memoria sensible |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MNEM-C1 | P3 | Typo: `cypher` debería ser `cipher` | Corregir en `EncryptedMnemonic` (L44) |
-| MNEM-C2 | P2 | Constantes duplicadas entre `EncryptedMnemonic.encrypt()` y `MnemonicManager.encrypt_mnemonic()` | Reutilizar las constantes globales |
-
----
-
-#### `src/iwa/core/db.py` (224 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DB-A1 | P2 | `log_transaction` tiene demasiados parámetros (14) | Crear `TransactionLogData` dataclass |
-| DB-A2 | P3 | Lógica de merge de tags/extra_data en `log_transaction` | Extraer a métodos: `_merge_tags()`, `_merge_extra_data()` |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DB-S1 | P2 | Base de datos sin encriptación at-rest | Documentar riesgo o implementar SQLCipher |
-| DB-S2 | P3 | `synchronous = 0` puede perder datos en crash | Cambiar a `synchronous = 1` (NORMAL) para datos financieros |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DB-C1 | P1 | Usa `print()` en vez de `logger` en migraciones y errores | Reemplazar todos los `print()` con `logger.error()` o `logger.warning()` |
-| DB-C2 | P2 | `run_migrations` tiene `# noqa: C901` - complejidad alta | Refactorizar en funciones individuales por migración |
-| DB-C3 | P2 | `log_transaction` tiene `# noqa: D103, C901` | Añadir docstring y reducir complejidad |
-
----
-
-#### `src/iwa/core/wallet.py` (381 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| WALLET-A1 | P3 | `Wallet` es facade que delega a servicios | Buena arquitectura - mantener |
-| WALLET-A2 | P2 | `swap()` es método async pero otros son sync | Considerar hacer todos async o documentar claramente |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| WALLET-S1 | P2 | `get_accounts_balances` usa `ThreadPoolExecutor` sin límite | Limitar max_workers para evitar DoS |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| WALLET-C1 | P3 | Docstrings incompletos en algunos métodos | Completar con Args, Returns, Raises |
-
----
-
-### SERVICES
-
----
-
-#### `src/iwa/core/services/transfer.py` (1357 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TRANS-A1 | P1 | Archivo demasiado largo (1357 líneas) | Dividir: `transfer_native.py`, `transfer_erc20.py`, `multi_send.py`, `swap.py`, `drain.py` |
-| TRANS-A2 | P2 | `multi_send` tiene `# noqa: C901` | Refactorizar extrayendo helpers |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TRANS-S1 | P0 | Whitelist validation es bypass-able si `config.core` es None | Añadir check: `if not config.core: return False` (fail-closed) |
-| TRANS-S2 | P1 | `_is_supported_token` permite cualquier dirección 0x | Requerir token estar en whitelist explícita |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TRANS-C1 | P2 | Métodos `_send_*_via_*` tienen código duplicado | Extraer logging y db calls a método común |
-| TRANS-C2 | P3 | Import `TYPE_CHECKING` pero algunos tipos no son string literals | Consistencia en type hints |
-
----
-
-#### `src/iwa/core/services/transaction.py` (166 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TXN-A1 | P3 | Bien estructurado | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TXN-S1 | P3 | `max_retries = 3` hardcoded | Hacer configurable vía settings |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TXN-C1 | P2 | `sign_and_send` tiene `# noqa: C901` | Extraer: `_prepare_transaction()`, `_execute_with_retry()`, `_log_success()` |
-
----
-
-### CONTRACTS
-
----
-
-#### `src/iwa/core/contracts/erc20.py` (80 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ERC20-A1 | P3 | Bien estructurado, hereda de `ContractInstance` | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ERC20-S1 | P2 | `__init__` hace llamadas RPC sin manejo de errores | Envolver en try/except para contratos inválidos |
-| ERC20-S2 | P3 | No valida que `decimals()` devuelva valor razonable (0-18) | Añadir validation: `if not 0 <= self.decimals <= 18: raise ValueError` |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ERC20-C1 | P3 | Docstrings muy cortos ("Transfer.", "Approve.") | Expandir con descripción de parámetros |
-
----
-
-### WEB
-
----
-
-#### `src/iwa/web/server.py` (147 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SRV-A1 | P3 | Bien estructurado con middleware y routers | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SRV-S1 | P2 | CSP tiene `'unsafe-inline'` para scripts y styles | Refactorizar JS/CSS para eliminar inline; usar nonces |
-| SRV-S2 | P3 | Rate limiter en memoria se pierde al reiniciar | Considerar Redis para persistencia en producción |
-| SRV-S3 | P2 | `allow_headers=["*"]` es muy permisivo | Especificar headers permitidos explícitamente |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SRV-C1 | P3 | `global_exception_handler` podría loggear stack trace en producción | Añadir flag para control de detalle en logs |
-
----
-
-#### `src/iwa/web/dependencies.py` (77 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DEP-A1 | P2 | `wallet = Wallet()` singleton global en import | Usar lazy initialization o dependency injection |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DEP-S1 | P3 | Sin rate limiting en endpoint de auth | Añadir `@limiter.limit("5/minute")` a `verify_auth` |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| DEP-C1 | P3 | Import circular evitado con lazy import | Documentar por qué es necesario |
-
----
-
-### PLUGINS
-
----
-
-#### `src/iwa/plugins/olas/service_manager.py`
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-A1 | P0 | Archivo extremadamente largo (2000+ líneas) | Dividir en: `service_lifecycle.py`, `staking_manager.py`, `drain_manager.py`, `checkpoint_manager.py` |
-| SM-A2 | P1 | Muchos métodos tienen `# noqa: C901` | Plan de refactorización urgente |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-S1 | P1 | Operaciones de staking sin confirmación doble | Añadir confirmación para operaciones irreversibles |
-| SM-S2 | P2 | Logs pueden contener direcciones sensibles | Revisar nivel de logging para operaciones críticas |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-C1 | P1 | Métodos con >100 líneas | Máximo 30 líneas por método |
-| SM-C2 | P2 | Nesting excesivo (>4 niveles) | Usar early returns y guard clauses |
-
----
-
-## Próximos Pasos
-
-1. **Revisión**: Este documento debe ser revisado por el equipo antes de implementación
-2. **Priorización**: Atacar P0 y P1 primero
-3. **Testing**: Cada cambio debe incluir tests
-4. **Incrementalidad**: Implementar en PRs pequeños y atómicos
-
----
-
-## Archivos Analizados (Continuación)
-
----
-
-### CONTRACTS (Continuación)
-
----
-
-#### `src/iwa/core/contracts/contract.py` (298 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CONTR-A1 | P3 | Bien estructurado como clase base | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CONTR-S1 | P2 | `decode_error` puede exponer detalles internos | Añadir flag para sanitizar mensajes en producción |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CONTR-C1 | P3 | PANIC_CODES como dict global | Mover a clase o constants.py |
-
-**Especificación**: Crear método `decode_error(self, error_data: str, sanitize: bool = False)` que omita detalles técnicos cuando `sanitize=True`.
-
----
-
-#### `src/iwa/core/contracts/multisend.py` (72 líneas)
-
-✅ **LIMPIO** - Sin issues significativos. Archivo pequeño y bien estructurado.
-
----
-
-### CORE (Continuación)
-
----
-
-#### `src/iwa/core/models.py` (345 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MOD-A1 | P2 | `Config` usa singleton implícito con `model_post_init` | Documentar comportamiento singleton claramente |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MOD-S1 | P3 | `StorableModel.save_*` no aplica permisos restrictivos | Añadir `os.chmod(path, 0o600)` después de save para archivos sensibles |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MOD-C1 | P3 | Múltiples modelos en un archivo | Considerar separar en `config.py`, `storable.py`, `token.py` |
-
-**Especificación**: En `StorableModel.save()`, después de escribir el archivo:
-```python
-if sensitive:
-    os.chmod(path, 0o600)
-```
-Añadir parámetro `sensitive: bool = False` a los métodos save.
-
----
-
-#### `src/iwa/core/monitor.py` (197 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MON-A1 | P3 | Bien estructurado | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MON-S1 | P3 | Logs pueden exponer direcciones monitoreadas | Considerar flag para modo silencioso |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| MON-C1 | P1 | `check_activity` tiene `# noqa: C901` (134 líneas) | Dividir en: `_check_native_transfers()`, `_check_erc20_transfers()`, `_process_logs()` |
-| MON-C2 | P3 | Comentario inline `# ... inside check_activity ...` | Eliminar comentarios de desarrollo |
-
-**Especificación para MON-C1**:
-```python
-def check_activity(self):
-    """Check for new blocks and logs."""
-    if not self._should_check():
-        return
-
-    from_block, to_block = self._get_block_range()
-    found_txs = []
-    found_txs.extend(self._check_native_transfers(from_block, to_block))
-    found_txs.extend(self._check_erc20_transfers(from_block, to_block))
-
-    self.last_checked_block = to_block
-    if found_txs:
-        self.callback(found_txs)
-```
-
----
-
-#### `src/iwa/core/pricing.py` (92 líneas)
-
-✅ **LIMPIO** - Archivo pequeño, bien estructurado, con caché y retry logic.
-
----
-
-#### `src/iwa/core/settings.py` (96 líneas)
+| Archivo | # noqa C901 | Líneas | Prioridad |
+|---------|-------------|--------|-----------|
+| `lifecycle.py` | 5 | 737 | **CRÍTICA** |
+| `importer.py` | 4 | ~500 | ALTA |
+| `olas_view.py` | 3 | ~900 | MEDIA |
+| `staking.py` | 2 | ~400 | ALTA |
+| Otros (11 archivos) | 1 c/u | - | BAJA |
 
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SET-A1 | P3 | Singleton con `@singleton` decorator | Buena práctica - mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SET-S1 | P3 | `SecretStr` usado correctamente para claves | ✅ Correcto |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SET-C1 | P3 | `load_tenderly_profile_credentials` es largo | Considerar extraer a método helper |
-
----
-
-### SERVICES (Continuación)
-
----
-
-#### `src/iwa/core/services/account.py` (58 líneas)
-
-✅ **LIMPIO** - Servicio pequeño, bien estructurado.
-
----
-
-#### `src/iwa/core/services/balance.py` (114 líneas)
-
-✅ **LIMPIO** - Servicio con retry logic bien implementado.
-
----
-
-#### `src/iwa/core/services/safe.py` (332 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SAFE-A1 | P3 | Bien estructurado | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SAFE-S1 | P2 | `_get_signer_keys` devuelve claves privadas raw | Documentar que es solo uso interno; añadir `# SECURITY: Internal only` |
-| SAFE-S2 | P1 | Claves en memoria durante `_sign_and_execute_safe_tx` | Limpiar variables explícitamente después de uso: `signer_keys.clear()` |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SAFE-C1 | P1 | `create_safe` tiene `# noqa: C901` (150 líneas) | Dividir en: `_prepare_safe_deployment()`, `_execute_deployment()`, `_save_safe_to_wallet()` |
-
-**Especificación para SAFE-C1**:
-```python
-def create_safe(self, deployer_tag, owner_tags, threshold, chain_name, tag=None, salt_nonce=None):
-    """Deploy a new Safe."""
-    # Step 1: Validate and prepare
-    deployer, owners, chain = self._prepare_safe_deployment(
-        deployer_tag, owner_tags, chain_name
-    )
-
-    # Step 2: Execute deployment
-    safe_address, tx_hash = self._execute_deployment(
-        deployer, owners, threshold, chain, salt_nonce
-    )
-
-    # Step 3: Save to wallet
-    self._save_safe_to_wallet(safe_address, owners, threshold, chain_name, tag)
-
-    return safe_address
-```
-
----
-
-### PLUGINS
-
----
-
-#### `src/iwa/plugins/gnosis/cow.py` (538 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| COW-A1 | P1 | Archivo largo (538 líneas) | Dividir en: `cow_swap.py`, `cow_orders.py`, `cow_quotes.py` |
-| COW-A2 | P2 | Lazy loading de cowdao_cowpy con globals | Refactorizar a import condicional o factory |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| COW-S1 | P1 | `__init__` acepta `private_key_or_signer` como string | Preferir siempre `LocalAccount`, nunca strings con claves |
-| COW-S2 | P2 | Slippage hardcoded a 0.5% | Hacer configurable por usuario |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| COW-C1 | P3 | `warnings.filterwarnings` al inicio de archivo | Mover a función de init o conftest |
-| COW-C2 | P2 | Globals `swap_tokens = None` como placeholders | Usar import lazy con `importlib` |
-
-**Especificación para COW-S1**:
-```python
-def __init__(self, signer: LocalAccount, chain: SupportedChain):
-    """Initialize CowSwap.
-
-    Args:
-        signer: LocalAccount object (NEVER pass raw private key string)
-        chain: Supported chain configuration
-    """
-    if isinstance(signer, str):
-        raise TypeError("Pass LocalAccount, not private key string")
-    self.signer = signer
-    self.chain = chain
-```
-
----
-
-#### `src/iwa/plugins/olas/plugin.py` (253 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-A1 | P3 | Bien estructurado como Plugin | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-S1 | P2 | `import_services` acepta password por CLI | Advertir sobre riesgos de pasar passwords en CLI |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-C1 | P2 | `import_services` es largo (170 líneas) | Extraer: `_discover_services()`, `_import_keys()`, `_validate_import()` |
-
----
-
-#### `src/iwa/plugins/olas/service_manager/` (Package)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta | Estado |
-|----|-----------|----------|-------------------|--------|
-| SM-A1 | P0 | **CRÍTICO**: Archivo extremadamente largo | Dividir en módulos (Mixins) | ✅ **RESUELTO** |
-| SM-A2 | P1 | Muchos métodos con `# noqa: C901` | Cada método largo debe refactorizarse |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-S1 | P1 | Operaciones de staking irreversibles sin confirmación | Añadir parámetro `confirm: bool = True` y logging detallado |
-| SM-S2 | P2 | Approval amounts pueden ser muy altos | Limitar approvals al mínimo necesario + 10% margen |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SM-C1 | P0 | Métodos con >100 líneas | Máximo 30 líneas por método |
-| SM-C2 | P1 | Nesting >4 niveles en `stake()`, `spin_up()` | Usar early returns y guard clauses |
-
-**Especificación para SM-A1** (división del archivo):
-
-```
-src/iwa/plugins/olas/
-├── service_manager/
-│   ├── __init__.py          # Re-export ServiceManager
-│   ├── base.py              # ServiceManager clase base
-│   ├── lifecycle.py         # create, spin_up, wind_down
-│   ├── staking.py           # stake, unstake, checkpoint
-│   ├── drain.py             # drain_service, claim_rewards
-│   └── validation.py        # _validate_*, helpers
-```
-
----
-
-### WEB ROUTERS
-
----
-
-#### `src/iwa/web/routers/olas.py` (975 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-R-A1 | P0 | **CRÍTICO**: Archivo muy largo (975 líneas) | Dividir en: `olas_services.py`, `olas_staking.py`, `olas_admin.py` |
-| OLAS-R-A2 | P2 | `get_staking_contracts` tiene función interna de 32 líneas | Extraer a método independiente |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-R-S1 | P2 | Endpoints críticos sin rate limiting | Añadir `@limiter.limit()` a stake, terminate, drain |
-| OLAS-R-S2 | P3 | Excepciones exponen detalles internos | Sanitizar mensajes de error |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| OLAS-R-C1 | P1 | `get_staking_contracts` tiene `# noqa: C901` | Refactorizar complejidad |
-| OLAS-R-C2 | P2 | Código duplicado en manejo de errores | Crear decorator `@handle_service_errors` |
-
-**Especificación para OLAS-R-C2**:
-```python
-def handle_service_errors(func):
-    """Decorator to standardize error handling in olas endpoints."""
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except ServiceNotFoundError as e:
-            raise HTTPException(404, f"Service not found: {e}")
-        except StakingError as e:
-            raise HTTPException(400, f"Staking error: {e}")
-        except Exception as e:
-            logger.exception(f"Unexpected error in {func.__name__}")
-            raise HTTPException(500, "Internal error")
-    return wrapper
-```
-
----
-
-#### `src/iwa/web/routers/swap.py` (309 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SWAP-A1 | P3 | Bien estructurado | Mantener |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SWAP-S1 | P2 | Sin rate limiting en `/swap` | Añadir `@limiter.limit("10/minute")` |
-| SWAP-S2 | P3 | Validadores no verifican longitud máxima | Añadir `max_length` a Field() |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| SWAP-C1 | P3 | `run_async_quote` definida inline dos veces | Extraer a función helper |
-
----
-
-#### `src/iwa/web/routers/transactions.py` (154 líneas)
-
-✅ **LIMPIO** - Bien estructurado, tiene rate limiting, validación correcta.
-
----
-
-#### `src/iwa/web/routers/accounts.py` (190 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ACC-A1 | P3 | Comentario `# --- Models (Temporary)` | Mover modelos a `web/models.py` |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ACC-S1 | P3 | Rate limiting adecuado | ✅ Correcto |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| ACC-C1 | P3 | `create_safe` usa `import time` dentro de función | Mover import al inicio |
-
----
-
-## Resumen de Issues por Prioridad
-
-### P0 (CRÍTICO) - 5 issues
-1. **KEYS-S4**: `get_signer()` expone claves
-2. **TRANS-S1**: Whitelist bypass si config.core es None
-3. ~~**SM-A1**: service_manager.py tiene 2000+ líneas~~ (Resuelto)
-4. **SM-C1**: Métodos con >100 líneas
-5. **OLAS-R-A1**: olas.py router tiene 975 líneas
-
-### P1 (ALTO) - 15 issues
-1. **CHAIN-S1**: RPC URLs con API keys en logs
-2. **KEYS-S3**: Scrypt n=2^14 puede ser bajo
-3. **MNEM-S1**: MnemonicStorage.save() sin permisos
-4. **DB-C1**: Usa print() en vez de logger
-5. **TRANS-A1**: transfer.py tiene 1357 líneas
-6. **TRANS-S2**: _is_supported_token permite cualquier 0x
-7. **TXN-C1**: sign_and_send tiene C901
-8. **MON-C1**: check_activity tiene C901
-9. **SAFE-S2**: Claves en memoria sin limpiar
-10. **SAFE-C1**: create_safe tiene C901
-11. **COW-A1**: cow.py tiene 538 líneas
-12. **COW-S1**: Acepta private key como string
-13. **SM-A2**: Muchos métodos con C901
-14. **SM-S1**: Operaciones irreversibles sin confirm
-15. **OLAS-R-C1**: get_staking_contracts tiene C901
-
-### P2 (MEDIO) - 25+ issues
-(Ver tablas detalladas arriba)
-
-### P3 (BAJO) - 20+ issues
-(Ver tablas detalladas arriba)
-
----
-
-## Plan de Implementación Sugerido
-
-### Sprint 1: Seguridad Crítica (P0/P1 Security)
-1. Fix whitelist bypass en transfer.py
-2. Documentar uso de get_signer()
-3. Añadir limpieza de claves en memoria
-4. Sanitizar RPC URLs en logs
-
-### Sprint 2: Refactorización Arquitectónica
-1. Dividir service_manager.py en módulos
-2. Dividir transfer.py
-3. Dividir olas.py router
-4. Dividir cow.py
-
-### Sprint 3: Código Limpio
-1. Eliminar todos los C901
-2. Reemplazar print() con logger
-3. Reducir métodos a <30 líneas
-4. Mejorar docstrings
-
-### Sprint 4: Mejoras Menores
-1. Mover constantes a constants.py
-2. Separar modelos en archivos
-3. Añadir rate limiting faltante
-4. Mejorar validaciones
-
----
-
-## Archivos Adicionales Analizados
-
----
-
-### CORE (Adicionales)
-
----
-
-#### `src/iwa/core/cli.py` (212 líneas)
-
-✅ **LIMPIO** - CLI bien estructurado con Typer. Plugin loading al final es correcto.
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| CLI-C1 | P3 | Comentario duplicado `# Load Plugins` (líneas 193, 194) | Eliminar duplicado |
-
----
-
-#### `src/iwa/core/plugins.py` (46 líneas)
-
-✅ **LIMPIO** - ABC bien definida para plugins. Archivo pequeño.
-
----
-
-#### `src/iwa/core/tables.py` (61 líneas)
-
-✅ **LIMPIO** - Función simple de visualización con Rich.
-
----
-
-#### `src/iwa/core/types.py` (60 líneas)
-
-✅ **LIMPIO** - `EthereumAddress` bien implementado con validación y Pydantic schema.
-
----
-
-#### `src/iwa/core/utils.py` (60 líneas)
-
-✅ **LIMPIO** - Funciones helper correctamente implementadas.
-
 ---
 
-### PLUGINS (Adicionales)
+## Patrones Problemáticos Identificados
 
----
-
-#### `src/iwa/plugins/gnosis/plugin.py` (69 líneas)
-
-✅ **LIMPIO** - Plugin pequeño y bien estructurado.
-
----
-
-#### `src/iwa/plugins/olas/contracts/staking.py` (404 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| STAKE-A1 | P2 | Archivo largo con muchos métodos | Considerar dividir en `staking_read.py` (queries) y `staking_write.py` (transactions) |
-
-**SEGURIDAD**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| STAKE-S1 | P3 | Documentación excelente sobre mecánicas de staking | ✅ Buena práctica |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| STAKE-C1 | P3 | `get_service_info` tiene muchos try/except anidados | Considerar extraer manejo de errores |
-
----
-
-### TUI
-
----
-
-#### `src/iwa/tui/app.py` (193 líneas)
-
-**ARQUITECTURA SÓLIDA**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TUI-A1 | P3 | Bien estructurado | Mantener |
-
-**CÓDIGO LIMPIO**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| TUI-C1 | P2 | `trace()` función de debug escribe a archivo | Eliminar o usar logger |
-| TUI-C2 | P3 | CSS inline en clase | Considerar mover a archivo `.css` separado |
-
----
-
-### WEB (Adicionales)
-
----
-
-#### `src/iwa/web/routers/state.py` (66 líneas)
-
-✅ **LIMPIO** - Router pequeño, bien estructurado, con `_obscure_url` para seguridad.
-
----
-
-### Archivos Limpios (Sin Issues Significativos)
-
-Los siguientes archivos fueron analizados y están limpios:
-
-| Archivo | Líneas | Estado |
-|---------|--------|--------|
-| `src/iwa/core/services/plugin.py` | ~50 | ✅ Limpio |
-| `src/iwa/plugins/gnosis/cow_utils.py` | ~60 | ✅ Limpio |
-| `src/iwa/plugins/gnosis/safe.py` | ~100 | ✅ Limpio |
-| `src/iwa/plugins/olas/constants.py` | ~80 | ✅ Limpio |
-| `src/iwa/plugins/olas/models.py` | ~120 | ✅ Limpio |
-| `src/iwa/plugins/olas/contracts/base.py` | ~30 | ✅ Limpio |
-| `src/iwa/plugins/olas/contracts/activity_checker.py` | ~80 | ✅ Limpio |
-| `src/iwa/plugins/olas/contracts/service.py` | ~200 | ✅ Limpio |
-| `src/iwa/tui/rpc.py` | ~100 | ✅ Limpio |
-| `src/iwa/tools/check_profile.py` | ~50 | ✅ Limpio |
-| `src/iwa/tools/reset_env.py` | ~40 | ✅ Limpio |
-| `src/iwa/tools/reset_tenderly.py` | ~60 | ✅ Limpio |
-| `src/iwa/tools/restore_backup.py` | ~80 | ✅ Limpio |
-
----
-
-### Frontend JavaScript (Análisis de Alto Nivel)
-
-Los archivos JavaScript del frontend fueron revisados y presentan estos patrones:
-
-| Archivo | Líneas | Observación |
-|---------|--------|-------------|
-| `main.js` | ~90 | ✅ Entry point bien organizado |
-| `modules/api.js` | ~50 | ✅ Fetch wrapper correcto |
-| `modules/auth.js` | ~60 | ✅ Manejo de auth headers |
-| `modules/state.js` | ~40 | ✅ Estado global simple |
-| `modules/accounts.js` | ~150 | P3: Considerar dividir |
-| `modules/olas.js` | ~300 | P2: Archivo largo, dividir |
-| `modules/cowswap.js` | ~200 | P3: Considerar dividir |
-| `modules/modals.js` | ~250 | P2: Muchas funciones similares |
-| `modules/transactions.js` | ~100 | ✅ Limpio |
-| `modules/rpc.js` | ~80 | ✅ Limpio |
-| `modules/ui.js` | ~100 | ✅ Limpio |
-| `modules/utils.js` | ~60 | ✅ Limpio |
-
-**Recomendaciones Frontend:**
-
-| ID | Prioridad | Problema | Solución Propuesta |
-|----|-----------|----------|-------------------|
-| FE-S1 | P2 | JS inline en `index.html` (CSP 'unsafe-inline') | Mover todo JS a módulos |
-| FE-C1 | P2 | `modules/olas.js` muy largo | Dividir en `olas_services.js`, `olas_staking.js` |
-| FE-C2 | P3 | Funciones de modal duplicadas | Crear factory de modales |
+### 1. Nesting Excesivo (>3 niveles)
+El código tiene muchos bloques anidados que dificultan la lectura.
 
----
+### 2. Falta de Return Early
+En lugar de salir temprano en condiciones de error, el código continúa con else/if anidados.
 
-## Estadísticas Finales
+### 3. Falta de Negative Programming
+La lógica positiva (happy path) se anida dentro de múltiples condiciones en lugar de rechazar casos inválidos primero.
 
-| Categoría | Archivos Analizados | Limpios | Con Issues |
-|-----------|---------------------|---------|------------|
-| Core | 15 | 8 | 7 |
-| Services | 6 | 3 | 3 |
-| Contracts | 5 | 2 | 3 |
-| Plugins Gnosis | 4 | 3 | 1 |
-| Plugins Olas | 8 | 5 | 3 |
-| Web Backend | 6 | 2 | 4 |
-| Web Frontend | 12 | 8 | 4 |
-| TUI | 6 | 5 | 1 |
-| Tools | 4 | 4 | 0 |
-| **TOTAL** | **66** | **40** | **26** |
+### 4. Métodos Largos
+Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 ---
-
-## Conclusión
-
-El codebase tiene una base sólida con buenas prácticas en la mayoría de archivos pequeños. Los problemas críticos se concentran en:
 
-1. **Archivos muy largos** (`service_manager.py`, `transfer.py`, `olas.py`) que necesitan división urgente
-2. **Complejidad ciclomática** (múltiples `# noqa: C901`) que dificulta mantenimiento
-3. **Algunas vulnerabilidades de seguridad** (whitelist bypass, claves en memoria) que requieren atención inmediata
+## Checklist de Refactorización
 
-El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, seguido de arquitectura y código limpio.
+> **Instrucciones**: Marcar `[x]` al completar. Cada tarea incluye problema y solución.
 
 ---
 
-## Checklist de Implementación
-
-> **Instrucciones**: Marcar con `[x]` las tareas completadas. Cada tarea incluye el archivo a modificar y la acción específica a realizar.
-
----
+### 1. `src/iwa/plugins/olas/service_manager/lifecycle.py` (5 noqa)
 
-### Sprint 1: Seguridad Crítica (P0/P1)
+#### 1.1 `create()` (L24-162) - 138 líneas
 
-#### 1.1 Fix Whitelist Bypass (TRANS-S1) - **P0**
-- [x] **Archivo**: `src/iwa/core/services/transfer.py`
-- [x] **Línea**: Método `_is_whitelisted_destination()`
-- [x] **Acción**: Añadir check fail-closed al inicio del método:
+- [x] **Problema**: Método muy largo con múltiples responsabilidades
+- [x] **Solución**: Dividir en métodos auxiliares:
   ```python
-  def _is_whitelisted_destination(self, address: str) -> bool:
-      if not self.config.core:
-          logger.warning("No core config found, rejecting destination")
-          return False  # Fail-closed
-      # ... resto del método
+  def create(...):
+      agent_params = self._prepare_agent_params(agent_ids, bond_amount_wei)
+      tx = self._send_create_transaction(agent_params, ...)
+      if not tx:
+          return None
+      service_id = self._extract_service_id_from_receipt(tx)
+      if not service_id:
+          return None
+      self._save_new_service(service_id, ...)
+      self._approve_token_if_needed(service_id, token_address, ...)
+      return service_id
   ```
-- [x] **Test**: Añadir test en `test_transfer.py` que verifique rechazo cuando `config.core` es None
-
-#### 1.2 Documentar get_signer() (KEYS-S4) - **P0**
-- [x] **Archivo**: `src/iwa/core/keys.py`
-- [x] **Línea**: Método `get_signer()` (~línea 280)
-- [x] **Acción**: Añadir docstring con advertencia de seguridad:
-  ```python
-  def get_signer(self, address_or_tag: str) -> Optional[LocalAccount]:
-      """Get LocalAccount signer for external APIs like CowSwap.
-
-      ⚠️ SECURITY WARNING: This returns a LocalAccount with accessible
-      private key (.key property). Only use when external library requires
-      a signer object. Never log or expose the returned object.
-
-      For signing transactions internally, use sign_transaction() instead.
-      """
-  ```
-
-#### 1.3 Limpiar Claves en Memoria (SAFE-S2) - **P1**
-- [x] **Archivo**: `src/iwa/core/services/safe.py`
-- [x] **Línea**: Método `_sign_and_execute_safe_tx()` (~línea 235)
-- [x] **Acción**: Añadir limpieza explícita de claves después de uso:
-  ```python
-  def _sign_and_execute_safe_tx(self, safe_tx: SafeTx, signer_keys: List[str]):
-      try:
-          # ... código existente de firma y ejecución ...
-          return tx_hash
-      finally:
-          # SECURITY: Clear sensitive data from memory
-          for i in range(len(signer_keys)):
-              signer_keys[i] = "0" * 64
-          signer_keys.clear()
-  ```
-
-#### 1.4 Sanitizar RPC URLs en Logs (CHAIN-S1) - **P1**
-- [x] **Archivo**: `src/iwa/core/chain.py`
-- [x] **Acción 1**: Crear función helper:
-  ```python
-  def _sanitize_rpc_url(url: str) -> str:
-      """Remove API keys from RPC URLs for safe logging."""
-      import re
-      # Remove query params that might contain keys
-      sanitized = re.sub(r'\?.*$', '?***', url)
-      # Remove path segments that look like API keys (32+ hex chars)
-      sanitized = re.sub(r'/[a-fA-F0-9]{32,}', '/***', sanitized)
-      return sanitized
-  ```
-- [x] **Acción 2**: Reemplazar todos los `logger.info/debug/error` que contengan URLs RPC con versión sanitizada
-- [x] **Buscar**: `grep -n "rpc" src/iwa/core/chain.py | grep -i log`
-
-#### 1.5 Permisos en MnemonicStorage.save() (MNEM-S1) - **P1**
-- [x] **Archivo**: `src/iwa/core/mnemonic.py`
-- [x] **Línea**: Método `MnemonicStorage.save()` (~línea 200)
-- [x] **Acción**: Añadir chmod después de guardar:
-  ```python
-  def save(self, encrypted: EncryptedMnemonic, file_path: Path) -> None:
-      with open(file_path, 'w') as f:
-          json.dump(encrypted.model_dump(), f)
-      os.chmod(file_path, 0o600)  # Solo lectura/escritura para owner
-  ```
-
-#### 1.6 Whitelist Explícita para Tokens (TRANS-S2) - **P1**
-- [x] **Archivo**: `src/iwa/core/services/transfer.py`
-- [x] **Línea**: Método `_is_supported_token()`
-- [x] **Acción**: Cambiar lógica para requerir token en whitelist:
-  ```python
-  def _is_supported_token(self, token_address: str, chain: SupportedChain) -> bool:
-      if token_address == NATIVE_CURRENCY_ADDRESS:
-          return True
-      # Requerir que el token esté explícitamente definido
-      if chain.get_token_address(token_address):
-          return True
-      logger.warning(f"Token {token_address} not in allowed list for {chain.name}")
-      return False
-  ```
-
-#### 1.7 Reemplazar print() con logger (DB-C1) - **P1**
-- [x] **Archivo**: `src/iwa/core/db.py`
-- [x] **Acción**: Buscar y reemplazar todos los `print()`:
-  ```bash
-  # Ejecutar para encontrar:
-  grep -n "print(" src/iwa/core/db.py
-  ```
-- [x] Reemplazar cada `print(...)` con `logger.info(...)` o `logger.error(...)`
-
----
-
-### Sprint 2: Refactorización Arquitectónica
-
-#### 2.1 Dividir service_manager.py (SM-A1) - **P0** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/plugins/olas/service_manager.py` (2000+ líneas)
-- [x] **Paso 1**: Crear directorio `src/iwa/plugins/olas/service_manager/`
-- [x] **Paso 2**: Crear `__init__.py` que re-exporte ServiceManager
-- [x] **Paso 3**: Extraer `lifecycle.py`
-- [x] **Paso 4**: Extraer `staking.py`
-- [x] **Paso 5**: Extraer `drain.py`
-- [x] **Paso 6**: Extraer `mech.py`
-
-
-#### 2.2 Dividir transfer.py (TRANS-A1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/services/transfer.py` (1357 líneas)
-- [x] **Paso 1**: Extraer a `transfer_native.py`: métodos de transferencia nativa (Implementado en `native.py`)
-- [x] **Paso 2**: Extraer a `transfer_erc20.py`: métodos de transferencia ERC20 (Implementado en `erc20.py`)
-- [x] **Paso 3**: Extraer a `multi_send.py`: métodos multi_send (Implementado en `multisend.py`)
-- [x] **Paso 4**: Extraer a `swap.py`: integración CowSwap (Implementado en `swap.py`)
-- [x] **Paso 5**: Mantener `transfer.py` como facade que importa submódulos (Reemplazado por package `src/iwa/core/services/transfer/`)
-- [x] **Test**: Ejecutar tests relacionados con transfer
-
-#### 2.3 Dividir olas.py router (OLAS-R-A1) - **P0** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/web/routers/olas.py` (975 líneas)
-- [x] **Paso 1**: Crear `olas_services.py`: endpoints CRUD de servicios (Implementado en `olas/services.py`)
-- [x] **Paso 2**: Crear `olas_staking.py`: endpoints stake/unstake/checkpoint (Implementado en `olas/staking.py`)
-- [x] **Paso 3**: Crear `olas_admin.py`: endpoints fund/drain (Implementado en `olas/funding.py` y `olas/admin.py`)
-- [x] **Paso 4**: Actualizar `server.py` para incluir nuevos routers (Actualizado para usar `olas` package)
-- [x] **Test**: Probar endpoints manualmente o con tests
-
-#### 2.4 Dividir cow.py (COW-A1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/plugins/gnosis/cow.py` (538 líneas)
-- [x] **Paso 1**: Extraer a `cow_swap.py`: clase CowSwap y método swap() (Implementado en `src/iwa/plugins/gnosis/cow/swap.py`)
-- [x] **Paso 2**: Extraer a `cow_quotes.py`: métodos get_*_amount_wei (Implementado en `src/iwa/plugins/gnosis/cow/quotes.py`)
-- [x] **Paso 3**: Mantener `cow.py` como re-exportador o eliminar (Eliminado, reemplazado por package)
-- [x] **Test**: Ejecutar tests de swap (`src/iwa/plugins/gnosis/tests/test_cow.py` verify OK)
-
----
-
-### Sprint 3: Código Limpio (Eliminar C901)
-
-#### 3.1 Refactorizar check_activity() (MON-C1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/monitor.py`
-- [x] **Línea**: Método `check_activity()` (~línea 63, 134 líneas)
-- [x] **Acción**: Dividir en métodos helper:
-  - [x] Crear `_should_check() -> bool`
-  - [x] Crear `_get_block_range() -> Tuple[int, int]`
-  - [x] Crear `_check_native_transfers(from_block, to_block) -> List[Dict]`
-  - [x] Crear `_check_erc20_transfers(from_block, to_block) -> List[Dict]`
-- [x] **Resultado**: check_activity() debe tener <20 líneas (Actual: ~20 líneas de orquestación)
 - [x] Eliminar `# noqa: C901`
 
-#### 3.2 Refactorizar create_safe() (SAFE-C1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/services/safe.py`
-- [x] **Línea**: Método `create_safe()` (~línea 40, ~150 líneas)
-- [x] **Acción**: Dividir en:
-  - [x] `_prepare_deployer_account(tag_or_addr)`
-  - [x] `_resolve_owner_addresses(owners)`
-  - [x] `_deploy_safe_contract(deployer, owners, ...)`
-  - [x] `_log_safe_deployment(...)`
-  - [x] `_store_safe_account(...)`
-- [x] **Resultado**: Método principal orquestador de alto nivel
+#### 1.2 `activate_registration()` (L164-262) - Nesting 4 niveles
+
+- [x] **Problema**: Líneas 187-231 tienen 4 niveles de nesting:
+  ```python
+  if not is_native:           # nivel 1
+      try:                    # nivel 2
+          if utility_address: # nivel 3
+              if allowance < X: # nivel 4
+  ```
+- [x] **Solución**: Aplicar return early y extraer lógica:
+  ```python
+  def activate_registration(self) -> bool:
+      if not self._validate_pre_registration_state():
+          return False
+
+      if self._is_token_based_service():
+          if not self._ensure_token_approval():
+              logger.warning("Token approval failed")
+
+      return self._send_activation_transaction()
+  ```
 - [x] Eliminar `# noqa: C901`
 
-#### 3.3 Refactorizar sign_and_send() (TXN-C1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/services/transaction.py`
-- [x] **Línea**: Método `sign_and_send()` con `# noqa: C901`
-- [x] **Acción**: Extraer:
-  - [x] `_prepare_transaction()`: preparación y nonce
-  - [x] `_execute_with_retry()`: loop de retry
-  - [x] `_log_successful_transaction()`: logging y DB
-- [x] **Resultado**: Método limpio con reintentos claros
+#### 1.3 `register_agent()` (L264-382) - 118 líneas
+
+- [x] **Problema**: Lógica de creación de agente mezclada con registro
+- [x] **Solución**: Extraer:
+  ```python
+  def _get_or_create_agent(self, agent_address) -> str:
+      if agent_address:
+          return agent_address
+      return self._create_and_fund_agent()
+
+  def _create_and_fund_agent(self) -> str:
+      agent = self.wallet.key_storage.create_account(...)
+      self._fund_agent(agent.address)
+      return agent.address
+  ```
 - [x] Eliminar `# noqa: C901`
 
-#### 3.4 Refactorizar get_staking_contracts() (OLAS-R-C1) - **P1** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/web/routers/olas/staking.py`
-- [x] **Línea**: Función `get_staking_contracts()` (~línea 36)
-- [x] **Acción**:
-  - [x] Extraer función interna `_check_availability()` a nivel de módulo
-  - [x] Extraer `_get_service_filter_info`, `_fetch_all_contracts`, `_filter_contracts`
-  - [x] Simplificar lógica de filtrado
+#### 1.4 `spin_up()` (L533-643) - 110 líneas
+
+- [x] **Problema**: 4 bloques if secuenciales para estados
+- [x] **Solución**: Usar diccionario de transiciones:
+  ```python
+  STATE_HANDLERS = {
+      ServiceState.PRE_REGISTRATION: "_handle_pre_registration",
+      ServiceState.ACTIVE_REGISTRATION: "_handle_active_registration",
+      ServiceState.FINISHED_REGISTRATION: "_handle_finished_registration",
+      ServiceState.DEPLOYED: "_handle_deployed",
+  }
+
+  def spin_up(self, ...):
+      current_state = self._get_current_state()
+      while current_state != ServiceState.DEPLOYED:
+          handler = getattr(self, self.STATE_HANDLERS.get(current_state))
+          if not handler():
+              return False
+          current_state = self._get_current_state()
+      return True
+  ```
 - [x] Eliminar `# noqa: C901`
 
-#### 3.5 Refactorizar multi_send() (TRANS-A2) - **P2** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/services/transfer/multisend.py`
-- [x] **Línea**: Método `multi_send()`
-- [x] **Acción**:
-  - [x] Extraer helpers para validación y preparación: `_prepare_multisend_transaction`, `_execute_multisend`
-  - [x] Extraer gestión de approvals: `_handle_erc20_approvals`
+#### 1.5 `wind_down()` (L645-736) - 91 líneas
+
+- [x] **Problema**: Similar a spin_up, bloques if secuenciales
+- [x] **Solución**: Misma estrategia de state machine
 - [x] Eliminar `# noqa: C901`
 
 ---
 
-### Sprint 4: Mejoras Menores
+### 2. `src/iwa/plugins/olas/importer.py` (4 noqa)
 
-#### 4.1 Eliminar función trace() de TUI (TUI-C1) - **P2** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/tui/app.py`
-- [x] **Línea**: Función `trace()` (líneas 15-22)
-- [x] **Acción**: Eliminar función y todas las llamadas a `trace()` en el archivo
-- [x] Usar `logger.debug()` si se necesita debugging
+#### 2.1 `_parse_trader_runner_format()` (L135)
 
-#### 4.2 Rate Limiting en Swap (SWAP-S1) - **P2** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/web/routers/swap.py`
-- [x] **Línea**: Endpoint `swap_tokens()` (~línea 77)
-- [x] **Acción**: Añadido decorador `@limiter.limit("10/minute")`
-- [x] Añadido `request: Request` como primer parámetro
+- [x] **Problema**: Múltiples try/except anidados
+- [x] **Solución**: Extraer validadores:
+  ```python
+  def _parse_trader_runner_format(self, folder):
+      config = self._try_load_config(folder)
+      if not config:
+          return None
 
-#### 4.3 Rate Limiting en Olas Críticos (OLAS-R-S1) - **P2** - ✅ **COMPLETADO**
-- [x] **Archivos**:
-  - [x] `src/iwa/web/routers/olas/staking.py` (`stake_service`)
-  - [x] `src/iwa/web/routers/olas/admin.py` (`terminate_service`)
-  - [x] `src/iwa/web/routers/olas/funding.py` (`drain_service`)
-- [x] **Acción**: Añadido `@limiter.limit` en cada endpoint crítico
-- [x] Añadido `request: Request` como primer parámetro en cada uno
+      service = self._extract_service_from_config(config)
+      if not self._validate_service(service):
+          return None
 
-#### 4.4 CSP sin unsafe-inline (SRV-S1) - **P2** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/web/server.py`
-- [x] **Línea**: SecurityHeadersMiddleware CSP
-- [x] **Acción**: Eliminado `'unsafe-inline'` de `script-src` y `style-src`
-- [x] **FE-S1**: Movido estilos inline de `index.html` a `style.css`
-- [x] **FE-C1**: Refactorizado `app.js` para usar delegación de eventos (`data-action`) y clases de utilidad en lugar de estilos/eventos inline
+      return service
+  ```
+- [x] Eliminar `# noqa: C901`
 
-#### 4.5 Mover Modelos Web (ACC-A1) - **P3** - ✅ **COMPLETADO**
-- [x] **Archivo origen**: `src/iwa/web/routers/accounts.py`
-- [x] **Archivo destino**: Crear `src/iwa/web/models.py`
-- [x] **Acción**: Mover `AccountCreateRequest` y `SafeCreateRequest`
-- [x] Actualizar imports en `accounts.py`
+#### 2.2 `_parse_operate_format()` (L197)
 
-#### 4.6 Eliminar Comentario Duplicado (CLI-C1) - **P3** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/core/cli.py`
-- [x] **Líneas**: 193-194 (comentarios `# Load Plugins` duplicados)
-- [x] **Acción**: Eliminar una de las líneas duplicadas
+- [x] **Problema**: Similar al anterior
+- [x] **Solución**: Aplicar mismo patrón de extracción
+- [x] Eliminar `# noqa: C901`
 
-#### 4.7 Mover Import de Time (ACC-C1) - **P3** - ✅ **COMPLETADO**
-- [x] **Archivo**: `src/iwa/web/routers/accounts.py`
-- [x] **Línea**: Dentro de `create_safe()` hay `import time`
-- [x] **Acción**: Mover import al inicio del archivo
+#### 2.3 `_parse_operate_service_config()` (L254)
+
+- [x] **Problema**: Try/except profundos
+- [x] **Solución**: Early return en cada validación
+- [x] Eliminar `# noqa: C901`
+
+#### 2.4 `import_service()` (L448)
+
+- [x] **Problema**: Método muy largo
+- [x] **Solución**: Dividir en pasos claros
+- [x] Eliminar `# noqa: C901`
 
 ---
 
-### Verificación Final
+### 3. `src/iwa/plugins/olas/tui/olas_view.py` (3 noqa)
 
-- [x] Ejecutar `just check` - debe pasar sin errores
-- [x] Ejecutar `just test` - todos los tests deben pasar
-- [x] Ejecutar `just format` - código formateado
-- [x] Revisar que no hay nuevos `# noqa: C901`
-- [x] Crear commit con mensaje descriptivo para cada sprint
+#### 3.1 `on_button_pressed()` (L131)
+
+- [ ] **Problema**: Gran switch/if-else para manejar botones
+- [ ] **Solución**: Usar diccionario de handlers:
+  ```python
+  BUTTON_HANDLERS = {
+      "stake": self._handle_stake_button,
+      "unstake": self._handle_unstake_button,
+      "fund": self._handle_fund_button,
+  }
+
+  def on_button_pressed(self, event):
+      handler = self.BUTTON_HANDLERS.get(event.button.id)
+      if handler:
+          handler()
+  ```
+- [ ] Eliminar `# noqa: C901`
+
+#### 3.2 `stake_service()` (L466)
+
+- [ ] **Problema**: Lógica compleja de staking en un método
+- [ ] **Solución**: Dividir en validación y ejecución
+- [ ] Eliminar `# noqa: C901`
+
+#### 3.3 `show_create_service_modal()` (L609)
+
+- [ ] **Problema**: Construcción de UI mezclada con lógica
+- [ ] **Solución**: Separar creación de modal de lógica de negocio
+- [ ] Eliminar `# noqa: C901`
 
 ---
 
-## Notas para el Ingeniero Implementador
+### 4. `src/iwa/plugins/olas/service_manager/staking.py` (2 noqa)
 
-1. **Orden de Implementación**: Seguir los sprints en orden. Sprint 1 (seguridad) es bloqueante.
+#### 4.1 `get_staking_status()` (L18)
 
-2. **Tests**: Cada cambio debe incluir tests. Si no existen, crearlos primero.
+- [ ] **Problema**: Múltiples condiciones anidadas
+- [ ] **Solución**: Aplicar early return:
+  ```python
+  def get_staking_status(self):
+      if not self.service:
+          return None
+      if not self.service.staking_contract_address:
+          return StakingStatus.NOT_STAKED
+      # ... continuar con caso positivo
+  ```
+- [ ] Eliminar `# noqa: C901`
 
-3. **Commits**: Un commit por tarea, no commits gigantes por sprint.
+#### 4.2 `stake()` (L139)
 
-4. **Review**: Solicitar PR review para cambios P0 y P1.
+- [ ] **Problema**: Validaciones y ejecución mezcladas
+- [ ] **Solución**: Extraer `_validate_stake_preconditions()` y `_execute_stake()`
+- [ ] Eliminar `# noqa: C901`
 
-5. **Backups**: Antes de refactorizar archivos grandes, asegurar que hay commits limpios.
+---
 
-6. **Documentación**: Actualizar docstrings afectados por refactorizaciones.
+### 5. `src/iwa/plugins/olas/service_manager/drain.py` (1 noqa)
+
+#### 5.1 `drain_service()` (L146)
+
+- [ ] **Problema**: Método largo con múltiples tipos de drain
+- [ ] **Solución**: Estrategia pattern:
+  ```python
+  def drain_service(self, ...):
+      results = {}
+      results["native"] = self._drain_native(...)
+      results["erc20"] = self._drain_erc20_tokens(...)
+      results["agent"] = self._drain_agent_account(...)
+      return results
+  ```
+- [ ] Eliminar `# noqa: C901`
+
+---
+
+### 6. `src/iwa/core/services/transfer/swap.py` (1 noqa)
+
+#### 6.1 `swap()` (L20)
+
+- [ ] **Problema**: Método async largo
+- [ ] **Solución**: Extraer `_prepare_swap()`, `_execute_swap()`, `_log_swap_result()`
+- [ ] Eliminar `# noqa: C901`
+
+---
+
+### 7. `src/iwa/core/db.py` (2 noqa)
+
+#### 7.1 `run_migrations()` (L65)
+
+- [ ] **Problema**: Múltiples migraciones en un solo método
+- [ ] **Solución**: Una función por migración:
+  ```python
+  MIGRATIONS = [
+      _migration_add_decimal_info,
+      _migration_add_account_type,
+      # ...
+  ]
+
+  def run_migrations(columns):
+      for migration in MIGRATIONS:
+          migration(columns)
+  ```
+- [ ] Eliminar `# noqa: C901`
+
+#### 7.2 `log_transaction()` (L126)
+
+- [ ] **Problema**: Demasiados parámetros y lógica condicional
+- [ ] **Solución**: Crear `TransactionLogData` dataclass
+- [ ] Eliminar `# noqa: C901, D103`
+
+---
+
+### 8. Archivos con 1 noqa (Prioridad Baja)
+
+#### 8.1 `src/iwa/tools/reset_env.py` - `main()` (L19)
+- [ ] Dividir en funciones por tipo de reset
+- [ ] Eliminar `# noqa: C901`
+
+#### 8.2 `src/iwa/tools/reset_tenderly.py` - `main()` (L209)
+- [ ] Dividir en funciones por operación
+- [ ] Eliminar `# noqa: C901`
+
+#### 8.3 `src/iwa/plugins/olas/plugin.py` - `import_services()` (L82)
+- [ ] Extraer lógica de descubrimiento y validación
+- [ ] Eliminar `# noqa: C901`
+
+#### 8.4 `src/iwa/plugins/gnosis/cow_utils.py` - `get_cowpy_module()` (L9)
+- [ ] Simplificar lógica de importación
+- [ ] Eliminar `# noqa: C901`
+
+#### 8.5 `src/iwa/tui/screens/wallets.py` - `refresh_table_structure_and_data()` (L158)
+- [ ] Dividir estructura de datos de renderizado
+- [ ] Eliminar `# noqa: C901`
+
+#### 8.6 `src/iwa/plugins/olas/service_manager/mech.py` - `_send_marketplace_mech_request()` (L124)
+- [ ] Aplicar early return pattern
+- [ ] Eliminar `# noqa: C901`
+
+---
+
+### 9. Archivos Largos sin noqa (Prioridad Media)
+
+> Estos archivos no tienen noqa pero son muy largos y se beneficiarían de refactorización.
+
+#### 9.1 `src/iwa/core/chain.py` (974 líneas)
+
+- [ ] **Problema**: Archivo muy largo con múltiples clases (ChainInterface, RPCRateLimiter, etc.)
+- [ ] **Solución**: Dividir en package:
+  ```
+  chain/
+  ├── __init__.py      # Re-exports
+  ├── interface.py     # ChainInterface
+  ├── rate_limiter.py  # RPCRateLimiter
+  ├── chains.py        # Gnosis, Ethereum, etc.
+  └── errors.py        # TenderlyQuotaExceededError
+  ```
+
+#### 9.2 `src/iwa/tui/screens/wallets.py` (735 líneas)
+
+- [ ] **Problema**: UI y lógica de datos mezcladas
+- [ ] **Solución**: Separar en `wallets_ui.py` (componentes) y `wallets_data.py` (transformación)
+
+#### 9.3 `src/iwa/tui/modals/base.py` (406 líneas)
+
+- [ ] **Problema**: Modal base muy largo con múltiples responsabilidades
+- [ ] **Solución**: Extraer modales específicos a archivos propios
+
+#### 9.4 `src/iwa/web/routers/olas/services.py` (378 líneas)
+
+- [ ] **Problema**: Muchos endpoints en un archivo
+- [ ] **Solución**: Revisar si endpoints individuales son concisos, considerar sub-dividir
+
+#### 9.5 `src/iwa/plugins/gnosis/cow/swap.py` (374 líneas)
+
+- [ ] **Problema**: Clase CowSwap grande
+- [ ] **Solución**: Evaluar extracción de helpers (opcional, ya está en package propio)
+
+---
+
+## Patrones a Aplicar
+
+### Pattern 1: Return Early (Guard Clauses)
+
+**Antes** (nesting profundo):
+```python
+def process(data):
+    if data:
+        if data.is_valid:
+            if data.has_permission:
+                return do_work(data)
+            else:
+                return "no permission"
+        else:
+            return "invalid"
+    else:
+        return "no data"
+```
+
+**Después** (return early):
+```python
+def process(data):
+    if not data:
+        return "no data"
+    if not data.is_valid:
+        return "invalid"
+    if not data.has_permission:
+        return "no permission"
+    return do_work(data)
+```
+
+### Pattern 2: Negative Programming
+
+**Antes**:
+```python
+def validate(user):
+    if user.is_active:
+        if user.has_subscription:
+            if not user.is_banned:
+                return True
+    return False
+```
+
+**Después**:
+```python
+def validate(user):
+    if not user.is_active:
+        return False
+    if not user.has_subscription:
+        return False
+    if user.is_banned:
+        return False
+    return True
+```
+
+### Pattern 3: Extract Method
+
+**Antes** (método de 100+ líneas):
+```python
+def big_method(self):
+    # 30 lines of validation
+    # 40 lines of processing
+    # 30 lines of logging
+```
+
+**Después**:
+```python
+def big_method(self):
+    if not self._validate():
+        return None
+    result = self._process()
+    self._log_result(result)
+    return result
+```
+
+### Pattern 4: State Machine para Transiciones
+
+**Antes**:
+```python
+if state == A:
+    do_a()
+    state = B
+if state == B:
+    do_b()
+    state = C
+# ...
+```
+
+**Después**:
+```python
+TRANSITIONS = {
+    A: (do_a, B),
+    B: (do_b, C),
+}
+
+while state != FINAL:
+    handler, next_state = TRANSITIONS[state]
+    if not handler():
+        return False
+    state = next_state
+```
+
+---
+
+## Verificación Final
+
+Después de completar todas las tareas:
+
+```bash
+# Verificar que no quedan noqa: C901
+grep -rn "# noqa: C901" src/iwa --include="*.py" | wc -l
+# Debe ser 0
+
+# Verificar linters
+just check
+
+# Verificar tests
+just test
+```
+
+---
+
+## Notas para el Ingeniero
+
+1. **Un método a la vez**: No refactorizar todo de golpe
+2. **Tests primero**: Si no hay test, créalo antes de refactorizar
+3. **Commits atómicos**: Un commit por método refactorizado
+4. **Verificar**: `just test` después de cada cambio
+5. **Documentar**: Actualizar docstrings si cambia la firma
+
+---
+
+## Inventario Completo de Archivos
+
+> 94 archivos Python analizados (16,857 líneas totales)
+
+### Archivos Críticos (Requieren Refactorización)
+
+| Archivo | Líneas | noqa | Problema Principal |
+|---------|--------|------|-------------------|
+| `service_manager/lifecycle.py` | 737 | 5 | Métodos >100 líneas, nesting profundo |
+| `olas/importer.py` | 668 | 4 | Try/except anidados, parsing complejo |
+| `tui/olas_view.py` | 916 | 3 | Event handler con muchos branches |
+| `service_manager/staking.py` | 510 | 2 | Validaciones mezcladas con ejecución |
+| `core/chain.py` | 974 | 0 | Archivo muy largo, múltiples responsabilidades |
+| `tui/screens/wallets.py` | 735 | 1 | Refresh complejo, UI mezclada con datos |
+
+### Archivos con Issues Menores
+
+| Archivo | Líneas | noqa | Issue |
+|---------|--------|------|-------|
+| `service_manager/drain.py` | 324 | 1 | drain_service() largo |
+| `service_manager/mech.py` | 312 | 1 | Request handling complejo |
+| `plugins/olas/plugin.py` | 252 | 1 | import_services() largo |
+| `core/db.py` | 224 | 2 | Migraciones y logging |
+| `tools/reset_tenderly.py` | 343 | 1 | main() script largo |
+| `tools/reset_env.py` | ~100 | 1 | main() con muchos resets |
+| `gnosis/cow_utils.py` | ~80 | 1 | Import dinámico complejo |
+| `core/services/transfer/swap.py` | ~300 | 1 | swap() async largo |
+
+### Archivos Bien Estructurados ✅
+
+Los siguientes archivos tienen buena estructura y no requieren cambios:
+
+| Categoría | Archivos |
+|-----------|----------|
+| **Core Services** | `account.py` (58), `balance.py` (114), `transaction.py` (166) |
+| **Transfer Mixins** | `base.py` (260), `native.py` (262), `erc20.py` (247), `multisend.py` (381) |
+| **Contracts** | `contract.py` (297), `erc20.py` (80), `multisend.py` (72) |
+| **Core** | `types.py` (60), `utils.py` (60), `plugins.py` (46), `tables.py` (61) |
+| **Web** | `server.py` (147), `dependencies.py` (77) |
+| **Routers** | `accounts.py` (190), `transactions.py` (154), `state.py` (66) |
+| **Models** | `models.py` (344), `keys.py` (361), `mnemonic.py` (385) |
+| **Plugins Gnosis** | `plugin.py` (69), `cow/swap.py` (374) |
+| **TUI** | `app.py` (193), `rpc.py` (~100), `modals/base.py` (406) |
+
+---
+
+## Análisis Detallado por Categoría
+
+### Core Services (Limpio ✅)
+
+- `account.py`: Servicio simple, bien estructurado
+- `balance.py`: Retry logic implementado correctamente
+- `transaction.py`: Sign and send con reintentos, aceptable
+- `safe.py` (392 líneas): **Revisar** - `create_safe()` es largo pero ya fue refactorizado
+
+### Transfer Mixins (Limpio ✅)
+
+Los mixins de transfer están bien divididos:
+- `base.py`: Validaciones y helpers compartidos
+- `native.py`: Transferencias de moneda nativa
+- `erc20.py`: Transferencias ERC20, approvals
+- `multisend.py`: Operaciones batch
+
+### Web Routers
+
+| Router | Líneas | Estado |
+|--------|--------|--------|
+| `olas/services.py` | 378 | **Revisar** - Muchos endpoints |
+| `olas/staking.py` | 341 | Aceptable |
+| `olas/admin.py` | ~150 | ✅ |
+| `olas/funding.py` | ~100 | ✅ |
+| `swap.py` | 313 | Tiene 1 noqa |
+
+### Olas Contracts (Limpio ✅)
+
+- `staking.py` (403): Bien documentado
+- `service.py` (215): Contratos de servicio
+- `mech.py`, `mech_marketplace.py`: Integración Mech
+- `activity_checker.py`: Checker de actividad
+
+---
+
+## Resumen de Trabajo
+
+| Prioridad | Archivos | Tareas | Esfuerzo |
+|-----------|----------|--------|----------|
+| **CRÍTICA** | 6 | 25 | 2-3 días |
+| **ALTA** | 8 | 15 | 1-2 días |
+| **MEDIA** | 5 | 8 | 1 día |
+| **BAJA** | 75 | 0 | - |
+| **TOTAL** | 94 | 48 | ~5 días |
+
+---
+
+## Orden de Implementación Sugerido
+
+### Día 1: Lifecycle (Crítico)
+1. Refactorizar `create()` en lifecycle.py
+2. Refactorizar `activate_registration()`
+3. Refactorizar `register_agent()`
+
+### Día 2: Lifecycle + Staking
+4. Refactorizar `spin_up()` con state machine
+5. Refactorizar `wind_down()`
+6. Refactorizar `stake()` en staking.py
+
+### Día 3: Importer + TUI
+7. Refactorizar métodos de parsing en importer.py
+8. Refactorizar `on_button_pressed()` en olas_view.py
+
+### Día 4: DB + Tools
+9. Refactorizar `run_migrations()` en db.py
+10. Cleanup de tools/
+
+### Día 5: Verificación + Chain
+11. Verificar todos los tests
+12. Evaluar división de chain.py (opcional)
+
 
