@@ -177,8 +177,8 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 3.1 `on_button_pressed()` (L131)
 
-- [ ] **Problema**: Gran switch/if-else para manejar botones
-- [ ] **Solución**: Usar diccionario de handlers:
+- [x] **Problema**: Gran switch/if-else para manejar botones
+- [x] **Solución**: Usar diccionario de handlers:
   ```python
   BUTTON_HANDLERS = {
       "stake": self._handle_stake_button,
@@ -191,19 +191,19 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
       if handler:
           handler()
   ```
-- [ ] Eliminar `# noqa: C901`
+- [x] Eliminar `# noqa: C901`
 
 #### 3.2 `stake_service()` (L466)
 
-- [ ] **Problema**: Lógica compleja de staking en un método
-- [ ] **Solución**: Dividir en validación y ejecución
-- [ ] Eliminar `# noqa: C901`
+- [x] **Problema**: Lógica compleja de staking en un método
+- [x] **Solución**: Dividir en validación y ejecución
+- [x] Eliminar `# noqa: C901`
 
 #### 3.3 `show_create_service_modal()` (L609)
 
-- [ ] **Problema**: Construcción de UI mezclada con lógica
-- [ ] **Solución**: Separar creación de modal de lógica de negocio
-- [ ] Eliminar `# noqa: C901`
+- [x] **Problema**: Construcción de UI mezclada con lógica
+- [x] **Solución**: Separar creación de modal de lógica de negocio
+- [x] Eliminar `# noqa: C901`
 
 ---
 
