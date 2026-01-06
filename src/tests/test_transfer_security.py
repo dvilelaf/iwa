@@ -29,7 +29,7 @@ def test_is_whitelisted_destination_fail_closed(transfer_service):
     transfer_service.account_service.resolve_account.return_value = None
 
     # 2. No config whitelist (simulating config.core is None or whitelist empty)
-    with patch("iwa.core.services.transfer.Config") as mock_config_cls:
+    with patch("iwa.core.services.transfer.base.Config") as mock_config_cls:
         mock_config = MagicMock()
         mock_config.core = None  # SIMULATE MISSING CONFIG
         mock_config_cls.return_value = mock_config
@@ -47,7 +47,7 @@ def test_is_whitelisted_destination_explicit_allow(transfer_service):
     allowed_addr = Account.create().address
 
     # 2. In config whitelist
-    with patch("iwa.core.services.transfer.Config") as mock_config_cls:
+    with patch("iwa.core.services.transfer.base.Config") as mock_config_cls:
         mock_config = MagicMock()
         mock_config.core.whitelist.values.return_value = [EthereumAddress(allowed_addr)]
         mock_config_cls.return_value = mock_config
@@ -71,7 +71,7 @@ def test_is_supported_token_strict_validation(transfer_service):
         "OLAS": EthereumAddress(valid_token_addr)
     }
 
-    with patch("iwa.core.services.transfer.ChainInterfaces") as mock_ci_cls:
+    with patch("iwa.core.services.transfer.base.ChainInterfaces") as mock_ci_cls:
         mock_ci_cls.return_value.get.return_value = mock_chain_interface
 
         # 1. Native currency -> Allowed

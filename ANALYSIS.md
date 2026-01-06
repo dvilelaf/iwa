@@ -1154,14 +1154,14 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Paso 6**: Extraer `mech.py`
 
 
-#### 2.2 Dividir transfer.py (TRANS-A1) - **P1**
-- [ ] **Archivo**: `src/iwa/core/services/transfer.py` (1357 líneas)
-- [ ] **Paso 1**: Extraer a `transfer_native.py`: métodos de transferencia nativa
-- [ ] **Paso 2**: Extraer a `transfer_erc20.py`: métodos de transferencia ERC20
-- [ ] **Paso 3**: Extraer a `multi_send.py`: métodos multi_send
-- [ ] **Paso 4**: Extraer a `swap.py`: integración CowSwap (si aplica)
-- [ ] **Paso 5**: Mantener `transfer.py` como facade que importa submódulos
-- [ ] **Test**: Ejecutar tests relacionados con transfer
+#### 2.2 Dividir transfer.py (TRANS-A1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/services/transfer.py` (1357 líneas)
+- [x] **Paso 1**: Extraer a `transfer_native.py`: métodos de transferencia nativa (Implementado en `native.py`)
+- [x] **Paso 2**: Extraer a `transfer_erc20.py`: métodos de transferencia ERC20 (Implementado en `erc20.py`)
+- [x] **Paso 3**: Extraer a `multi_send.py`: métodos multi_send (Implementado en `multisend.py`)
+- [x] **Paso 4**: Extraer a `swap.py`: integración CowSwap (Implementado en `swap.py`)
+- [x] **Paso 5**: Mantener `transfer.py` como facade que importa submódulos (Reemplazado por package `src/iwa/core/services/transfer/`)
+- [x] **Test**: Ejecutar tests relacionados con transfer
 
 #### 2.3 Dividir olas.py router (OLAS-R-A1) - **P0**
 - [ ] **Archivo**: `src/iwa/web/routers/olas.py` (975 líneas)
