@@ -258,9 +258,30 @@ class KeyStorage(BaseModel):
     def get_signer(self, address_or_tag: str) -> Optional[LocalAccount]:
         """Get a LocalAccount signer for the address or tag.
 
-        Note: This method returns a LocalAccount which encapsulates the private key.
-        It's used for APIs that require a signer object (e.g., CowSwap).
-        Prefer sign_transaction() or sign_message() when possible.
+        ⚠️ SECURITY WARNING: This method returns a LocalAccount object which
+        encapsulates the private key. The private key is accessible via the
+        .key property on the returned object.
+
+        USE CASES:
+        - Only use this when an external library requires a signer object
+          (e.g., CowSwap SDK, safe-eth-py for certain operations)
+
+        DO NOT:
+        - Log or serialize the returned LocalAccount object
+        - Store the returned object longer than necessary
+        - Pass the .key property to any external system
+
+        ALTERNATIVES:
+        - For signing transactions: use sign_transaction() instead
+        - For message signing: use sign_message() or sign_typed_data()
+
+        Args:
+            address_or_tag: Address or tag of the account to get signer for.
+
+        Returns:
+            LocalAccount if found and is an EOA, None otherwise.
+            Returns None for Safe accounts (they cannot sign directly).
+
         """
         account = self.find_stored_account(address_or_tag)
         if not account:

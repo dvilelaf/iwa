@@ -193,7 +193,6 @@ def drain_wallet(
 
 
 # Load Plugins
-# Load Plugins
 # Removed direct import here, moved to top
 
 plugin_service = PluginService()

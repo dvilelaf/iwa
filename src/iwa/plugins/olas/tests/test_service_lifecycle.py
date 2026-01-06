@@ -97,7 +97,7 @@ def test_sm_stake_fail(sm):
 
     with (
         patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_stk_cls,
-        patch("iwa.plugins.olas.service_manager.ERC20Contract"),
+        patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"),
     ):
         mock_stk = mock_stk_cls.return_value
         mock_stk.get_service_info.return_value = {"staking_state": 1}

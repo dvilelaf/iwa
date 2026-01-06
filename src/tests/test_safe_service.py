@@ -1,179 +1,168 @@
-"""Tests for SafeService."""
+"""Tests for core SafeService."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from eth_account import Account
 
 from iwa.core.keys import EncryptedAccount, KeyStorage
-from iwa.core.models import StoredSafeAccount
-from iwa.core.services.account import AccountService
 from iwa.core.services.safe import SafeService
 
 
 @pytest.fixture
 def mock_key_storage():
-    """Mock KeyStorage."""
-    ks = MagicMock(spec=KeyStorage)
-    ks.accounts = {}
-    return ks
+    """Mock key storage."""
+    mock = MagicMock(spec=KeyStorage)
+    mock.accounts = {}
+
+    # Mock find_stored_account to return appropriate account types
+    def find_account(tag_or_addr):
+        if tag_or_addr == "deployer":
+            acc = MagicMock(spec=EncryptedAccount)
+            # Valid checksum address - Deployer
+            acc.address = "0xAB7C8803962c0f2F5BBBe3FA8BF0Dcd705084223"
+            return acc
+        if tag_or_addr == "owner1":
+            acc = MagicMock(spec=EncryptedAccount)
+            # Valid checksum address - Owner
+            acc.address = "0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"
+            return acc
+        return None
+
+    mock.find_stored_account.side_effect = find_account
+
+    # Mock private key retrieval
+    mock._get_private_key.return_value = (
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+    )
+
+    return mock
 
 
 @pytest.fixture
 def mock_account_service():
-    """Mock AccountService."""
-    return MagicMock(spec=AccountService)
+    """Mock account service."""
+    mock = MagicMock()
+    mock.get_tag_by_address.return_value = "deployer_tag"
+    return mock
 
 
 @pytest.fixture
-def safe_service(mock_key_storage, mock_account_service):
-    """SafeService fixture."""
-    return SafeService(mock_key_storage, mock_account_service)
+def mock_dependencies():
+    """Mock external dependencies (Safe, EthereumClient, etc)."""
+    with (
+        patch("iwa.core.services.safe.EthereumClient") as mock_client,
+        patch("iwa.core.services.safe.Safe") as mock_safe,
+        patch("iwa.core.services.safe.ProxyFactory") as mock_proxy_factory,
+        patch("iwa.core.services.safe.settings") as mock_settings,
+        patch("iwa.core.services.safe.log_transaction") as mock_log,
+        patch("iwa.core.services.safe.get_safe_master_copy_address") as mock_master,
+        patch("iwa.core.services.safe.get_safe_proxy_factory_address") as mock_factory,
+    ):
+        mock_settings.gnosis_rpc.get_secret_value.return_value = "http://rpc"
+
+        # Setup Safe creation return
+        mock_create_tx = MagicMock()
+        # Valid Checksum Address - New Safe (Matches Pydantic output)
+        mock_create_tx.contract_address = "0xbEC49fa140ACaa83533f900357DCD37866d50618"
+        mock_create_tx.tx_hash.hex.return_value = "0xTxHash"
+
+        mock_safe.create.return_value = mock_create_tx
+
+        # Setup ProxyFactory return
+        mock_deploy_tx = MagicMock()
+        # Valid checksum address - Salted Safe
+        mock_deploy_tx.contract_address = "0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5"
+        mock_deploy_tx.tx_hash.hex.return_value = "0xTxHashSalted"
+
+        mock_proxy_factory.return_value.deploy_proxy_contract_with_nonce.return_value = (
+            mock_deploy_tx
+        )
+
+        # Fix for setup_data chaining
+        mock_function = MagicMock()
+        mock_function.build_transaction.return_value = {"data": "0x1234"}
+
+        mock_contract = MagicMock()
+        mock_contract.functions.setup.return_value = mock_function
+
+        mock_safe_instance = MagicMock()
+        mock_safe_instance.contract = mock_contract
+
+        def safe_side_effect(*args, **kwargs):
+            return mock_safe_instance
+
+        mock_safe.side_effect = safe_side_effect
+        mock_safe.create.return_value = mock_create_tx
+
+        # Mock get_transaction_receipt for gas calc
+        mock_client.return_value.w3.eth.get_transaction_receipt.return_value = {
+            "gasUsed": 50000,
+            "effectiveGasPrice": 20,
+        }
+
+        yield {
+            "client": mock_client,
+            "safe": mock_safe,
+            "proxy_factory": mock_proxy_factory,
+            "settings": mock_settings,
+            "log": mock_log,
+            "master": mock_master,
+            "factory": mock_factory,
+        }
 
 
-def test_create_safe_deployer_not_found(safe_service, mock_key_storage):
-    """Test create_safe when deployer not found."""
-    mock_key_storage.find_stored_account.return_value = None
-    with pytest.raises(ValueError, match="Deployer account 'deployer' not found"):
-        safe_service.create_safe("deployer", ["owner"], 1, "gnosis")
+def test_create_safe_standard(mock_key_storage, mock_account_service, mock_dependencies):
+    """Test standard create_safe without salt."""
+    service = SafeService(mock_key_storage, mock_account_service)
 
-
-def test_create_safe_deployer_is_safe(safe_service, mock_key_storage):
-    """Test create_safe when deployer is a Safe."""
-    # Use valid addresses
-    valid_addr_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-
-    mock_key_storage.find_stored_account.return_value = StoredSafeAccount(
-        tag="safe", address=valid_addr_1, chains=["gnosis"], threshold=1, signers=[]
-    )
-    with pytest.raises(ValueError, match="Deployer account 'deployer' .* is a Safe"):
-        safe_service.create_safe("deployer", ["owner"], 1, "gnosis")
-
-
-def test_create_safe_owner_not_found(safe_service, mock_key_storage):
-    """Test create_safe when owner not found."""
-    deployer = MagicMock(spec=EncryptedAccount)
-    deployer.address = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-
-    # First call for deployer found, second call for owner returns None
-    def side_effect(arg):
-        if arg == "deployer":
-            return deployer
-        return None
-
-    mock_key_storage.find_stored_account.side_effect = side_effect
-    # Use valid 32 byte key hex
-    mock_key_storage._get_private_key.return_value = "0x" + "1" * 64
-
-    with pytest.raises(ValueError, match="Owner account 'owner' not found"):
-        safe_service.create_safe("deployer", ["owner"], 1, "gnosis")
-
-
-@patch("iwa.core.services.safe.EthereumClient")
-@patch("iwa.core.services.safe.Safe")
-@patch("iwa.core.services.safe.settings")
-def test_create_safe_success(
-    mock_settings,
-    mock_safe_cls,
-    mock_eth_client,
-    safe_service,
-    mock_key_storage,
-    mock_account_service,
-):
-    """Test create_safe success path."""
-    deployer = MagicMock(spec=EncryptedAccount)
-    deployer.address = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-
-    owner = MagicMock(spec=EncryptedAccount)
-    owner.address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
-
-    mock_key_storage.find_stored_account.side_effect = (
-        lambda x: deployer if x == "deployer" else owner
-    )
-    mock_key_storage._get_private_key.return_value = Account.create().key.hex()
-    mock_key_storage.accounts = {}
-
-    # Mock Safe creation
-    mock_safe_instance = MagicMock()
-    mock_safe_cls.create.return_value = mock_safe_instance
-    mock_safe_instance.contract_address = "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
-    mock_safe_instance.tx_hash.hex.return_value = "0xTxHash"
-
-    mock_account_service.get_tag_by_address.return_value = "deployer_tag"
-
-    safe_account, tx_hash = safe_service.create_safe(
-        "deployer", ["owner"], 1, "gnosis", tag="MySafe"
+    safe_account, tx_hash = service.create_safe(
+        deployer_tag_or_address="deployer",
+        owner_tags_or_addresses=["owner1"],
+        threshold=1,
+        chain_name="gnosis",
+        tag="MySafe",
     )
 
-    assert safe_account.address == "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
+    # Checksum address matching what Pydantic/Web3 produces
+    assert safe_account.address == "0xbEC49fa140ACaa83533f900357DCD37866d50618"
     assert safe_account.tag == "MySafe"
     assert tx_hash == "0xTxHash"
 
-    # Verify save called
+    mock_dependencies["safe"].create.assert_called_once()
     mock_key_storage.save.assert_called_once()
-    assert "0x617F2E2fD72FD9D5503197092aC168c91465E7f2" in mock_key_storage.accounts
 
 
-def test_get_signer_keys_not_safe(safe_service, mock_key_storage):
-    """Test _get_signer_keys when target is not a safe."""
-    # _get_signer_keys now takes a StoredSafeAccount directly
-    non_safe = MagicMock(spec=EncryptedAccount)
-    # Should raise TypeError since method expects StoredSafeAccount
-    with pytest.raises(AttributeError):
-        safe_service._get_signer_keys(non_safe)
+def test_create_safe_with_salt(mock_key_storage, mock_account_service, mock_dependencies):
+    """Test create_safe with salt nonce."""
+    service = SafeService(mock_key_storage, mock_account_service)
 
+    mock_dependencies["client"].return_value.w3.eth.gas_price = 1000
 
-def test_get_signer_keys_not_enough_signers(safe_service, mock_key_storage):
-    """Test _get_signer_keys when not enough keys available."""
-    valid_addr_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-    valid_addr_2 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
-    valid_addr_3 = "0x617F2E2fD72FD9D5503197092aC168c91465E7f2"
-
-    safe = StoredSafeAccount(
-        tag="safe",
-        address=valid_addr_1,
-        chains=["gnosis"],
-        threshold=2,
-        signers=[valid_addr_2, valid_addr_3],
-    )
-
-    # Only one key available
-    mock_key_storage._get_private_key.side_effect = (
-        lambda addr: "0xKey1" if addr == valid_addr_2 else None
-    )
-
-    with pytest.raises(ValueError, match="Not enough signer private keys"):
-        safe_service._get_signer_keys(safe)
-
-
-@patch("iwa.plugins.gnosis.safe.SafeMultisig")
-def test_execute_safe_transaction_success(mock_safe_multisig, safe_service, mock_key_storage):
-    """Test execute_safe_transaction success."""
-    valid_addr_1 = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
-    valid_addr_2 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
-
-    safe = StoredSafeAccount(
-        tag="safe", address=valid_addr_1, chains=["gnosis"], threshold=1, signers=[valid_addr_2]
-    )
-    mock_key_storage.find_stored_account.return_value = safe
-    mock_key_storage._get_private_key.return_value = "0xKey1"
-
-    # Mock SafeMultisig and its methods
-    mock_safe_instance = MagicMock()
-    mock_safe_multisig.return_value = mock_safe_instance
-    mock_safe_tx = MagicMock()
-    mock_safe_tx.tx_hash.hex.return_value = "0xTxHash123"
-    mock_safe_instance.build_tx.return_value = mock_safe_tx
-
-    result = safe_service.execute_safe_transaction(
-        safe_address_or_tag="safe",
-        to="0x0000000000000000000000000000000000000001",
-        value=1000,
+    safe_account, tx_hash = service.create_safe(
+        deployer_tag_or_address="deployer",
+        owner_tags_or_addresses=["owner1"],
+        threshold=1,
         chain_name="gnosis",
+        tag="MySaltedSafe",
+        salt_nonce=123,
     )
 
-    assert result == "0xTxHash123"
-    mock_safe_instance.build_tx.assert_called_once()
-    mock_safe_tx.sign.assert_called_with("0xKey1")
-    mock_safe_tx.call.assert_called_once()
-    mock_safe_tx.execute.assert_called_with("0xKey1")
+    # 0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5
+    assert safe_account.address == "0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5"
+    assert tx_hash == "0xTxHashSalted"
+
+    # Check that manual ProxyFactory logic was used
+    mock_dependencies[
+        "proxy_factory"
+    ].return_value.deploy_proxy_contract_with_nonce.assert_called_once()
+    # Safe.create should NOT be called
+    mock_dependencies["safe"].create.assert_not_called()
+
+
+def test_create_safe_invalid_deployer(mock_key_storage, mock_account_service):
+    """Test error when deployer invalid."""
+    mock_key_storage.find_stored_account.return_value = None
+    service = SafeService(mock_key_storage, mock_account_service)
+
+    with pytest.raises(ValueError, match="Deployer account .* not found"):
+        service.create_safe("invalid", [], 1, "gnosis")

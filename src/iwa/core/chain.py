@@ -1,5 +1,6 @@
 """Chain interaction helpers."""
 
+import re
 import threading
 import time
 from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
@@ -29,6 +30,32 @@ class TenderlyQuotaExceededError(Exception):
     """
 
     pass
+
+
+def _sanitize_rpc_url(url: str) -> str:
+    """Remove API keys and sensitive data from RPC URLs for safe logging.
+
+    Sanitizes:
+    - Query parameters (may contain API keys)
+    - Path segments that look like API keys (32+ hex chars)
+    - Known API key patterns in subdomains
+
+    Args:
+        url: The RPC URL to sanitize.
+
+    Returns:
+        Sanitized URL safe for logging.
+
+    """
+    if not url:
+        return url
+    # Remove query params that might contain keys
+    sanitized = re.sub(r"\?.*$", "?***", url)
+    # Remove path segments that look like API keys (32+ hex chars)
+    sanitized = re.sub(r"/[a-fA-F0-9]{32,}", "/***", sanitized)
+    # Remove common API key patterns in path (e.g., /v3/YOUR_KEY)
+    sanitized = re.sub(r"/v[0-9]+/[a-zA-Z0-9_-]{20,}", "/v*/***", sanitized)
+    return sanitized
 
 
 class RPCRateLimiter:
@@ -371,7 +398,8 @@ class ChainInterface:
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
             logger.warning(
-                f"Using insecure RPC URL for {self.chain.name}: {self.chain.rpc}. Please use HTTPS."
+                f"Using insecure RPC URL for {self.chain.name}: "
+                f"{_sanitize_rpc_url(self.chain.rpc)}. Please use HTTPS."
             )
 
         self._initial_block = 0

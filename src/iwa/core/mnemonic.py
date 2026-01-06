@@ -124,9 +124,11 @@ class MnemonicStorage(BaseModel):
         return MnemonicStorage(**data)
 
     def save(self, file_path: Path = WALLET_PATH) -> None:
-        """Save"""
+        """Save mnemonic storage to file with secure permissions."""
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(self.model_dump(), f, indent=4)
+        # SECURITY: Restrict file permissions to owner only
+        os.chmod(file_path, 0o600)
 
 
 class MnemonicManager:

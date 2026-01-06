@@ -20,8 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const targetTime = new Date(el.dataset.unstakeAt);
       const diffMs = targetTime - new Date();
       if (diffMs <= 0) {
-        el.innerHTML =
-          '<span style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>';
+        el.innerHTML = '<span class="text-success font-bold">AVAILABLE</span>';
         el.removeAttribute("data-unstake-at");
       } else {
         const totalMins = Math.ceil(diffMs / 60000);
@@ -293,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nativeSymbol = getNativeCurrencySymbol();
 
     // Show loading
-    body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" style="text-align: center;"><span class="loading-spinner"></span> Loading accounts...</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" class="text-center"><span class="loading-spinner"></span> Loading accounts...</td></tr>`;
 
     try {
       const resp = await authFetch(`/api/accounts?chain=${state.activeChain}`);
@@ -307,7 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
       fetchBalancesForTokens(Array.from(state.activeTokens));
     } catch (err) {
       console.error(err);
-      body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" style="text-align: center; color: #e74c3c;">Error loading accounts</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" class="text-center text-error">Error loading accounts</td></tr>`;
     }
   }
 
@@ -330,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
     thead.innerHTML = headerHtml;
 
     if (!state.accounts || state.accounts.length === 0) {
-      body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" style="text-align: center; opacity: 0.5;">No accounts found for ${escapeHtml(state.activeChain)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${3 + allTokens.length}" class="text-center opacity-50">No accounts found for ${escapeHtml(state.activeChain)}</td></tr>`;
       return;
     }
 
@@ -340,14 +339,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return `
                 <tr data-address="${escapeHtml(acc.address)}">
                     <td><span class="tag-badge">${escapeHtml(acc.tag)}</span></td>
-                    <td class="address-cell" onclick="copyToClipboard('${escapeHtml(acc.address)}')">${escapeHtml(shortenAddr(acc.address))}</td>
+                    <td class="address-cell" data-action="copy" data-value="${escapeHtml(acc.address)}">${escapeHtml(shortenAddr(acc.address))}</td>
                     <td>${escapeHtml(acc.type)}</td>
                     ${allTokens
                       .map((t) => {
                         const isActive = state.activeTokens.has(t);
-                        if (!isActive) {
-                          return `<td class="val balance-cell" data-token="${t}" style="opacity: 0.3;">-</td>`;
-                        }
+                        return `<td class="val balance-cell opacity-30" data-token="${t}">-</td>`;
                         const bal = cached[t];
                         if (bal !== undefined && bal !== null) {
                           return `<td class="val balance-cell" data-token="${t}">${escapeHtml(formatBalance(bal))}</td>`;
@@ -422,8 +419,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td>${escapeHtml(tx.token.toUpperCase())}</td>
                     <td class="val">${escapeHtml(formatBalance(tx.amount))}</td>
                     <td class="val">${escapeHtml(formatBalance(tx.value_eur))}</td>
-                    <td><span style="color: #2ecc71">${escapeHtml(tx.status)}</span></td>
-                    <td class="address-cell" onclick="copyToClipboard('${escapeHtml(tx.hash)}')">${escapeHtml(tx.hash.substring(0, 10))}...</td>
+                    <td><span class="text-success">${escapeHtml(tx.status)}</span></td>
+                    <td class="address-cell" data-action="copy" data-value="${escapeHtml(tx.hash)}">${escapeHtml(tx.hash.substring(0, 10))}...</td>
                     <td>${escapeHtml(tx.gas_cost)}</td>
                     <td>${escapeHtml(formatBalance(tx.gas_value_eur))}</td>
                     <td class="tags-cell">${(tx.tags || []).map((t) => `<span class="tag-badge">${escapeHtml(t)}</span>`).join("")}</td>
@@ -444,7 +441,7 @@ document.addEventListener("DOMContentLoaded", () => {
       !container.innerHTML ||
       container.innerHTML.includes("No data")
     ) {
-      container.innerHTML = `<div class="rpc-card glass" style="text-align: center; padding: 2rem;"><span class="loading-spinner"></span> Loading RPC status...</div>`;
+      container.innerHTML = `<div class="rpc-card glass text-center mb-2"><span class="loading-spinner"></span> Loading RPC status...</div>`;
     }
 
     try {
@@ -460,10 +457,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                     <div class="rpc-meta">
                         <span>Status:</span>
-                        <span style="color: ${data.status === "online" ? "#2ecc71" : "#e74c3c"}">${escapeHtml(data.status.toUpperCase())}</span>
+                        <span class="${data.status === "online" ? "text-success" : "text-error"}">${escapeHtml(data.status.toUpperCase())}</span>
                     </div>
                     ${data.block ? `<div class="rpc-meta"><span>Block:</span><span>${escapeHtml(String(data.block))}</span></div>` : ""}
-                    ${data.latency ? `<div class="rpc-meta"><span>Latency:</span><span style="color: var(--accent-color)">${escapeHtml(data.latency)}</span></div>` : ""}
+                    ${data.latency ? `<div class="rpc-meta"><span>Latency:</span><span class="accent-color">${escapeHtml(data.latency)}</span></div>` : ""}
                 </div>
             `,
         )
@@ -471,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error(err);
       if (!container.innerHTML || container.innerHTML.includes("Loading")) {
-        container.innerHTML = `<div class="rpc-card glass" style="text-align: center; color: #e74c3c;">Error loading RPC status</div>`;
+        container.innerHTML = `<div class="rpc-card glass text-center text-error">Error loading RPC status</div>`;
       }
     }
   }
@@ -585,7 +582,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const container = document.getElementById("safe-owners-list");
     if (!state.accounts || state.accounts.length === 0) {
       container.innerHTML =
-        '<span style="color: var(--text-muted); font-size: 0.9rem;">No accounts available</span>';
+        '<span class="text-muted text-sm">No accounts available</span>';
       return;
     }
     container.innerHTML = state.accounts
@@ -1204,7 +1201,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast(`Failed to refresh services: ${err.message}`, "error");
         return;
       }
-      container.innerHTML = `<div class="empty-state glass" style="color: #e74c3c;"><p>Error loading services: ${escapeHtml(err.message)}</p></div>`;
+      container.innerHTML = `<div class="empty-state glass text-error"><p>Error loading services: ${escapeHtml(err.message)}</p></div>`;
     }
   };
 
@@ -1418,23 +1415,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const summaryContainer = document.getElementById("olas-summary-container");
     if (summaryContainer) {
       summaryContainer.innerHTML = `
-                <div class="olas-summary-header" style="margin: 0 auto 1rem auto; padding: 0.8rem 1.5rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); max-width: 700px;">
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
-                        <div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Services</div>
-                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);">${serviceCount}</div>
+                <div class="olas-summary-header">
+                    <div class="olas-summary-grid">
+                        <div class="olas-summary-item">
+                            <div class="olas-summary-item-label">Services</div>
+                            <div class="olas-summary-item-value accent">${serviceCount}</div>
                         </div>
-                        <div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Rewards</div>
-                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--success);">${rewardsDisplay} OLAS</div>
+                        <div class="olas-summary-item">
+                            <div class="olas-summary-item-label">Rewards</div>
+                            <div class="olas-summary-item-value success">${rewardsDisplay} OLAS</div>
                         </div>
-                        <div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">OLAS Price</div>
-                            <div style="font-size: 1.3rem; font-weight: 600;">${priceDisplay}</div>
+                        <div class="olas-summary-item">
+                            <div class="olas-summary-item-label">OLAS Price</div>
+                            <div class="olas-summary-item-value">${priceDisplay}</div>
                         </div>
-                        <div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Rewards Value</div>
-                            <div style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);">${valueDisplay}</div>
+                        <div class="olas-summary-item">
+                            <div class="olas-summary-item-label">Rewards Value</div>
+                            <div class="olas-summary-item-value accent">${valueDisplay}</div>
                         </div>
                     </div>
                 </div>
@@ -1455,7 +1452,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const diff = Math.floor(staking.remaining_epoch_seconds);
       if (diff <= 0) {
         epochCountdown =
-          '<span class="countdown" style="color: #e74c3c">Checkpoint pending</span>';
+          '<span class="countdown text-error">Checkpoint pending</span>';
       } else {
         const h = Math.floor(diff / 3600);
         const m = Math.floor((diff % 3600) / 60);
@@ -1473,7 +1470,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return `
                     <tr>
                         <td>${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))}</td>
-                        <td class="address-cell" style="color: var(--text-muted)">Not deployed</td>
+                        <td class="address-cell text-muted">Not deployed</td>
                         <td class="val">-</td>
                         <td class="val">-</td>
                     </tr>
@@ -1518,7 +1515,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="staking-row">
                         <span class="label">Liveness:</span>
                         <div class="liveness-progress">
-                            <div class="progress-bar" style="width: 0%"></div>
+                            <div class="progress-bar"></div>
                             <span class="progress-text"><span class="cell-spinner"></span></span>
                         </div>
                     </div>
@@ -1537,7 +1534,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="staking-row">
                         <span class="label">Liveness:</span>
                         <div class="liveness-progress">
-                            <div class="progress-bar ${progressClass}" style="width: ${percentage}%"></div>
+                            <div class="progress-bar ${progressClass}" style="--width: ${percentage}%"></div>
                             <span class="progress-text">${current}/${required} ${staking.liveness_ratio_passed ? "✓" : ""}</span>
                         </div>
                     </div>
@@ -1547,17 +1544,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Disable all buttons while loading
     const loadingDisabled = isLoading ? "disabled" : "";
-    const loadingStyle = isLoading
-      ? "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
-      : "";
+    const loadingClass = isLoading ? "opacity-60 not-allowed grayscale" : "";
 
     return `
             <div class="service-card glass" data-service-key="${escapeHtml(service.key)}">
                 <div class="service-header">
                     <h3>${escapeHtml(service.name || "Service")} <span class="service-id">#${service.service_id}</span></h3>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="flex-center-gap">
                         <span class="chain-badge">${escapeHtml(service.chain)}</span>
-                        <button class="btn-icon" onclick="refreshSingleService('${escapeHtml(service.key)}')" title="Refresh this service" ${loadingDisabled} style="padding: 0.3rem; ${loadingStyle}">
+                        <button class="btn-icon btn-icon-sm ${loadingClass}" data-action="refresh-service" data-key="${escapeHtml(service.key)}" title="Refresh this service" ${loadingDisabled}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -1649,7 +1644,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                   new Date(staking.unstake_available_at) -
                                   new Date();
                                 if (diffMs <= 0)
-                                  return '<span style="color: var(--success-color); font-weight: bold;">AVAILABLE</span>';
+                                  return '<span class="text-success font-bold">AVAILABLE</span>';
                                 const diffMins = Math.ceil(diffMs / 60000);
                                 const hours = Math.floor(diffMins / 60);
                                 const mins = diffMins % 60;
@@ -1662,7 +1657,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
 
                 <div class="service-actions">
-                    <button class="btn-primary btn-sm" onclick="showFundServiceModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}')" ${loadingDisabled} style="${loadingStyle}">
+                    <button class="btn-primary btn-sm" data-action="fund-service" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" ${loadingDisabled}>
                         Fund
                     </button>
                     ${
@@ -1685,9 +1680,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             checkpointTitle = `Checkpoint not needed yet. Epoch ends in ${h}h ${m}m.`;
                           }
                           return `
-                                <button class="btn-primary btn-sm btn-checkpoint" onclick="checkpointOlasService('${escapeHtml(service.key)}')" ${checkpointDisabled ? "disabled" : ""} style="${loadingStyle}" title="${escapeHtml(checkpointTitle)}">
-                                    Checkpoint
-                                </button>
+                        <button class="btn-primary btn-sm btn-checkpoint ${loadingClass}" data-action="checkpoint" data-key="${escapeHtml(service.key)}" ${checkpointDisabled ? "disabled" : ""} title="${escapeHtml(checkpointTitle)}">
+                            Checkpoint
+                        </button>
                             `;
                         })()}
                         ${(() => {
@@ -1714,8 +1709,7 @@ document.addEventListener("DOMContentLoaded", () => {
                           }
 
                           return `
-                        <button class="btn-danger btn-sm" onclick="unstakeOlasService('${escapeHtml(service.key)}')" ${unstakeDisabled}
-                                style="${isLoading || !canUnstake ? disabledStyle : ""}"
+                        <button class="btn-danger btn-sm ${isLoading || !canUnstake ? "opacity-60 not-allowed grayscale" : ""}" data-action="unstake" data-key="${escapeHtml(service.key)}" ${unstakeDisabled}
                                 title="${isLoading ? "Loading..." : !canUnstake ? `Cannot unstake yet. Minimum staking duration (72h) ends in ${timeText}` : "Unstake service"}">
                             ${escapeHtml(unstakeLabel)}
                         </button>
@@ -1724,15 +1718,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     `
                         : service.state === "DEPLOYED"
                           ? `
-                        <button class="btn-danger btn-sm" disabled
-                                style="opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
+                        <button class="btn-danger btn-sm opacity-60 not-allowed grayscale" disabled
                                 title="Cannot stake a deployed service. Terminate first to change staking configuration.">
                             Stake
                         </button>
                     `
                           : service.state === "PRE_REGISTRATION"
                             ? `
-                        <button class="btn-primary btn-sm" onclick="showDeployModal('${escapeHtml(service.key)}', '${escapeHtml(service.chain)}', '${escapeHtml(service.name || "")}', '${escapeHtml(service.service_id)}')" ${loadingDisabled} style="${loadingStyle}">
+                        <button class="btn-primary btn-sm ${loadingClass}" data-action="deploy" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" data-name="${escapeHtml(service.name || "")}" data-id="${escapeHtml(service.service_id)}" ${loadingDisabled}>
                             Deploy
                         </button>
                     `
@@ -1780,9 +1773,9 @@ document.addEventListener("DOMContentLoaded", () => {
                           terminateTitle = "Loading...";
                         }
 
+                        const isDisabled = terminateDisabled === "disabled";
                         return `
-                        <button class="btn-danger btn-sm" onclick="showTerminateModal('${escapeHtml(service.key)}')" ${terminateDisabled}
-                                style="${terminateStyle}"
+                        <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="terminate" data-key="${escapeHtml(service.key)}" ${terminateDisabled}
                                 title="${escapeHtml(terminateTitle)}">
                             ${escapeHtml(terminateLabel)}
                         </button>
@@ -1840,9 +1833,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
               }
 
+              const isDisabled = drainDisabled === "disabled";
               return `
-                    <button class="btn-danger btn-sm" onclick="drainOlasService('${escapeHtml(service.key)}')" ${drainDisabled}
-                            style="${drainStyle}"
+                    <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="drain" data-key="${escapeHtml(service.key)}" ${drainDisabled}
                             title="${escapeHtml(drainTitle)}">
                         ${escapeHtml(drainLabel)}
                     </button>
@@ -1851,7 +1844,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${
                   isStaked && parseFloat(staking.accrued_reward_olas) > 0
                     ? `
-                    <button class="btn-primary btn-sm" onclick="claimOlasRewards('${escapeHtml(service.key)}')" ${loadingDisabled} style="${loadingStyle}">
+                    <button class="btn-primary btn-sm ${loadingClass}" data-action="claim-rewards" data-key="${escapeHtml(service.key)}" ${loadingDisabled}>
                         Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS
                     </button>
                 `
@@ -2226,8 +2219,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 slotText = `${slots} slots`;
               }
               const text = `${escapeHtml(c.name)} (${slotText})`;
-              const style = isDisabled ? "color: #999;" : "";
-              return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
+              const optionClass = isDisabled ? "text-muted" : "";
+              return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
             })
             .join("");
 
@@ -2335,9 +2328,8 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           const text = `${escapeHtml(c.name)} (${slotText})`;
-          const style = isDisabled ? "color: #999;" : "";
-
-          return `<option value="${escapeHtml(c.address)}" ${disabledStr} style="${style}">${text}</option>`;
+          const optionClass = isDisabled ? "text-muted" : "";
+          return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
         })
         .join("")
     );
@@ -2355,8 +2347,8 @@ document.addEventListener("DOMContentLoaded", () => {
         contractSelect.innerHTML = renderContractOptions(
           state.stakingContractsCache,
         );
-        contractSelect.style.display = "";
-        spinnerDiv.style.display = "none";
+        contractSelect.classList.remove("hidden");
+        spinnerDiv.classList.add("hidden");
       } else {
         // If cache not ready, show spinner and hide select
         const submitBtn = createServiceForm.querySelector(
@@ -2401,8 +2393,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const serviceKey = createServiceForm.dataset.deployServiceKey;
 
       btn.innerHTML = isDeployMode
-        ? '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Deploying...'
-        : '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 0.5rem;"></span>Creating & Deploying...';
+        ? '<span class="loading-spinner spinner-sm"></span>Deploying...'
+        : '<span class="loading-spinner spinner-sm"></span>Creating & Deploying...';
       btn.disabled = true;
 
       const stakingContract = document.getElementById(
@@ -2547,6 +2539,36 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  // Global Click listener for delegation
+  document.body.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const key = btn.dataset.key;
+    const chain = btn.dataset.chain;
+
+    if (action === "copy") {
+      copyToClipboard(btn.dataset.value);
+    } else if (action === "refresh-service") {
+      refreshSingleService(key);
+    } else if (action === "fund-service") {
+      showFundServiceModal(key, chain);
+    } else if (action === "checkpoint") {
+      checkpointOlasService(key);
+    } else if (action === "unstake") {
+      unstakeOlasService(key);
+    } else if (action === "deploy") {
+      showDeployModal(key, chain, btn.dataset.name, btn.dataset.id);
+    } else if (action === "terminate") {
+      showTerminateModal(key);
+    } else if (action === "drain") {
+      drainOlasService(key);
+    } else if (action === "claim-rewards") {
+      claimOlasRewards(key);
+    }
+  });
 
   init();
 });

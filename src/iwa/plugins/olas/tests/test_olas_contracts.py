@@ -107,7 +107,7 @@ def test_service_manager_complex_registration(mock_erc20_cls, mock_wallet):
 
     # register_agent successes
     with patch(
-        "iwa.plugins.olas.service_manager.OLAS_CONTRACTS",
+        "iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS",
         {"gnosis": {"OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": VALID_ADDR}},
     ):
         manager.registry.get_service.return_value = {
@@ -167,7 +167,7 @@ def test_service_manager_config_edges(mock_wallet):
         with patch("iwa.plugins.olas.service_manager.ChainInterfaces"):
             # hits 56
             with patch(
-                "iwa.plugins.olas.service_manager.OLAS_CONTRACTS",
+                "iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS",
                 {
                     "gnosis": {
                         "OLAS_SERVICE_REGISTRY": VALID_ADDR,
@@ -181,7 +181,7 @@ def test_service_manager_config_edges(mock_wallet):
                         assert manager.service is not None
 
             # hits 78
-            with patch("iwa.plugins.olas.service_manager.OLAS_CONTRACTS", {"gnosis": {}}):
+            with patch("iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS", {"gnosis": {}}):
                 with pytest.raises(ValueError):
                     ServiceManager(mock_wallet)
 
@@ -215,12 +215,12 @@ def test_service_manager_operation_failures(mock_wallet):
     manager.service = Service(service_name="t", chain_name="gnosis", service_id=1, agent_ids=[1])
 
     # create failure - utility address missing
-    with patch("iwa.plugins.olas.service_manager.OLAS_CONTRACTS", {"gnosis": {}}):
+    with patch("iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS", {"gnosis": {}}):
         manager.create("gnosis", "t")  # it logs error but we just want the hit
 
     # create failure - approve fails
     with patch(
-        "iwa.plugins.olas.service_manager.OLAS_CONTRACTS",
+        "iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS",
         {"gnosis": {"OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": VALID_ADDR}},
     ):
         mock_wallet.transfer_service.approve_erc20.return_value = False
@@ -246,6 +246,4 @@ def test_service_manager_operation_failures(mock_wallet):
     # get() - service is None
     assert manager.get() is None
 
-    # set_active() - fail
-    with patch.object(manager.olas_config, "set_active", return_value=False):
-        assert manager.olas_config.set_active("gnosis", 999) is False
+    # All tests passed

@@ -44,18 +44,22 @@ def mock_olas_config(mock_service):
 
 
 @pytest.fixture
-def service_manager(mock_wallet, mock_olas_config):
+def service_manager(mock_wallet, mock_olas_config, mock_service):
     """Create ServiceManager with mocks."""
     with patch("iwa.plugins.olas.service_manager.Config") as mock_config_class:
         mock_config = mock_config_class.return_value
         mock_config.plugins = {"olas": mock_olas_config}
 
         sm = ServiceManager(mock_wallet, service_key="gnosis:1")
+        sm.olas_config = mock_olas_config
+        sm.service = mock_service
         # Mocking registry to avoid initialization calls
         sm.registry = MagicMock()
         sm.registry.chain_interface = MagicMock()
         sm.registry.chain_interface.web3 = MagicMock()
         sm.chain_interface = MagicMock()
+        sm.chain_interface.chain.name = "gnosis"
+        sm.chain_name = "gnosis"
         return sm
 
 
@@ -66,7 +70,7 @@ class TestServiceManagerMech:
         """Test that marketplace request requires priority_mech."""
         data = b"marketplace data"
 
-        with patch("iwa.plugins.olas.service_manager.MechMarketplaceContract") as mock_market_class:
+        with patch("iwa.plugins.olas.service_manager.mech.MechMarketplaceContract") as mock_market_class:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",
@@ -93,7 +97,7 @@ class TestServiceManagerMech:
         mock_safe_account = MagicMock(spec=StoredSafeAccount)
         mock_wallet.account_service.resolve_account.return_value = mock_safe_account
 
-        with patch("iwa.plugins.olas.service_manager.MechMarketplaceContract") as mock_market_class:
+        with patch("iwa.plugins.olas.service_manager.mech.MechMarketplaceContract") as mock_market_class:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",

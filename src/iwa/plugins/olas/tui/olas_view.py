@@ -292,10 +292,9 @@ class OlasView(Static):
             container.mount(
                 Button("Create New Service", id="olas-create-service-btn", variant="primary")
             )
-        except Exception as e:
-            import sys
+        except Exception:
+            pass
 
-            print(f"[OLAS DEBUG] Error mounting cards: {e}", file=sys.stderr)
 
     def _mount_error(self, message: str) -> None:
         """Mount error message (called from UI thread)."""
@@ -303,10 +302,9 @@ class OlasView(Static):
             container = self.query_one("#services-container", ScrollableContainer)
             container.remove_children()
             container.mount(Label(message, classes="empty-state"))
-        except Exception as e:
-            import sys
+        except Exception:
+            pass
 
-            print(f"[OLAS DEBUG] Error mounting error: {e}", file=sys.stderr)
 
     def _create_service_card(
         self, service_key: str, service, staking_status, service_state: str = "UNKNOWN"

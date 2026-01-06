@@ -4,8 +4,10 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces, SupportedChain
@@ -14,6 +16,8 @@ from iwa.web.dependencies import verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/swap", tags=["swap"])
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 class SwapRequest(BaseModel):
@@ -79,7 +83,8 @@ class SwapRequest(BaseModel):
     summary="Swap Tokens",
     description="Execute a token swap on CowSwap (CoW Protocol).",
 )
-async def swap_tokens(req: SwapRequest, auth: bool = Depends(verify_auth)):
+@limiter.limit("10/minute")
+async def swap_tokens(request: Request, req: SwapRequest, auth: bool = Depends(verify_auth)):
     """Execute a token swap via CowSwap."""
     try:
         from iwa.plugins.gnosis.cow import OrderType

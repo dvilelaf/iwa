@@ -1,7 +1,7 @@
 """Event Monitor for Iwa TUI"""
 
 import time
-from typing import Callable, List
+from typing import Any, Callable, Dict, List
 
 from web3 import Web3
 
@@ -60,7 +60,7 @@ class EventMonitor:
         """Stop monitoring."""
         self.running = False
 
-    def check_activity(self):  # noqa: C901
+    def check_activity(self):
         """Check for new blocks and logs."""
         try:
             latest_block = self.web3.eth.block_number
@@ -68,25 +68,37 @@ class EventMonitor:
             logger.error(f"Failed to get block number: {e}")
             return
 
-        if latest_block <= self.last_checked_block:
-            # logger.debug(f"No new blocks ({latest_block})...")
+        if not self._should_check(latest_block):
             return
 
         logger.info(f"New block detected: {latest_block} (Last: {self.last_checked_block})")
 
+        from_block, to_block = self._get_block_range(latest_block)
+
+        found_txs = []
+        found_txs.extend(self._check_native_transfers(from_block, to_block))
+        found_txs.extend(self._check_erc20_transfers(from_block, to_block))
+
+        self.last_checked_block = to_block
+
+        if found_txs:
+            self.callback(found_txs)
+
+    def _should_check(self, latest_block: int) -> bool:
+        return latest_block > self.last_checked_block
+
+    def _get_block_range(self, latest_block: int) -> tuple[int, int]:
         from_block = self.last_checked_block + 1
         to_block = latest_block
 
         if to_block - from_block > 100:
             from_block = to_block - 100
+        return from_block, to_block
 
-        # ... inside check_activity ...
+    def _check_native_transfers(self, from_block: int, to_block: int) -> List[Dict[str, Any]]:
         found_txs = []
-
-        # Use lowercase set for reliable comparison
         my_addrs = set(a.lower() for a in self.addresses)
 
-        # 1. Native Transfers
         for block_num in range(from_block, to_block + 1):
             try:
                 block = self.web3.eth.get_block(block_num, full_transactions=True)
@@ -117,10 +129,14 @@ class EventMonitor:
                             }
                         )
             except Exception as e:
-                # ... error handling ...
                 logger.warning(f"Failed to fetch/process block {block_num}: {e}")
 
-        # 2. Key Logs (ERC20 Transfers)
+        return found_txs
+
+    def _check_erc20_transfers(self, from_block: int, to_block: int) -> List[Dict[str, Any]]:
+        found_txs = []
+        my_addrs = set(a.lower() for a in self.addresses)
+
         transfer_topic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
         padded_addresses = [
             "0x000000000000000000000000" + addr.lower().replace("0x", "") for addr in self.addresses
@@ -190,7 +206,4 @@ class EventMonitor:
         except Exception as e:
             logger.warning(f"Failed to fetch logs: {e}")
 
-        self.last_checked_block = to_block
-
-        if found_txs:
-            self.callback(found_txs)
+        return found_txs

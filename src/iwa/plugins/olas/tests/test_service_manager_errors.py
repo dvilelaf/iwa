@@ -25,7 +25,7 @@ def mock_wallet():
 
 def setup_manager(mock_wallet):
     """Setup a ServiceManager with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.Config") as mock_cfg_cls:
+    with patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls:
         mock_cfg = mock_cfg_cls.return_value
         mock_cfg.plugins = {"olas": MagicMock()}
         mock_cfg.plugins["olas"].get_service.return_value = None
@@ -39,7 +39,7 @@ def setup_manager(mock_wallet):
                 }
             },
         ):
-            with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_if_cls:
+            with patch("iwa.plugins.olas.service_manager.base.ChainInterfaces") as mock_if_cls:
                 mock_if = mock_if_cls.return_value
                 mock_if.get.return_value.chain.name.lower.return_value = "gnosis"
                 mock_if.get.return_value.get_contract_address.return_value = VALID_ADDR
@@ -69,7 +69,7 @@ def test_service_manager_mech_requests_failures(mock_wallet):
     )
 
     # Marketplace failures
-    with patch("iwa.plugins.olas.service_manager.MechMarketplaceContract") as mock_mkt_cls:
+    with patch("iwa.plugins.olas.service_manager.mech.MechMarketplaceContract") as mock_mkt_cls:
         mock_mkt = mock_mkt_cls.return_value
 
         # No marketplace address
@@ -121,7 +121,7 @@ def test_service_manager_lifecycle_failures(mock_wallet):
         "num_agent_instances": 1,
         "required_agent_bond": 50000000000000000000,
     }
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract"):
+    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"):
         assert manager.stake(mock_staking) is False
 
     # unstake failures
@@ -164,7 +164,7 @@ def test_service_manager_staking_status_failures(mock_wallet):
 
     # Exception in contract loading
     manager.service.staking_contract_address = VALID_ADDR
-    with patch("iwa.plugins.olas.service_manager.StakingContract") as mock_staking_cls:
+    with patch("iwa.plugins.olas.service_manager.staking.StakingContract") as mock_staking_cls:
         mock_staking_cls.side_effect = Exception("fail")
         status = manager.get_staking_status()
         assert status.staking_state == "ERROR"

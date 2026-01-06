@@ -1,17 +1,8 @@
-"""CoW Swap interaction."""
-
-# ruff: noqa: E402
+"""CoW Swap execution logic."""
 
 import time
 import warnings
 from typing import TYPE_CHECKING
-
-warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
-warnings.filterwarnings(
-    "ignore", message="This AsyncLimiter instance is being re-used across loops.*"
-)
-
-from enum import Enum
 
 import requests
 from eth_account import Account
@@ -21,53 +12,46 @@ from web3 import Web3
 from web3.types import Wei
 
 from iwa.core.chain import SupportedChain
-from iwa.core.types import EthereumAddress
 from iwa.core.utils import configure_logger
+from iwa.plugins.gnosis.cow.quotes import get_max_buy_amount_wei, get_max_sell_amount_wei
+from iwa.plugins.gnosis.cow.types import (
+    COW_API_URLS,
+    COW_EXPLORER_URL,
+    HTTP_OK,
+    OrderType,
+)
+from iwa.plugins.gnosis.cow_utils import get_cowpy_module
+
+warnings.filterwarnings("ignore", message="Pydantic serializer warnings:")
+warnings.filterwarnings(
+    "ignore", message="This AsyncLimiter instance is being re-used across loops.*"
+)
 
 logger = configure_logger()
 
-from iwa.plugins.gnosis.cow_utils import get_cowpy_module
-
-# Type hints for cowdao_cowpy types (only used for type checking)
 if TYPE_CHECKING:
     from cowdao_cowpy.common.chains import Chain
     from cowdao_cowpy.cow.swap import CompletedOrder
     from cowdao_cowpy.order_book.config import Envs
 
-COW_API_URLS = {100: "https://api.cow.fi/xdai"}
-ORDER_ENDPOINT_URL = "/api/v1/orders/"
-COW_EXPLORER_URL = "https://explorer.cow.fi/gc/orders/"
-HTTP_OK = 200
-
-COWSWAP_GPV2_VAULT_RELAYER_ADDRESS = EthereumAddress("0xC92E8bdf79f0507f65a392b0ab4667716BFE0110")
-MAX_APPROVAL = 2**256 - 1
-
 # Placeholders for cowdao_cowpy functions/classes to allow patching in tests
 swap_tokens = None
 get_order_quote = None
-post_order = None
-sign_order = None
-CompletedOrder = None
 OrderQuoteRequest = None
 OrderQuoteSide1 = None
 OrderQuoteSide3 = None
 OrderQuoteSideKindBuy = None
 OrderQuoteSideKindSell = None
 TokenAmount = None
-Order = None
-PreSignSignature = None
-SigningScheme = None
-Chain = None
 SupportedChainId = None
 OrderBookApi = None
 OrderBookAPIConfigFactory = None
-
-
-class OrderType(Enum):
-    """Order types."""
-
-    SELL = "sell"
-    BUY = "buy"
+Order = None
+PreSignSignature = None
+SigningScheme = None
+sign_order = None
+post_order = None
+CompletedOrder = None
 
 
 class CowSwap:
@@ -107,15 +91,7 @@ class CowSwap:
 
     @staticmethod
     async def check_cowswap_order(order: "CompletedOrder") -> dict | None:
-        """Check if a CowSwap order has been executed by polling the Explorer API.
-
-        Args:
-            order: The executed order object containing UID and URL.
-
-        Returns:
-            dict | None: The full order data if executed successfully, None otherwise.
-
-        """
+        """Check if a CowSwap order has been executed by polling the Explorer API."""
         import asyncio
 
         logger.info(f"Checking order status for UID: {order.uid}")
@@ -189,19 +165,7 @@ class CowSwap:
         safe_address: ChecksumAddress | None = None,
         order_type: OrderType = OrderType.SELL,
     ) -> dict | None:
-        """Execute a token swap on CoW Protocol.
-
-        Args:
-            amount_wei: Amount to swap in Wei.
-            sell_token_name: Symbol of token to sell.
-            buy_token_name: Symbol of token to buy.
-            safe_address: Optional address of Safe if this is a Multisig swap.
-            order_type: SELL or BUY.
-
-        Returns:
-            dict | None: The order data if swap initiated and verified successfully.
-
-        """
+        """Execute a token swap on CoW Protocol."""
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
         if order_type == OrderType.BUY:
@@ -264,71 +228,18 @@ class CowSwap:
         env: "Envs" = "prod",
         slippage_tolerance: float = 0.005,
     ) -> int:
-        """Calculate the estimated sell amount needed to buy a fixed amount of tokens.
-
-        Queries the CoW Protocol Order Book API for a quote.
-
-        Args:
-            amount_wei: Desired buy amount in Wei.
-            sell_token: Address of token to sell.
-            buy_token: Address of token to buy.
-            safe_address: Optional Safe address context.
-            app_data: Optional app data hash.
-            env: API environment ("prod" or "staging").
-            slippage_tolerance: Tolerance percentage (default 0.5%).
-
-        Returns:
-            int: Estimated sell amount in Wei (including slippage buffer).
-
-        """
-        if app_data is None:
-            app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
-
-        # In testing context, these might be patched
-        global \
-            get_order_quote, \
-            OrderQuoteRequest, \
-            OrderQuoteSide3, \
-            OrderQuoteSideKindBuy, \
-            TokenAmount, \
-            SupportedChainId, \
-            OrderBookApi, \
-            OrderBookAPIConfigFactory
-
-        _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
-        _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
-        _order_quote_side_cls = OrderQuoteSide3 or get_cowpy_module("OrderQuoteSide3")
-        _order_quote_side_kind_buy_cls = OrderQuoteSideKindBuy or get_cowpy_module(
-            "OrderQuoteSideKindBuy"
+        """Calculate the estimated sell amount needed to buy a fixed amount of tokens."""
+        return await get_max_sell_amount_wei(
+            amount_wei=amount_wei,
+            sell_token=sell_token,
+            buy_token=buy_token,
+            chain_id_val=self.cow_chain.value[0],
+            account_address=self.account.address,
+            safe_address=safe_address,
+            app_data=app_data,
+            env=env,
+            slippage_tolerance=slippage_tolerance,
         )
-        _token_amount_cls = TokenAmount or get_cowpy_module("TokenAmount")
-        _supported_chain_id_cls = SupportedChainId or get_cowpy_module("SupportedChainId")
-        _order_book_api_cls = OrderBookApi or get_cowpy_module("OrderBookApi")
-        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or get_cowpy_module(
-            "OrderBookAPIConfigFactory"
-        )
-
-        chain_id = _supported_chain_id_cls(self.cow_chain.value[0])
-        order_book_api = _order_book_api_cls(
-            _order_book_api_config_factory_cls.get_config(env, chain_id)
-        )
-
-        order_quote_request = _order_quote_request_cls(
-            sellToken=sell_token,
-            buyToken=buy_token,
-            from_=safe_address if safe_address is not None else self.account._address,
-            appData=app_data,
-        )
-
-        order_side = _order_quote_side_cls(
-            kind=_order_quote_side_kind_buy_cls.buy,
-            buyAmountAfterFee=_token_amount_cls(str(amount_wei)),
-        )
-
-        order_quote = await _get_order_quote(order_quote_request, order_side, order_book_api)
-
-        sell_amount_wei = int(int(order_quote.quote.sellAmount.root) * (1.0 + slippage_tolerance))
-        return sell_amount_wei
 
     async def get_max_buy_amount_wei(
         self,
@@ -340,69 +251,18 @@ class CowSwap:
         env: "Envs" = "prod",
         slippage_tolerance: float = 0.005,
     ) -> int:
-        """Calculate the maximum buy amount for a given sell amount.
-
-        Args:
-            sell_amount_wei: Amount of sell token in wei
-            sell_token: Sell token address
-            buy_token: Buy token address
-            safe_address: Optional Safe address
-            app_data: Optional app data hash
-            env: CowSwap environment
-            slippage_tolerance: Slippage tolerance
-
-        Returns:
-            Maximum buy amount in wei (after slippage)
-
-        """
-        if app_data is None:
-            app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
-
-        global \
-            get_order_quote, \
-            OrderQuoteRequest, \
-            OrderQuoteSide1, \
-            OrderQuoteSideKindSell, \
-            TokenAmount, \
-            SupportedChainId, \
-            OrderBookApi, \
-            OrderBookAPIConfigFactory
-
-        _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
-        _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
-        _order_quote_side_cls = OrderQuoteSide1 or get_cowpy_module("OrderQuoteSide1")
-        _order_quote_side_kind_sell_cls = OrderQuoteSideKindSell or get_cowpy_module(
-            "OrderQuoteSideKindSell"
+        """Calculate the maximum buy amount for a given sell amount."""
+        return await get_max_buy_amount_wei(
+            sell_amount_wei=sell_amount_wei,
+            sell_token=sell_token,
+            buy_token=buy_token,
+            chain_id_val=self.cow_chain.value[0],
+            account_address=self.account.address,
+            safe_address=safe_address,
+            app_data=app_data,
+            env=env,
+            slippage_tolerance=slippage_tolerance,
         )
-        _token_amount_cls = TokenAmount or get_cowpy_module("TokenAmount")
-        _supported_chain_id_cls = SupportedChainId or get_cowpy_module("SupportedChainId")
-        _order_book_api_cls = OrderBookApi or get_cowpy_module("OrderBookApi")
-        _order_book_api_config_factory_cls = OrderBookAPIConfigFactory or get_cowpy_module(
-            "OrderBookAPIConfigFactory"
-        )
-
-        chain_id = _supported_chain_id_cls(self.cow_chain.value[0])
-        order_book_api = _order_book_api_cls(
-            _order_book_api_config_factory_cls.get_config(env, chain_id)
-        )
-
-        order_quote_request = _order_quote_request_cls(
-            sellToken=sell_token,
-            buyToken=buy_token,
-            from_=safe_address if safe_address is not None else self.account._address,
-            appData=app_data,
-        )
-
-        order_side = _order_quote_side_cls(
-            kind=_order_quote_side_kind_sell_cls.sell,
-            sellAmountBeforeFee=_token_amount_cls(str(sell_amount_wei)),
-        )
-
-        order_quote = await _get_order_quote(order_quote_request, order_side, order_book_api)
-
-        # Apply slippage (reduce buy amount)
-        buy_amount_wei = int(int(order_quote.quote.buyAmount.root) * (1.0 - slippage_tolerance))
-        return buy_amount_wei
 
     @staticmethod
     async def swap_tokens_to_exact_tokens(
@@ -418,28 +278,7 @@ class CowSwap:
         slippage_tolerance: float = 0.005,
         partially_fillable: bool = False,
     ) -> "CompletedOrder":
-        """Execute a 'Buy' order (Exact Output) on CoW Protocol.
-
-        This is a modified version of `cowdao_cowpy.cow.swap.swap_tokens` tailored
-        for 'Buy' orders where the buy amount is fixed and sell amount is estimated.
-
-        Args:
-            amount: Exact amount of tokens to buy in Wei.
-            account: The local account signing the order.
-            chain: The chain instance.
-            sell_token: Address of token to sell.
-            buy_token: Address of token to buy.
-            safe_address: Optional Safe address.
-            app_data: App data hash.
-            valid_to: Order expiration timestamp.
-            env: API environment.
-            slippage_tolerance: Slippage tolerance.
-            partially_fillable: Whether order can be partially filled.
-
-        Returns:
-            CompletedOrder: The created order with UID and explorer link.
-
-        """
+        """Execute a 'Buy' order (Exact Output) on CoW Protocol."""
         # Lazy imports
         if app_data is None:
             app_data = get_cowpy_module("DEFAULT_APP_DATA_HASH")
@@ -460,6 +299,7 @@ class CowSwap:
             post_order, \
             CompletedOrder
 
+        # Re-initialize lazy modules if needed (they are file-global in this file)
         _get_order_quote = get_order_quote or get_cowpy_module("get_order_quote")
         _order_quote_request_cls = OrderQuoteRequest or get_cowpy_module("OrderQuoteRequest")
         _order_quote_side_cls = OrderQuoteSide3 or get_cowpy_module("OrderQuoteSide3")
@@ -487,11 +327,10 @@ class CowSwap:
         order_quote_request = _order_quote_request_cls(
             sellToken=sell_token,
             buyToken=buy_token,
-            from_=safe_address if safe_address is not None else account._address,  # type: ignore # pyright doesn't recognize `populate_by_name=True`.
+            from_=safe_address if safe_address is not None else account._address,  # type: ignore
             appData=app_data,
         )
 
-        # This is one of the changes
         order_side = _order_quote_side_cls(
             kind=_order_quote_side_kind_buy_cls.buy,
             buyAmountAfterFee=_token_amount_cls(str(amount)),
@@ -514,11 +353,9 @@ class CowSwap:
             valid_to=min_valid_to,
             app_data=app_data,
             sell_amount=str(sell_amount_wei),
-            buy_amount=str(
-                amount
-            ),  # Since it is a buy order, the buyAmountBeforeFee is the same as the buyAmount.
+            buy_amount=str(amount),
             fee_amount="0",  # CoW Swap does not charge fees.
-            kind=_order_quote_side_kind_buy_cls.buy.value,  # This is another change
+            kind=_order_quote_side_kind_buy_cls.buy.value,
             sell_token_balance="erc20",
             buy_token_balance="erc20",
             partially_fillable=partially_fillable,

@@ -312,7 +312,7 @@ def test_sm_create_token_utility_missing(mock_wallet):
     with patch("iwa.core.models.Config"):
         sm = ServiceManager(mock_wallet)
 
-        with patch.dict("iwa.plugins.olas.service_manager.OLAS_CONTRACTS", {"unknown": {}}):
+        with patch.dict("iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS", {"unknown": {}}):
             # Should not crash, just log error
             sm.chain_name = "unknown"
             # Can't easily test create without more mocks, but we test the path
@@ -332,7 +332,7 @@ def test_sm_get_staking_status_staked_info_fail(mock_wallet):
         mock_staking.activity_checker.liveness_ratio = 10
         mock_staking.get_service_info.side_effect = Exception("fail")
 
-        with patch("iwa.plugins.olas.service_manager.StakingContract", return_value=mock_staking):
+        with patch("iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking):
             status = sm.get_staking_status()
             assert status.staking_state == "STAKED"
 
@@ -349,7 +349,7 @@ def test_sm_call_checkpoint_prepare_fail(mock_wallet):
         mock_staking.is_checkpoint_needed.return_value = True
         mock_staking.prepare_checkpoint_tx.return_value = None
 
-        with patch("iwa.plugins.olas.service_manager.StakingContract", return_value=mock_staking):
+        with patch("iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking):
             result = sm.call_checkpoint()
             assert result is False
 

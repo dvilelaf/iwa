@@ -191,9 +191,7 @@
                         </div>
                     </div>
                     <!-- Actions below service cards -->
-                    <div class="olas-actions mt-2"
-                         style="text-align: center;
-                                margin-bottom: 3rem">
+                    <div class="olas-actions mt-2 text-center mb-3">
                         <button id="create-service-btn" class="btn-primary">Create Service</button>
                     </div>
                 </section>
@@ -254,7 +252,7 @@
                                                    min="0"
                                                    placeholder="0.00"
                                                    readonly />
-                                            <button type="button" id="swap-max-buy" class="btn-max" style="display: none">Max</button>
+                                            <button type="button" id="swap-max-buy" class="btn-max hidden">Max</button>
                                         </div>
                                     </div>
                                 </div>
@@ -276,7 +274,7 @@
         </div>
         <!-- Safe Creation Modal -->
         <div id="safe-modal" class="modal">
-            <div class="modal-content glass">
+            <div class="modal-content glass modal-md">
                 <h2>Create Multisig Safe</h2>
                 <form id="create-safe-form">
                     <div class="form-group mb-1">
@@ -324,11 +322,9 @@
         </div>
         <!-- Confirmation Modal -->
         <div id="confirm-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 400px">
+            <div class="modal-content glass modal-md">
                 <h2 id="confirm-title">Confirm Action</h2>
-                <p id="confirm-message"
-                   style="color: var(--text-muted);
-                          margin-bottom: 1.5rem"></p>
+                <p id="confirm-message" class="text-muted mb-2"></p>
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" id="confirm-cancel">Cancel</button>
                     <button type="button" class="btn-primary" id="confirm-ok">Confirm</button>
@@ -337,15 +333,13 @@
         </div>
         <!-- Stake Modal -->
         <div id="stake-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px">
+            <div class="modal-content glass modal-lg">
                 <h2>Stake Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem">Select a staking contract for this service:</p>
+                <p class="text-muted mb-1">Select a staking contract for this service:</p>
                 <input type="hidden" id="stake-service-key" />
                 <div class="form-group mb-1">
                     <label>Staking Contract</label>
-                    <div id="stake-contract-spinner"
-                         style="display: none;
-                                padding: 0.7rem 1rem">
+                    <div id="stake-contract-spinner" class="hidden">
                         <span class="cell-spinner"></span> Loading contracts...
                     </div>
                     <select id="stake-contract-select">
@@ -360,7 +354,7 @@
         </div>
         <!-- Create Service Modal -->
         <div id="create-service-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px">
+            <div class="modal-content glass modal-lg">
                 <h2>Create Olas Service</h2>
                 <form id="create-service-form">
                     <div class="form-group mb-1">
@@ -384,9 +378,7 @@
                     </div>
                     <div class="form-group mb-1">
                         <label>Staking Contract</label>
-                        <div id="staking-contract-spinner"
-                             style="display: none;
-                                    padding: 0.7rem 1rem">
+                        <div id="staking-contract-spinner" class="hidden">
                             <span class="cell-spinner"></span> Loading contracts...
                         </div>
                         <select id="new-service-staking-contract">
@@ -403,9 +395,9 @@
         </div>
         <!-- Fund Service Modal -->
         <div id="fund-service-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px">
+            <div class="modal-content glass modal-lg">
                 <h2>Fund Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem">Send native tokens from master wallet to service accounts:</p>
+                <p class="text-muted mb-1">Send native tokens from master wallet to service accounts:</p>
                 <input type="hidden" id="fund-service-key" />
                 <div class="form-group mb-1">
                     <label>
@@ -437,9 +429,9 @@
         </div>
         <!-- Terminate Service Modal -->
         <div id="terminate-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 450px">
-                <h2 style="color: var(--error)">⚠️ Terminate Service</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem">
+            <div class="modal-content glass modal-lg">
+                <h2 class="text-error">⚠️ Terminate Service</h2>
+                <p class="text-muted mb-1">
                     This action will:
                     <br />
                     • Unstake the service (if staked)
@@ -460,9 +452,9 @@
         </div>
         <!-- Login Modal -->
         <div id="login-modal" class="modal">
-            <div class="modal-content glass" style="max-width: 380px">
+            <div class="modal-content glass modal-sm">
                 <h2>🔐 Authentication Required</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1.5rem">Enter your Web UI password to continue:</p>
+                <p class="text-muted mb-2">Enter your Web UI password to continue:</p>
                 <form id="login-form">
                     <div class="form-group mb-1">
                         <label>Password</label>
@@ -473,7 +465,7 @@
                                autocomplete="current-password" />
                     </div>
                     <div class="modal-actions mt-2">
-                        <button type="submit" class="btn-primary" style="width: 100%">Login</button>
+                        <button type="submit" class="btn-primary w-100">Login</button>
                     </div>
                 </form>
             </div>

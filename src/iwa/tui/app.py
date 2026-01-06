@@ -1,7 +1,5 @@
 """Main TUI Application module."""
 
-import datetime
-
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -10,16 +8,6 @@ from textual.widgets import Footer, Header, TabbedContent, TabPane
 from iwa.core.wallet import Wallet
 from iwa.tui.rpc import RPCView
 from iwa.tui.screens.wallets import WalletsScreen
-
-
-def trace(msg):
-    """Write debug trace."""
-    try:
-        with open("debug_trace.txt", "a") as f:
-            ts = datetime.datetime.now().strftime("%H:%M:%S.%f")
-            f.write(f"[APP] [{ts}] {msg}\n")
-    except Exception:
-        pass
 
 
 class IwaApp(App):
@@ -109,19 +97,15 @@ class IwaApp(App):
 
     def __init__(self):
         """Initialize the App."""
-        trace("App INIT called")
         super().__init__()
         # Configure logger for TUI
         logger.remove()
         logger.add("iwa.log", rotation="10 MB", level="INFO")
 
-        trace("App INIT: Loading Wallet...")
         self.wallet = Wallet()
-        trace("App INIT: Wallet Loaded")
 
         # Use PluginService from wallet
         self.plugins = self.wallet.plugin_service.get_all_plugins()
-        trace("App INIT: Plugins Loaded")
 
     def compose(self) -> ComposeResult:
         """Compose the application layout.
@@ -133,13 +117,11 @@ class IwaApp(App):
             ComposeResult: The widgets to be shown in the app.
 
         """
-        trace("App COMPOSE called")
         yield Header(show_clock=True)
 
         with TabbedContent(initial="wallets-tab"):
             # Wallets first (default)
             with TabPane("Wallets", id="wallets-tab"):
-                trace("App COMPOSE: Yielding WalletsScreen")
                 yield WalletsScreen(self.wallet)
 
             # Plugin tabs (Olas)
