@@ -13,16 +13,22 @@ from iwa.core.services.transfer import TransferService
 def mock_deps():
     """Mock dependencies for TransferService."""
     with (
-        patch("iwa.core.services.transfer.ChainInterfaces") as mock_chain,
+        patch("iwa.core.services.transfer.base.ChainInterfaces") as mock_chain,
+        patch("iwa.core.services.transfer.multisend.ChainInterfaces", new=mock_chain),
+        patch("iwa.core.services.transfer.swap.ChainInterfaces", new=mock_chain),
         patch("iwa.core.services.transfer.multisend.MultiSendContract") as mock_ms,
         patch("iwa.core.services.transfer.multisend.MultiSendCallOnlyContract") as mock_ms_co,
         patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20,
+        patch("iwa.core.services.transfer.swap.ERC20Contract", new=mock_erc20),
+        patch("iwa.core.services.transfer.erc20.ERC20Contract", new=mock_erc20),
     ):
         mock_account_service = MagicMock()
         mock_key_storage = MagicMock()
         mock_balance_service = MagicMock()
         mock_safe_service = MagicMock()
         mock_txn_service = MagicMock()
+        # Set default return for sign_and_send
+        mock_txn_service.sign_and_send.return_value = (True, {})
 
         # Setup Chain Interface
         mock_w3 = MagicMock()
@@ -30,7 +36,9 @@ def mock_deps():
         mock_w3.to_checksum_address.side_effect = lambda x: x
         mock_w3.to_wei.return_value = 1000  # 1000 wei default
         mock_chain.return_value.get.return_value.web3 = mock_w3
+        mock_chain.return_value.get.return_value.chain.name = "gnosis"
         mock_chain.return_value.get.return_value.chain.tokens = {"TEST": "0xToken"}
+        mock_erc20.return_value.allowance_wei.return_value = 0
 
         deps = {
             "account_service": mock_account_service,
@@ -57,15 +65,12 @@ def test_multi_send_eoa_native(mock_deps):
     mock_from = MagicMock()
     mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"  # Valid checksum address
     mock_from.tag = "from_tag"
-    mock_deps["account_service"].resolve_account.return_value = mock_from
-
-    # Mock Resolve To Account to return None (so it uses the string) or a mock with address
     def resolve_side_effect(arg):
         if arg == "from_tag":
             return mock_from
         return None
 
-    mock_deps["account_service"].resolve_account.side_effect = resolve_side_effect
+    service.account_service.resolve_account.side_effect = resolve_side_effect
 
     # Mock dependencies
     mock_ms_co = mock_deps["contracts"]["ms_co"].return_value
@@ -108,7 +113,7 @@ def test_multi_send_safe_erc20(mock_deps):
     mock_safe_account = MagicMock(spec=StoredSafeAccount)
     mock_safe_account.address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 
-    mock_deps["account_service"].resolve_account.side_effect = (
+    service.account_service.resolve_account.side_effect = (
         lambda x: mock_safe_account if x == "safe_tag" else None
     )
 
@@ -152,7 +157,8 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
     # Mock From Account (EOA)
     mock_from = MagicMock()
     mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
-    mock_deps["account_service"].resolve_account.side_effect = (
+    del mock_from.threshold  # EOA has no threshold
+    service.account_service.resolve_account.side_effect = (
         lambda x: mock_from if x == "from_tag" else None
     )
 
