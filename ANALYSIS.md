@@ -297,16 +297,16 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 - [x] Eliminar `# noqa: C901`
 
 #### 8.3 `src/iwa/plugins/olas/plugin.py` - `import_services()` (L82)
-- [ ] Extraer lógica de descubrimiento y validación
-- [ ] Eliminar `# noqa: C901`
+- [x] Extraer lógica de descubrimiento y validación
+- [x] Eliminar `# noqa: C901`
 
 #### 8.4 `src/iwa/plugins/gnosis/cow_utils.py` - `get_cowpy_module()` (L9)
 - [x] Simplificar lógica de importación
 - [x] Eliminar `# noqa: C901`
 
 #### 8.5 `src/iwa/tui/screens/wallets.py` - `refresh_table_structure_and_data()` (L158)
-- [ ] Dividir estructura de datos de renderizado
-- [ ] Eliminar `# noqa: C901`
+- [x] Dividir estructura de datos de renderizado
+- [x] Eliminar `# noqa: C901`
 
 #### 8.6 `src/iwa/plugins/olas/service_manager/mech.py` - `_send_marketplace_mech_request()` (L124)
 - [x] Aplicar early return pattern
