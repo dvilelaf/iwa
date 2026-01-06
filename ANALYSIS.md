@@ -320,15 +320,16 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 9.1 `src/iwa/core/chain.py` (974 líneas)
 
-- [ ] **Problema**: Archivo muy largo con múltiples clases (ChainInterface, RPCRateLimiter, etc.)
-- [ ] **Solución**: Dividir en package:
+- [x] **Problema**: Archivo muy largo con múltiples clases (ChainInterface, RPCRateLimiter, etc.)
+- [x] **Solución**: Dividido en package:
   ```
   chain/
   ├── __init__.py      # Re-exports
-  ├── interface.py     # ChainInterface
+  ├── errors.py        # TenderlyQuotaExceededError
   ├── rate_limiter.py  # RPCRateLimiter
-  ├── chains.py        # Gnosis, Ethereum, etc.
-  └── errors.py        # TenderlyQuotaExceededError
+  ├── models.py        # Gnosis, Ethereum, etc.
+  ├── interface.py     # ChainInterface
+  └── manager.py       # ChainInterfaces
   ```
 
 #### 9.2 `src/iwa/tui/screens/wallets.py` (735 líneas)
