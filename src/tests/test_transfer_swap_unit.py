@@ -1,8 +1,11 @@
 """Unit tests for SwapMixin.swap logic."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from iwa.core.services.transfer.swap import SwapMixin, OrderType
+
+from iwa.core.services.transfer.swap import OrderType, SwapMixin
+
 
 # Dummy class to mixin
 class MockTransferService(SwapMixin):
