@@ -186,7 +186,11 @@ def _merge_transaction_extra_data(existing_extra: dict, new_extra: dict | None) 
 
 
 def _resolve_final_token_and_amount(
-    existing: SentTransaction | None, token: str, amount_wei: int, price_eur: float | None, value_eur: float | None
+    existing: SentTransaction | None,
+    token: str,
+    amount_wei: int,
+    price_eur: float | None,
+    value_eur: float | None,
 ) -> tuple[str, str, float | None, float | None]:
     """Resolve token name and amount, preserving ERC20 info over native currency if needed."""
     final_token = token
@@ -242,12 +246,22 @@ def _prepare_transaction_record(
         "status": "Confirmed",
         "amount_wei": final_amount_wei,
         "chain": chain,
-        "price_eur": final_price_eur if final_price_eur is not None else (existing.price_eur if existing else None),
-        "value_eur": final_value_eur if final_value_eur is not None else (existing.value_eur if existing else None),
-        "gas_cost": str(gas_cost) if gas_cost is not None else (existing.gas_cost if existing else None),
-        "gas_value_eur": gas_value_eur if gas_value_eur is not None else (existing.gas_value_eur if existing else None),
+        "price_eur": final_price_eur
+        if final_price_eur is not None
+        else (existing.price_eur if existing else None),
+        "value_eur": final_value_eur
+        if final_value_eur is not None
+        else (existing.value_eur if existing else None),
+        "gas_cost": str(gas_cost)
+        if gas_cost is not None
+        else (existing.gas_cost if existing else None),
+        "gas_value_eur": gas_value_eur
+        if gas_value_eur is not None
+        else (existing.gas_value_eur if existing else None),
         "tags": json.dumps(merged_tags) if merged_tags else (existing.tags if existing else None),
-        "extra_data": json.dumps(merged_extra) if merged_extra else (existing.extra_data if existing else None),
+        "extra_data": json.dumps(merged_extra)
+        if merged_extra
+        else (existing.extra_data if existing else None),
     }
 
 
@@ -275,8 +289,8 @@ def log_transaction(
             merged_tags = _merge_transaction_tags(existing_tags, tags)
             merged_extra = _merge_transaction_extra_data(existing_extra, extra_data)
 
-            final_token, final_amount_wei, final_price, final_value = _resolve_final_token_and_amount(
-                existing, token, amount_wei, price_eur, value_eur
+            final_token, final_amount_wei, final_price, final_value = (
+                _resolve_final_token_and_amount(existing, token, amount_wei, price_eur, value_eur)
             )
 
             data = _prepare_transaction_record(

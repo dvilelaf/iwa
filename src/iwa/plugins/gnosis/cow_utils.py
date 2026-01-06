@@ -42,4 +42,3 @@ def get_cowpy_module(name: str) -> Any:
         _cowpy_cache[name] = getattr(module, attr_name)
 
     return _cowpy_cache[name]
-

@@ -133,10 +133,21 @@ class ChainInterface:
         """Check if error is a connection/network error."""
         err_text = str(error).lower()
         connection_signals = [
-            "timeout", "timed out", "connection refused", "connection reset",
-            "connection error", "connection aborted", "name resolution", "dns",
-            "no route to host", "network unreachable", "max retries exceeded",
-            "read timeout", "connect timeout", "remote end closed", "broken pipe",
+            "timeout",
+            "timed out",
+            "connection refused",
+            "connection reset",
+            "connection error",
+            "connection aborted",
+            "name resolution",
+            "dns",
+            "no route to host",
+            "network unreachable",
+            "max retries exceeded",
+            "read timeout",
+            "connect timeout",
+            "remote end closed",
+            "broken pipe",
         ]
         return any(signal in err_text for signal in connection_signals)
 
@@ -152,8 +163,14 @@ class ChainInterface:
         """Check if error is a server-side error (5xx)."""
         err_text = str(error).lower()
         server_error_signals = [
-            "500", "502", "503", "504", "internal server error",
-            "bad gateway", "service unavailable", "gateway timeout",
+            "500",
+            "502",
+            "503",
+            "504",
+            "internal server error",
+            "bad gateway",
+            "service unavailable",
+            "gateway timeout",
         ]
         return any(signal in err_text for signal in server_error_signals)
 

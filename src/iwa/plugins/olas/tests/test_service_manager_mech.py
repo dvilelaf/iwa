@@ -70,7 +70,9 @@ class TestServiceManagerMech:
         """Test that marketplace request requires priority_mech."""
         data = b"marketplace data"
 
-        with patch("iwa.plugins.olas.service_manager.mech.MechMarketplaceContract") as mock_market_class:
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_market_class:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",
@@ -97,7 +99,9 @@ class TestServiceManagerMech:
         mock_safe_account = MagicMock(spec=StoredSafeAccount)
         mock_wallet.account_service.resolve_account.return_value = mock_safe_account
 
-        with patch("iwa.plugins.olas.service_manager.mech.MechMarketplaceContract") as mock_market_class:
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_market_class:
             mock_market = mock_market_class.return_value
             mock_market.prepare_request_tx.return_value = {
                 "data": "0xMarketplaceEncoded",

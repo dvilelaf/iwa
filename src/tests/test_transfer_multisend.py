@@ -65,6 +65,7 @@ def test_multi_send_eoa_native(mock_deps):
     mock_from = MagicMock()
     mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"  # Valid checksum address
     mock_from.tag = "from_tag"
+
     def resolve_side_effect(arg):
         if arg == "from_tag":
             return mock_from

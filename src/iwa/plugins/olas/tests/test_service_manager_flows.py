@@ -123,7 +123,9 @@ def test_create_service_failures(
     ]
     # First tx (create) success, Second tx (approve) fails
     mock_wallet.sign_and_send_transaction.reset_mock()
-    mock_wallet.sign_and_send_transaction.return_value = None # Clear return_value to let side_effect work
+    mock_wallet.sign_and_send_transaction.return_value = (
+        None  # Clear return_value to let side_effect work
+    )
     mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (False, {})]
     mock_wallet.transfer_service = MagicMock()
     mock_wallet.transfer_service.approve_erc20.return_value = False
@@ -194,8 +196,12 @@ def test_activate_registration(
     manager = ServiceManager(mock_wallet, service_key="gnosis:123")
 
     # Explicitly set mock return values to ensure they aren't overridden
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 50000000000000000000 * 2 # Enough balance
-    mock_wallet.transfer_service.get_erc20_allowance.return_value = 50000000000000000000 * 2 # Enough allowance
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = (
+        50000000000000000000 * 2
+    )  # Enough balance
+    mock_wallet.transfer_service.get_erc20_allowance.return_value = (
+        50000000000000000000 * 2
+    )  # Enough allowance
 
     success = manager.activate_registration()
     assert success is True
@@ -395,7 +401,9 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
 
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
-@patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")  # MUST mock specifically here
+@patch(
+    "iwa.plugins.olas.service_manager.base.ServiceManagerContract"
+)  # MUST mock specifically here
 @patch("iwa.plugins.olas.service_manager.staking.ERC20Contract")  # For checking balance
 def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service staking."""

@@ -934,7 +934,7 @@ def test_activate_registration_token_service_sends_security_deposit_as_value(
     mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18  # Plenty of balance
 
     # Mock allowance to pass check (return an int)
-    mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20 # Plenty of allowance
+    mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20  # Plenty of allowance
 
     service_manager.activate_registration()
 

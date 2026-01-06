@@ -123,7 +123,9 @@ class OlasPlugin(Plugin):
                 elif on_chain_signers is not None:
                     is_signer = key.address.lower() in [s.lower() for s in on_chain_signers]
                     if not is_signer:
-                        key_info = f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                        key_info = (
+                            f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                        )
 
             table.add_row(f"Key ({key.role})", key_info)
 
@@ -151,11 +153,17 @@ class OlasPlugin(Plugin):
             all_errors.extend(result.errors)
 
             if result.imported_keys:
-                console.print(f"  [green]✓[/green] Imported keys: {', '.join(result.imported_keys)}")
+                console.print(
+                    f"  [green]✓[/green] Imported keys: {', '.join(result.imported_keys)}"
+                )
             if result.imported_safes:
-                console.print(f"  [green]✓[/green] Imported safes: {', '.join(result.imported_safes)}")
+                console.print(
+                    f"  [green]✓[/green] Imported safes: {', '.join(result.imported_safes)}"
+                )
             if result.imported_services:
-                console.print(f"  [green]✓[/green] Imported services: {', '.join(result.imported_services)}")
+                console.print(
+                    f"  [green]✓[/green] Imported services: {', '.join(result.imported_services)}"
+                )
             if result.skipped:
                 for item in result.skipped:
                     console.print(f"  [yellow]⊘[/yellow] Skipped: {item}")
@@ -213,7 +221,9 @@ class OlasPlugin(Plugin):
         # Check if we need a password for encrypted keys
         needs_password = any(key.is_encrypted for service in discovered for key in service.keys)
         if needs_password and not password:
-            console.print("\n[yellow]Some keys are encrypted. Please enter the source password.[/yellow]")
+            console.print(
+                "\n[yellow]Some keys are encrypted. Please enter the source password.[/yellow]"
+            )
             password = typer.prompt("Password", hide_input=True)
 
         # Import services
@@ -231,4 +241,3 @@ class OlasPlugin(Plugin):
         if all_errors:
             console.print(f"  [red]Errors: {len(all_errors)}[/red]")
             raise typer.Exit(code=1)
-

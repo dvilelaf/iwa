@@ -77,7 +77,9 @@ def test_wrap_native_success(mock_deps):
     # Mock Receipt
     mock_receipt = MagicMock()
     mock_receipt.status = 1
-    mock_deps["chain_interface"].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
+    mock_deps[
+        "chain_interface"
+    ].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
 
     result = service.wrap_native("user", 1000)
 
@@ -148,7 +150,9 @@ def test_unwrap_native_success(mock_deps):
     # Mock Receipt
     mock_receipt = MagicMock()
     mock_receipt.status = 1
-    mock_deps["chain_interface"].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
+    mock_deps[
+        "chain_interface"
+    ].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
 
     result = service.unwrap_native("user", 1000)
 
@@ -184,7 +188,9 @@ def test_unwrap_native_auto_balance(mock_deps):
     mock_deps["chain_interface"].web3._web3.eth.send_raw_transaction.return_value = b"tx_hash"
     mock_receipt = MagicMock()
     mock_receipt.status = 1
-    mock_deps["chain_interface"].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
+    mock_deps[
+        "chain_interface"
+    ].web3._web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
 
     # Call without amount
     result = service.unwrap_native("user")

@@ -19,6 +19,7 @@ def mock_deps():
         "account_service": mock_account_service,
     }
 
+
 @pytest.fixture
 def safe_service(mock_deps):
     """SafeService instance."""
@@ -58,9 +59,7 @@ def test_execute_safe_transaction_success(safe_service, mock_deps):
         mock_safe_tx.tx_hash.hex.return_value = "0xTxHash"
 
         # Execute
-        tx_hash = safe_service.execute_safe_transaction(
-            safe_address, to_address, value, chain_name
-        )
+        tx_hash = safe_service.execute_safe_transaction(safe_address, to_address, value, chain_name)
 
         # Verify
         assert tx_hash == "0xTxHash"

@@ -79,7 +79,8 @@ def test_sm_get_staking_status_no_staking_address(mock_wallet):
 
         # Contract load fails
         with patch(
-            "iwa.plugins.olas.service_manager.staking.StakingContract", side_effect=Exception("fail")
+            "iwa.plugins.olas.service_manager.staking.StakingContract",
+            side_effect=Exception("fail"),
         ):
             status = sm.get_staking_status()
             assert status.staking_state == "ERROR"
@@ -112,7 +113,10 @@ def test_sm_get_staking_status_with_full_info(mock_wallet):
         }
 
         with (
-            patch("iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking),
+            patch(
+                "iwa.plugins.olas.service_manager.staking.StakingContract",
+                return_value=mock_staking,
+            ),
             patch("iwa.plugins.olas.service_manager.staking.Web3") as mock_web3,
         ):
             mock_web3.from_wei.return_value = 0.001

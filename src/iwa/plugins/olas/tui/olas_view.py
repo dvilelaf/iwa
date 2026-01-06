@@ -300,7 +300,6 @@ class OlasView(Static):
         except Exception:
             pass
 
-
     def _mount_error(self, message: str) -> None:
         """Mount error message (called from UI thread)."""
         try:
@@ -309,7 +308,6 @@ class OlasView(Static):
             container.mount(Label(message, classes="empty-state"))
         except Exception:
             pass
-
 
     def _create_service_card(
         self, service_key: str, service, staking_status, service_state: str = "UNKNOWN"
@@ -482,9 +480,7 @@ class OlasView(Static):
         service_bond_olas = service_bond / 10**18 if service_bond else 0
 
         # 2. Filter contracts
-        filtered_contracts = self._get_compatible_staking_contracts(
-            contracts_dict, service_bond
-        )
+        filtered_contracts = self._get_compatible_staking_contracts(contracts_dict, service_bond)
 
         if not filtered_contracts:
             if service_bond_olas is not None:

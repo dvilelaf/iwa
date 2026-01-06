@@ -21,7 +21,10 @@ def mock_chain_interface():
                 mock_gnosis = mock_gnosis_cls.return_value
                 mock_gnosis.name = "gnosis"
                 mock_gnosis.rpc = "https://rpc.gnosis.gateway.fm"
-                mock_gnosis.rpcs = ["https://rpc.gnosis.gateway.fm", "https://rpc2.gnosis.gateway.fm"]
+                mock_gnosis.rpcs = [
+                    "https://rpc.gnosis.gateway.fm",
+                    "https://rpc2.gnosis.gateway.fm",
+                ]
                 mock_gnosis.chain_id = 100
                 mock_gnosis.native_currency = "xDAI"
                 mock_gnosis.tokens = {}
@@ -113,7 +116,9 @@ def test_is_tenderly_quota_exceeded():
 
                 interface = ChainInterface(mock_gnosis)
 
-    assert interface._is_tenderly_quota_exceeded(Exception("403 Forbidden tenderly virtual network"))
+    assert interface._is_tenderly_quota_exceeded(
+        Exception("403 Forbidden tenderly virtual network")
+    )
     assert not interface._is_tenderly_quota_exceeded(Exception("500 server error"))
 
 

@@ -332,7 +332,9 @@ def test_sm_get_staking_status_staked_info_fail(mock_wallet):
         mock_staking.activity_checker.liveness_ratio = 10
         mock_staking.get_service_info.side_effect = Exception("fail")
 
-        with patch("iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking):
+        with patch(
+            "iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking
+        ):
             status = sm.get_staking_status()
             assert status.staking_state == "STAKED"
 
@@ -349,7 +351,9 @@ def test_sm_call_checkpoint_prepare_fail(mock_wallet):
         mock_staking.is_checkpoint_needed.return_value = True
         mock_staking.prepare_checkpoint_tx.return_value = None
 
-        with patch("iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking):
+        with patch(
+            "iwa.plugins.olas.service_manager.staking.StakingContract", return_value=mock_staking
+        ):
             result = sm.call_checkpoint()
             assert result is False
 

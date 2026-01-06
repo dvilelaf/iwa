@@ -17,29 +17,35 @@ class MockTransferService(SwapMixin):
         self.get_erc20_allowance = MagicMock()
         self.approve_erc20 = MagicMock()
 
+
 @pytest.fixture
 def transfer_service():
     return MockTransferService()
+
 
 @pytest.fixture
 def mock_chain_interfaces():
     with patch("iwa.core.services.transfer.swap.ChainInterfaces") as mock:
         yield mock
 
+
 @pytest.fixture
 def mock_cow_swap():
     with patch("iwa.core.services.transfer.swap.CowSwap") as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_erc20_contract():
     with patch("iwa.core.services.transfer.swap.ERC20Contract") as mock:
         yield mock
 
+
 @pytest.fixture
 def mock_log_transaction():
     with patch("iwa.core.services.transfer.swap.log_transaction") as mock:
         yield mock
+
 
 @pytest.mark.asyncio
 async def test_swap_happy_path(
@@ -62,7 +68,7 @@ async def test_swap_happy_path(
         "executedSellAmount": "1000000000000000000",
         "executedBuyAmount": "2000000",
         "quote": {"sellTokenPrice": 1.0, "buyTokenPrice": 500.0},
-        "txHash": "0xHash"
+        "txHash": "0xHash",
     }
     cow_instance.swap.return_value = swap_result
 
@@ -72,7 +78,7 @@ async def test_swap_happy_path(
         amount_eth=1.0,
         sell_token_name="WETH",
         buy_token_name="USDC",
-        chain_name="gnosis"
+        chain_name="gnosis",
     )
 
     # Verify
@@ -85,10 +91,9 @@ async def test_swap_happy_path(
     mock_log_transaction.assert_called_once()
     assert result["analytics"]["value_change_pct"] != "N/A"
 
+
 @pytest.mark.asyncio
-async def test_swap_insufficient_allowance(
-    transfer_service, mock_chain_interfaces, mock_cow_swap
-):
+async def test_swap_insufficient_allowance(transfer_service, mock_chain_interfaces, mock_cow_swap):
     """Test approval is called when allowance is insufficient."""
     # Setup
     account_mock = MagicMock()
@@ -103,19 +108,15 @@ async def test_swap_insufficient_allowance(
 
     # Execute
     await transfer_service.swap(
-        account_address_or_tag="user",
-        amount_eth=1.0,
-        sell_token_name="WETH",
-        buy_token_name="USDC"
+        account_address_or_tag="user", amount_eth=1.0, sell_token_name="WETH", buy_token_name="USDC"
     )
 
     # Verify Approval
     transfer_service.approve_erc20.assert_called_once()
 
+
 @pytest.mark.asyncio
-async def test_swap_full_balance(
-    transfer_service, mock_chain_interfaces, mock_cow_swap
-):
+async def test_swap_full_balance(transfer_service, mock_chain_interfaces, mock_cow_swap):
     """Test swapping entire balance (amount_eth=None)."""
     # Setup
     account_mock = MagicMock()
@@ -136,13 +137,10 @@ async def test_swap_full_balance(
         account_address_or_tag="user",
         amount_eth=None,
         sell_token_name="WETH",
-        buy_token_name="USDC"
+        buy_token_name="USDC",
     )
 
     # Verify correct amount passed to swap
     cow_instance.swap.assert_called_with(
-        amount_wei=500,
-        sell_token_name="WETH",
-        buy_token_name="USDC",
-        order_type=OrderType.SELL
+        amount_wei=500, sell_token_name="WETH", buy_token_name="USDC", order_type=OrderType.SELL
     )

@@ -538,9 +538,7 @@ class OlasServiceImporter:
                 result.errors.append(f"Key {key.address}: {key_result[1]}")
                 result.success = False
 
-    def _import_discovered_safes(
-        self, service: DiscoveredService, result: ImportResult
-    ) -> None:
+    def _import_discovered_safes(self, service: DiscoveredService, result: ImportResult) -> None:
         """Import Safe from the service if present."""
         if service.safe_address:
             safe_result = self._import_safe(service)

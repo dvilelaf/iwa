@@ -83,7 +83,7 @@ async def test_monitor_worker_run_error():
     # We also patch sleep to be fast
     with patch("asyncio.to_thread", side_effect=side_effect) as mock_to_thread:
         with patch("asyncio.sleep", new_callable=AsyncMock):
-             await worker.run()
+            await worker.run()
 
     # This verifies passing through error handling
     assert not worker._running

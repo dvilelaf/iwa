@@ -170,7 +170,9 @@ class RateLimitedEth:
 class RateLimitedWeb3:
     """Wrapper around Web3 instance that applies rate limiting transparently."""
 
-    def __init__(self, web3_instance, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
+    def __init__(
+        self, web3_instance, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"
+    ):
         """Initialize RateLimitedWeb3 wrapper."""
         self._web3 = web3_instance
         self._rate_limiter = rate_limiter

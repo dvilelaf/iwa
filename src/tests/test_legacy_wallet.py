@@ -72,10 +72,12 @@ def mock_chain_interfaces():
         mock_chain.native_currency = "xDAI"
         mock_chain.chain_id = 100
         mock_chain.tokens = {}
+
         def debug_get_token(name):
             addr = mock_chain.tokens.get(name)
             # print(f"DEBUG LAMBDA: name={name} tokens={mock_chain.tokens} addr={addr}")
             return addr
+
         mock_chain.get_token_address.side_effect = debug_get_token
         gnosis_interface.chain = mock_chain
 
@@ -212,7 +214,6 @@ def wallet(
             w.safe_service,
             w.transaction_service,
         )
-
 
         # Mock internal transfer service methods to return 0 by default for numeric comparisons,
         # but allow side_effect to handle tests that expect None.
@@ -516,8 +517,10 @@ def test_drain_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):
         {"status": 1, "transactionHash": b"hash"},
     )
 
-    with patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20, \
-         patch("iwa.core.services.transfer.multisend.MultiSendCallOnlyContract") as mock_multisend:
+    with (
+        patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20,
+        patch("iwa.core.services.transfer.multisend.MultiSendCallOnlyContract") as mock_multisend,
+    ):
         with patch("iwa.core.services.transfer.erc20.ERC20Contract", new=mock_erc20):
             erc20_instance = mock_erc20.return_value
             erc20_instance.prepare_transfer_tx.return_value = {"to": "0x", "data": b"", "value": 0}
@@ -697,11 +700,17 @@ def test_multi_send_erc20_eoa_success(wallet, mock_key_storage, mock_chain_inter
 
     wallet.transaction_service.sign_and_send.return_value = (True, {"status": 1})
 
-    with patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20, \
-         patch("iwa.core.services.transfer.multisend.MultiSendCallOnlyContract") as mock_multisend:
+    with (
+        patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20,
+        patch("iwa.core.services.transfer.multisend.MultiSendCallOnlyContract") as mock_multisend,
+    ):
         with patch("iwa.core.services.transfer.erc20.ERC20Contract", new=mock_erc20):
             erc20_instance = mock_erc20.return_value
-            erc20_instance.prepare_transfer_from_tx.return_value = {"to": "0x", "data": b"", "value": 0}
+            erc20_instance.prepare_transfer_from_tx.return_value = {
+                "to": "0x",
+                "data": b"",
+                "value": 0,
+            }
 
             multisend_instance = mock_multisend.return_value
             multisend_instance.prepare_tx.return_value = {"to": "0x", "data": b"", "value": 0}

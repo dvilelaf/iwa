@@ -33,7 +33,12 @@ class SwapMixin:
 
         """
         amount_wei = self._prepare_swap_amount(
-            account_address_or_tag, amount_eth, sell_token_name, buy_token_name, chain_name, order_type
+            account_address_or_tag,
+            amount_eth,
+            sell_token_name,
+            buy_token_name,
+            chain_name,
+            order_type,
         )
         if amount_wei is None:
             return None
@@ -57,7 +62,13 @@ class SwapMixin:
 
             # Check and approve allowance if needed
             await self._ensure_allowance_for_swap(
-                account_address_or_tag, sell_token_name, buy_token_name, chain_name, amount_wei, order_type, cow
+                account_address_or_tag,
+                sell_token_name,
+                buy_token_name,
+                chain_name,
+                amount_wei,
+                order_type,
+                cow,
             )
 
             # Execute Swap
@@ -79,7 +90,7 @@ class SwapMixin:
 
                     tx_hash = result.get("txHash") or result.get("uid")
                     if tx_hash:
-                         self._log_swap_transaction(
+                        self._log_swap_transaction(
                             tx_hash,
                             account,
                             account_address_or_tag,
@@ -87,8 +98,8 @@ class SwapMixin:
                             buy_token_name,
                             result,
                             chain_name,
-                            analytics
-                         )
+                            analytics,
+                        )
 
                     # Inject analytics back into result for API/Frontend
                     result["analytics"] = analytics
@@ -233,9 +244,7 @@ class SwapMixin:
             "sell_price_usd": sell_price_usd,
             "buy_price_usd": buy_price_usd,
             "execution_price": execution_price,
-            "value_change_pct": value_change_pct
-            if value_change_pct is not None
-            else "N/A",
+            "value_change_pct": value_change_pct if value_change_pct is not None else "N/A",
             # Internal fields for logging use
             "_value_sold": value_sold,
         }

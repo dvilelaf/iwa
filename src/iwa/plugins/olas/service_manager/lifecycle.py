@@ -277,9 +277,7 @@ class LifecycleManagerMixin:
             utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
             if utility_address:
-                required_approval = Web3.to_wei(
-                    1000, "ether"
-                )  # Approve generous amount to be safe
+                required_approval = Web3.to_wei(1000, "ether")  # Approve generous amount to be safe
 
                 # Check current allowance
                 allowance = self.wallet.transfer_service.get_erc20_allowance(
@@ -347,6 +345,7 @@ class LifecycleManagerMixin:
             return False
 
         return True
+
     def register_agent(
         self, agent_address: Optional[str] = None, bond_amount_wei: Optional[Wei] = None
     ) -> bool:
@@ -681,9 +680,7 @@ class LifecycleManagerMixin:
         while current_state != ServiceState.DEPLOYED:
             previous_state = current_state
 
-            if not self._process_spin_up_state(
-                current_state, agent_address, bond_amount_wei
-            ):
+            if not self._process_spin_up_state(current_state, agent_address, bond_amount_wei):
                 return False
 
             # Refresh state
@@ -745,6 +742,7 @@ class LifecycleManagerMixin:
         except Exception as e:
             logger.error(f"Could not get service info for {service_id}: {e}")
             return None
+
     def wind_down(self, staking_contract=None) -> bool:
         """Wind down a service to PRE_REGISTRATION state.
 
@@ -826,14 +824,9 @@ class LifecycleManagerMixin:
         self, service_id: int, current_state: ServiceState, staking_contract=None
     ) -> bool:
         """Ensure the service is unstaked if it was staked."""
-        if (
-            current_state == ServiceState.DEPLOYED
-            and self.service.staking_contract_address
-        ):
+        if current_state == ServiceState.DEPLOYED and self.service.staking_contract_address:
             if not staking_contract:
-                logger.error(
-                    "Service is staked but no staking contract provided for unstaking"
-                )
+                logger.error("Service is staked but no staking contract provided for unstaking")
                 return False
 
             logger.info("Unstaking service...")

@@ -137,7 +137,9 @@ class MechManagerMixin:
         try:
             mech_factory = marketplace.call("mapAgentMechFactories", priority_mech)
             if mech_factory == ZERO_ADDRESS:
-                logger.warning(f"Priority mech {priority_mech} has no factory (may be unregistered)")
+                logger.warning(
+                    f"Priority mech {priority_mech} has no factory (may be unregistered)"
+                )
             else:
                 logger.debug(f"Priority mech factory: {mech_factory}")
         except Exception as e:
