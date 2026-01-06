@@ -259,7 +259,8 @@ def test_rotate_rpc(mock_web3):
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestChain"
     chain.rpcs = ["http://rpc1", "http://rpc2", "http://rpc3"]
-    # Needs to return property value for rpc if accessed, but here access is via index
+    # Needs to return property value for rpc if accessed
+    type(chain).rpc = PropertyMock(return_value="http://rpc1")
 
     ci = ChainInterface(chain)
     ci._current_rpc_index = 0

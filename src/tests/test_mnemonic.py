@@ -113,9 +113,10 @@ def test_mnemonic_storage_save():
             kdf_salt="salt", nonce="nonce", ciphertext="ciphertext"
         )
     )
-    with patch("builtins.open", mock_open()) as mock_file:
+    with patch("builtins.open", mock_open()) as mock_file, patch("os.chmod") as mock_chmod:
         storage.save(Path("test.json"))
         mock_file.assert_called_once()
+        mock_chmod.assert_called_once()
 
 
 def test_mnemonic_manager_init():

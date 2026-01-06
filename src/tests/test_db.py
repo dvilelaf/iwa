@@ -43,12 +43,12 @@ def test_log_transaction_update_preserve_fields():
 
 def test_log_transaction_error():
     """Test log_transaction handles errors gracefully."""
-    with patch("iwa.core.db.SentTransaction") as mock_model, patch("builtins.print") as mock_print:
+    with patch("iwa.core.db.SentTransaction") as mock_model, patch("iwa.core.db.logger") as mock_logger:
         mock_model.get_or_none.side_effect = Exception("DB Error")
 
         log_transaction("0x123", "0xFrom", "0xTo", "DAI", 100, "gnosis")
 
-        mock_print.assert_called()
+        mock_logger.error.assert_called()
 
 
 def test_init_db():
@@ -116,13 +116,13 @@ def test_run_migrations_drop_token_symbol_error():
     with (
         patch("iwa.core.db.SqliteMigrator"),
         patch("iwa.core.db.migrate", side_effect=Exception("Drop failed")),
-        patch("builtins.print") as mock_print,
+        patch("iwa.core.db.logger") as mock_logger,
     ):
         columns = ["token_symbol", "from_tag", "price_eur", "tags"]
 
         run_migrations(columns)
 
-        mock_print.assert_called()
+        mock_logger.warning.assert_called()
 
 
 def test_run_migrations_add_from_tag():
@@ -144,13 +144,13 @@ def test_run_migrations_add_from_tag_error():
     with (
         patch("iwa.core.db.SqliteMigrator"),
         patch("iwa.core.db.migrate", side_effect=Exception("Add failed")),
-        patch("builtins.print") as mock_print,
+        patch("iwa.core.db.logger") as mock_logger,
     ):
         columns = []  # No columns - triggers add
 
         run_migrations(columns)
 
-        mock_print.assert_called()
+        mock_logger.warning.assert_called()
 
 
 def test_run_migrations_add_price_eur():

@@ -237,18 +237,26 @@ class SafeService:
 
         This method handles the signing and execution of a Safe transaction,
         keeping private keys internal to SafeService.
+
+        SECURITY: Keys are overwritten with zeros and cleared after use.
         """
-        # Sign with all available signers
-        for pk in signer_keys:
-            safe_tx.sign(pk)
+        try:
+            # Sign with all available signers
+            for pk in signer_keys:
+                safe_tx.sign(pk)
 
-        # Verify the transaction will succeed
-        safe_tx.call()
+            # Verify the transaction will succeed
+            safe_tx.call()
 
-        # Execute using the first signer
-        safe_tx.execute(signer_keys[0])
+            # Execute using the first signer
+            safe_tx.execute(signer_keys[0])
 
-        return safe_tx.tx_hash.hex()
+            return safe_tx.tx_hash.hex()
+        finally:
+            # SECURITY: Overwrite keys with zeros before clearing (best effort)
+            for i in range(len(signer_keys)):
+                signer_keys[i] = "0" * len(signer_keys[i]) if signer_keys[i] else ""
+            signer_keys.clear()
 
     def execute_safe_transaction(
         self,

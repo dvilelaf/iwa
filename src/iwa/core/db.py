@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 
+from loguru import logger
 from peewee import (
     CharField,
     DateTimeField,
@@ -69,7 +70,7 @@ def run_migrations(columns):  # noqa: C901
         try:
             migrate(migrator.drop_column("senttransaction", "token_symbol"))
         except Exception as e:
-            print(f"Migration (drop token_symbol) failed: {e}")
+            logger.warning(f"Migration (drop token_symbol) failed: {e}")
 
     if "from_tag" not in columns:
         try:
@@ -79,7 +80,7 @@ def run_migrations(columns):  # noqa: C901
                 migrator.add_column("senttransaction", "token_symbol", CharField(null=True)),
             )
         except Exception as e:
-            print(f"Migration failed: {e}")
+            logger.warning(f"Migration failed: {e}")
 
     if "price_eur" not in columns:
         try:
@@ -90,19 +91,19 @@ def run_migrations(columns):  # noqa: C901
                 migrator.add_column("senttransaction", "gas_value_eur", FloatField(null=True)),
             )
         except Exception as e:
-            print(f"Migration (pricing) failed: {e}")
+            logger.warning(f"Migration (pricing) failed: {e}")
 
     if "tags" not in columns:
         try:
             migrate(migrator.add_column("senttransaction", "tags", CharField(null=True)))
         except Exception as e:
-            print(f"Migration (tags) failed: {e}")
+            logger.warning(f"Migration (tags) failed: {e}")
 
     if "extra_data" not in columns:
         try:
             migrate(migrator.add_column("senttransaction", "extra_data", CharField(null=True)))
         except Exception as e:
-            print(f"Migration (extra_data) failed: {e}")
+            logger.warning(f"Migration (extra_data) failed: {e}")
 
 
 def init_db():
@@ -220,4 +221,4 @@ def log_transaction(  # noqa: D103, C901
             SentTransaction.insert(**data).on_conflict_replace().execute()
 
     except Exception as e:
-        print(f"Failed to log transaction: {e}")
+        logger.error(f"Failed to log transaction: {e}")
