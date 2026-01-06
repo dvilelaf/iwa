@@ -193,7 +193,9 @@ def test_get_staking_contracts(client):
 def test_create_service(client, mock_olas_config):
     """Test /api/olas/create endpoint."""
     with (
-        patch("iwa.web.routers.olas.services.Config") as mock_config_cls,  # Not strictly used but kept for consistency if needed
+        patch(
+            "iwa.web.routers.olas.services.Config"
+        ) as mock_config_cls,  # Not strictly used but kept for consistency if needed
         patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
     ):
         mock_config = mock_config_cls.return_value

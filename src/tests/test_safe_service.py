@@ -3,11 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from eth_account import Account
 
 from iwa.core.keys import EncryptedAccount, KeyStorage
 from iwa.core.services.safe import SafeService
-from iwa.core.models import StoredSafeAccount
 
 
 @pytest.fixture
@@ -33,7 +31,9 @@ def mock_key_storage():
     mock.find_stored_account.side_effect = find_account
 
     # Mock private key retrieval
-    mock._get_private_key.return_value = "0x1234567890123456789012345678901234567890123456789012345678901234"
+    mock._get_private_key.return_value = (
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+    )
 
     return mock
 
@@ -74,7 +74,9 @@ def mock_dependencies():
         mock_deploy_tx.contract_address = "0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5"
         mock_deploy_tx.tx_hash.hex.return_value = "0xTxHashSalted"
 
-        mock_proxy_factory.return_value.deploy_proxy_contract_with_nonce.return_value = mock_deploy_tx
+        mock_proxy_factory.return_value.deploy_proxy_contract_with_nonce.return_value = (
+            mock_deploy_tx
+        )
 
         # Fix for setup_data chaining
         mock_function = MagicMock()
@@ -118,7 +120,7 @@ def test_create_safe_standard(mock_key_storage, mock_account_service, mock_depen
         owner_tags_or_addresses=["owner1"],
         threshold=1,
         chain_name="gnosis",
-        tag="MySafe"
+        tag="MySafe",
     )
 
     # Checksum address matching what Pydantic/Web3 produces
@@ -142,7 +144,7 @@ def test_create_safe_with_salt(mock_key_storage, mock_account_service, mock_depe
         threshold=1,
         chain_name="gnosis",
         tag="MySaltedSafe",
-        salt_nonce=123
+        salt_nonce=123,
     )
 
     # 0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5
@@ -150,7 +152,9 @@ def test_create_safe_with_salt(mock_key_storage, mock_account_service, mock_depe
     assert tx_hash == "0xTxHashSalted"
 
     # Check that manual ProxyFactory logic was used
-    mock_dependencies["proxy_factory"].return_value.deploy_proxy_contract_with_nonce.assert_called_once()
+    mock_dependencies[
+        "proxy_factory"
+    ].return_value.deploy_proxy_contract_with_nonce.assert_called_once()
     # Safe.create should NOT be called
     mock_dependencies["safe"].create.assert_not_called()
 

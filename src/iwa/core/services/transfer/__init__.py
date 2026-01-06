@@ -3,7 +3,6 @@
 from typing import Optional
 
 from loguru import logger
-from web3 import Web3
 from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces

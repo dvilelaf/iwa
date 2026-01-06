@@ -21,10 +21,10 @@ def mock_chain():
 @pytest.fixture
 def mock_cowpy_modules():
     """Mock cowpy modules."""
-    with patch("iwa.plugins.gnosis.cow.swap.get_cowpy_module") as mock_get_swap, \
-         patch("iwa.plugins.gnosis.cow.quotes.get_cowpy_module") as mock_get_quotes:
-        mock_get = mock_get_swap
-
+    with (
+        patch("iwa.plugins.gnosis.cow.swap.get_cowpy_module") as mock_get_swap,
+        patch("iwa.plugins.gnosis.cow.quotes.get_cowpy_module") as mock_get_quotes,
+    ):
         # Create mocks for all various modules
         mocks = {
             "SupportedChainId": MagicMock(),

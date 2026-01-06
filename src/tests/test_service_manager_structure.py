@@ -1,7 +1,7 @@
-
-import pytest
 from unittest.mock import MagicMock
+
 from iwa.plugins.olas.service_manager import ServiceManager
+
 
 def test_service_manager_structure():
     """Verify that ServiceManager has all expected methods from mixins."""
@@ -29,4 +29,3 @@ def test_service_manager_structure():
     # Check Base methods
     assert hasattr(sm, "get")
     assert hasattr(sm, "_init_contracts")
-

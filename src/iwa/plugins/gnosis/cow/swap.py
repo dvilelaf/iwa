@@ -2,7 +2,7 @@
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import requests
 from eth_account import Account

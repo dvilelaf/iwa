@@ -1,4 +1,5 @@
 """Lifecycle manager mixin."""
+
 from typing import List, Optional, Union
 
 from loguru import logger
@@ -6,12 +7,12 @@ from web3 import Web3
 from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
-from iwa.core.types import EthereumAddress
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS, ZERO_ADDRESS
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.constants import (
-    AgentType,
     OLAS_CONTRACTS,
     TRADER_CONFIG_HASH,
+    AgentType,
 )
 from iwa.plugins.olas.contracts.service import ServiceState
 from iwa.plugins.olas.models import Service

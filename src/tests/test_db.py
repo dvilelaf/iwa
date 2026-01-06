@@ -43,7 +43,10 @@ def test_log_transaction_update_preserve_fields():
 
 def test_log_transaction_error():
     """Test log_transaction handles errors gracefully."""
-    with patch("iwa.core.db.SentTransaction") as mock_model, patch("iwa.core.db.logger") as mock_logger:
+    with (
+        patch("iwa.core.db.SentTransaction") as mock_model,
+        patch("iwa.core.db.logger") as mock_logger,
+    ):
         mock_model.get_or_none.side_effect = Exception("DB Error")
 
         log_transaction("0x123", "0xFrom", "0xTo", "DAI", 100, "gnosis")

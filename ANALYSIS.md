@@ -1242,31 +1242,26 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Acción**: Eliminar función y todas las llamadas a `trace()` en el archivo
 - [x] Usar `logger.debug()` si se necesita debugging
 
-#### 4.2 Rate Limiting en Swap (SWAP-S1) - **P2**
-- [ ] **Archivo**: `src/iwa/web/routers/swap.py`
-- [ ] **Línea**: Endpoint `swap_tokens()` (~línea 77)
-- [ ] **Acción**: Añadir decorador:
-  ```python
-  @router.post("/swap")
-  @limiter.limit("10/minute")
-  def swap_tokens(request: Request, req: SwapRequest, ...):
-  ```
-- [ ] Añadir `request: Request` como primer parámetro
+#### 4.2 Rate Limiting en Swap (SWAP-S1) - **P2** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/web/routers/swap.py`
+- [x] **Línea**: Endpoint `swap_tokens()` (~línea 77)
+- [x] **Acción**: Añadido decorador `@limiter.limit("10/minute")`
+- [x] Añadido `request: Request` como primer parámetro
 
-#### 4.3 Rate Limiting en Olas Críticos (OLAS-R-S1) - **P2**
-- [ ] **Archivo**: `src/iwa/web/routers/olas.py`
-- [ ] **Endpoints a modificar**:
-  - [ ] `stake_service()`: añadir `@limiter.limit("5/minute")`
-  - [ ] `terminate_service()`: añadir `@limiter.limit("3/minute")`
-  - [ ] `drain_service()`: añadir `@limiter.limit("3/minute")`
-- [ ] Añadir import: `from slowapi import Limiter`
-- [ ] Añadir `request: Request` como primer parámetro en cada uno
+#### 4.3 Rate Limiting en Olas Críticos (OLAS-R-S1) - **P2** - ✅ **COMPLETADO**
+- [x] **Archivos**:
+  - [x] `src/iwa/web/routers/olas/staking.py` (`stake_service`)
+  - [x] `src/iwa/web/routers/olas/admin.py` (`terminate_service`)
+  - [x] `src/iwa/web/routers/olas/funding.py` (`drain_service`)
+- [x] **Acción**: Añadido `@limiter.limit` en cada endpoint crítico
+- [x] Añadido `request: Request` como primer parámetro en cada uno
 
-#### 4.4 CSP sin unsafe-inline (SRV-S1) - **P2**
-- [ ] **Archivo**: `src/iwa/web/server.py`
-- [ ] **Línea**: SecurityHeadersMiddleware CSP
-- [ ] **Acción**: Refactorizar para usar nonces o eliminar JS inline
-- [ ] **Dependencia**: Primero mover JS inline de index.html a módulos (FE-S1)
+#### 4.4 CSP sin unsafe-inline (SRV-S1) - **P2** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/web/server.py`
+- [x] **Línea**: SecurityHeadersMiddleware CSP
+- [x] **Acción**: Eliminado `'unsafe-inline'` de `script-src` y `style-src`
+- [x] **FE-S1**: Movido estilos inline de `index.html` a `style.css`
+- [x] **FE-C1**: Refactorizado `app.js` para usar delegación de eventos (`data-action`) y clases de utilidad en lugar de estilos/eventos inline
 
 #### 4.5 Mover Modelos Web (ACC-A1) - **P3** - ✅ **COMPLETADO**
 - [x] **Archivo origen**: `src/iwa/web/routers/accounts.py`

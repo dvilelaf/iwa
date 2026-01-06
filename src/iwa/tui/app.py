@@ -1,7 +1,5 @@
 """Main TUI Application module."""
 
-
-
 from loguru import logger
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -10,9 +8,6 @@ from textual.widgets import Footer, Header, TabbedContent, TabPane
 from iwa.core.wallet import Wallet
 from iwa.tui.rpc import RPCView
 from iwa.tui.screens.wallets import WalletsScreen
-
-
-
 
 
 class IwaApp(App):

@@ -1,4 +1,5 @@
 """Mech manager mixin."""
+
 from typing import Optional
 
 from loguru import logger

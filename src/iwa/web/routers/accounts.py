@@ -2,7 +2,6 @@
 
 import logging
 import time
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter

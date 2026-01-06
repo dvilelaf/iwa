@@ -1,10 +1,11 @@
 """Security tests for TransferService."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
 from eth_account import Account
 
-from iwa.core.models import Config, EthereumAddress
+from iwa.core.models import EthereumAddress
 from iwa.core.services.transfer import TransferService
 
 
@@ -67,15 +68,14 @@ def test_is_supported_token_strict_validation(transfer_service):
 
     # Mock chain interface
     mock_chain_interface = MagicMock()
-    mock_chain_interface.tokens = {
-        "OLAS": EthereumAddress(valid_token_addr)
-    }
+    mock_chain_interface.tokens = {"OLAS": EthereumAddress(valid_token_addr)}
 
     with patch("iwa.core.services.transfer.base.ChainInterfaces") as mock_ci_cls:
         mock_ci_cls.return_value.get.return_value = mock_chain_interface
 
         # 1. Native currency -> Allowed
         from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
+
         assert transfer_service._is_supported_token(NATIVE_CURRENCY_ADDRESS, chain_name) is True
         assert transfer_service._is_supported_token("native", chain_name) is True
 

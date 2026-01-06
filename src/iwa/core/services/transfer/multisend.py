@@ -167,9 +167,7 @@ class MultiSendMixin:
                 )
 
             if not transfer_tx:
-                logger.error(
-                    f"Failed to prepare transfer transaction for {token_address_or_tag}"
-                )
+                logger.error(f"Failed to prepare transfer transaction for {token_address_or_tag}")
                 return None
 
             tx_copy["to"] = erc20.address

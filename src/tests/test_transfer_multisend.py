@@ -1,9 +1,8 @@
 """Tests for TransferService.multi_send."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from safe_eth.safe import SafeOperationEnum
 
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.models import StoredSafeAccount
@@ -29,7 +28,7 @@ def mock_deps():
         mock_w3 = MagicMock()
         # Ensure to_checksum_address returns input if string
         mock_w3.to_checksum_address.side_effect = lambda x: x
-        mock_w3.to_wei.return_value = 1000 # 1000 wei default
+        mock_w3.to_wei.return_value = 1000  # 1000 wei default
         mock_chain.return_value.get.return_value.web3 = mock_w3
         mock_chain.return_value.get.return_value.chain.tokens = {"TEST": "0xToken"}
 
@@ -39,11 +38,7 @@ def mock_deps():
             "balance_service": mock_balance_service,
             "safe_service": mock_safe_service,
             "transaction_service": mock_txn_service,
-            "contracts": {
-                "ms": mock_ms,
-                "ms_co": mock_ms_co,
-                "erc20": mock_erc20
-            }
+            "contracts": {"ms": mock_ms, "ms_co": mock_ms_co, "erc20": mock_erc20},
         }
         yield deps
 
@@ -55,19 +50,21 @@ def test_multi_send_eoa_native(mock_deps):
         mock_deps["key_storage"],
         mock_deps["balance_service"],
         mock_deps["safe_service"],
-        mock_deps["transaction_service"]
+        mock_deps["transaction_service"],
     )
 
     # Mock From Account (EOA)
     mock_from = MagicMock()
-    mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D" # Valid checksum address
+    mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"  # Valid checksum address
     mock_from.tag = "from_tag"
     mock_deps["account_service"].resolve_account.return_value = mock_from
 
     # Mock Resolve To Account to return None (so it uses the string) or a mock with address
     def resolve_side_effect(arg):
-        if arg == "from_tag": return mock_from
+        if arg == "from_tag":
+            return mock_from
         return None
+
     mock_deps["account_service"].resolve_account.side_effect = resolve_side_effect
 
     # Mock dependencies
@@ -76,8 +73,12 @@ def test_multi_send_eoa_native(mock_deps):
     mock_ms_co.address = "0xMultiSendCallOnly"
 
     transactions = [
-        {"to": "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "amount": 1.0, "token": NATIVE_CURRENCY_ADDRESS},
-        {"to": "0xTo2", "amount_wei": 500, "token": NATIVE_CURRENCY_ADDRESS}
+        {
+            "to": "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
+            "amount": 1.0,
+            "token": NATIVE_CURRENCY_ADDRESS,
+        },
+        {"to": "0xTo2", "amount_wei": 500, "token": NATIVE_CURRENCY_ADDRESS},
     ]
 
     service.multi_send("from_tag", transactions)
@@ -100,14 +101,16 @@ def test_multi_send_safe_erc20(mock_deps):
         mock_deps["key_storage"],
         mock_deps["balance_service"],
         mock_deps["safe_service"],
-        mock_deps["transaction_service"]
+        mock_deps["transaction_service"],
     )
 
     # Mock From Account (Safe)
     mock_safe_account = MagicMock(spec=StoredSafeAccount)
     mock_safe_account.address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 
-    mock_deps["account_service"].resolve_account.side_effect = lambda x: mock_safe_account if x == "safe_tag" else None
+    mock_deps["account_service"].resolve_account.side_effect = (
+        lambda x: mock_safe_account if x == "safe_tag" else None
+    )
 
     # Mock ERC20
     mock_erc20 = mock_deps["contracts"]["erc20"].return_value
@@ -122,9 +125,7 @@ def test_multi_send_safe_erc20(mock_deps):
     mock_ms.prepare_tx.return_value = {"value": 0, "data": b"multisend_data"}
     mock_ms.address = "0xMultiSend"
 
-    transactions = [
-        {"to": "0xRecipient", "amount": 10.0, "token": "TEST"}
-    ]
+    transactions = [{"to": "0xRecipient", "amount": 10.0, "token": "TEST"}]
 
     service.multi_send("safe_tag", transactions)
 
@@ -142,7 +143,7 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
         mock_deps["key_storage"],
         mock_deps["balance_service"],
         mock_deps["safe_service"],
-        mock_deps["transaction_service"]
+        mock_deps["transaction_service"],
     )
 
     # Stub approve_erc20 to verify it's called
@@ -151,7 +152,9 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
     # Mock From Account (EOA)
     mock_from = MagicMock()
     mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
-    mock_deps["account_service"].resolve_account.side_effect = lambda x: mock_from if x == "from_tag" else None
+    mock_deps["account_service"].resolve_account.side_effect = (
+        lambda x: mock_from if x == "from_tag" else None
+    )
 
     mock_deps["account_service"].get_token_address.return_value = "0xToken"
     mock_erc20 = mock_deps["contracts"]["erc20"].return_value
@@ -161,9 +164,7 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
     mock_ms_co = mock_deps["contracts"]["ms_co"].return_value
     mock_ms_co.prepare_tx.return_value = {"value": 0, "data": b"encoded"}
 
-    transactions = [
-        {"to": "0xRecipient", "amount": 10.0, "token": "TEST"}
-    ]
+    transactions = [{"to": "0xRecipient", "amount": 10.0, "token": "TEST"}]
 
     service.multi_send("from_tag", transactions)
 

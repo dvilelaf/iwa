@@ -1,6 +1,6 @@
 """Tests for TransactionService."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from web3 import exceptions as web3_exceptions
@@ -64,16 +64,18 @@ def mock_external_deps():
     with (
         patch("iwa.core.services.transaction.log_transaction") as mock_log,
         patch("iwa.core.pricing.PriceService") as mock_price,
-        patch("iwa.core.services.transaction.time.sleep") as mock_sleep, # speed up tests
+        patch("iwa.core.services.transaction.time.sleep") as _,  # speed up tests
     ):
-        mock_price.return_value.get_token_price.return_value = 1.0 # 1 EUR per Token
+        mock_price.return_value.get_token_price.return_value = 1.0  # 1 EUR per Token
         yield {
             "log": mock_log,
             "price": mock_price,
         }
 
 
-def test_sign_and_send_success(mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps):
+def test_sign_and_send_success(
+    mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps
+):
     """Test successful sign and send flow."""
     service = TransactionService(mock_key_storage, mock_account_service)
 
@@ -95,16 +97,20 @@ def test_sign_and_send_success(mock_key_storage, mock_account_service, mock_chai
     mock_key_storage.sign_transaction.assert_called()
 
     # Check sending
-    mock_chain_interfaces.get.return_value.web3.eth.send_raw_transaction.assert_called_with(b"raw_tx_bytes")
+    mock_chain_interfaces.get.return_value.web3.eth.send_raw_transaction.assert_called_with(
+        b"raw_tx_bytes"
+    )
 
     # Check logging
     mock_external_deps["log"].assert_called_once()
     call_args = mock_external_deps["log"].call_args[1]
-    assert call_args["tx_hash"] == "74785f686173685f6279746573" # hex of b'tx_hash_bytes'
+    assert call_args["tx_hash"] == "74785f686173685f6279746573"  # hex of b'tx_hash_bytes'
     assert call_args["tags"] is None
 
 
-def test_sign_and_send_low_gas_retry(mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps):
+def test_sign_and_send_low_gas_retry(
+    mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps
+):
     """Test retry logic on low gas error."""
     service = TransactionService(mock_key_storage, mock_account_service)
 
@@ -113,7 +119,7 @@ def test_sign_and_send_low_gas_retry(mock_key_storage, mock_account_service, moc
     # First attempt fails with "intrinsic gas too low", second succeeds
     web3_mock.send_raw_transaction.side_effect = [
         web3_exceptions.Web3RPCError("intrinsic gas too low"),
-        b"tx_hash_bytes_success"
+        b"tx_hash_bytes_success",
     ]
 
     tx = {"to": "0xDest", "value": 100, "gas": 20000}
@@ -133,7 +139,9 @@ def test_sign_and_send_low_gas_retry(mock_key_storage, mock_account_service, moc
     assert final_tx_arg["gas"] == 30000
 
 
-def test_sign_and_send_rpc_rotation(mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps):
+def test_sign_and_send_rpc_rotation(
+    mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps
+):
     """Test RPC rotation on generic error."""
     service = TransactionService(mock_key_storage, mock_account_service)
     chain_interface = mock_chain_interfaces.get.return_value
@@ -141,7 +149,7 @@ def test_sign_and_send_rpc_rotation(mock_key_storage, mock_account_service, mock
     # Side effect: 1. Exception, 2. Success
     chain_interface.web3.eth.send_raw_transaction.side_effect = [
         Exception("Connection reset"),
-        b"tx_hash_bytes"
+        b"tx_hash_bytes",
     ]
     chain_interface.rotate_rpc.return_value = True
 

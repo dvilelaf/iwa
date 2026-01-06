@@ -2,7 +2,9 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
@@ -10,6 +12,7 @@ from iwa.web.dependencies import verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post(
@@ -116,7 +119,8 @@ def deploy_service_step(service_key: str, auth: bool = Depends(verify_auth)):
     summary="Terminate Service",
     description="Wind down a service: unstake (if staked) → terminate → unbond.",
 )
-def terminate_service(service_key: str, auth: bool = Depends(verify_auth)):
+@limiter.limit("3/minute")
+def terminate_service(request: Request, service_key: str, auth: bool = Depends(verify_auth)):
     """Terminate and unbond a service using wind_down."""
     try:
         from iwa.plugins.olas.contracts.staking import StakingContract

@@ -2,8 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
@@ -11,6 +13,7 @@ from iwa.web.dependencies import verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 class FundRequest(BaseModel):
@@ -82,7 +85,8 @@ def fund_service(service_key: str, req: FundRequest, auth: bool = Depends(verify
     summary="Drain Service",
     description="Drain all funds from a service's accounts to the master account.",
 )
-def drain_service(service_key: str, auth: bool = Depends(verify_auth)):
+@limiter.limit("3/minute")
+def drain_service(request: Request, service_key: str, auth: bool = Depends(verify_auth)):
     """Drain all funds from a service's accounts."""
     try:
         from iwa.plugins.olas.service_manager import ServiceManager

@@ -53,11 +53,7 @@ class SafeService:
         ethereum_client = self._get_ethereum_client(chain_name)
 
         contract_address, tx_hash = self._deploy_safe_contract(
-            deployer_account,
-            owner_addresses,
-            threshold,
-            salt_nonce,
-            ethereum_client
+            deployer_account, owner_addresses, threshold, salt_nonce, ethereum_client
         )
 
         logger.info(
@@ -71,15 +67,11 @@ class SafeService:
             tx_hash,
             chain_name,
             ethereum_client,
-            tag
+            tag,
         )
 
         safe_account = self._store_safe_account(
-            contract_address,
-            chain_name,
-            owner_addresses,
-            threshold,
-            tag
+            contract_address, chain_name, owner_addresses, threshold, tag
         )
 
         return safe_account, tx_hash
@@ -116,7 +108,7 @@ class SafeService:
         owner_addresses: List[str],
         threshold: int,
         salt_nonce: Optional[int],
-        ethereum_client: EthereumClient
+        ethereum_client: EthereumClient,
     ) -> Tuple[str, str]:
         master_copy = get_safe_master_copy_address("1.4.1")
         proxy_factory_address = get_safe_proxy_factory_address("1.4.1")
@@ -171,7 +163,7 @@ class SafeService:
         tx_hash: str,
         chain_name: str,
         ethereum_client: EthereumClient,
-        tag: Optional[str]
+        tag: Optional[str],
     ):
         # Resolve tag for logging
         resolved_from_tag = self.account_service.get_tag_by_address(deployer_account.address)
@@ -226,7 +218,7 @@ class SafeService:
         chain_name: str,
         owner_addresses: List[str],
         threshold: int,
-        tag: Optional[str]
+        tag: Optional[str],
     ) -> StoredSafeAccount:
         # Check if already exists
         accounts = self.key_storage.accounts

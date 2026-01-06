@@ -1,8 +1,8 @@
 """Drain manager mixin."""
+
 from typing import Dict, Optional, Tuple
 
 from loguru import logger
-from web3 import Web3
 
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS

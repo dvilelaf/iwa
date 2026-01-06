@@ -1,4 +1,5 @@
 """ServiceManager base class."""
+
 from typing import Dict, Optional
 
 from loguru import logger
@@ -87,3 +88,25 @@ class ServiceManagerBase:
             logger.error("No active service")
             return None
         return self.registry.get_service(self.service.service_id)
+
+    def get_service_state(self, service_id: Optional[int] = None) -> str:
+        """Get the state of a service as a string.
+
+        Args:
+            service_id: Optional service ID. If not provided, uses the active service.
+
+        Returns:
+            The state name (e.g., 'DEPLOYED') or 'UNKNOWN' if not found.
+
+        """
+        if service_id is None:
+            if not self.service:
+                return "UNKNOWN"
+            service_id = self.service.service_id
+
+        try:
+            info = self.registry.get_service(service_id)
+            return info["state"].name
+        except Exception as e:
+            logger.debug(f"Failed to get service state for {service_id}: {e}")
+            return "UNKNOWN"

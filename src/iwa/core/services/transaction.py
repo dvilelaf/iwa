@@ -104,13 +104,9 @@ class TransactionService:
         logger.exception(f"Unexpected error sending transaction: {e}")
         return False
 
-    def _log_successful_transaction(
-        self, receipt, tx, signer_account, chain_name, txn_hash, tags
-    ):
+    def _log_successful_transaction(self, receipt, tx, signer_account, chain_name, txn_hash, tags):
         try:
-            gas_cost_wei, gas_value_eur = self._calculate_gas_cost(
-                receipt, tx, chain_name
-            )
+            gas_cost_wei, gas_value_eur = self._calculate_gas_cost(receipt, tx, chain_name)
             final_tags = self._determine_tags(tx, tags)
 
             log_transaction(

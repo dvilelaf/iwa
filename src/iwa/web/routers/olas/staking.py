@@ -3,7 +3,9 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
@@ -11,6 +13,7 @@ from iwa.web.dependencies import get_config, verify_auth, wallet
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get(
@@ -154,7 +157,9 @@ def _fetch_all_contracts(contracts: dict, w3, abi) -> list:
     return results
 
 
-def _filter_contracts(results: list, service_bond: Optional[int], service_token: Optional[str]) -> list:
+def _filter_contracts(
+    results: list, service_bond: Optional[int], service_token: Optional[str]
+) -> list:
     """Filter contracts based on usage and service compatibility."""
     filtered_results = []
     for r in results:
@@ -184,7 +189,9 @@ def _filter_contracts(results: list, service_bond: Optional[int], service_token:
     summary="Stake Service",
     description="Stake a service into a staking contract.",
 )
+@limiter.limit("5/minute")
 def stake_service(
+    request: Request,
     service_key: str,
     staking_contract: str,
     auth: bool = Depends(verify_auth),
