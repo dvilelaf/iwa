@@ -22,6 +22,10 @@ def mock_wallet():
     )
     wallet.sign_and_send_transaction.return_value = (True, {"status": 1})
     wallet.send.return_value = (True, {"status": 1})
+    wallet.balance_service = MagicMock()
+    wallet.transfer_service = MagicMock()
+    # Default behavior for balance checking calls to avoid AttributeError
+    wallet.balance_service.get_erc20_balance_wei.return_value = 10**20
     return wallet
 
 
@@ -118,6 +122,8 @@ def test_create_service_failures(
         {"name": "CreateService", "args": {"serviceId": 123}}
     ]
     # First tx (create) success, Second tx (approve) fails
+    mock_wallet.sign_and_send_transaction.reset_mock()
+    mock_wallet.sign_and_send_transaction.return_value = None # Clear return_value to let side_effect work
     mock_wallet.sign_and_send_transaction.side_effect = [(True, {}), (False, {})]
     mock_wallet.transfer_service = MagicMock()
     mock_wallet.transfer_service.approve_erc20.return_value = False
@@ -186,6 +192,10 @@ def test_activate_registration(
     mock_registry_inst.extract_events.return_value = [{"name": "ActivateRegistration"}]
 
     manager = ServiceManager(mock_wallet, service_key="gnosis:123")
+
+    # Explicitly set mock return values to ensure they aren't overridden
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 50000000000000000000 * 2 # Enough balance
+    mock_wallet.transfer_service.get_erc20_allowance.return_value = 50000000000000000000 * 2 # Enough allowance
 
     success = manager.activate_registration()
     assert success is True
