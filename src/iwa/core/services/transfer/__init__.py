@@ -9,11 +9,16 @@ from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.models import StoredSafeAccount
+from iwa.core.contracts.multisend import (
+    MultiSendCallOnlyContract,
+    MultiSendContract,
+)
 from iwa.core.services.transfer.base import TransferServiceBase
 from iwa.core.services.transfer.erc20 import ERC20TransferMixin
 from iwa.core.services.transfer.multisend import MultiSendMixin
 from iwa.core.services.transfer.native import NativeTransferMixin
 from iwa.core.services.transfer.swap import SwapMixin
+from iwa.plugins.gnosis.cow import CowSwap, OrderType
 
 
 class TransferService(
@@ -81,7 +86,7 @@ class TransferService(
         token_symbol = self._resolve_token_symbol(
             token_address, token_address_or_name, chain_interface
         )
-        is_safe = isinstance(from_account, StoredSafeAccount)
+        is_safe = getattr(from_account, "threshold", None) is not None
 
         # Native currency transfer
         if token_address == NATIVE_CURRENCY_ADDRESS:
