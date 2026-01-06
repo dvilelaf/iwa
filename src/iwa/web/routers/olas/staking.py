@@ -18,7 +18,7 @@ router = APIRouter(tags=["olas"])
     summary="Get Staking Contracts",
     description="Get the list of available OLAS staking contracts for a specific chain.",
 )
-def get_staking_contracts(  # noqa: C901
+def get_staking_contracts(
     chain: str = "gnosis",
     service_key: Optional[str] = None,
     auth: bool = Depends(verify_auth),  # noqa: B008
@@ -32,45 +32,15 @@ def get_staking_contracts(  # noqa: C901
 
     try:
         import json
-        from concurrent.futures import ThreadPoolExecutor
 
         from iwa.core.chain import ChainInterface
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
         from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
-        from iwa.plugins.olas.service_manager import ServiceManager
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
 
         # Get service bond and token if filtered
-        service_bond = None
-        service_token = None
-
-        if service_key:
-            try:
-                # Need to use ServiceManager to get accurate info including security deposit
-                chain_name, service_id = service_key.split(":")
-                # Initialize wallet dependencies for ServiceManager
-                manager = ServiceManager(wallet, service_key)
-                if manager.service:
-                    # Get service requirements
-                    service_token = (manager.service.token_address or "").lower()
-                    service_id_int = manager.service.service_id
-
-                    # Get security deposit from registry - this is the actual bond value
-                    # Note: get_agent_params returns incorrect bond=1 due to web3 struct decoding bug
-                    try:
-                        service_info = manager.registry.get_service(service_id_int)
-                        service_bond = service_info.get("security_deposit", 0)
-                        logger.info(
-                            f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}"
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to get service info for filtering: {e}")
-
-            except Exception as e:
-                logger.warning(f"Could not fetch service details for filtering: {e}")
-                # Don't fail the request, just skip filtering
-                pass
+        service_bond, service_token = _get_service_filter_info(service_key)
 
         # Load ABI once
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
@@ -79,70 +49,8 @@ def get_staking_contracts(  # noqa: C901
         # Get correct web3 instance
         w3 = ChainInterface(chain).web3
 
-        def check_availability(name, address):
-            try:
-                contract = w3.eth.contract(address=address, abi=abi)
-                service_ids = contract.functions.getServiceIds().call()
-                max_services = contract.functions.maxNumServices().call()
-                min_deposit = contract.functions.minStakingDeposit().call()
-                staking_token = contract.functions.stakingToken().call()
-                used = len(service_ids)
-
-                return {
-                    "name": name,
-                    "address": address,
-                    "usage": {
-                        "used": used,
-                        "max": max_services,
-                        "available_slots": max_services - used,
-                        "available": used < max_services,
-                    },
-                    "min_staking_deposit": min_deposit,
-                    "staking_token": staking_token,
-                }
-            except Exception as e:
-                logger.warning(f"Failed to check availability for {name} ({address}): {e}")
-                # Don't need full traceback here, just the error
-                # import traceback
-                # traceback.print_exc()
-                # Return basic info with assumed availability (or not)
-                return {
-                    "name": name,
-                    "address": address,
-                    "usage": None,  # Could not verify
-                    "min_staking_deposit": None,
-                }
-
-        results = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(check_availability, name, addr) for name, addr in contracts.items()
-            ]
-            for future in futures:
-                results.append(future.result())
-
-        # Filter valid contracts (fetched info) OR unverified (RPC failed)
-        # But exclude contracts KNOWN to be full (usage exists AND available <= 0)
-        filtered_results = []
-        for r in results:
-            # 1. Availability check
-            if r["usage"] is not None and not r["usage"]["available"]:
-                continue
-
-            # 2. Compatibility check (if service info is known)
-            if service_bond is not None and r.get("min_staking_deposit") is not None:
-                # Bond Check
-                if service_bond < r["min_staking_deposit"]:
-                    # Incompatible: Service bond is too low for this contract
-                    continue
-
-                # Token Check
-                contract_token = str(r.get("staking_token", "")).lower()
-                if service_token and contract_token and service_token != contract_token:
-                    # Incompatible: Tokens do not match
-                    continue
-
-            filtered_results.append(r)
+        results = _fetch_all_contracts(contracts, w3, abi)
+        filtered_results = _filter_contracts(results, service_bond, service_token)
 
         # Return with filter metadata so frontend can explain filtering
         return {
@@ -162,6 +70,113 @@ def get_staking_contracts(  # noqa: C901
         traceback.print_exc()
         logger.error(f"Error fetching staking contracts: {e}")
         return []
+
+
+def _get_service_filter_info(service_key: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    """Retrieve service bond and token if service_key is provided."""
+    service_bond = None
+    service_token = None
+
+    if service_key:
+        try:
+            from iwa.plugins.olas.service_manager import ServiceManager
+
+            # Initialize wallet dependencies for ServiceManager
+            manager = ServiceManager(wallet, service_key)
+            if manager.service:
+                # Get service requirements
+                service_token = (manager.service.token_address or "").lower()
+                service_id_int = manager.service.service_id
+
+                # Get security deposit from registry - this is the actual bond value
+                try:
+                    service_info = manager.registry.get_service(service_id_int)
+                    service_bond = service_info.get("security_deposit", 0)
+                    logger.info(
+                        f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to get service info for filtering: {e}")
+
+        except Exception as e:
+            logger.warning(f"Could not fetch service details for filtering: {e}")
+            # Don't fail the request, just skip filtering
+            pass
+
+    return service_bond, service_token
+
+
+def _check_availability(name, address, w3, abi):
+    """Check availability of a single staking contract."""
+    try:
+        contract = w3.eth.contract(address=address, abi=abi)
+        service_ids = contract.functions.getServiceIds().call()
+        max_services = contract.functions.maxNumServices().call()
+        min_deposit = contract.functions.minStakingDeposit().call()
+        staking_token = contract.functions.stakingToken().call()
+        used = len(service_ids)
+
+        return {
+            "name": name,
+            "address": address,
+            "usage": {
+                "used": used,
+                "max": max_services,
+                "available_slots": max_services - used,
+                "available": used < max_services,
+            },
+            "min_staking_deposit": min_deposit,
+            "staking_token": staking_token,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to check availability for {name} ({address}): {e}")
+        return {
+            "name": name,
+            "address": address,
+            "usage": None,  # Could not verify
+            "min_staking_deposit": None,
+        }
+
+
+def _fetch_all_contracts(contracts: dict, w3, abi) -> list:
+    """Fetch availability for all contracts using threads."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Pass w3 and abi to the helper
+        futures = [
+            executor.submit(_check_availability, name, addr, w3, abi)
+            for name, addr in contracts.items()
+        ]
+        for future in futures:
+            results.append(future.result())
+    return results
+
+
+def _filter_contracts(results: list, service_bond: Optional[int], service_token: Optional[str]) -> list:
+    """Filter contracts based on usage and service compatibility."""
+    filtered_results = []
+    for r in results:
+        # 1. Availability check
+        if r["usage"] is not None and not r["usage"]["available"]:
+            continue
+
+        # 2. Compatibility check (if service info is known)
+        if service_bond is not None and r.get("min_staking_deposit") is not None:
+            # Bond Check
+            if service_bond < r["min_staking_deposit"]:
+                # Incompatible: Service bond is too low for this contract
+                continue
+
+            # Token Check
+            contract_token = str(r.get("staking_token", "")).lower()
+            if service_token and contract_token and service_token != contract_token:
+                # Incompatible: Tokens do not match
+                continue
+
+        filtered_results.append(r)
+    return filtered_results
 
 
 @router.post(

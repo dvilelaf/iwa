@@ -1215,13 +1215,14 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Resultado**: Método limpio con reintentos claros
 - [x] Eliminar `# noqa: C901`
 
-#### 3.4 Refactorizar get_staking_contracts() (OLAS-R-C1) - **P1**
-- [ ] **Archivo**: `src/iwa/web/routers/olas.py`
-- [ ] **Línea**: Función `get_staking_contracts()` (~línea 36)
-- [ ] **Acción**:
-  - [ ] Extraer función interna `check_availability()` a nivel de módulo
-  - [ ] Simplificar lógica de filtrado
-- [ ] Eliminar `# noqa: C901`
+#### 3.4 Refactorizar get_staking_contracts() (OLAS-R-C1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/web/routers/olas/staking.py`
+- [x] **Línea**: Función `get_staking_contracts()` (~línea 36)
+- [x] **Acción**:
+  - [x] Extraer función interna `_check_availability()` a nivel de módulo
+  - [x] Extraer `_get_service_filter_info`, `_fetch_all_contracts`, `_filter_contracts`
+  - [x] Simplificar lógica de filtrado
+- [x] Eliminar `# noqa: C901`
 
 #### 3.5 Refactorizar multi_send() (TRANS-A2) - **P2**
 - [ ] **Archivo**: `src/iwa/core/services/transfer.py`
