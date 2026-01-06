@@ -289,28 +289,28 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 ### 8. Archivos con 1 noqa (Prioridad Baja)
 
 #### 8.1 `src/iwa/tools/reset_env.py` - `main()` (L19)
-- [ ] Dividir en funciones por tipo de reset
-- [ ] Eliminar `# noqa: C901`
+- [x] Dividir en funciones por tipo de reset
+- [x] Eliminar `# noqa: C901`
 
 #### 8.2 `src/iwa/tools/reset_tenderly.py` - `main()` (L209)
-- [ ] Dividir en funciones por operación
-- [ ] Eliminar `# noqa: C901`
+- [x] Dividir en funciones por operación
+- [x] Eliminar `# noqa: C901`
 
 #### 8.3 `src/iwa/plugins/olas/plugin.py` - `import_services()` (L82)
 - [ ] Extraer lógica de descubrimiento y validación
 - [ ] Eliminar `# noqa: C901`
 
 #### 8.4 `src/iwa/plugins/gnosis/cow_utils.py` - `get_cowpy_module()` (L9)
-- [ ] Simplificar lógica de importación
-- [ ] Eliminar `# noqa: C901`
+- [x] Simplificar lógica de importación
+- [x] Eliminar `# noqa: C901`
 
 #### 8.5 `src/iwa/tui/screens/wallets.py` - `refresh_table_structure_and_data()` (L158)
 - [ ] Dividir estructura de datos de renderizado
 - [ ] Eliminar `# noqa: C901`
 
 #### 8.6 `src/iwa/plugins/olas/service_manager/mech.py` - `_send_marketplace_mech_request()` (L124)
-- [ ] Aplicar early return pattern
-- [ ] Eliminar `# noqa: C901`
+- [x] Aplicar early return pattern
+- [x] Eliminar `# noqa: C901`
 
 ---
 
