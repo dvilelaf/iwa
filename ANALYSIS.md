@@ -1205,14 +1205,15 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 - [x] **Resultado**: Método principal orquestador de alto nivel
 - [x] Eliminar `# noqa: C901`
 
-#### 3.3 Refactorizar sign_and_send() (TXN-C1) - **P1**
-- [ ] **Archivo**: `src/iwa/core/services/transaction.py`
-- [ ] **Línea**: Método `sign_and_send()` con `# noqa: C901`
-- [ ] **Acción**: Extraer:
-  - [ ] `_prepare_transaction()`: preparación y nonce
-  - [ ] `_execute_with_retry()`: loop de retry
-  - [ ] `_handle_transaction_result()`: logging y DB
-- [ ] Eliminar `# noqa: C901`
+#### 3.3 Refactorizar sign_and_send() (TXN-C1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/services/transaction.py`
+- [x] **Línea**: Método `sign_and_send()` con `# noqa: C901`
+- [x] **Acción**: Extraer:
+  - [x] `_prepare_transaction()`: preparación y nonce
+  - [x] `_execute_with_retry()`: loop de retry
+  - [x] `_log_successful_transaction()`: logging y DB
+- [x] **Resultado**: Método limpio con reintentos claros
+- [x] Eliminar `# noqa: C901`
 
 #### 3.4 Refactorizar get_staking_contracts() (OLAS-R-C1) - **P1**
 - [ ] **Archivo**: `src/iwa/web/routers/olas.py`
