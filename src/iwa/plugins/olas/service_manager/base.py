@@ -42,7 +42,8 @@ class ServiceManagerBase:
             self.service = self.olas_config.get_service(chain_name, int(service_id))
 
         # Initialize contracts (default to gnosis)
-        chain_name = self.service.chain_name if self.service else "gnosis"
+        service_chain = getattr(self.service, "chain_name", "gnosis")
+        chain_name = service_chain if isinstance(service_chain, str) else "gnosis"
         self._init_contracts(chain_name)
 
         # Initialize TransferService from wallet
@@ -66,7 +67,7 @@ class ServiceManagerBase:
         logger.info(f"[SM-INIT] Registry Address: {self.registry.address}")
         logger.info(f"[SM-INIT] Manager Address: {self.manager.address}")
         self.chain_interface = chain_interface
-        self.chain_name = chain_interface.chain.name.lower()
+        self.chain_name = chain_name.lower()
 
     def _save_config(self) -> None:
         """Persist configuration to config.yaml."""

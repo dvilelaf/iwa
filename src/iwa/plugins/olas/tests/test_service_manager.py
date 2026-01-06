@@ -49,7 +49,7 @@ def mock_olas_config(mock_service):
 def mock_config(mock_olas_config):
     """Mock configuration fixture."""
     with patch(
-        "iwa.plugins.olas.service_manager.Config"
+        "iwa.plugins.olas.service_manager.base.Config"
     ) as mock:  # Patch the class used in service_manager
         instance = mock.return_value
         instance.plugins = {"olas": mock_olas_config}
@@ -78,21 +78,21 @@ def mock_wallet():
 @pytest.fixture
 def mock_registry():
     """Mock service registry fixture."""
-    with patch("iwa.plugins.olas.service_manager.ServiceRegistryContract") as mock:
+    with patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_manager_contract():
     """Mock service manager contract fixture."""
-    with patch("iwa.plugins.olas.service_manager.ServiceManagerContract") as mock:
+    with patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_chain_interfaces():
     """Mock chain interfaces fixture."""
-    with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock:
+    with patch("iwa.plugins.olas.service_manager.base.ChainInterfaces") as mock:
         chain = MagicMock()
         # Use valid token address
         chain.chain.get_token_address.return_value = "0x1111111111111111111111111111111111111111"
@@ -103,7 +103,7 @@ def mock_chain_interfaces():
 @pytest.fixture
 def mock_erc20_contract():
     """Mock ERC20 contract fixture."""
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock:
+    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock:
         yield mock
 
 
@@ -119,7 +119,7 @@ def service_manager(
     mock_service,
 ):
     """ServiceManager fixture with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.Config") as local_mock_config:
+    with patch("iwa.plugins.olas.service_manager.base.Config") as local_mock_config:
         instance = local_mock_config.return_value
         instance.plugins = {"olas": mock_olas_config}
         instance.save_config = MagicMock()
@@ -174,7 +174,7 @@ def test_create_no_event(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = []
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract"):  # Mock ERC20
+    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"):  # Mock ERC20
         res = service_manager.create(
             token_address_or_tag="0x1111111111111111111111111111111111111111"
         )
@@ -282,7 +282,7 @@ def test_stake_success(service_manager, mock_wallet):
         "security_deposit": 50000000000000000000,
     }
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
+    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock_erc20:
         mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
 
         mock_wallet.sign_and_send_transaction.return_value = (True, {})
@@ -543,7 +543,7 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
         "required_agent_bond": 50000000000000000000,  # 50 OLAS
     }
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20:
+    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock_erc20:
         mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
         mock_wallet.sign_and_send_transaction.return_value = (True, {})
         staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]

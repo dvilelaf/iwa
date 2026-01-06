@@ -7,6 +7,8 @@ from iwa.web.routers.olas.funding import router as funding_router
 from iwa.web.routers.olas.general import router as general_router
 from iwa.web.routers.olas.services import router as services_router
 from iwa.web.routers.olas.staking import router as staking_router
+from iwa.core.models import Config
+from iwa.plugins.olas.models import OlasConfig
 
 # Create main router
 router = APIRouter(prefix="/api/olas", tags=["olas"])

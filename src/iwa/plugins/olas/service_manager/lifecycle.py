@@ -9,6 +9,7 @@ from web3.types import Wei
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS, ZERO_ADDRESS
 from iwa.core.types import EthereumAddress
+from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     TRADER_CONFIG_HASH,
@@ -190,7 +191,7 @@ class LifecycleManagerMixin:
                 balance = self.wallet.balance_service.get_erc20_balance_wei(
                     account_address_or_tag=self.service.service_owner_address,
                     token_address_or_name=token_address,
-                    chain_name=self.service.chain_name,
+                    chain_name=self.chain_name,
                 )
 
                 if balance < security_deposit:
@@ -198,7 +199,7 @@ class LifecycleManagerMixin:
                         f"[ACTIVATE] FAIL: Owner balance {balance} < required {security_deposit}"
                     )
 
-                protocol_contracts = OLAS_CONTRACTS.get(self.service.chain_name.lower(), {})
+                protocol_contracts = OLAS_CONTRACTS.get(self.chain_name.lower(), {})
                 utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
                 if utility_address:
@@ -211,7 +212,7 @@ class LifecycleManagerMixin:
                         owner_address_or_tag=self.service.service_owner_address,
                         spender_address=utility_address,
                         token_address_or_name=token_address,
-                        chain_name=self.service.chain_name,
+                        chain_name=self.chain_name,
                     )
 
                     if allowance < Web3.to_wei(10, "ether"):  # Min threshold check
@@ -223,7 +224,7 @@ class LifecycleManagerMixin:
                             spender_address_or_tag=utility_address,
                             token_address_or_name=token_address,
                             amount_wei=required_approval,
-                            chain_name=self.service.chain_name,
+                            chain_name=self.chain_name,
                         )
                         if not success_approve:
                             logger.warning("Token approval transaction returned failure.")
@@ -244,7 +245,7 @@ class LifecycleManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
         )
 
         if not success:
@@ -337,7 +338,7 @@ class LifecycleManagerMixin:
                 )
 
                 utility_address = str(
-                    OLAS_CONTRACTS[self.service.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
+                    OLAS_CONTRACTS[self.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
                 )
 
                 approve_success = self.wallet.transfer_service.approve_erc20(
@@ -345,7 +346,7 @@ class LifecycleManagerMixin:
                     spender_address_or_tag=utility_address,
                     amount_wei=bond_amount_wei,
                     owner_address_or_tag=agent_account_address,
-                    chain_name=self.service.chain_name,
+                    chain_name=self.chain_name,
                 )
                 if not approve_success:
                     logger.error("Failed to approve token for agent registration")
@@ -361,7 +362,7 @@ class LifecycleManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=register_tx,
             signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_register_agent"],
         )
 
@@ -396,7 +397,7 @@ class LifecycleManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=deploy_tx,
             signer_address_or_tag=self.service.service_owner_address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_deploy_service"],
         )
 
@@ -438,7 +439,7 @@ class LifecycleManagerMixin:
             safe_account = StoredSafeAccount(
                 tag=f"{self.service.service_name}_multisig",
                 address=multisig_address,
-                chains=[self.service.chain_name],
+                chains=[self.chain_name],
                 threshold=threshold,
                 signers=agent_instances,
             )
@@ -476,7 +477,7 @@ class LifecycleManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=terminate_tx,
             signer_address_or_tag=self.service.service_owner_address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_terminate_service"],
         )
 
@@ -511,7 +512,7 @@ class LifecycleManagerMixin:
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=unbond_tx,
             signer_address_or_tag=self.service.service_owner_address,
-            chain_name=self.service.chain_name,
+            chain_name=self.chain_name,
             tags=["olas_unbond_service"],
         )
 

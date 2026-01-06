@@ -25,7 +25,7 @@ def mock_wallet():
 
 def setup_manager(mock_wallet):
     """Setup a ServiceManager with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.Config") as mock_cfg_cls:
+    with patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls:
         mock_cfg = mock_cfg_cls.return_value
         mock_olas_config = MagicMock()
         mock_olas_config.get_service.return_value = None
@@ -40,7 +40,7 @@ def setup_manager(mock_wallet):
                 }
             },
         ):
-            with patch("iwa.plugins.olas.service_manager.ChainInterfaces") as mock_if_cls:
+            with patch("iwa.plugins.olas.service_manager.base.ChainInterfaces") as mock_if_cls:
                 mock_if = mock_if_cls.return_value
                 mock_if.get.return_value.chain.name.lower.return_value = "gnosis"
                 mock_if.get.return_value.get_contract_address.return_value = VALID_ADDR
@@ -215,7 +215,7 @@ def test_withdraw_rewards_no_olas_balance(mock_wallet):
     )
     manager.olas_config.withdrawal_address = WITHDRAWAL_ADDR
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.ERC20Contract") as mock_erc20_cls:
         mock_erc20 = mock_erc20_cls.return_value
         mock_erc20.balance_of_wei.return_value = 0
 
@@ -237,7 +237,7 @@ def test_withdraw_rewards_success(mock_wallet):
     )
     manager.olas_config.withdrawal_address = WITHDRAWAL_ADDR
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.ERC20Contract") as mock_erc20_cls:
         mock_erc20 = mock_erc20_cls.return_value
         mock_erc20.balance_of_wei.return_value = 50 * 10**18  # 50 OLAS
 
@@ -261,7 +261,7 @@ def test_withdraw_rewards_transfer_fails(mock_wallet):
     manager.olas_config.withdrawal_address = WITHDRAWAL_ADDR
     mock_wallet.send.return_value = None  # Transfer fails
 
-    with patch("iwa.plugins.olas.service_manager.ERC20Contract") as mock_erc20_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.ERC20Contract") as mock_erc20_cls:
         mock_erc20 = mock_erc20_cls.return_value
         mock_erc20.balance_of_wei.return_value = 50 * 10**18
 

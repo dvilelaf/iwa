@@ -527,7 +527,7 @@ def test_get_olas_price_error(client):
 
 def test_get_olas_services_basic_no_plugin(client):
     """Cover get_olas_services_basic with no olas plugin (lines 576-577)."""
-    with patch("iwa.web.routers.olas.Config") as mock_config:
+    with patch("iwa.web.routers.olas.services.Config") as mock_config:
         mock_config.return_value.plugins = {}
         response = client.get("/api/olas/services/basic?chain=gnosis")
         assert response.status_code == 200
@@ -536,7 +536,7 @@ def test_get_olas_services_basic_no_plugin(client):
 
 def test_get_olas_services_basic_with_services(client):
     """Cover get_olas_services_basic with services (lines 582-611)."""
-    with patch("iwa.web.routers.olas.Config") as mock_config:
+    with patch("iwa.web.routers.olas.services.Config") as mock_config:
         mock_service = MagicMock()
         mock_service.chain_name = "gnosis"
         mock_service.service_name = "test"
@@ -550,7 +550,7 @@ def test_get_olas_services_basic_with_services(client):
 
         wallet.key_storage.find_stored_account = MagicMock(return_value=None)
 
-        with patch("iwa.web.routers.olas.OlasConfig") as mock_olas_cfg:
+        with patch("iwa.web.routers.olas.services.OlasConfig") as mock_olas_cfg:
             mock_olas_cfg.model_validate.return_value.services = {"gnosis:1": mock_service}
             response = client.get("/api/olas/services/basic?chain=gnosis")
             assert response.status_code == 200
@@ -561,7 +561,7 @@ def test_get_olas_services_basic_with_services(client):
 
 def test_get_olas_services_basic_import_error(client):
     """Cover get_olas_services_basic with import error (lines 613-614)."""
-    with patch("iwa.web.routers.olas.Config", side_effect=ImportError("No module")):
+    with patch("iwa.web.routers.olas.services.Config", side_effect=ImportError("No module")):
         response = client.get("/api/olas/services/basic?chain=gnosis")
         assert response.status_code == 200
         assert response.json() == []
@@ -572,7 +572,7 @@ def test_get_olas_services_basic_import_error(client):
 
 def test_get_olas_service_details_no_plugin(client):
     """Cover get_olas_service_details with no olas plugin (lines 629-630)."""
-    with patch("iwa.web.routers.olas.Config") as mock_config:
+    with patch("iwa.web.routers.olas.services.Config") as mock_config:
         mock_config.return_value.plugins = {}
         response = client.get("/api/olas/services/gnosis:1/details")
         assert response.status_code == 404
@@ -580,9 +580,9 @@ def test_get_olas_service_details_no_plugin(client):
 
 def test_get_olas_service_details_not_found(client):
     """Cover get_olas_service_details with service not found (lines 633-634)."""
-    with patch("iwa.web.routers.olas.Config") as mock_config:
+    with patch("iwa.web.routers.olas.services.Config") as mock_config:
         mock_config.return_value.plugins = {"olas": {"services": {}}}
-        with patch("iwa.web.routers.olas.OlasConfig") as mock_olas_cfg:
+        with patch("iwa.web.routers.olas.services.OlasConfig") as mock_olas_cfg:
             mock_olas_cfg.model_validate.return_value.services = {}
             response = client.get("/api/olas/services/gnosis:1/details")
             assert response.status_code == 404

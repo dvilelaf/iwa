@@ -138,7 +138,7 @@ class MechManagerMixin:
 
         multisig_address = self.service.multisig_address
         chain_name = (
-            self.service.chain_name if self.service else getattr(self, "chain_name", "gnosis")
+            self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
         )
         protocol_contracts = OLAS_CONTRACTS.get(chain_name, {})
         marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
