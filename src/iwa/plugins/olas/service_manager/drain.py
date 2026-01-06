@@ -214,7 +214,7 @@ class DrainManagerMixin:
                 logger.warning(f"Could not claim rewards: {e}")
         return 0
 
-    def _drain_safe_account(self, target: str, chain: str, claimed_rewards: int) -> Optional[str]:
+    def _drain_safe_account(self, target: str, chain: str, claimed_rewards: int) -> Optional[Any]:
         """Drain the Safe account with retry logic for rewards."""
         if not self.service.multisig_address:
             return None
@@ -258,7 +258,7 @@ class DrainManagerMixin:
                     time.sleep(3)
         return None
 
-    def _drain_agent_account(self, target: str, chain: str) -> Optional[str]:
+    def _drain_agent_account(self, target: str, chain: str) -> Optional[Any]:
         """Drain the Agent account."""
         if not self.service.agent_address:
             return None
@@ -285,7 +285,7 @@ class DrainManagerMixin:
             logger.warning(f"Agent traceback: {traceback.format_exc()}")
         return None
 
-    def _drain_owner_account(self, target: str, chain: str) -> Optional[str]:
+    def _drain_owner_account(self, target: str, chain: str) -> Optional[Any]:
         """Drain the Owner account."""
         if not self.service.service_owner_address:
             return None
@@ -312,8 +312,8 @@ class DrainManagerMixin:
             logger.warning(f"Owner traceback: {traceback.format_exc()}")
         return None
 
-    def _normalize_drain_result(self, result: Any) -> Optional[str]:
-        """Normalize the result from wallet.drain to a transaction hash string."""
+    def _normalize_drain_result(self, result: Any) -> Any:
+        """Normalize the result from wallet.drain to a transaction hash string or dict."""
         if not result:
             return None
 
@@ -327,8 +327,4 @@ class DrainManagerMixin:
                 return str(tx_hash)
             return None
 
-        # If it's already a string (simple tx hash)
-        if isinstance(result, str):
-            return result
-
-        return str(result)
+        return result
