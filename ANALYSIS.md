@@ -1182,16 +1182,16 @@ El plan de 4 sprints propuesto prioriza correctamente la seguridad primero, segu
 
 ### Sprint 3: Código Limpio (Eliminar C901)
 
-#### 3.1 Refactorizar check_activity() (MON-C1) - **P1**
-- [ ] **Archivo**: `src/iwa/core/monitor.py`
-- [ ] **Línea**: Método `check_activity()` (~línea 63, 134 líneas)
-- [ ] **Acción**: Dividir en métodos helper:
-  - [ ] Crear `_should_check() -> bool`
-  - [ ] Crear `_get_block_range() -> Tuple[int, int]`
-  - [ ] Crear `_check_native_transfers(from_block, to_block) -> List[Dict]`
-  - [ ] Crear `_check_erc20_transfers(from_block, to_block) -> List[Dict]`
-- [ ] **Resultado**: check_activity() debe tener <20 líneas
-- [ ] Eliminar `# noqa: C901`
+#### 3.1 Refactorizar check_activity() (MON-C1) - **P1** - ✅ **COMPLETADO**
+- [x] **Archivo**: `src/iwa/core/monitor.py`
+- [x] **Línea**: Método `check_activity()` (~línea 63, 134 líneas)
+- [x] **Acción**: Dividir en métodos helper:
+  - [x] Crear `_should_check() -> bool`
+  - [x] Crear `_get_block_range() -> Tuple[int, int]`
+  - [x] Crear `_check_native_transfers(from_block, to_block) -> List[Dict]`
+  - [x] Crear `_check_erc20_transfers(from_block, to_block) -> List[Dict]`
+- [x] **Resultado**: check_activity() debe tener <20 líneas (Actual: ~20 líneas de orquestación)
+- [x] Eliminar `# noqa: C901`
 
 #### 3.2 Refactorizar create_safe() (SAFE-C1) - **P1**
 - [ ] **Archivo**: `src/iwa/core/services/safe.py`
