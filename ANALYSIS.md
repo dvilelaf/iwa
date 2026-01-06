@@ -211,8 +211,8 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
 
 #### 4.1 `get_staking_status()` (L18)
 
-- [ ] **Problema**: Múltiples condiciones anidadas
-- [ ] **Solución**: Aplicar early return:
+- [x] **Problema**: Múltiples condiciones anidadas
+- [x] **Solución**: Aplicar early return:
   ```python
   def get_staking_status(self):
       if not self.service:
@@ -221,13 +221,13 @@ Métodos de 100+ líneas que deberían dividirse en funciones más pequeñas.
           return StakingStatus.NOT_STAKED
       # ... continuar con caso positivo
   ```
-- [ ] Eliminar `# noqa: C901`
+- [x] Eliminar `# noqa: C901`
 
 #### 4.2 `stake()` (L139)
 
-- [ ] **Problema**: Validaciones y ejecución mezcladas
-- [ ] **Solución**: Extraer `_validate_stake_preconditions()` y `_execute_stake()`
-- [ ] Eliminar `# noqa: C901`
+- [x] **Problema**: Validaciones y ejecución mezcladas
+- [x] **Solución**: Extraer `_validate_stake_preconditions()` y `_execute_stake()`
+- [x] Eliminar `# noqa: C901`
 
 ---
 
