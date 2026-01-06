@@ -22,8 +22,8 @@ sys.modules["cowdao_cowpy.order_book.generated.model"] = MagicMock()
 
 from iwa.core.chain import Gnosis
 from iwa.core.models import StoredAccount, StoredSafeAccount
-from iwa.core.wallet import Wallet
 from iwa.core.services import TransferService
+from iwa.core.wallet import Wallet
 from iwa.plugins.gnosis.cow import OrderType
 
 # Use valid addresses

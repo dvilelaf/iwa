@@ -9,7 +9,6 @@ from web3.types import Wei
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS, ZERO_ADDRESS
 from iwa.core.types import EthereumAddress
-from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     TRADER_CONFIG_HASH,
