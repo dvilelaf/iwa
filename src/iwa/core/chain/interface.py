@@ -91,14 +91,24 @@ class ChainInterface:
         except Exception as e:
             logger.warning(f"Failed to init block tracking: {e}")
 
-    def check_block_limit(self):
-        """Check if approaching block limit (heuristic)."""
+    def check_block_limit(self, show_progress_bar: bool = False):
+        """Check if approaching block limit (heuristic).
+
+        Args:
+            show_progress_bar: If True, display a large ASCII progress bar (for startup).
+        """
         if not self.is_tenderly or self._initial_block == 0:
             return
 
         try:
             current = self.web3.eth.block_number
             delta = current - self._initial_block
+            limit = 50
+            percentage = min(100, int((delta / limit) * 100))
+
+            # Show progress bar at startup or when explicitly requested
+            if show_progress_bar or delta == 0:
+                self._display_tenderly_progress(delta, limit, percentage)
 
             if delta >= 50:
                 logger.error(
@@ -108,14 +118,41 @@ class ChainInterface:
                 )
             elif delta > 40:
                 logger.warning(
-                    f"⚠️ TENDERLY LIMIT WARNING: {delta} blocks processed since vNet creation. "
-                    f"vNet limit is usually 50 blocks. You may experience errors soon."
+                    f"⚠️ TENDERLY LIMIT WARNING: {delta}/50 blocks ({percentage}%). "
+                    f"You may experience errors soon."
                 )
             elif delta > 0 and delta % 10 == 0:
-                logger.info(f"Tenderly Usage: {delta} blocks processed in session.")
+                logger.info(f"📊 Tenderly Usage: {delta}/50 blocks ({percentage}%)")
 
         except Exception:
             pass
+
+    def _display_tenderly_progress(self, used: int, limit: int, percentage: int):
+        """Display a visual ASCII progress bar for Tenderly block usage."""
+        bar_width = 40
+        filled = int(bar_width * percentage / 100)
+        empty = bar_width - filled
+
+        # Color coding based on usage
+        if percentage >= 80:
+            bar_char = "█"
+            status = "🔴 CRITICAL"
+        elif percentage >= 60:
+            bar_char = "█"
+            status = "🟡 WARNING"
+        else:
+            bar_char = "█"
+            status = "🟢 OK"
+
+        bar = bar_char * filled + "░" * empty
+        logger.warning("")
+        logger.warning("╔══════════════════════════════════════════════════╗")
+        logger.warning("║          TENDERLY VIRTUAL NETWORK USAGE          ║")
+        logger.warning("╠══════════════════════════════════════════════════╣")
+        logger.warning(f"║  [{bar}]  ║")
+        logger.warning(f"║           {used:2d}/{limit} blocks  ({percentage:3d}%)  {status:12s}     ║")
+        logger.warning("╚══════════════════════════════════════════════════╝")
+        logger.warning("")
 
     def _init_web3(self):
         """Initialize Web3 with current RPC."""
