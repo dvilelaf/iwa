@@ -103,26 +103,26 @@ class ChainInterface:
         try:
             current = self.web3.eth.block_number
             delta = current - self._initial_block
-            limit = 50
+            limit = 20  # Tenderly free tier limit (updated Jan 2026)
             percentage = min(100, int((delta / limit) * 100))
 
             # Show progress bar at startup or when explicitly requested
             if show_progress_bar or delta == 0:
                 self._display_tenderly_progress(delta, limit, percentage)
 
-            if delta >= 50:
+            if delta >= 20:
                 logger.error(
                     f"🛑 CRITICAL TENDERLY LIMIT REACHED: {delta} blocks processed. "
-                    f"The vNet has likely expired (limit 50). Transactions WILL fail. "
+                    f"The vNet has likely expired (limit 20). Transactions WILL fail. "
                     f"Please run `just reset-tenderly` immediately."
                 )
-            elif delta > 40:
+            elif delta > 16:
                 logger.warning(
-                    f"⚠️ TENDERLY LIMIT WARNING: {delta}/50 blocks ({percentage}%). "
+                    f"⚠️ TENDERLY LIMIT WARNING: {delta}/20 blocks ({percentage}%). "
                     f"You may experience errors soon."
                 )
-            elif delta > 0 and delta % 10 == 0:
-                logger.info(f"📊 Tenderly Usage: {delta}/50 blocks ({percentage}%)")
+            elif delta > 0 and delta % 5 == 0:
+                logger.info(f"📊 Tenderly Usage: {delta}/20 blocks ({percentage}%)")
 
         except Exception:
             pass
