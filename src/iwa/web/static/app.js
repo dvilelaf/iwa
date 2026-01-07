@@ -1004,7 +1004,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await authFetch(`/api/swap/max-amount?${params}`);
       const result = await resp.json();
       if (resp.ok) {
-        targetInput.value = result.max_amount.toFixed(2);
+        // Use up to 6 decimals but remove trailing zeros
+        targetInput.value = parseFloat(result.max_amount.toFixed(6));
         // Trigger quote fetch
         fetchQuote();
       } else {
@@ -1138,6 +1139,20 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${mins}m ${secs}s`;
   }
 
+  function formatOrderDate(isoString) {
+    if (!isoString) return "-";
+    try {
+      const date = new Date(isoString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const mins = String(date.getMinutes()).padStart(2, "0");
+      return `${day}/${month} ${hours}:${mins}`;
+    } catch (e) {
+      return "-";
+    }
+  }
+
   async function loadRecentOrders() {
     const tableBody = document.getElementById("recent-orders-body");
     if (!tableBody) return;
@@ -1158,7 +1173,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const orders = data.orders || [];
 
       if (orders.length === 0) {
-        const noOrdersHtml = `<tr><td colspan="4" class="text-center text-muted">No recent orders</td></tr>`;
+        const noOrdersHtml = `<tr><td colspan="5" class="text-center text-muted">No recent orders</td></tr>`;
         if (tableBody.innerHTML !== noOrdersHtml) {
           tableBody.innerHTML = noOrdersHtml;
         }
@@ -1173,6 +1188,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const buySymbol = order.buyToken;
         const sellAmt = order.sellAmount;
         const buyAmt = order.buyAmount;
+
+        // Format creation date
+        const dateStr = formatOrderDate(order.created);
 
         // Status badge class
         const statusClass = order.status.replace(/([A-Z])/g, "-$1").toLowerCase();
@@ -1201,6 +1219,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         html += `
           <tr>
+            <td class="text-muted">${dateStr}</td>
             <td><span class="order-status ${statusClass}">${order.status}</span></td>
             <td>${sellAmt} ${escapeHtml(sellSymbol)}</td>
             <td>${buyAmt} ${escapeHtml(buySymbol)}</td>
