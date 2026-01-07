@@ -96,8 +96,8 @@ class CowSwap:
 
         logger.info(f"Checking order status for UID: {order.uid}")
 
-        max_retries = 4
-        sleep_between_retries = 15
+        max_retries = 6
+        sleep_between_retries = 25
         retries = 0
 
         while retries < max_retries:
@@ -164,8 +164,22 @@ class CowSwap:
         buy_token_name: str,
         safe_address: ChecksumAddress | None = None,
         order_type: OrderType = OrderType.SELL,
+        wait_for_execution: bool = False,
     ) -> dict | None:
-        """Execute a token swap on CoW Protocol."""
+        """Execute a token swap on CoW Protocol.
+
+        Args:
+            amount_wei: Amount to swap in wei.
+            sell_token_name: Name of token to sell.
+            buy_token_name: Name of token to buy.
+            safe_address: Optional Safe address for multi-sig.
+            order_type: SELL or BUY order type.
+            wait_for_execution: If True, wait for order to be filled (blocking).
+                               If False, return immediately after order placement.
+
+        Returns:
+            dict with order info (uid, url, status) or None on error.
+        """
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
         if order_type == OrderType.BUY:
@@ -206,13 +220,27 @@ class CowSwap:
                 safe_address=safe_address,
                 valid_to=valid_to,
                 env=self.env,
-                slippage_tolerance=0.005,
+                slippage_tolerance=0.01,
                 partially_fillable=False,
             )
 
             logger.info(f"Swap order placed: {COW_EXPLORER_URL}{order.uid.root}")
 
-            return await self.check_cowswap_order(order)
+            # Return immediately with order info (non-blocking by default)
+            if wait_for_execution:
+                # Blocking mode: wait for order to be filled or expire
+                return await self.check_cowswap_order(order)
+            else:
+                # Non-blocking mode: return immediately with order details
+                return {
+                    "uid": order.uid.root if hasattr(order.uid, 'root') else str(order.uid),
+                    "url": order.url,
+                    "status": "open",
+                    "validTo": valid_to,
+                    "sellToken": sell_token_name,
+                    "buyToken": buy_token_name,
+                    "sellAmount": str(amount_wei),
+                }
 
         except Exception as e:
             logger.error(f"Error during token swap: {e}")
