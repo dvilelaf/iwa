@@ -133,7 +133,20 @@ class SwapMixin:
                 account_address_or_tag, sell_token_name, chain_name
             )
         else:
-            return Web3.to_wei(amount_eth, "ether")
+        else:
+            # FIX: Use actual token decimals instead of assuming 18 (ether)
+            try:
+                chain_interface = ChainInterfaces().get(chain_name)
+                token_address = chain_interface.chain.get_token_address(sell_token_name)
+                if token_address:
+                    checksum_address = Web3.to_checksum_address(token_address)
+                    decimals = ERC20Contract(checksum_address, chain_name).decimals
+                    return int(amount_eth * (10**decimals))
+            except Exception as e:
+                logger.warning(f"Failed to fetch decimals for {sell_token_name}, defaulting to 18: {e}")
+
+            # Fallback to 18 decimals
+            return int(amount_eth * (10**18))
 
     async def _ensure_allowance_for_swap(
         self: "TransferService",
@@ -217,9 +230,9 @@ class SwapMixin:
                 sell_addr = chain_interface.chain.get_token_address(sell_token_name)
                 buy_addr = chain_interface.chain.get_token_address(buy_token_name)
                 if sell_addr:
-                    sell_decimals = ERC20Contract(sell_addr, chain_name).decimals
+                    sell_decimals = ERC20Contract(Web3.to_checksum_address(sell_addr), chain_name).decimals
                 if buy_addr:
-                    buy_decimals = ERC20Contract(buy_addr, chain_name).decimals
+                    buy_decimals = ERC20Contract(Web3.to_checksum_address(buy_addr), chain_name).decimals
         except Exception as e:
             logger.warning(f"Could not get decimals for analytics: {e}")
 
