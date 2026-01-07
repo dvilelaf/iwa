@@ -959,6 +959,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (buyAmountInput) {
       buyAmountInput.addEventListener("input", debouncedFetch);
     }
+
+    // Also trigger quote on token change
+    const sellTokenSelect = document.getElementById("swap-sell-token");
+    const buyTokenSelect = document.getElementById("swap-buy-token");
+    if (sellTokenSelect) {
+      sellTokenSelect.addEventListener("change", debouncedFetch);
+    }
+    if (buyTokenSelect) {
+      buyTokenSelect.addEventListener("change", debouncedFetch);
+    }
   }
 
   setupAmountListeners();
@@ -1068,6 +1078,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
           sellAmountInput.value = "";
           buyAmountInput.value = "";
+
+          // Refresh balances after swap
+          loadMasterBalanceTable(true);
         } else {
           showToast(`Error: ${result.detail}`, "error");
         }
