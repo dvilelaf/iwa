@@ -1119,6 +1119,7 @@ textarea:focus {
 
 .liveness-progress .progress-bar {
   height: 100%;
+  width: var(--width, 0%);
   transition: width 0.3s ease;
   border-radius: 12px;
 }
