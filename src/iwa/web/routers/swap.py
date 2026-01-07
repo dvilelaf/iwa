@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,6 +20,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/swap", tags=["swap"])
 
 limiter = Limiter(key_func=get_remote_address)
+
+
+@lru_cache(maxsize=128)
+def get_cached_decimals(token_address: str, chain: str) -> int:
+    """Get token decimals with caching to prevent excessive RPC calls."""
+    try:
+        from iwa.core.contracts.erc20 import ERC20Contract
+
+        # Note: ERC20Contract init makes 4 RPC calls (decimals, symbol, name, supply)
+        # Caching this result is critical for performance.
+        contract = ERC20Contract(token_address, chain)
+        return contract.decimals
+    except Exception as e:
+        logger.warning(f"Error fetching decimals for {token_address}: {e}")
+        return 18
 
 
 class SwapRequest(BaseModel):
@@ -111,16 +127,15 @@ async def swap_tokens(request: Request, req: SwapRequest, auth: bool = Depends(v
             buy_decimals = 18
             try:
                 from iwa.core.chain import ChainInterfaces
-                from iwa.core.contracts.erc20 import ERC20Contract
 
                 chain_interface = ChainInterfaces().get(req.chain)
                 if chain_interface:
                     sell_addr = chain_interface.chain.get_token_address(req.sell_token)
                     buy_addr = chain_interface.chain.get_token_address(req.buy_token)
                     if sell_addr:
-                        sell_decimals = ERC20Contract(sell_addr, req.chain).decimals
+                        sell_decimals = get_cached_decimals(sell_addr, req.chain)
                     if buy_addr:
-                        buy_decimals = ERC20Contract(buy_addr, req.chain).decimals
+                        buy_decimals = get_cached_decimals(buy_addr, req.chain)
             except Exception:
                 pass  # Default to 18 if we can't get decimals
 
@@ -188,7 +203,6 @@ def get_swap_quote(
     auth: bool = Depends(verify_auth),
 ):
     """Get a quote for a swap."""
-    from iwa.core.contracts.erc20 import ERC20Contract
 
     try:
         chain_interface = ChainInterfaces().get(chain)
@@ -203,8 +217,8 @@ def get_swap_quote(
         sell_token_addr = chain_obj.get_token_address(sell_token)
         buy_token_addr = chain_obj.get_token_address(buy_token)
 
-        sell_decimals = ERC20Contract(sell_token_addr, chain).decimals
-        buy_decimals = ERC20Contract(buy_token_addr, chain).decimals
+        sell_decimals = get_cached_decimals(sell_token_addr, chain)
+        buy_decimals = get_cached_decimals(buy_token_addr, chain)
 
         # Convert input amount to wei using the correct decimals
         if mode == "sell":
@@ -512,7 +526,6 @@ def get_recent_orders(
 
 def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, current_time: int) -> dict:
     """Process a single order for frontend display."""
-    from iwa.core.contracts.erc20 import ERC20Contract
 
     valid_to = int(order.get("validTo", 0))
     created = order.get("creationDate", "")
@@ -551,14 +564,14 @@ def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, c
         sell_decimals = 18
         buy_decimals = 18
 
-        # Try to get decimals from contract if available
+        # Try to get decimals from contract with caching!
         try:
-            sell_decimals = ERC20Contract(sell_token_addr, chain).decimals
+            sell_decimals = get_cached_decimals(sell_token_addr, chain)
         except Exception:
             pass
 
         try:
-            buy_decimals = ERC20Contract(buy_token_addr, chain).decimals
+            buy_decimals = get_cached_decimals(buy_token_addr, chain)
         except Exception:
             pass
 

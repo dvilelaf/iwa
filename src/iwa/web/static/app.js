@@ -1085,6 +1085,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Refresh balances after swap
           loadMasterBalanceTable(true);
+          // Refresh orders immediately
+          loadRecentOrders();
         } else {
           showToast(`Error: ${result.detail}`, "error");
         }
@@ -1146,6 +1148,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // tableBody.innerHTML = `<tr><td colspan="4" class="text-center"><span class="cell-spinner"></span> Loading...</td></tr>`;
     }
 
+    let hasPendingOrders = false;
+
     try {
       const resp = await authFetch(`/api/swap/orders?chain=${state.activeChain}`);
       if (!resp.ok) throw new Error("Failed to fetch orders");
@@ -1158,6 +1162,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tableBody.innerHTML !== noOrdersHtml) {
           tableBody.innerHTML = noOrdersHtml;
         }
+        scheduleNextPoll(60000); // Slow poll if empty
         return;
       }
 
@@ -1174,17 +1179,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Progress bar for open orders
         let progressHtml = "-";
-        if (order.status === "open" && order.timeRemaining > 0) {
-          progressHtml = `
-            <div class="order-progress">
-              <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${order.progressPct}%"></div>
-              </div>
-              <span class="progress-time">${formatSecondsToTime(order.timeRemaining)}</span>
-            </div>
-          `;
-        } else if (order.status === "open" && order.timeRemaining <= 0) {
-          progressHtml = `<span class="text-muted">Expiring...</span>`;
+
+        // Detect pending status for adaptive polling
+        if (order.status === "open" || order.status === "presignaturePending") {
+          if (order.timeRemaining > 0) {
+            hasPendingOrders = true;
+            progressHtml = `
+                    <div class="order-progress">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${order.progressPct}%"></div>
+                    </div>
+                    <span class="progress-time">${formatSecondsToTime(order.timeRemaining)}</span>
+                    </div>
+                `;
+          } else {
+            progressHtml = `<span class="text-muted">Expiring...</span>`;
+            // Even if expiring, we might want to poll fast to catch the "expired" state update
+            hasPendingOrders = true;
+          }
         }
 
         html += `
@@ -1205,23 +1217,36 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Error loading orders:", err);
       // Don't wipe table on error, just log
+    } finally {
+      // Schedule next poll based on state
+      const delay = hasPendingOrders ? 5000 : 60000;
+      scheduleNextPoll(delay);
     }
   }
 
-  // Auto-refresh orders every 15 seconds when on CowSwap tab
-  let ordersRefreshInterval = null;
+  // Adaptive polling for orders
+  let ordersTimeoutId = null;
+  let isPolling = false;
 
-  function startOrdersRefresh() {
-    if (ordersRefreshInterval) clearInterval(ordersRefreshInterval);
-    ordersRefreshInterval = setInterval(() => {
+  function scheduleNextPoll(delay) {
+    if (ordersTimeoutId) clearTimeout(ordersTimeoutId);
+
+    ordersTimeoutId = setTimeout(() => {
       const cowswapTab = document.getElementById("cowswap");
       if (cowswapTab && cowswapTab.classList.contains("active")) {
         loadRecentOrders();
+      } else {
+        // If tab not active, stop polling (it will resume on tab click)
+        isPolling = false;
       }
-    }, 15000);
+    }, delay);
+    isPolling = true;
   }
 
-  startOrdersRefresh();
+  function startOrdersPolling() {
+    // Force immediate load and start cycle
+    loadRecentOrders();
+  }
 
   // Load Master Balance Table for CowSwap tab
   let masterTableLoadedChain = null;
