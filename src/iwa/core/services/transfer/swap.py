@@ -164,15 +164,14 @@ class SwapMixin:
         )
 
         # Calculate required amount
-        required_amount = (
-            amount_wei
-            if order_type == OrderType.SELL
-            else cow.get_max_sell_amount_wei(
+        if order_type == OrderType.SELL:
+            required_amount = amount_wei
+        else:
+            required_amount = await cow.get_max_sell_amount_wei(
                 amount_wei,
                 sell_token_name,
                 buy_token_name,
             )
-        )
 
         # If allowance is insufficient, approve EXACT amount (No Infinite)
         if current_allowance < required_amount:
