@@ -133,20 +133,18 @@ class SwapMixin:
                 account_address_or_tag, sell_token_name, chain_name
             )
         else:
-        else:
-            # FIX: Use actual token decimals instead of assuming 18 (ether)
+            # Get decimals correctly!
+            decimals = 18
             try:
+                from iwa.core.contracts.erc20 import ERC20Contract
                 chain_interface = ChainInterfaces().get(chain_name)
-                token_address = chain_interface.chain.get_token_address(sell_token_name)
-                if token_address:
-                    checksum_address = Web3.to_checksum_address(token_address)
-                    decimals = ERC20Contract(checksum_address, chain_name).decimals
-                    return int(amount_eth * (10**decimals))
+                token_addr = chain_interface.chain.get_token_address(sell_token_name)
+                if token_addr:
+                    decimals = ERC20Contract(token_addr, chain_name).decimals
             except Exception as e:
-                logger.warning(f"Failed to fetch decimals for {sell_token_name}, defaulting to 18: {e}")
+                logger.warning(f"Could not get decimals for {sell_token_name}, assuming 18: {e}")
 
-            # Fallback to 18 decimals
-            return int(amount_eth * (10**18))
+            return int(amount_eth * (10**decimals))
 
     async def _ensure_allowance_for_swap(
         self: "TransferService",
@@ -171,18 +169,15 @@ class SwapMixin:
         )
 
         # Calculate required amount
-        if order_type == OrderType.SELL:
-            required_amount = amount_wei
-        else:
-            # Need token addresses for buy mode calculation
-            chain_interface = ChainInterfaces().get(chain_name)
-            sell_token_address = chain_interface.chain.get_token_address(sell_token_name)
-            buy_token_address = chain_interface.chain.get_token_address(buy_token_name)
-            required_amount = await cow.get_max_sell_amount_wei(
+        required_amount = (
+            amount_wei
+            if order_type == OrderType.SELL
+            else cow.get_max_sell_amount_wei(
                 amount_wei,
-                sell_token_address,
-                buy_token_address,
+                sell_token_name,
+                buy_token_name,
             )
+        )
 
         # If allowance is insufficient, approve EXACT amount (No Infinite)
         if current_allowance < required_amount:
@@ -230,9 +225,9 @@ class SwapMixin:
                 sell_addr = chain_interface.chain.get_token_address(sell_token_name)
                 buy_addr = chain_interface.chain.get_token_address(buy_token_name)
                 if sell_addr:
-                    sell_decimals = ERC20Contract(Web3.to_checksum_address(sell_addr), chain_name).decimals
+                    sell_decimals = ERC20Contract(sell_addr, chain_name).decimals
                 if buy_addr:
-                    buy_decimals = ERC20Contract(Web3.to_checksum_address(buy_addr), chain_name).decimals
+                    buy_decimals = ERC20Contract(buy_addr, chain_name).decimals
         except Exception as e:
             logger.warning(f"Could not get decimals for analytics: {e}")
 
