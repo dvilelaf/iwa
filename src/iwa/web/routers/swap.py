@@ -30,7 +30,9 @@ def get_cached_decimals(token_address: str, chain: str) -> int:
 
         # Note: ERC20Contract init makes 4 RPC calls (decimals, symbol, name, supply)
         # Caching this result is critical for performance.
-        contract = ERC20Contract(token_address, chain)
+        # FIX: Web3 requires checksum addresses
+        checksum_address = Web3.to_checksum_address(token_address)
+        contract = ERC20Contract(checksum_address, chain)
         return contract.decimals
     except Exception as e:
         logger.warning(f"Error fetching decimals for {token_address}: {e}")

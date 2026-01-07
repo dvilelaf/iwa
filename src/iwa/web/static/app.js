@@ -1189,7 +1189,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="progress-bar-container">
                         <div class="progress-bar" style="width: ${order.progressPct}%"></div>
                     </div>
-                    <span class="progress-time">${formatSecondsToTime(order.timeRemaining)}</span>
+                    <span class="progress-time" data-valid-to="${order.validTo}">${formatSecondsToTime(order.timeRemaining)}</span>
                     </div>
                 `;
           } else {
@@ -1224,6 +1224,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Client-side countdown timer for smooth updates
+  setInterval(() => {
+    const timers = document.querySelectorAll('.progress-time[data-valid-to]');
+    if (timers.length === 0) return;
+
+    const now = Math.floor(Date.now() / 1000);
+
+    timers.forEach(timer => {
+      const validTo = parseInt(timer.dataset.validTo);
+      const remaining = validTo - now;
+
+      if (remaining > 0) {
+        timer.textContent = formatSecondsToTime(remaining);
+      } else {
+        timer.textContent = "Expiring...";
+      }
+    });
+  }, 1000);
+
   // Adaptive polling for orders
   let ordersTimeoutId = null;
   let isPolling = false;
@@ -1247,6 +1266,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Force immediate load and start cycle
     loadRecentOrders();
   }
+
+  // Start polling
+  startOrdersPolling();
 
   // Load Master Balance Table for CowSwap tab
   let masterTableLoadedChain = null;
