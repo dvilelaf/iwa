@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -496,49 +497,92 @@ def get_recent_orders(
 
         # Process orders for frontend
         result = []
+        chain_interface = ChainInterfaces().get(chain)
+
         for order in orders[:limit]:
-            valid_to = int(order.get("validTo", 0))
-            created = order.get("creationDate", "")
-            status = order.get("status", "unknown")
-
-            # Calculate progress for pending orders
-            progress_pct = 0
-            if status in ["open", "presignaturePending"] and valid_to > current_time:
-                # Calculate time elapsed vs total time
-                created_ts = 0
-                if created:
-                    try:
-                        from datetime import datetime
-
-                        created_ts = int(
-                            datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
-                        )
-                    except ValueError:
-                        created_ts = current_time - 180  # Default 3 min ago
-
-                total_duration = valid_to - created_ts
-                time_remaining = valid_to - current_time
-                if total_duration > 0:
-                    progress_pct = max(0, min(100, (time_remaining / total_duration) * 100))
-
-            result.append(
-                {
-                    "uid": order.get("uid", "")[:12] + "...",
-                    "full_uid": order.get("uid", ""),
-                    "status": status,
-                    "sellToken": order.get("sellToken", ""),
-                    "buyToken": order.get("buyToken", ""),
-                    "sellAmount": order.get("sellAmount", "0"),
-                    "buyAmount": order.get("buyAmount", "0"),
-                    "validTo": valid_to,
-                    "created": created,
-                    "progressPct": round(progress_pct, 1),
-                    "timeRemaining": max(0, valid_to - current_time),
-                }
-            )
+            order_data = _process_order_for_frontend(order, chain_interface, chain, current_time)
+            result.append(order_data)
 
         return {"orders": result}
 
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
         return {"orders": []}
+
+
+def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, current_time: int) -> dict:
+    """Process a single order for frontend display."""
+    from iwa.core.contracts.erc20 import ERC20Contract
+
+    valid_to = int(order.get("validTo", 0))
+    created = order.get("creationDate", "")
+    status = order.get("status", "unknown")
+
+    # Calculate progress for pending orders
+    progress_pct = 0
+    if status in ["open", "presignaturePending"] and valid_to > current_time:
+        # Calculate time elapsed vs total time
+        created_ts = 0
+        if created:
+            try:
+                from datetime import datetime
+
+                created_ts = int(
+                    datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+                )
+            except ValueError:
+                created_ts = current_time - 180  # Default 3 min ago
+
+        total_duration = valid_to - created_ts
+        time_remaining = valid_to - current_time
+        if total_duration > 0:
+            progress_pct = max(0, min(100, (time_remaining / total_duration) * 100))
+    else:
+        time_remaining = 0
+
+    # Resolve token addresses to names
+    sell_token_addr = order.get("sellToken", "")
+    buy_token_addr = order.get("buyToken", "")
+    sell_token_name = chain_interface.chain.get_token_name(sell_token_addr) or sell_token_addr[:8] + "..."
+    buy_token_name = chain_interface.chain.get_token_name(buy_token_addr) or buy_token_addr[:8] + "..."
+
+    # Calculate human-readable amounts
+    try:
+        sell_decimals = 18
+        buy_decimals = 18
+
+        # Try to get decimals from contract if available
+        try:
+            sell_decimals = ERC20Contract(sell_token_addr, chain).decimals
+        except Exception:
+            pass
+
+        try:
+            buy_decimals = ERC20Contract(buy_token_addr, chain).decimals
+        except Exception:
+            pass
+
+        sell_amount_wei = float(order.get("sellAmount", "0"))
+        buy_amount_wei = float(order.get("buyAmount", "0"))
+
+        sell_amount_fmt = sell_amount_wei / (10**sell_decimals)
+        buy_amount_fmt = buy_amount_wei / (10**buy_decimals)
+
+    except Exception as e:
+        logger.warning(f"Error converting amounts: {e}")
+        sell_amount_fmt = 0.0
+        buy_amount_fmt = 0.0
+
+    return {
+        "uid": order.get("uid", "")[:12] + "...",
+        "full_uid": order.get("uid", ""),
+        "status": status,
+        "sellToken": sell_token_name,
+        "buyToken": buy_token_name,
+        "sellAmount": f"{sell_amount_fmt:.4f}",
+        "buyAmount": f"{buy_amount_fmt:.4f}",
+        "validTo": valid_to,
+        "created": created,
+        "progressPct": round(progress_pct, 1),
+        "timeRemaining": max(0, valid_to - current_time),
+    }

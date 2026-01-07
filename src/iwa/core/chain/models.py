@@ -39,6 +39,14 @@ class SupportedChain(BaseModel):
 
         return None
 
+    def get_token_name(self, token_address: str) -> Optional[str]:
+        """Get token name from address."""
+        addr_lower = token_address.lower()
+        for name, addr in self.tokens.items():
+            if addr.lower() == addr_lower:
+                return name
+        return None
+
 
 @singleton
 class Gnosis(SupportedChain):

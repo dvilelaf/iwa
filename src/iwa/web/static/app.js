@@ -1140,7 +1140,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const tableBody = document.getElementById("recent-orders-body");
     if (!tableBody) return;
 
-    tableBody.innerHTML = `<tr><td colspan="4" class="text-center"><span class="cell-spinner"></span> Loading...</td></tr>`;
+    // Do not show loading spinner if we already have content (prevents flicker)
+    if (tableBody.children.length === 0 || tableBody.innerHTML.includes("Loading...")) {
+      // Only show loading on initial load or if empty
+      // tableBody.innerHTML = `<tr><td colspan="4" class="text-center"><span class="cell-spinner"></span> Loading...</td></tr>`;
+    }
 
     try {
       const resp = await authFetch(`/api/swap/orders?chain=${state.activeChain}`);
@@ -1150,21 +1154,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const orders = data.orders || [];
 
       if (orders.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No recent orders</td></tr>`;
+        const noOrdersHtml = `<tr><td colspan="4" class="text-center text-muted">No recent orders</td></tr>`;
+        if (tableBody.innerHTML !== noOrdersHtml) {
+          tableBody.innerHTML = noOrdersHtml;
+        }
         return;
       }
 
-      // Build known tokens map from state
-      const chainInterface = state.tokens[state.activeChain] || [];
-
       let html = "";
       for (const order of orders) {
-        const sellSymbol = await getTokenSymbol(order.sellToken, chainInterface);
-        const buySymbol = await getTokenSymbol(order.buyToken, chainInterface);
-
-        // Format amounts (assuming 18 decimals for display)
-        const sellAmt = (parseInt(order.sellAmount) / 1e18).toFixed(2);
-        const buyAmt = (parseInt(order.buyAmount) / 1e18).toFixed(2);
+        // Use backend provided names (which are symbols) and formatted amounts
+        const sellSymbol = order.sellToken;
+        const buySymbol = order.buyToken;
+        const sellAmt = order.sellAmount;
+        const buyAmt = order.buyAmount;
 
         // Status badge class
         const statusClass = order.status.replace(/([A-Z])/g, "-$1").toLowerCase();
@@ -1180,6 +1183,8 @@ document.addEventListener("DOMContentLoaded", () => {
               <span class="progress-time">${formatSecondsToTime(order.timeRemaining)}</span>
             </div>
           `;
+        } else if (order.status === "open" && order.timeRemaining <= 0) {
+          progressHtml = `<span class="text-muted">Expiring...</span>`;
         }
 
         html += `
@@ -1192,11 +1197,14 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
       }
 
-      tableBody.innerHTML = html;
+      // Only update DOM if content changed to avoid focus loss/scroll jumps
+      if (tableBody.innerHTML !== html) {
+        tableBody.innerHTML = html;
+      }
 
     } catch (err) {
       console.error("Error loading orders:", err);
-      tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Error loading orders</td></tr>`;
+      // Don't wipe table on error, just log
     }
   }
 
