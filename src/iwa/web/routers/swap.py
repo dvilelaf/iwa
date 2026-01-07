@@ -187,9 +187,9 @@ def get_swap_quote(
     auth: bool = Depends(verify_auth),
 ):
     """Get a quote for a swap."""
-    try:
-        amount_wei = Web3.to_wei(amount, "ether")
+    from iwa.core.contracts.erc20 import ERC20Contract
 
+    try:
         chain_interface = ChainInterfaces().get(chain)
         chain_obj: SupportedChain = chain_interface.chain  # type: ignore[assignment]
         account_obj = wallet.account_service.resolve_account(account)
@@ -197,6 +197,19 @@ def get_swap_quote(
 
         if not signer:
             raise HTTPException(status_code=400, detail="Could not get signer for account")
+
+        # Get token addresses and decimals
+        sell_token_addr = chain_obj.get_token_address(sell_token)
+        buy_token_addr = chain_obj.get_token_address(buy_token)
+
+        sell_decimals = ERC20Contract(sell_token_addr, chain).decimals
+        buy_decimals = ERC20Contract(buy_token_addr, chain).decimals
+
+        # Convert input amount to wei using the correct decimals
+        if mode == "sell":
+            amount_wei = int(amount * (10**sell_decimals))
+        else:
+            amount_wei = int(amount * (10**buy_decimals))
 
         def run_async_quote():
             """Run the async CowSwap quote in a new event loop."""
@@ -209,8 +222,8 @@ def get_swap_quote(
                     return loop.run_until_complete(
                         cow.get_max_buy_amount_wei(
                             amount_wei,
-                            chain_obj.get_token_address(sell_token),
-                            chain_obj.get_token_address(buy_token),
+                            sell_token_addr,
+                            buy_token_addr,
                         )
                     )
                 else:
@@ -218,8 +231,8 @@ def get_swap_quote(
                     return loop.run_until_complete(
                         cow.get_max_sell_amount_wei(
                             amount_wei,
-                            chain_obj.get_token_address(sell_token),
-                            chain_obj.get_token_address(buy_token),
+                            sell_token_addr,
+                            buy_token_addr,
                         )
                     )
             finally:
@@ -229,7 +242,12 @@ def get_swap_quote(
             future = executor.submit(run_async_quote)
             result_wei = future.result(timeout=30)
 
-        result_eth = float(Web3.from_wei(result_wei, "ether"))
+        # Convert result using the correct decimals
+        if mode == "sell":
+            result_eth = result_wei / (10**buy_decimals)
+        else:
+            result_eth = result_wei / (10**sell_decimals)
+
         return {"amount": result_eth, "mode": mode}
 
     except Exception as e:
