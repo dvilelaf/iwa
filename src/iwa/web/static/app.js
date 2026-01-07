@@ -1094,6 +1094,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => {
       if (btn.dataset.tab === "cowswap") {
         populateSwapForm();
+        populateWrapForm();
         loadMasterBalanceTable();
       } else if (btn.dataset.tab === "olas") {
         loadOlasServices();
@@ -1179,6 +1180,160 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  // ===== Wrap/Unwrap Functions =====
+  const wrapForm = document.getElementById("wrap-form");
+  const wrapModeRadios = document.querySelectorAll('input[name="wrap-mode"]');
+  const wrapAccountSelect = document.getElementById("wrap-account");
+  const wrapAmountInput = document.getElementById("wrap-amount");
+  const wrapMaxBtn = document.getElementById("wrap-max-btn");
+  const wrapSubmitBtn = document.getElementById("wrap-submit-btn");
+  const wrapNativeBalance = document.getElementById("wrap-native-balance");
+  const wrapWxdaiBalance = document.getElementById("wrap-wxdai-balance");
+
+  let wrapBalancesCache = { native: 0, wxdai: 0 };
+
+  function populateWrapForm() {
+    if (!wrapAccountSelect) return;
+
+    // Populate accounts
+    wrapAccountSelect.innerHTML = state.accounts
+      .map(
+        (acc) =>
+          `<option value="${escapeHtml(acc.tag)}">${escapeHtml(acc.tag)}</option>`,
+      )
+      .join("");
+
+    // Load balances for selected account
+    loadWrapBalances();
+  }
+
+  async function loadWrapBalances() {
+    if (!wrapAccountSelect) return;
+
+    const account = wrapAccountSelect.value;
+    if (!account) {
+      wrapNativeBalance.textContent = "-";
+      wrapWxdaiBalance.textContent = "-";
+      return;
+    }
+
+    wrapNativeBalance.innerHTML = '<span class="cell-spinner"></span>';
+    wrapWxdaiBalance.innerHTML = '<span class="cell-spinner"></span>';
+
+    try {
+      const resp = await authFetch(`/api/swap/wrap/balance?account=${encodeURIComponent(account)}&chain=${state.activeChain}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        wrapBalancesCache = data;
+        wrapNativeBalance.textContent = formatBalance(data.native);
+        wrapWxdaiBalance.textContent = formatBalance(data.wxdai);
+      } else {
+        wrapNativeBalance.textContent = "-";
+        wrapWxdaiBalance.textContent = "-";
+      }
+    } catch (err) {
+      console.error("Error loading wrap balances:", err);
+      wrapNativeBalance.textContent = "-";
+      wrapWxdaiBalance.textContent = "-";
+    }
+  }
+
+  function updateWrapButtonText() {
+    if (!wrapSubmitBtn) return;
+    const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+    wrapSubmitBtn.textContent = mode === "wrap" ? "Wrap xDAI" : "Unwrap WXDAI";
+  }
+
+  // Account change handler
+  if (wrapAccountSelect) {
+    wrapAccountSelect.addEventListener("change", loadWrapBalances);
+  }
+
+  // Mode change handler
+  if (wrapModeRadios) {
+    wrapModeRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        updateWrapButtonText();
+        if (wrapAmountInput) wrapAmountInput.value = "";
+      });
+    });
+  }
+
+  // Max button handler
+  if (wrapMaxBtn) {
+    wrapMaxBtn.addEventListener("click", () => {
+      const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+      const maxAmount = mode === "wrap" ? wrapBalancesCache.native : wrapBalancesCache.wxdai;
+      if (wrapAmountInput && maxAmount > 0) {
+        wrapAmountInput.value = maxAmount.toFixed(2);
+      }
+    });
+  }
+
+  // Form submission
+  if (wrapForm) {
+    wrapForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!wrapSubmitBtn) return;
+
+      const originalText = wrapSubmitBtn.textContent;
+      wrapSubmitBtn.textContent = "Processing...";
+      wrapSubmitBtn.disabled = true;
+
+      const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+      const account = wrapAccountSelect.value;
+      const amount = parseFloat(wrapAmountInput.value);
+
+      if (!account || !amount || amount <= 0) {
+        showToast("Please enter a valid amount", "error");
+        wrapSubmitBtn.textContent = originalText;
+        wrapSubmitBtn.disabled = false;
+        return;
+      }
+
+      const endpoint = mode === "wrap" ? "/api/swap/wrap" : "/api/swap/unwrap";
+      const payload = {
+        account: account,
+        amount_eth: amount,
+        chain: state.activeChain,
+      };
+
+      try {
+        const resp = await authFetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+
+        if (resp.ok) {
+          const hashDisplay = result.hash ? `TX: ${result.hash.substring(0, 10)}...` : "";
+          showToast(`${result.message} ${hashDisplay}`, "success", 5000);
+          wrapAmountInput.value = "";
+          // Refresh balances
+          loadWrapBalances();
+          loadMasterBalanceTable(true);
+        } else {
+          showToast(`Error: ${result.detail}`, "error");
+        }
+      } catch (err) {
+        showToast("Network error during wrap/unwrap", "error");
+      } finally {
+        wrapSubmitBtn.textContent = originalText;
+        wrapSubmitBtn.disabled = false;
+      }
+    });
+  }
+
+  // Update tab handler to include wrap form population
+  const originalTabClickHandler = tabBtns.forEach.bind(tabBtns);
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.tab === "cowswap") {
+        populateWrapForm();
+      }
+    });
+  });
 
   // ===== Olas Services Functions =====
   const olasRefreshBtn = document.getElementById("refresh-olas-btn");

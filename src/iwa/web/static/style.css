@@ -738,6 +738,44 @@ textarea:focus {
   width: 100%;
 }
 
+.swap-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1200px;
+}
+
+@media (max-width: 900px) {
+  .swap-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wrap-balance-info {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.wrap-balance-info .balance-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+}
+
+.wrap-balance-info .balance-row .label {
+  color: var(--text-muted);
+}
+
+.wrap-balance-info .balance-row .value {
+  font-family: var(--font-mono);
+  color: var(--accent-color);
+}
+
 .swap-container {
   padding: 2rem;
   width: 100%;

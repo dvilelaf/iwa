@@ -311,3 +311,122 @@ def get_swap_max_amount(
                 detail="No liquidity available for this token pair. Try a different pair.",
             ) from None
         raise HTTPException(status_code=400, detail=error_msg or "Unknown error") from None
+
+
+class WrapRequest(BaseModel):
+    """Request to wrap/unwrap native currency."""
+
+    account: str = Field(description="Account address or tag")
+    amount_eth: float = Field(description="Amount in human-readable units (ETH)")
+    chain: str = Field(default="gnosis", description="Blockchain network name")
+
+    @field_validator("account")
+    @classmethod
+    def validate_account(cls, v: str) -> str:
+        """Validate account address or tag."""
+        if not v:
+            raise ValueError("Account cannot be empty")
+        if v.startswith("0x") and len(v) != 42:
+            raise ValueError("Invalid account format")
+        return v
+
+    @field_validator("amount_eth")
+    @classmethod
+    def validate_amount(cls, v: float) -> float:
+        """Validate amount is positive."""
+        if v <= 0:
+            raise ValueError("Amount must be greater than 0")
+        if v > 1e18:
+            raise ValueError("Amount too large")
+        return v
+
+    @field_validator("chain")
+    @classmethod
+    def validate_chain(cls, v: str) -> str:
+        """Validate chain name is alphanumeric."""
+        if not v.replace("-", "").isalnum():
+            raise ValueError("Invalid chain name")
+        return v
+
+
+@router.post(
+    "/wrap",
+    summary="Wrap Native Currency",
+    description="Wrap native currency to wrapped token (e.g., xDAI → WXDAI).",
+)
+@limiter.limit("10/minute")
+async def wrap_native(request: Request, req: WrapRequest, auth: bool = Depends(verify_auth)):
+    """Wrap native currency to WXDAI."""
+    try:
+        amount_wei = Web3.to_wei(req.amount_eth, "ether")
+        tx_hash = wallet.transfer_service.wrap_native(
+            account_address_or_tag=req.account,
+            amount_wei=amount_wei,
+            chain_name=req.chain,
+        )
+        if tx_hash:
+            return {
+                "status": "success",
+                "message": f"Wrapped {req.amount_eth:.4f} xDAI → WXDAI",
+                "hash": tx_hash,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Wrap transaction failed")
+    except Exception as e:
+        logger.error(f"Error wrapping: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.post(
+    "/unwrap",
+    summary="Unwrap to Native Currency",
+    description="Unwrap wrapped token to native currency (e.g., WXDAI → xDAI).",
+)
+@limiter.limit("10/minute")
+async def unwrap_native(request: Request, req: WrapRequest, auth: bool = Depends(verify_auth)):
+    """Unwrap WXDAI to native xDAI."""
+    try:
+        amount_wei = Web3.to_wei(req.amount_eth, "ether")
+        tx_hash = wallet.transfer_service.unwrap_native(
+            account_address_or_tag=req.account,
+            amount_wei=amount_wei,
+            chain_name=req.chain,
+        )
+        if tx_hash:
+            return {
+                "status": "success",
+                "message": f"Unwrapped {req.amount_eth:.4f} WXDAI → xDAI",
+                "hash": tx_hash,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Unwrap transaction failed")
+    except Exception as e:
+        logger.error(f"Error unwrapping: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.get(
+    "/wrap/balance",
+    summary="Get Wrap/Unwrap Balances",
+    description="Get native and WXDAI balances for an account.",
+)
+def get_wrap_balances(
+    account: str,
+    chain: str = "gnosis",
+    auth: bool = Depends(verify_auth),
+):
+    """Get balances for wrap/unwrap operations."""
+    try:
+        native_balance_wei = wallet.balance_service.get_native_balance_wei(account, chain)
+        wxdai_balance_wei = wallet.balance_service.get_erc20_balance_wei(account, "WXDAI", chain)
+
+        native_eth = float(Web3.from_wei(native_balance_wei or 0, "ether"))
+        wxdai_eth = float(Web3.from_wei(wxdai_balance_wei or 0, "ether"))
+
+        return {
+            "native": native_eth,
+            "wxdai": wxdai_eth,
+        }
+    except Exception as e:
+        logger.error(f"Error getting wrap balances: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from None
