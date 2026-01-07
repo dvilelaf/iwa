@@ -344,7 +344,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     ${allTokens
                       .map((t) => {
                         const isActive = state.activeTokens.has(t);
-                        return `<td class="val balance-cell opacity-30" data-token="${t}">-</td>`;
+                        if (!isActive) {
+                          return `<td class="val balance-cell opacity-30" data-token="${t}">-</td>`;
+                        }
                         const bal = cached[t];
                         if (bal !== undefined && bal !== null) {
                           return `<td class="val balance-cell" data-token="${t}">${escapeHtml(formatBalance(bal))}</td>`;
