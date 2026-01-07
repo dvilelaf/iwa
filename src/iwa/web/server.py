@@ -65,6 +65,8 @@ async def lifespan(app: FastAPI):
     from iwa.core.chain import ChainInterfaces
 
     ChainInterfaces().gnosis.init_block_tracking()
+    # Check block limit immediately at startup to show current status
+    ChainInterfaces().gnosis.check_block_limit()
 
     yield
     logger.info("Shutting down...")

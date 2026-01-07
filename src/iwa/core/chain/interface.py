@@ -445,6 +445,8 @@ class ChainInterface:
             if receipt and status == 1:
                 self.wait_for_no_pending_tx(from_address)
                 logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                # Check Tenderly block limit after each successful transaction
+                self.check_block_limit()
                 return True, receipt["transactionHash"].hex()
 
             logger.error("Transaction failed (status != 1)")
