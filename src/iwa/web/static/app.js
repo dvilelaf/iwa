@@ -1032,7 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
         account: "master",
         sell_token: document.getElementById("swap-sell-token").value,
         buy_token: document.getElementById("swap-buy-token").value,
-        amount: amount,
+        amount_eth: amount,
         order_type: swapMode,
         chain: state.activeChain,
       };
