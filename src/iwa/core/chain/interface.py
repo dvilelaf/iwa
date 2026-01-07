@@ -145,14 +145,15 @@ class ChainInterface:
             status = "🟢 OK"
 
         bar = bar_char * filled + "░" * empty
-        logger.warning("")
-        logger.warning("╔══════════════════════════════════════════════════╗")
-        logger.warning("║          TENDERLY VIRTUAL NETWORK USAGE          ║")
-        logger.warning("╠══════════════════════════════════════════════════╣")
-        logger.warning(f"║  [{bar}]  ║")
-        logger.warning(f"║           {used:2d}/{limit} blocks  ({percentage:3d}%)  {status:12s}     ║")
-        logger.warning("╚══════════════════════════════════════════════════╝")
-        logger.warning("")
+        # Use print to ensure visibility in console (loguru writes to file)
+        print("")
+        print("╔══════════════════════════════════════════════════╗")
+        print("║          TENDERLY VIRTUAL NETWORK USAGE          ║")
+        print("╠══════════════════════════════════════════════════╣")
+        print(f"║  [{bar}]  ║")
+        print(f"║           {used:2d}/{limit} blocks  ({percentage:3d}%)  {status:12s}     ║")
+        print("╚══════════════════════════════════════════════════╝")
+        print("")
 
     def _init_web3(self):
         """Initialize Web3 with current RPC."""
