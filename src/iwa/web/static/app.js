@@ -1177,38 +1177,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const wrapAmountInput = document.getElementById("wrap-amount");
   const wrapMaxBtn = document.getElementById("wrap-max-btn");
   const wrapSubmitBtn = document.getElementById("wrap-submit-btn");
-  const wrapNativeBalance = document.getElementById("wrap-native-balance");
-  const wrapWxdaiBalance = document.getElementById("wrap-wxdai-balance");
-
-  let wrapBalancesCache = { native: 0, wxdai: 0 };
 
   function populateWrapForm() {
-    // Load balances for master account
-    loadWrapBalances();
-  }
-
-  async function loadWrapBalances() {
-    const account = "master";
-
-    if (wrapNativeBalance) wrapNativeBalance.innerHTML = '<span class="cell-spinner"></span>';
-    if (wrapWxdaiBalance) wrapWxdaiBalance.innerHTML = '<span class="cell-spinner"></span>';
-
-    try {
-      const resp = await authFetch(`/api/swap/wrap/balance?account=${encodeURIComponent(account)}&chain=${state.activeChain}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        wrapBalancesCache = data;
-        if (wrapNativeBalance) wrapNativeBalance.textContent = formatBalance(data.native);
-        if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = formatBalance(data.wxdai);
-      } else {
-        if (wrapNativeBalance) wrapNativeBalance.textContent = "-";
-        if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = "-";
-      }
-    } catch (err) {
-      console.error("Error loading wrap balances:", err);
-      if (wrapNativeBalance) wrapNativeBalance.textContent = "-";
-      if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = "-";
-    }
+    // Nothing to populate - uses master account
   }
 
   function updateWrapButtonText() {
@@ -1216,8 +1187,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
     wrapSubmitBtn.textContent = mode === "wrap" ? "Wrap xDAI" : "Unwrap WXDAI";
   }
-
-
 
   // Mode change handler
   if (wrapModeRadios) {
@@ -1229,13 +1198,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Max button handler
+  // Max button handler - fetches balance from API
   if (wrapMaxBtn) {
-    wrapMaxBtn.addEventListener("click", () => {
+    wrapMaxBtn.addEventListener("click", async () => {
       const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
-      const maxAmount = mode === "wrap" ? wrapBalancesCache.native : wrapBalancesCache.wxdai;
-      if (wrapAmountInput && maxAmount > 0) {
-        wrapAmountInput.value = maxAmount.toFixed(2);
+
+      wrapMaxBtn.disabled = true;
+      wrapMaxBtn.innerHTML = '<span class="btn-spinner"></span>';
+
+      try {
+        const resp = await authFetch(`/api/swap/wrap/balance?account=master&chain=${state.activeChain}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const maxAmount = mode === "wrap" ? data.native : data.wxdai;
+          if (wrapAmountInput && maxAmount > 0) {
+            wrapAmountInput.value = maxAmount.toFixed(2);
+          }
+        }
+      } catch (err) {
+        console.error("Error getting max amount:", err);
+      } finally {
+        wrapMaxBtn.disabled = false;
+        wrapMaxBtn.innerHTML = "Max";
       }
     });
   }
