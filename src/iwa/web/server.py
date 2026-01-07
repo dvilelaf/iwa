@@ -16,6 +16,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from iwa.core.wallet import init_db
 
+# Pre-load cowdao_cowpy modules BEFORE async loop starts
+# This is required because cowdao_cowpy uses asyncio.run() at import time
+# which fails if called from an already running event loop
+from iwa.plugins.gnosis.cow_utils import get_cowpy_module
+
+get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
+
 # Import dependencies to ensure initialization
 # Import routers
 from iwa.web.routers import accounts, olas, state, swap, transactions
