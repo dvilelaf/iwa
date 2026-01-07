@@ -351,11 +351,9 @@ input:focus {
 
 .btn-send {
   width: 100%;
-  background: linear-gradient(
-    135deg,
-    var(--primary-color),
-    var(--accent-color)
-  );
+  background: linear-gradient(135deg,
+      var(--primary-color),
+      var(--accent-color));
   border: none;
   color: white;
   padding: 0.7rem 1rem;
@@ -719,8 +717,25 @@ textarea:focus {
 /* ===== CowSwap Styles ===== */
 .swap-wrapper {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
   justify-content: center;
   padding: 2rem 0;
+}
+
+.swap-wrapper .table-container {
+  width: 100%;
+  max-width: 1200px;
+}
+
+#cowswap-master-table th:not(:first-child) {
+  text-align: right;
+}
+
+#cowswap-master-table {
+  table-layout: fixed;
+  width: 100%;
 }
 
 .swap-container {
