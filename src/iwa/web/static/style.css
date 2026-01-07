@@ -1355,3 +1355,72 @@ textarea:focus {
   border-width: 2px !important;
   margin-right: 0.5rem !important;
 }
+
+/* Recent Orders Table */
+.recent-orders-section {
+  width: 100%;
+  max-width: 1200px;
+}
+
+.recent-orders-section h3 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: var(--text-muted);
+}
+
+#recent-orders-table {
+  width: 100%;
+}
+
+.order-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.order-status.fulfilled {
+  background: rgba(46, 204, 113, 0.2);
+  color: var(--success);
+}
+
+.order-status.open {
+  background: rgba(0, 210, 255, 0.2);
+  color: var(--accent-color);
+}
+
+.order-status.expired,
+.order-status.cancelled {
+  background: rgba(231, 76, 60, 0.2);
+  color: var(--error);
+}
+
+.order-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.progress-bar-container {
+  width: 100px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), var(--primary-color));
+  border-radius: 3px;
+  transition: width 1s linear;
+}
+
+.progress-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

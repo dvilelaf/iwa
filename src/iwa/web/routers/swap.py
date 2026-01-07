@@ -448,3 +448,97 @@ def get_wrap_balances(
     except Exception as e:
         logger.error(f"Error getting wrap balances: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@router.get(
+    "/orders",
+    summary="Get Recent Orders",
+    description="Get recent swap orders for an account from CowSwap API.",
+)
+def get_recent_orders(
+    account: str = "master",
+    chain: str = "gnosis",
+    limit: int = 5,
+    auth: bool = Depends(verify_auth),
+):
+    """Get recent orders for an account from CowSwap API."""
+    import time
+
+    import requests
+
+    try:
+        # Resolve account address
+        account_obj = wallet.account_service.resolve_account(account)
+        address = account_obj.address
+
+        # Get API URL for chain
+        chain_interface = ChainInterfaces().get(chain)
+        chain_id = chain_interface.chain.chain_id
+
+        api_urls = {
+            100: "https://api.cow.fi/xdai",
+            1: "https://api.cow.fi/mainnet",
+            11155111: "https://api.cow.fi/sepolia",
+        }
+        api_url = api_urls.get(chain_id)
+        if not api_url:
+            return {"orders": []}
+
+        # Fetch orders from CowSwap API
+        url = f"{api_url}/api/v1/account/{address}/orders?limit={limit}"
+        response = requests.get(url, timeout=10)
+
+        if response.status_code != 200:
+            return {"orders": []}
+
+        orders = response.json()
+        current_time = int(time.time())
+
+        # Process orders for frontend
+        result = []
+        for order in orders[:limit]:
+            valid_to = int(order.get("validTo", 0))
+            created = order.get("creationDate", "")
+            status = order.get("status", "unknown")
+
+            # Calculate progress for pending orders
+            progress_pct = 0
+            if status in ["open", "presignaturePending"] and valid_to > current_time:
+                # Calculate time elapsed vs total time
+                created_ts = 0
+                if created:
+                    try:
+                        from datetime import datetime
+
+                        created_ts = int(
+                            datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+                        )
+                    except ValueError:
+                        created_ts = current_time - 180  # Default 3 min ago
+
+                total_duration = valid_to - created_ts
+                time_remaining = valid_to - current_time
+                if total_duration > 0:
+                    progress_pct = max(0, min(100, (time_remaining / total_duration) * 100))
+
+            result.append(
+                {
+                    "uid": order.get("uid", "")[:12] + "...",
+                    "full_uid": order.get("uid", ""),
+                    "status": status,
+                    "sellToken": order.get("sellToken", ""),
+                    "buyToken": order.get("buyToken", ""),
+                    "sellAmount": order.get("sellAmount", "0"),
+                    "buyAmount": order.get("buyAmount", "0"),
+                    "validTo": valid_to,
+                    "created": created,
+                    "progressPct": round(progress_pct, 1),
+                    "timeRemaining": max(0, valid_to - current_time),
+                }
+            )
+
+        return {"orders": result}
+
+    except Exception as e:
+        logger.error(f"Error fetching orders: {e}")
+        return {"orders": []}

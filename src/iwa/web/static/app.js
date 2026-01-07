@@ -1104,11 +1104,116 @@ document.addEventListener("DOMContentLoaded", () => {
         populateSwapForm();
         populateWrapForm();
         loadMasterBalanceTable();
+        loadRecentOrders();
       } else if (btn.dataset.tab === "olas") {
         loadOlasServices();
       }
     });
   });
+
+  // Token symbol mapping cache
+  const tokenSymbolCache = {};
+
+  async function getTokenSymbol(address, chainTokens) {
+    if (tokenSymbolCache[address]) return tokenSymbolCache[address];
+
+    // Try to find in known tokens
+    for (const [symbol, addr] of Object.entries(chainTokens || {})) {
+      if (addr && addr.toLowerCase() === address.toLowerCase()) {
+        tokenSymbolCache[address] = symbol;
+        return symbol;
+      }
+    }
+
+    // Return truncated address if not found
+    return address.substring(0, 6) + "...";
+  }
+
+  function formatSecondsToTime(seconds) {
+    if (seconds <= 0) return "Expired";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  }
+
+  async function loadRecentOrders() {
+    const tableBody = document.getElementById("recent-orders-body");
+    if (!tableBody) return;
+
+    tableBody.innerHTML = `<tr><td colspan="4" class="text-center"><span class="cell-spinner"></span> Loading...</td></tr>`;
+
+    try {
+      const resp = await authFetch(`/api/swap/orders?chain=${state.activeChain}`);
+      if (!resp.ok) throw new Error("Failed to fetch orders");
+
+      const data = await resp.json();
+      const orders = data.orders || [];
+
+      if (orders.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No recent orders</td></tr>`;
+        return;
+      }
+
+      // Build known tokens map from state
+      const chainInterface = state.tokens[state.activeChain] || [];
+
+      let html = "";
+      for (const order of orders) {
+        const sellSymbol = await getTokenSymbol(order.sellToken, chainInterface);
+        const buySymbol = await getTokenSymbol(order.buyToken, chainInterface);
+
+        // Format amounts (assuming 18 decimals for display)
+        const sellAmt = (parseInt(order.sellAmount) / 1e18).toFixed(2);
+        const buyAmt = (parseInt(order.buyAmount) / 1e18).toFixed(2);
+
+        // Status badge class
+        const statusClass = order.status.replace(/([A-Z])/g, "-$1").toLowerCase();
+
+        // Progress bar for open orders
+        let progressHtml = "-";
+        if (order.status === "open" && order.timeRemaining > 0) {
+          progressHtml = `
+            <div class="order-progress">
+              <div class="progress-bar-container">
+                <div class="progress-bar" style="width: ${order.progressPct}%"></div>
+              </div>
+              <span class="progress-time">${formatSecondsToTime(order.timeRemaining)}</span>
+            </div>
+          `;
+        }
+
+        html += `
+          <tr>
+            <td><span class="order-status ${statusClass}">${order.status}</span></td>
+            <td>${sellAmt} ${escapeHtml(sellSymbol)}</td>
+            <td>${buyAmt} ${escapeHtml(buySymbol)}</td>
+            <td>${progressHtml}</td>
+          </tr>
+        `;
+      }
+
+      tableBody.innerHTML = html;
+
+    } catch (err) {
+      console.error("Error loading orders:", err);
+      tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Error loading orders</td></tr>`;
+    }
+  }
+
+  // Auto-refresh orders every 15 seconds when on CowSwap tab
+  let ordersRefreshInterval = null;
+
+  function startOrdersRefresh() {
+    if (ordersRefreshInterval) clearInterval(ordersRefreshInterval);
+    ordersRefreshInterval = setInterval(() => {
+      const cowswapTab = document.getElementById("cowswap");
+      if (cowswapTab && cowswapTab.classList.contains("active")) {
+        loadRecentOrders();
+      }
+    }, 15000);
+  }
+
+  startOrdersRefresh();
 
   // Load Master Balance Table for CowSwap tab
   let masterTableLoadedChain = null;
