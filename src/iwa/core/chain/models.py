@@ -45,9 +45,7 @@ class Gnosis(SupportedChain):
     """Gnosis Chain"""
 
     name: str = "Gnosis"
-    rpcs: List[str] = (
-        settings.gnosis_rpc.get_secret_value().split(",") if settings.gnosis_rpc else []
-    )
+    rpcs: List[str] = []  # Set dynamically in __init__
     chain_id: int = 100
     native_currency: str = "xDAI"
     tokens: Dict[str, EthereumAddress] = {
@@ -66,15 +64,19 @@ class Gnosis(SupportedChain):
         ),
     }
 
+    def __init__(self, **data):
+        """Initialize with RPCs from settings (after testing override is applied)."""
+        super().__init__(**data)
+        if not self.rpcs and settings.gnosis_rpc:
+            self.rpcs = settings.gnosis_rpc.get_secret_value().split(",")
+
 
 @singleton
 class Ethereum(SupportedChain):
     """Ethereum Mainnet"""
 
     name: str = "Ethereum"
-    rpcs: List[str] = (
-        settings.ethereum_rpc.get_secret_value().split(",") if settings.ethereum_rpc else []
-    )
+    rpcs: List[str] = []  # Set dynamically in __init__
     chain_id: int = 1
     native_currency: str = "ETH"
     tokens: Dict[str, EthereumAddress] = {
@@ -82,19 +84,31 @@ class Ethereum(SupportedChain):
     }
     contracts: Dict[str, EthereumAddress] = {}
 
+    def __init__(self, **data):
+        """Initialize with RPCs from settings (after testing override is applied)."""
+        super().__init__(**data)
+        if not self.rpcs and settings.ethereum_rpc:
+            self.rpcs = settings.ethereum_rpc.get_secret_value().split(",")
+
 
 @singleton
 class Base(SupportedChain):
     """Base"""
 
     name: str = "Base"
-    rpcs: List[str] = settings.base_rpc.get_secret_value().split(",") if settings.base_rpc else []
+    rpcs: List[str] = []  # Set dynamically in __init__
     chain_id: int = 8453
     native_currency: str = "ETH"
     tokens: Dict[str, EthereumAddress] = {
         "OLAS": EthereumAddress("0x54330d28ca3357F294334BDC454a032e7f353416"),
     }
     contracts: Dict[str, EthereumAddress] = {}
+
+    def __init__(self, **data):
+        """Initialize with RPCs from settings (after testing override is applied)."""
+        super().__init__(**data)
+        if not self.rpcs and settings.base_rpc:
+            self.rpcs = settings.base_rpc.get_secret_value().split(",")
 
 
 @singleton
