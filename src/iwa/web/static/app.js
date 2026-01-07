@@ -922,7 +922,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    outputField.value = "...";
+    // Show loading indicator in output field
+    outputField.value = "";
+    outputField.placeholder = "Loading...";
 
     try {
       const params = new URLSearchParams({
@@ -943,6 +945,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       outputField.value = "";
+    } finally {
+      outputField.placeholder = "0.00";
     }
   }
 
