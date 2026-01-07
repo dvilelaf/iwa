@@ -114,14 +114,28 @@ async def swap_tokens(request: Request, req: SwapRequest, auth: bool = Depends(v
 
         order_type = OrderType.SELL if req.order_type == "sell" else OrderType.BUY
 
-        order_data = await wallet.transfer_service.swap(
-            account_address_or_tag=req.account,
-            amount_eth=req.amount_eth,
-            sell_token_name=req.sell_token,
-            buy_token_name=req.buy_token,
-            chain_name=req.chain,
-            order_type=order_type,
-        )
+        # Run swap in a separate thread with its own event loop to avoid
+        # asyncio.run() conflict with cowdao_cowpy library
+        def run_swap_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(
+                    wallet.transfer_service.swap(
+                        account_address_or_tag=req.account,
+                        amount_eth=req.amount_eth,
+                        sell_token_name=req.sell_token,
+                        buy_token_name=req.buy_token,
+                        chain_name=req.chain,
+                        order_type=order_type,
+                    )
+                )
+            finally:
+                loop.close()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_swap_in_thread)
+            order_data = future.result(timeout=120)
 
         if order_data:
             # Check if order was executed (blocking mode) or just placed (non-blocking)
