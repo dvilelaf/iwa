@@ -318,6 +318,8 @@ class DrainManagerMixin:
             logger.warning(f"Owner traceback: {traceback.format_exc()}")
         return None
 
+
+
     def _normalize_drain_result(self, result: Any) -> Any:
         """Normalize the result from wallet.drain to a transaction hash string or dict."""
         if not result:

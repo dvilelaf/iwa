@@ -282,11 +282,16 @@ class MultiSendMixin:
                 drainable_balance_wei = native_balance_wei
             else:
                 # EOA needs to reserve gas for the multi_send transaction
-                # Estimate: base 21k + ~30k per transfer in batch + buffer
+                # Conservative estimate: base 100k + ~50k per transfer + 20% buffer
                 num_transfers = len(transactions) + 1  # +1 for native
-                estimated_gas = 50_000 + (30_000 * num_transfers)
-                gas_cost_wei = chain_interface.web3.eth.gas_price * estimated_gas
+                estimated_gas = 100_000 + (50_000 * num_transfers)
+                gas_price = chain_interface.web3.eth.gas_price
+                gas_cost_wei = int(gas_price * estimated_gas * 1.2)  # 20% buffer
                 drainable_balance_wei = native_balance_wei - gas_cost_wei
+                logger.debug(
+                    f"EOA drain: balance={native_balance_wei}, gas_reserve={gas_cost_wei}, "
+                    f"drainable={drainable_balance_wei}"
+                )
 
             if drainable_balance_wei > 0:
                 # Use amount_wei directly for zero precision loss
