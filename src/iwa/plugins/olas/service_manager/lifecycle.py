@@ -387,7 +387,8 @@ class LifecycleManagerMixin:
             return agent_address
 
         # Create a new account for the service (or use existing if found)
-        agent_tag = f"service_{self.service.service_id}_agent"
+        # Use service_name for consistency with Safe naming
+        agent_tag = f"{self.service.service_name}_agent"
         try:
             agent_account = self.wallet.key_storage.create_account(agent_tag)
             agent_account_address = agent_account.address
