@@ -46,73 +46,67 @@ class SwapMixin:
         chain = ChainInterfaces().get(chain_name).chain
         account = self.account_service.resolve_account(account_address_or_tag)
 
-        retries = 1
-        max_retries = 3
-        while retries < max_retries + 1:
-            # Get signer (LocalAccount)
-            signer = self.key_storage.get_signer(account.address)
-            if not signer:
-                logger.error(f"Could not retrieve signer for {account_address_or_tag}")
-                return None
+        # Get signer (LocalAccount)
+        signer = self.key_storage.get_signer(account.address)
+        if not signer:
+            logger.error(f"Could not retrieve signer for {account_address_or_tag}")
+            return None
 
-            cow = CowSwap(
-                private_key_or_signer=signer,
-                chain=chain,
-            )
+        cow = CowSwap(
+            private_key_or_signer=signer,
+            chain=chain,
+        )
 
-            # Check and approve allowance if needed
-            await self._ensure_allowance_for_swap(
-                account_address_or_tag,
-                sell_token_name,
-                buy_token_name,
-                chain_name,
-                amount_wei,
-                order_type,
-                cow,
-            )
+        # Check and approve allowance if needed
+        await self._ensure_allowance_for_swap(
+            account_address_or_tag,
+            sell_token_name,
+            buy_token_name,
+            chain_name,
+            amount_wei,
+            order_type,
+            cow,
+        )
 
-            # Execute Swap
-            result = await cow.swap(
-                amount_wei=amount_wei,
-                sell_token_name=sell_token_name,
-                buy_token_name=buy_token_name,
-                order_type=order_type,
-            )
+        # Execute Swap
+        result = await cow.swap(
+            amount_wei=amount_wei,
+            sell_token_name=sell_token_name,
+            buy_token_name=buy_token_name,
+            order_type=order_type,
+        )
 
-            if result:
-                logger.info("Swap successful")
+        if result:
+            logger.info("Swap successful")
 
-                # Log transaction and analytics
-                try:
-                    analytics = self._calculate_swap_analytics(
-                        result, sell_token_name, buy_token_name, chain_name
+            # Log transaction and analytics
+            try:
+                analytics = self._calculate_swap_analytics(
+                    result, sell_token_name, buy_token_name, chain_name
+                )
+
+                tx_hash = result.get("txHash") or result.get("uid")
+                if tx_hash:
+                    self._log_swap_transaction(
+                        tx_hash,
+                        account,
+                        account_address_or_tag,
+                        sell_token_name,
+                        buy_token_name,
+                        result,
+                        chain_name,
+                        analytics,
                     )
 
-                    tx_hash = result.get("txHash") or result.get("uid")
-                    if tx_hash:
-                        self._log_swap_transaction(
-                            tx_hash,
-                            account,
-                            account_address_or_tag,
-                            sell_token_name,
-                            buy_token_name,
-                            result,
-                            chain_name,
-                            analytics,
-                        )
+                # Inject analytics back into result for API/Frontend
+                result["analytics"] = analytics
 
-                    # Inject analytics back into result for API/Frontend
-                    result["analytics"] = analytics
+            except Exception as log_err:
+                logger.warning(f"Failed to log swap analytics: {log_err}")
 
-                except Exception as log_err:
-                    logger.warning(f"Failed to log swap analytics: {log_err}")
+            return result
 
-                return result
-
-            logger.error(f"Swap try {retries}/{max_retries}] failed")
-            retries += 1
-
-        logger.error("Max swap retries reached. Swap failed.")
+        logger.error("Swap failed")
         return None
 
     def _prepare_swap_amount(

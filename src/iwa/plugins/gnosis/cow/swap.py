@@ -96,8 +96,8 @@ class CowSwap:
 
         logger.info(f"Checking order status for UID: {order.uid}")
 
-        max_retries = 8
-        sleep_between_retries = 30
+        max_retries = 4
+        sleep_between_retries = 15
         retries = 0
 
         while retries < max_retries:
