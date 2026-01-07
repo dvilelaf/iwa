@@ -210,10 +210,6 @@
                                         <span>Buy exact amount</span>
                                     </label>
                                 </div>
-                                <div class="form-group mb-1">
-                                    <label>From Account</label>
-                                    <select id="swap-account" required></select>
-                                </div>
                                 <div class="swap-cards">
                                     <!-- Sell Card -->
                                     <div class="swap-card" id="sell-card">
@@ -227,8 +223,8 @@
                                     </div>
                                     <!-- Arrow -->
                                     <div class="swap-arrow">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <path d="M5 12h14M13 5l7 7-7 7" />
                                         </svg>
                                     </div>
@@ -237,8 +233,8 @@
                                         <div class="swap-card-header">Buy</div>
                                         <select id="swap-buy-token" required></select>
                                         <div class="swap-card-amount">
-                                            <input type="number" id="swap-buy-amount" class="no-spinners" step="1" min="0"
-                                                placeholder="0.00" readonly />
+                                            <input type="number" id="swap-buy-amount" class="no-spinners" step="1"
+                                                min="0" placeholder="0.00" readonly />
                                             <button type="button" id="swap-max-buy" class="btn-max hidden">Max</button>
                                         </div>
                                     </div>
@@ -259,10 +255,6 @@
                                         <span>Unwrap WXDAI → xDAI</span>
                                     </label>
                                 </div>
-                                <div class="form-group mb-1">
-                                    <label>From Account</label>
-                                    <select id="wrap-account" required></select>
-                                </div>
                                 <div class="wrap-balance-info">
                                     <div class="balance-row">
                                         <span class="label">xDAI Balance:</span>
@@ -276,7 +268,8 @@
                                 <div class="form-group mb-1">
                                     <label>Amount</label>
                                     <div class="swap-card-amount">
-                                        <input type="number" id="wrap-amount" step="0.01" min="0" placeholder="0.00" required />
+                                        <input type="number" id="wrap-amount" step="0.01" min="0" placeholder="0.00"
+                                            required />
                                         <button type="button" id="wrap-max-btn" class="btn-max">Max</button>
                                     </div>
                                 </div>

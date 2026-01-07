@@ -828,17 +828,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let quoteTimeout = null;
 
   function populateSwapForm() {
-    const accountSelect = document.getElementById("swap-account");
     const sellTokenSelect = document.getElementById("swap-sell-token");
     const buyTokenSelect = document.getElementById("swap-buy-token");
-
-    // Populate accounts
-    accountSelect.innerHTML = state.accounts
-      .map(
-        (acc) =>
-          `<option value="${escapeHtml(acc.tag)}">${escapeHtml(acc.tag)}</option>`,
-      )
-      .join("");
 
     // Populate tokens (CowSwap supports ERC20s like WXDAI, but not native xDAI)
     const chainTokens = state.tokens[state.activeChain] || [];
@@ -907,7 +898,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = document.querySelector(
       'input[name="swap-mode"]:checked',
     ).value;
-    const account = document.getElementById("swap-account").value;
+    const account = "master";
     const sellToken = document.getElementById("swap-sell-token").value;
     const buyToken = document.getElementById("swap-buy-token").value;
 
@@ -974,14 +965,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Handle Max Sell button click
   async function handleMaxClick(isSellMode) {
-    const account = document.getElementById("swap-account").value;
+    const account = "master";
     const sellToken = document.getElementById("swap-sell-token").value;
     const buyToken = document.getElementById("swap-buy-token").value;
     const btn = isSellMode ? swapMaxSellBtn : swapMaxBuyBtn;
     const targetInput = isSellMode ? sellAmountInput : buyAmountInput;
 
-    if (!account || !sellToken || !buyToken) {
-      showToast("Select account and tokens first", "error");
+    if (!sellToken || !buyToken) {
+      showToast("Select tokens first", "error");
       return;
     }
 
@@ -1038,7 +1029,7 @@ document.addEventListener("DOMContentLoaded", () => {
           : parseFloat(buyAmountInput.value);
 
       const payload = {
-        account: document.getElementById("swap-account").value,
+        account: "master",
         sell_token: document.getElementById("swap-sell-token").value,
         buy_token: document.getElementById("swap-buy-token").value,
         amount: amount,
@@ -1183,7 +1174,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===== Wrap/Unwrap Functions =====
   const wrapForm = document.getElementById("wrap-form");
   const wrapModeRadios = document.querySelectorAll('input[name="wrap-mode"]');
-  const wrapAccountSelect = document.getElementById("wrap-account");
   const wrapAmountInput = document.getElementById("wrap-amount");
   const wrapMaxBtn = document.getElementById("wrap-max-btn");
   const wrapSubmitBtn = document.getElementById("wrap-submit-btn");
@@ -1193,48 +1183,31 @@ document.addEventListener("DOMContentLoaded", () => {
   let wrapBalancesCache = { native: 0, wxdai: 0 };
 
   function populateWrapForm() {
-    if (!wrapAccountSelect) return;
-
-    // Populate accounts
-    wrapAccountSelect.innerHTML = state.accounts
-      .map(
-        (acc) =>
-          `<option value="${escapeHtml(acc.tag)}">${escapeHtml(acc.tag)}</option>`,
-      )
-      .join("");
-
-    // Load balances for selected account
+    // Load balances for master account
     loadWrapBalances();
   }
 
   async function loadWrapBalances() {
-    if (!wrapAccountSelect) return;
+    const account = "master";
 
-    const account = wrapAccountSelect.value;
-    if (!account) {
-      wrapNativeBalance.textContent = "-";
-      wrapWxdaiBalance.textContent = "-";
-      return;
-    }
-
-    wrapNativeBalance.innerHTML = '<span class="cell-spinner"></span>';
-    wrapWxdaiBalance.innerHTML = '<span class="cell-spinner"></span>';
+    if (wrapNativeBalance) wrapNativeBalance.innerHTML = '<span class="cell-spinner"></span>';
+    if (wrapWxdaiBalance) wrapWxdaiBalance.innerHTML = '<span class="cell-spinner"></span>';
 
     try {
       const resp = await authFetch(`/api/swap/wrap/balance?account=${encodeURIComponent(account)}&chain=${state.activeChain}`);
       if (resp.ok) {
         const data = await resp.json();
         wrapBalancesCache = data;
-        wrapNativeBalance.textContent = formatBalance(data.native);
-        wrapWxdaiBalance.textContent = formatBalance(data.wxdai);
+        if (wrapNativeBalance) wrapNativeBalance.textContent = formatBalance(data.native);
+        if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = formatBalance(data.wxdai);
       } else {
-        wrapNativeBalance.textContent = "-";
-        wrapWxdaiBalance.textContent = "-";
+        if (wrapNativeBalance) wrapNativeBalance.textContent = "-";
+        if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = "-";
       }
     } catch (err) {
       console.error("Error loading wrap balances:", err);
-      wrapNativeBalance.textContent = "-";
-      wrapWxdaiBalance.textContent = "-";
+      if (wrapNativeBalance) wrapNativeBalance.textContent = "-";
+      if (wrapWxdaiBalance) wrapWxdaiBalance.textContent = "-";
     }
   }
 
@@ -1244,10 +1217,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wrapSubmitBtn.textContent = mode === "wrap" ? "Wrap xDAI" : "Unwrap WXDAI";
   }
 
-  // Account change handler
-  if (wrapAccountSelect) {
-    wrapAccountSelect.addEventListener("change", loadWrapBalances);
-  }
+
 
   // Mode change handler
   if (wrapModeRadios) {
@@ -1281,7 +1251,7 @@ document.addEventListener("DOMContentLoaded", () => {
       wrapSubmitBtn.disabled = true;
 
       const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
-      const account = wrapAccountSelect.value;
+      const account = "master";
       const amount = parseFloat(wrapAmountInput.value);
 
       if (!account || !amount || amount <= 0) {
