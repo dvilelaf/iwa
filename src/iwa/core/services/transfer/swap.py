@@ -167,10 +167,14 @@ class SwapMixin:
         if order_type == OrderType.SELL:
             required_amount = amount_wei
         else:
+            # Need token addresses for buy mode calculation
+            chain_interface = ChainInterfaces().get(chain_name)
+            sell_token_address = chain_interface.chain.get_token_address(sell_token_name)
+            buy_token_address = chain_interface.chain.get_token_address(buy_token_name)
             required_amount = await cow.get_max_sell_amount_wei(
                 amount_wei,
-                sell_token_name,
-                buy_token_name,
+                sell_token_address,
+                buy_token_address,
             )
 
         # If allowance is insufficient, approve EXACT amount (No Infinite)
