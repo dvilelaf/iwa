@@ -291,6 +291,12 @@ class DrainManagerMixin:
             return None
 
         owner_addr = str(self.service.service_owner_address)
+
+        # Skip if owner == target (owner is already the destination, e.g., master)
+        if owner_addr.lower() == target.lower():
+            logger.info("Skipping owner drain: owner is already the target address")
+            return None
+
         logger.info(f"Attempting to drain Owner: {owner_addr}")
         try:
             result = self.wallet.drain(

@@ -23,7 +23,9 @@ class SafeMultisig:
 
     def __init__(self, safe_account: StoredSafeAccount, chain_name: str):
         """Initialize the SafeMultisig instance."""
-        if chain_name not in safe_account.chains:
+        # Normalize chain comparison to be case-insensitive
+        normalized_chains = [c.lower() for c in safe_account.chains]
+        if chain_name.lower() not in normalized_chains:
             raise ValueError(f"Safe account is not deployed on chain: {chain_name}")
 
         rpc_secret = getattr(settings, f"{chain_name}_rpc")

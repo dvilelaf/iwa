@@ -169,3 +169,14 @@ def test_normalize_drain_result_none(mock_drain_manager):
     """Test _normalize_drain_result with None input."""
     result = mock_drain_manager._normalize_drain_result(None)
     assert result is None
+
+
+def test_drain_owner_skipped_when_equals_target(mock_drain_manager):
+    """Test _drain_owner_account is skipped when owner == target."""
+    mock_drain_manager.service.service_owner_address = "0xOwner123"
+    # Target is the same as owner (case-insensitive)
+    result = mock_drain_manager._drain_owner_account("0xowner123", "gnosis")
+    # Should skip and return None without calling drain
+    assert result is None
+    mock_drain_manager.wallet.drain.assert_not_called()
+
