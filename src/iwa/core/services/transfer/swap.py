@@ -136,11 +136,11 @@ class SwapMixin:
             # Get decimals correctly!
             decimals = 18
             try:
-                from iwa.core.contracts.erc20 import ERC20Contract
                 chain_interface = ChainInterfaces().get(chain_name)
                 token_addr = chain_interface.chain.get_token_address(sell_token_name)
                 if token_addr:
-                    decimals = ERC20Contract(token_addr, chain_name).decimals
+                    checksum_addr = Web3.to_checksum_address(token_addr)
+                    decimals = ERC20Contract(checksum_addr, chain_name).decimals
             except Exception as e:
                 logger.warning(f"Could not get decimals for {sell_token_name}, assuming 18: {e}")
 
@@ -169,15 +169,18 @@ class SwapMixin:
         )
 
         # Calculate required amount
-        required_amount = (
-            amount_wei
-            if order_type == OrderType.SELL
-            else cow.get_max_sell_amount_wei(
+        if order_type == OrderType.SELL:
+            required_amount = amount_wei
+        else:
+            # Need token addresses for buy mode calculation
+            chain_interface = ChainInterfaces().get(chain_name)
+            sell_token_address = chain_interface.chain.get_token_address(sell_token_name)
+            buy_token_address = chain_interface.chain.get_token_address(buy_token_name)
+            required_amount = await cow.get_max_sell_amount_wei(
                 amount_wei,
-                sell_token_name,
-                buy_token_name,
+                sell_token_address,
+                buy_token_address,
             )
-        )
 
         # If allowance is insufficient, approve EXACT amount (No Infinite)
         if current_allowance < required_amount:
@@ -225,9 +228,9 @@ class SwapMixin:
                 sell_addr = chain_interface.chain.get_token_address(sell_token_name)
                 buy_addr = chain_interface.chain.get_token_address(buy_token_name)
                 if sell_addr:
-                    sell_decimals = ERC20Contract(sell_addr, chain_name).decimals
+                    sell_decimals = ERC20Contract(Web3.to_checksum_address(sell_addr), chain_name).decimals
                 if buy_addr:
-                    buy_decimals = ERC20Contract(buy_addr, chain_name).decimals
+                    buy_decimals = ERC20Contract(Web3.to_checksum_address(buy_addr), chain_name).decimals
         except Exception as e:
             logger.warning(f"Could not get decimals for analytics: {e}")
 
