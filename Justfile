@@ -96,3 +96,12 @@ list-backups:
 # Restore wallet from backup (use just list-backups to see available backups)
 restore-wallet backup:
     PYTHONPATH=src uv run python src/iwa/tools/restore_backup.py {{backup}}
+
+# Create a new release (tag and push) - triggers GitHub Actions
+release version:
+    @if [ -n "$(git status --porcelain)" ]; then echo "❌ Error: Working directory is not clean. Commit changes first."; exit 1; fi
+    @echo "🚀 Preparing to release version v{{version}}..."
+    @read -p "Are you sure? This will trigger a deployment to PyPI and DockerHub [y/N] " ans && [ $${ans:-N} = y ]
+    git tag v{{version}}
+    git push origin v{{version}}
+    @echo "✅ Release v{{version}} triggered! Check GitHub Actions."
