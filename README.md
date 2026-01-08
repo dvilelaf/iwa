@@ -1,8 +1,8 @@
 # Iwa - Secure Crypto Wallet Framework
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-595%20passed-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-672%20passed-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Iwa is a Python framework designed for managing crypto wallets and interacting with smart contracts and crypto protocols in a secure, modular, and extensible way. It's ideal for building autonomous agents and applications that require blockchain interactions.

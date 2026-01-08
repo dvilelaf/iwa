@@ -57,7 +57,12 @@ async def test_swap_happy_path(
     account_mock.address = "0xUser"
     transfer_service.account_service.resolve_account.return_value = account_mock
     transfer_service.key_storage.get_signer.return_value = "signer"
+    transfer_service.key_storage.get_signer.return_value = "signer"
     transfer_service.get_erc20_allowance.return_value = 10**18 + 100  # Sufficient
+
+    # Mock balance for pre-swap check
+    transfer_service.balance_service.get_erc20_balance_wei.return_value = 2 * 10**18
+    transfer_service.balance_service.get_native_balance_wei.return_value = 2 * 10**18
 
     # Mock CowSwap instance
     cow_instance = AsyncMock()
@@ -100,7 +105,11 @@ async def test_swap_insufficient_allowance(transfer_service, mock_chain_interfac
     account_mock.address = "0xUser"
     transfer_service.account_service.resolve_account.return_value = account_mock
     transfer_service.key_storage.get_signer.return_value = "signer"
+    transfer_service.key_storage.get_signer.return_value = "signer"
     transfer_service.get_erc20_allowance.return_value = 0  # Insufficient
+
+    # Mock balance for pre-swap check
+    transfer_service.balance_service.get_erc20_balance_wei.return_value = 2 * 10**18
 
     cow_instance = AsyncMock()
     mock_cow_swap.return_value = cow_instance

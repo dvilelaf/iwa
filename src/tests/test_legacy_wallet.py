@@ -569,6 +569,10 @@ async def test_swap_success(wallet, mock_key_storage, mock_chain_interfaces, moc
         }
         chain_interface.sign_and_send_transaction.return_value = (True, {})
 
+        # Mock balance for pre-swap validation
+        wallet.balance_service.get_erc20_balance_wei.return_value = 2000000000000000000  # 2 ETH (> 1.0 ETH)
+        wallet.balance_service.get_native_balance_wei.return_value = 2000000000000000000  # 2 ETH
+
         success = await wallet.swap("sender", 1.0, "SELL", "BUY")
 
         assert success is True
@@ -970,6 +974,11 @@ async def test_swap_max_retries(wallet, mock_key_storage, mock_chain_interfaces,
 
     with patch("iwa.core.services.transfer.multisend.ERC20Contract") as mock_erc20:
         mock_erc20.return_value.allowance_wei.return_value = 0
+
+        # Mock balance
+        wallet.balance_service.get_erc20_balance_wei.return_value = 2000000000000000000
+        wallet.balance_service.get_native_balance_wei.return_value = 2000000000000000000
+
         await wallet.swap("account", 1.0, "SELL", "BUY")
         # Should log error after retries
 
