@@ -893,6 +893,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Swap tokens button handler (click on arrow to swap sell/buy)
+  const swapTokensBtn = document.getElementById("swap-tokens-btn");
+  if (swapTokensBtn) {
+    swapTokensBtn.addEventListener("click", () => {
+      const sellTokenSelect = document.getElementById("swap-sell-token");
+      const buyTokenSelect = document.getElementById("swap-buy-token");
+
+      // Swap token values
+      const tempToken = sellTokenSelect.value;
+      sellTokenSelect.value = buyTokenSelect.value;
+      buyTokenSelect.value = tempToken;
+
+      // Clear amounts since they need to be recalculated
+      sellAmountInput.value = "";
+      buyAmountInput.value = "";
+
+      // Clear isMax flag
+      delete sellAmountInput.dataset.isMax;
+    });
+  }
+
+
   // Debounced quote fetching
   async function fetchQuote() {
     const mode = document.querySelector(
