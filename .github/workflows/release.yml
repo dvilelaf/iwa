@@ -59,6 +59,11 @@ jobs:
       - name: Install just
         run: uv tool install just
 
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+
       - name: Build package
         run: just build
 
@@ -82,5 +87,5 @@ jobs:
           context: .
           push: true
           tags: |
-            david/iwa:latest
-            david/iwa:${{ github.ref_name }}
+            dvilela/iwa:latest
+            dvilela/iwa:${{ github.ref_name }}
