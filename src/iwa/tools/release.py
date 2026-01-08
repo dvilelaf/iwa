@@ -91,7 +91,8 @@ def main() -> None:
 
         info(f"Force updating {tag}...")
         run(f"git tag -f {tag}")
-        run(f"git push -f origin {tag}")
+        # Push to the explicit URL (likely SSH) to avoid HTTPS prompts
+        run(f"git push -f {check_url} {tag}")
         print(f"✅ Tag {tag} force updated. GitHub Actions triggered.")
 
     else:
@@ -100,7 +101,8 @@ def main() -> None:
             error("Aborted by user.")
 
         run(f"git tag {tag}")
-        run(f"git push origin {tag}")
+        # Push to the explicit URL (likely SSH) to avoid HTTPS prompts
+        run(f"git push {check_url} {tag}")
         print(f"✅ Release {tag} triggered! Check GitHub Actions.")
 
 if __name__ == "__main__":
