@@ -1,7 +1,7 @@
 # Iwa
 
 [![PyPI version](https://badge.fury.io/py/iwa.svg)](https://badge.fury.io/py/iwa)
-[![Docker Pulls](https://img.shields.io/docker/pulls/dvilelaf/iwa.svg)](https://hub.docker.com/r/dvilelaf/iwa)
+[![Docker Pulls](https://img.shields.io/docker/pulls/dvilela/iwa.svg)](https://hub.docker.com/r/dvilela/iwa)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-672%20passed-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen.svg)]()
