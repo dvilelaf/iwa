@@ -103,13 +103,13 @@ release version:
     @echo "🚀 Preparing to release version v{{version}}..."
     @if git rev-parse "v{{version}}" >/dev/null 2>&1; then \
         echo "⚠️  Tag v{{version}} already exists!"; \
-        read -p "Do you want to DELETE and overwrite it? [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
-        git tag -d v{{version}}; \
-        git push origin :refs/tags/v{{version}} 2>/dev/null || true; \
-        echo "🗑️  Old tag deleted."; \
+        read -p "Do you want to FORCE update it? [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
+        git tag -f v{{version}}; \
+        git push -f origin v{{version}}; \
+        echo "✅ Tag v{{version}} force updated. GitHub Actions triggered."; \
     else \
         read -p "Are you sure? This will trigger a deployment to PyPI and DockerHub [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
+        git tag v{{version}}; \
+        git push origin v{{version}}; \
+        echo "✅ Release v{{version}} triggered! Check GitHub Actions."; \
     fi
-    git tag v{{version}}
-    git push origin v{{version}}
-    @echo "✅ Release v{{version}} triggered! Check GitHub Actions."
