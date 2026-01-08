@@ -958,7 +958,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (sellAmountInput) {
-      sellAmountInput.addEventListener("input", debouncedFetch);
+      sellAmountInput.addEventListener("input", () => {
+        // Clear the isMax flag when user manually edits the value
+        delete sellAmountInput.dataset.isMax;
+        debouncedFetch();
+      });
     }
     if (buyAmountInput) {
       buyAmountInput.addEventListener("input", debouncedFetch);
@@ -1006,6 +1010,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resp.ok) {
         // Use up to 6 decimals but remove trailing zeros
         targetInput.value = parseFloat(result.max_amount.toFixed(6));
+        // Mark that this is a "max" amount to avoid precision loss
+        if (isSellMode) {
+          targetInput.dataset.isMax = "true";
+        }
         // Trigger quote fetch
         fetchQuote();
       } else {
@@ -1038,8 +1046,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const swapMode = document.querySelector(
         'input[name="swap-mode"]:checked',
       ).value;
-      const amount =
-        swapMode === "sell"
+
+      // Check if user used Max button (to avoid float precision loss)
+      const isMaxSell = swapMode === "sell" && sellAmountInput.dataset.isMax === "true";
+
+      const amount = isMaxSell
+        ? null  // Send null to use exact wei balance on backend
+        : swapMode === "sell"
           ? parseFloat(sellAmountInput.value)
           : parseFloat(buyAmountInput.value);
 
@@ -1051,6 +1064,7 @@ document.addEventListener("DOMContentLoaded", () => {
         order_type: swapMode,
         chain: state.activeChain,
       };
+
 
       try {
         const resp = await authFetch("/api/swap", {
@@ -1178,7 +1192,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tableBody.innerHTML !== noOrdersHtml) {
           tableBody.innerHTML = noOrdersHtml;
         }
-        scheduleNextPoll(60000); // Slow poll if empty
+        // Stop polling when no orders - will restart when new swap is placed
+        isPolling = false;
         return;
       }
 
@@ -1243,9 +1258,12 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error loading orders:", err);
       // Don't wipe table on error, just log
     } finally {
-      // Schedule next poll based on state
-      const delay = hasPendingOrders ? 5000 : 60000;
-      scheduleNextPoll(delay);
+      // Only continue polling if there are pending orders
+      if (hasPendingOrders) {
+        scheduleNextPoll(5000);
+      } else {
+        isPolling = false;
+      }
     }
   }
 
