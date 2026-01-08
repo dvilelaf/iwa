@@ -25,7 +25,7 @@ get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
 
 # Import dependencies to ensure initialization
 # Import routers
-from iwa.web.routers import accounts, olas, state, swap, transactions
+from iwa.web.routers import accounts, olas, state, swap, transactions  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

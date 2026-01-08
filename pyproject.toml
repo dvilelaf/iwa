@@ -30,6 +30,9 @@ dependencies = [
     "cbor2==5.8.0",
     "slowapi>=0.1.9",
     "nest-asyncio>=1.6.0",
+    "aiohttp>=3.13.3",
+    "pynacl>=1.6.2",
+    "urllib3>=2.6.3",
 ]
 
 [project.scripts]
