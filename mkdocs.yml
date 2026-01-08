@@ -43,5 +43,12 @@ nav:
   - Home: index.md
   - Security: security.md
   - Core Modules: core.md
-  - Plugins: plugins.md
-  - CLI Reference: cli.md
+  - Plugins:
+    - Gnosis (Safe & CowSwap): plugins/gnosis.md
+    - Olas (Agents & Services): plugins/olas.md
+  - Interfaces:
+    - Web UI: interfaces/web.md
+    - CLI & TUI: interfaces/cli_tui.md
+  - Development:
+    - Release Workflow: dev/release.md
+    - Contributing: dev/contributing.md

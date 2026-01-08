@@ -18,14 +18,20 @@ Iwa is a Python framework designed for managing crypto wallets and interacting w
 ## Features
 
 - **Secure Key Storage**: Private keys are encrypted with AES-256-GCM and stored safely. They are never exposed to the application layer; signing happens internally via the `KeyStorage` class.
+
 - **Modularity (Plugins)**: Protocols and features are implemented as plugins, loaded dynamically. Currently supports Gnosis (Safe, CowSwap) and Olas (Registry, Services, Staking).
+
 - **Multi-Chain Support**: Native support for Gnosis Chain, Ethereum, and Base, with easy extensibility for others.
+
 - **Robust Transaction Management**:
   - **RPC Rotation**: Automatically switches RPC providers if one fails or is rate-limited.
   - **Rate Limiting**: Token bucket algorithm with automatic backoff.
   - **Retry Logic**: Automatic retries with exponential backoff for transient failures.
+
 - **CLI & TUI Integration**: Interact with your wallet via a unified CLI or a beautiful Terminal User Interface built with Textual.
+
 - **Web API**: RESTful API built with FastAPI for web-based integrations.
+
 - **Modern Tooling**: Managed with `uv`, `Justfile` for automation, and ready for Docker deployment.
 
 ## Architecture
