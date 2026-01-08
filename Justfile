@@ -110,6 +110,6 @@ release version:
     else \
         read -p "Are you sure? This will trigger a deployment to PyPI and DockerHub [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
     fi
-    @git tag v{{version}}
-    @git push origin v{{version}}
+    git tag v{{version}}
+    git push origin v{{version}}
     @echo "✅ Release v{{version}} triggered! Check GitHub Actions."
