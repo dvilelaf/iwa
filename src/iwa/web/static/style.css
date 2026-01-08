@@ -1424,3 +1424,15 @@ textarea:focus {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* Order Links */
+.order-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.order-link:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
