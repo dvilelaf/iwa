@@ -62,13 +62,18 @@ def main() -> None:
     if status:
         error("Working directory is not clean. Commit changes first.")
 
-    # 2. Update remote info (primes credentials and fetches tags)
+    # 2. Update remote info (best effort)
     print("Fetching remote info...")
-    run("git fetch origin", check=False)
+    try:
+        run("git fetch origin", check=True, capture=True)
+        exists_remotely = run(f"git ls-remote --tags origin {tag}", check=False, capture=True)
+    except SystemExit:
+        # fetch failed (likely auth), assume we can proceed to push (which might prompt or work if user is right)
+        print("⚠️  Could not fetch remote info (auth needed?). Assuming tag is new remotely.")
+        exists_remotely = ""
 
     # 3. Check if tag exists
     exists_locally = run(f"git rev-parse {tag}", check=False, capture=True)
-    exists_remotely = run(f"git ls-remote --tags origin {tag}", check=False, capture=True)
 
     if exists_locally or exists_remotely:
         print(f"⚠️  Tag {tag} already exists!")
