@@ -68,7 +68,7 @@ Create a `secrets.env` file with your configuration:
 
 ```bash
 WALLET_PASSWORD=your_secure_password
-GNOSIS_RPC=https://rpc.gnosis.io
+GNOSIS_RPC=https://rpc.gnosis.io,https://gnosis.drpc.org
 ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
 BASE_RPC=https://mainnet.base.org
 
@@ -116,7 +116,7 @@ Plugins are located in `src/iwa/plugins`. Currently supported:
 
 ### Gnosis Plugin
 - **Safe**: Create and manage Safe multisig wallets
-- **CowSwap**: Token swaps via CoW Protocol with MEV protection
+- **CowSwap**: Token swaps via CoW Protocol with MEV protection, Max balance support, and auto-refreshing UI
 
 ### Olas Plugin
 - **Registry**: Interact with Olas service registry
