@@ -9,7 +9,7 @@
 
 </br>
 <p align="center">
-  <img width="40%" src="images/iwa.png">
+  <img width="40%" src="https://raw.githubusercontent.com/dvilelaf/iwa/master/images/iwa.png">
 </p>
 </br>
 
