@@ -101,7 +101,15 @@ restore-wallet backup:
 release version:
     @if [ -n "$(git status --porcelain)" ]; then echo "❌ Error: Working directory is not clean. Commit changes first."; exit 1; fi
     @echo "🚀 Preparing to release version v{{version}}..."
-    @read -p "Are you sure? This will trigger a deployment to PyPI and DockerHub [y/N] " ans && [ $${ans:-N} = y ]
-    git tag v{{version}}
-    git push origin v{{version}}
+    @if git rev-parse "v{{version}}" >/dev/null 2>&1; then \
+        echo "⚠️  Tag v{{version}} already exists!"; \
+        read -p "Do you want to DELETE and overwrite it? [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
+        git tag -d v{{version}}; \
+        git push origin :refs/tags/v{{version}} 2>/dev/null || true; \
+        echo "🗑️  Old tag deleted."; \
+    else \
+        read -p "Are you sure? This will trigger a deployment to PyPI and DockerHub [y/N] " ans && [ $${ans:-N} = y ] || exit 1; \
+    fi
+    @git tag v{{version}}
+    @git push origin v{{version}}
     @echo "✅ Release v{{version}} triggered! Check GitHub Actions."
