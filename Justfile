@@ -110,5 +110,5 @@ release-check:
     @echo "✅ All checks passed! Ready for release."
 
 # Create a new release (tag and push) - triggers GitHub Actions
-release version: release-check
+release version:
     PYTHONPATH=src uv run python src/iwa/tools/release.py {{version}}

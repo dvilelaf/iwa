@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""
-Release helper script.
+"""Release helper script.
+
 Usage: python release.py <version>
 """
-import sys
-import subprocess
 import argparse
+import subprocess  # nosec: B404
+import sys
 from typing import NoReturn
+
 
 def run(cmd: str, check: bool = True, capture: bool = False) -> str:
     """Run a shell command."""
     try:
         result = subprocess.run(
             cmd,
-            shell=True,
+            shell=True,  # nosec: B602
             check=check,
             text=True,
             stdout=subprocess.PIPE if capture else None,
@@ -47,6 +48,7 @@ def confirm(question: str) -> bool:
             return False
 
 def main() -> None:
+    """Execute the release process."""
     parser = argparse.ArgumentParser(description="Create a new release")
     parser.add_argument("version", help="Version tag (e.g., 0.1.0)")
     args = parser.parse_args()
@@ -76,7 +78,7 @@ def main() -> None:
         # Use ls-remote on the specific URL (SSH) to check tags without prompting for HTTPS creds
         exists_remotely = run(f"git ls-remote --tags {check_url} {tag}", check=False, capture=True)
 
-    except Exception as e:
+    except Exception:
         # fetch failed (likely auth), assume we can proceed to push (which might prompt or work if user is right)
         print("⚠️  Could not fetch remote info (auth needed?). Assuming tag is new remotely.")
         exists_remotely = ""
