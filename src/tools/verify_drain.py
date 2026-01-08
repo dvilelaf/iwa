@@ -53,8 +53,7 @@ def verify_drain():  # noqa: C901, D103
         if manager.service and manager.service.service_id == service_id:
             service = manager.service
         else:
-            if not manager.olas_config:
-                raise ValueError("Olas config not initialized")
+            assert manager.olas_config is not None, "Olas config not initialized"
             service = manager.olas_config.get_service("gnosis", service_id)
             if not service:
                 raise ValueError(f"Service {service_id} not found in config")
@@ -69,8 +68,7 @@ def verify_drain():  # noqa: C901, D103
             # Fallback fetch if local object lagging
             info = manager.registry.get_service(service_id)
             logger.info(f"Registry Info: {info}")
-            if not manager.olas_config:
-                raise ValueError("Olas config not initialized")
+            assert manager.olas_config is not None, "Olas config not initialized"
             service = manager.olas_config.get_service("gnosis", service_id)
             if not service:
                  raise ValueError(f"Service {service_id} not found in config")
