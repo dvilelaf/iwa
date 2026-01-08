@@ -1120,9 +1120,7 @@ document.addEventListener("DOMContentLoaded", () => {
           sellAmountInput.value = "";
           buyAmountInput.value = "";
 
-          // Refresh balances after swap
-          loadMasterBalanceTable(true);
-          // Refresh orders immediately
+          // Refresh orders immediately (balance refresh happens on fulfillment)
           loadRecentOrders();
         } else {
           showToast(`Error: ${result.detail}`, "error");
