@@ -2194,7 +2194,7 @@ document.addEventListener("DOMContentLoaded", () => {
                           }
 
                           return `
-                        <button class="btn-danger btn-sm ${isLoading || !canUnstake ? "opacity-60 not-allowed grayscale" : ""}" data-action="unstake" data-key="${escapeHtml(service.key)}" ${unstakeDisabled}
+                        <button class="btn-danger btn-sm" data-action="unstake" data-key="${escapeHtml(service.key)}" ${unstakeDisabled}
                                 title="${isLoading ? "Loading..." : !canUnstake ? `Cannot unstake yet. Minimum staking duration (72h) ends in ${timeText}` : "Unstake service"}">
                             ${escapeHtml(unstakeLabel)}
                         </button>
@@ -2203,7 +2203,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     `
                         : service.state === "DEPLOYED"
                           ? `
-                        <button class="btn-danger btn-sm opacity-60 not-allowed grayscale" disabled
+                        <button class="btn-danger btn-sm" disabled
                                 title="Cannot stake a deployed service. Terminate first to change staking configuration.">
                             Stake
                         </button>
@@ -2260,7 +2260,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         const isDisabled = terminateDisabled === "disabled";
                         return `
-                        <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="terminate" data-key="${escapeHtml(service.key)}" ${terminateDisabled}
+                        <button class="btn-danger btn-sm" data-action="terminate" data-key="${escapeHtml(service.key)}" ${terminateDisabled}
                                 title="${escapeHtml(terminateTitle)}">
                             ${escapeHtml(terminateLabel)}
                         </button>
@@ -2320,19 +2320,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
               const isDisabled = drainDisabled === "disabled";
               return `
-                    <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="drain" data-key="${escapeHtml(service.key)}" ${drainDisabled}
+                    <button class="btn-danger btn-sm" data-action="drain" data-key="${escapeHtml(service.key)}" ${drainDisabled}
                             title="${escapeHtml(drainTitle)}">
                         ${escapeHtml(drainLabel)}
                     </button>
                 `;
             })()}
                 ${
-                  isStaked && parseFloat(staking.accrued_reward_olas) > 0
-                    ? `
-                    <button class="btn-primary btn-sm ${loadingClass}" data-action="claim-rewards" data-key="${escapeHtml(service.key)}" ${loadingDisabled}>
-                        Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS
-                    </button>
-                `
+                  isStaked
+                    ? (() => {
+                        const hasRewards =
+                          parseFloat(staking.accrued_reward_olas) > 0;
+                        const claimDisabled = isLoading || !hasRewards;
+                        const claimTitle = isLoading
+                          ? "Loading..."
+                          : hasRewards
+                            ? "Claim staking rewards"
+                            : "No rewards available to claim";
+                        const claimLabel = hasRewards
+                          ? `Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS`
+                          : "Claim";
+                        return `
+                        <button class="btn-primary btn-sm"
+                                data-action="claim-rewards"
+                                data-key="${escapeHtml(service.key)}"
+                                ${claimDisabled ? "disabled" : ""}
+                                title="${escapeHtml(claimTitle)}">
+                            ${claimLabel}
+                        </button>
+                        `;
+                      })()
                     : ""
                 }
             </div>
