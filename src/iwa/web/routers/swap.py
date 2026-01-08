@@ -4,7 +4,7 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -45,7 +45,9 @@ class SwapRequest(BaseModel):
     account: str = Field(description="Account address or tag")
     sell_token: str = Field(description="Token symbol to sell (e.g., WXDAI)")
     buy_token: str = Field(description="Token symbol to buy (e.g., OLAS)")
-    amount_eth: float = Field(description="Amount in human-readable units (ETH)")
+    amount_eth: Optional[float] = Field(
+        default=None, description="Amount in human-readable units (ETH). If null, uses entire balance."
+    )
     order_type: str = Field(description="Type of order: 'sell' or 'buy'")
     chain: str = Field(default="gnosis", description="Blockchain network name")
 
@@ -80,8 +82,10 @@ class SwapRequest(BaseModel):
 
     @field_validator("amount_eth")
     @classmethod
-    def validate_amount(cls, v: float) -> float:
-        """Validate amount is positive."""
+    def validate_amount(cls, v: Optional[float]) -> Optional[float]:
+        """Validate amount is positive (if provided)."""
+        if v is None:
+            return v  # None means use entire balance
         if v <= 0:  # Swaps must be positive
             raise ValueError("Amount must be greater than 0")
         if v > 1e18:  # Sanity check
