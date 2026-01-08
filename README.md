@@ -1,5 +1,7 @@
 # Iwa
 
+[![PyPI version](https://badge.fury.io/py/iwa.svg)](https://badge.fury.io/py/iwa)
+[![Docker Pulls](https://img.shields.io/docker/pulls/dvilelaf/iwa.svg)](https://hub.docker.com/r/dvilelaf/iwa)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-672%20passed-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen.svg)]()
@@ -71,6 +73,13 @@ iwa/
 ### Installation
 
 ```bash
+# Install from PyPI
+pip install iwa
+
+# Or using uv (recommended for tools)
+uv tool install iwa
+
+# Or from source
 git clone https://github.com/dvilelaf/iwa.git
 cd iwa
 just install
@@ -120,6 +129,10 @@ just security  # Runs gitleaks, bandit, and pip-audit
 ### Docker
 
 ```bash
+# Pull from Docker Hub
+docker pull dvilelaf/iwa:latest
+
+# Build locally
 just docker-build
 just docker-run
 ```
