@@ -893,6 +893,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Swap tokens button handler (click on arrow to swap sell/buy)
+  const swapTokensBtn = document.getElementById("swap-tokens-btn");
+  if (swapTokensBtn) {
+    swapTokensBtn.addEventListener("click", () => {
+      const sellTokenSelect = document.getElementById("swap-sell-token");
+      const buyTokenSelect = document.getElementById("swap-buy-token");
+
+      // Swap token values
+      const tempToken = sellTokenSelect.value;
+      sellTokenSelect.value = buyTokenSelect.value;
+      buyTokenSelect.value = tempToken;
+
+      // Clear amounts since they need to be recalculated
+      sellAmountInput.value = "";
+      buyAmountInput.value = "";
+
+      // Clear isMax flag
+      delete sellAmountInput.dataset.isMax;
+    });
+  }
+
+
   // Debounced quote fetching
   async function fetchQuote() {
     const mode = document.querySelector(
@@ -958,7 +980,11 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (sellAmountInput) {
-      sellAmountInput.addEventListener("input", debouncedFetch);
+      sellAmountInput.addEventListener("input", () => {
+        // Clear the isMax flag when user manually edits the value
+        delete sellAmountInput.dataset.isMax;
+        debouncedFetch();
+      });
     }
     if (buyAmountInput) {
       buyAmountInput.addEventListener("input", debouncedFetch);
@@ -1004,7 +1030,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await authFetch(`/api/swap/max-amount?${params}`);
       const result = await resp.json();
       if (resp.ok) {
-        targetInput.value = result.max_amount.toFixed(2);
+        // Use up to 6 decimals but remove trailing zeros
+        targetInput.value = parseFloat(result.max_amount.toFixed(6));
+        // Mark that this is a "max" amount to avoid precision loss
+        if (isSellMode) {
+          targetInput.dataset.isMax = "true";
+        }
         // Trigger quote fetch
         fetchQuote();
       } else {
@@ -1037,8 +1068,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const swapMode = document.querySelector(
         'input[name="swap-mode"]:checked',
       ).value;
-      const amount =
-        swapMode === "sell"
+
+      // Check if user used Max button (to avoid float precision loss)
+      const isMaxSell = swapMode === "sell" && sellAmountInput.dataset.isMax === "true";
+
+      const amount = isMaxSell
+        ? null  // Send null to use exact wei balance on backend
+        : swapMode === "sell"
           ? parseFloat(sellAmountInput.value)
           : parseFloat(buyAmountInput.value);
 
@@ -1050,6 +1086,7 @@ document.addEventListener("DOMContentLoaded", () => {
         order_type: swapMode,
         chain: state.activeChain,
       };
+
 
       try {
         const resp = await authFetch("/api/swap", {
@@ -1083,9 +1120,7 @@ document.addEventListener("DOMContentLoaded", () => {
           sellAmountInput.value = "";
           buyAmountInput.value = "";
 
-          // Refresh balances after swap
-          loadMasterBalanceTable(true);
-          // Refresh orders immediately
+          // Refresh orders immediately (balance refresh happens on fulfillment)
           loadRecentOrders();
         } else {
           showToast(`Error: ${result.detail}`, "error");
@@ -1138,6 +1173,21 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${mins}m ${secs}s`;
   }
 
+  function formatOrderDate(isoString) {
+    if (!isoString) return "-";
+    try {
+      const date = new Date(isoString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const mins = String(date.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day} ${hours}:${mins}`;
+    } catch (e) {
+      return "-";
+    }
+  }
+
   async function loadRecentOrders() {
     const tableBody = document.getElementById("recent-orders-body");
     if (!tableBody) return;
@@ -1157,12 +1207,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json();
       const orders = data.orders || [];
 
+      // Detect status transitions to "fulfilled" and refresh balances
+      for (const order of orders) {
+        const prevStatus = previousOrderStatuses[order.uid];
+        if (prevStatus && prevStatus !== "fulfilled" && order.status === "fulfilled") {
+          // Order just became fulfilled - refresh balances
+          loadMasterBalanceTable(true);
+          break; // Only need to refresh once per poll cycle
+        }
+        previousOrderStatuses[order.uid] = order.status;
+      }
+
       if (orders.length === 0) {
-        const noOrdersHtml = `<tr><td colspan="4" class="text-center text-muted">No recent orders</td></tr>`;
+        const noOrdersHtml = `<tr><td colspan="6" class="text-center text-muted">No recent orders</td></tr>`;
         if (tableBody.innerHTML !== noOrdersHtml) {
           tableBody.innerHTML = noOrdersHtml;
         }
-        scheduleNextPoll(60000); // Slow poll if empty
+        // Stop polling when no orders - will restart when new swap is placed
+        isPolling = false;
         return;
       }
 
@@ -1173,6 +1235,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const buySymbol = order.buyToken;
         const sellAmt = order.sellAmount;
         const buyAmt = order.buyAmount;
+
+        // Format creation date
+        const dateStr = formatOrderDate(order.created);
 
         // Status badge class
         const statusClass = order.status.replace(/([A-Z])/g, "-$1").toLowerCase();
@@ -1199,8 +1264,14 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        // Build CowSwap explorer URL
+        const explorerUrl = `https://explorer.cow.fi/gc/orders/${order.full_uid}`;
+        const shortUid = order.uid;
+
         html += `
           <tr>
+            <td class="text-muted">${dateStr}</td>
+            <td><a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="order-link">${escapeHtml(shortUid)}</a></td>
             <td><span class="order-status ${statusClass}">${order.status}</span></td>
             <td>${sellAmt} ${escapeHtml(sellSymbol)}</td>
             <td>${buyAmt} ${escapeHtml(buySymbol)}</td>
@@ -1218,9 +1289,12 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error loading orders:", err);
       // Don't wipe table on error, just log
     } finally {
-      // Schedule next poll based on state
-      const delay = hasPendingOrders ? 5000 : 60000;
-      scheduleNextPoll(delay);
+      // Only continue polling if there are pending orders
+      if (hasPendingOrders) {
+        scheduleNextPoll(5000);
+      } else {
+        isPolling = false;
+      }
     }
   }
 
@@ -1246,6 +1320,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Adaptive polling for orders
   let ordersTimeoutId = null;
   let isPolling = false;
+  const previousOrderStatuses = {}; // Track order status for detecting fulfilled transitions
 
   function scheduleNextPoll(delay) {
     if (ordersTimeoutId) clearTimeout(ordersTimeoutId);
@@ -1441,13 +1516,21 @@ document.addEventListener("DOMContentLoaded", () => {
           const hashDisplay = result.hash ? `TX: ${result.hash.substring(0, 10)}...` : "";
           showToast(`${result.message} ${hashDisplay}`, "success", 5000);
           wrapAmountInput.value = "";
-          // Refresh balances
-          loadWrapBalances();
-          loadMasterBalanceTable(true);
+
+          // Refresh balances safely (don't fail the whole operation if this fails)
+          try {
+            await Promise.all([
+              loadWrapBalances(),
+              loadMasterBalanceTable(true)
+            ]);
+          } catch (e) {
+            console.error("Error refreshing balances after wrap/unwrap:", e);
+          }
         } else {
           showToast(`Error: ${result.detail}`, "error");
         }
       } catch (err) {
+        console.error("Wrap/Unwrap error:", err);
         showToast("Network error during wrap/unwrap", "error");
       } finally {
         wrapSubmitBtn.textContent = originalText;

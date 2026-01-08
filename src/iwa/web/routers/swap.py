@@ -4,7 +4,7 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -45,7 +45,9 @@ class SwapRequest(BaseModel):
     account: str = Field(description="Account address or tag")
     sell_token: str = Field(description="Token symbol to sell (e.g., WXDAI)")
     buy_token: str = Field(description="Token symbol to buy (e.g., OLAS)")
-    amount_eth: float = Field(description="Amount in human-readable units (ETH)")
+    amount_eth: Optional[float] = Field(
+        default=None, description="Amount in human-readable units (ETH). If null, uses entire balance."
+    )
     order_type: str = Field(description="Type of order: 'sell' or 'buy'")
     chain: str = Field(default="gnosis", description="Blockchain network name")
 
@@ -80,8 +82,10 @@ class SwapRequest(BaseModel):
 
     @field_validator("amount_eth")
     @classmethod
-    def validate_amount(cls, v: float) -> float:
-        """Validate amount is positive."""
+    def validate_amount(cls, v: Optional[float]) -> Optional[float]:
+        """Validate amount is positive (if provided)."""
+        if v is None:
+            return v  # None means use entire balance
         if v <= 0:  # Swaps must be positive
             raise ValueError("Amount must be greater than 0")
         if v > 1e18:  # Sanity check
@@ -100,93 +104,81 @@ class SwapRequest(BaseModel):
 @router.post(
     "",
     summary="Swap Tokens",
-    description="Execute a token swap on CowSwap (CoW Protocol).",
+    description="Execute a token swap on CowSwap (CoW Protocol). Returns immediately after order placement.",
 )
 @limiter.limit("10/minute")
 async def swap_tokens(request: Request, req: SwapRequest, auth: bool = Depends(verify_auth)):
-    """Execute a token swap via CowSwap."""
+    """Execute a token swap via CowSwap.
+
+    This endpoint places the order and returns immediately.
+    Use GET /api/swap/orders to track order status.
+    """
     try:
         from iwa.plugins.gnosis.cow import OrderType
 
         order_type = OrderType.SELL if req.order_type == "sell" else OrderType.BUY
 
-        order_data = await wallet.transfer_service.swap(
-            account_address_or_tag=req.account,
-            amount_eth=req.amount_eth,
-            sell_token_name=req.sell_token,
-            buy_token_name=req.buy_token,
-            chain_name=req.chain,
-            order_type=order_type,
-        )
+        # Run swap in a separate thread with its own event loop to avoid
+        # asyncio.run() conflict with cowdao_cowpy library
+        def run_swap_in_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(
+                    wallet.transfer_service.swap(
+                        account_address_or_tag=req.account,
+                        amount_eth=req.amount_eth,
+                        sell_token_name=req.sell_token,
+                        buy_token_name=req.buy_token,
+                        chain_name=req.chain,
+                        order_type=order_type,
+                    )
+                )
+            finally:
+                loop.close()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_swap_in_thread)
+            order_data = future.result(timeout=120)
 
         if order_data:
-            # Calculate analytics
-            executed_sell = float(order_data.get("executedSellAmount", 0))
-            executed_buy = float(order_data.get("executedBuyAmount", 0))
+            # Check if order was executed (blocking mode) or just placed (non-blocking)
+            status = order_data.get("status", "unknown")
 
-            # Get actual token decimals for accurate calculations
-            sell_decimals = 18
-            buy_decimals = 18
-            try:
-                from iwa.core.chain import ChainInterfaces
+            if status == "open":
+                # Non-blocking: order placed but not yet executed
+                return {
+                    "status": "success",
+                    "message": f"Swap order placed! Track progress in Recent Orders.",
+                    "order": order_data,
+                }
+            elif status == "fulfilled":
+                # Order was executed (if wait_for_execution=True was used)
+                executed_sell = float(order_data.get("executedSellAmount", 0))
+                executed_buy = float(order_data.get("executedBuyAmount", 0))
 
-                chain_interface = ChainInterfaces().get(req.chain)
-                if chain_interface:
-                    sell_addr = chain_interface.chain.get_token_address(req.sell_token)
-                    buy_addr = chain_interface.chain.get_token_address(req.buy_token)
-                    if sell_addr:
-                        sell_decimals = get_cached_decimals(sell_addr, req.chain)
-                    if buy_addr:
-                        buy_decimals = get_cached_decimals(buy_addr, req.chain)
-            except Exception:
-                pass  # Default to 18 if we can't get decimals
-
-            # Calculating price ratio with actual decimals
-            execution_price = 0.0
-            if executed_sell > 0:
-                # Get quote prices from CowSwap API (already adjusted for decimals)
-                quote = order_data.get("quote", {})
-                sell_price_usd = float(quote.get("sellTokenPrice", 0) or 0)
-                buy_price_usd = float(quote.get("buyTokenPrice", 0) or 0)
-
-                # Calculate value using correct decimals
-                value_sold = (executed_sell / (10**sell_decimals)) * sell_price_usd
-                value_bought = (executed_buy / (10**buy_decimals)) * buy_price_usd
-
-                value_change_pct = 0.0
-                if value_sold > 0:
-                    # Change = (Value Bought - Value Sold) / Value Sold * 100
-                    # Positive = Gain, Negative = Loss
-                    value_change_pct = ((value_bought - value_sold) / value_sold) * 100
-
-            # Log analytics for visibility
-            logger.info(
-                f"Swap Analytics: Execution Price={execution_price:.4f}, "
-                f"Value Change={value_change_pct:.2f}%, "
-                f"Sell=${sell_price_usd:.2f}, Buy=${buy_price_usd:.2f}"
-            )
-
-            return {
-                "status": "success",
-                "message": "Swap executed successfully",
-                "order": order_data,
-                "analytics": {
-                    "executed_sell_amount": executed_sell,
-                    "executed_buy_amount": executed_buy,
-                    "value_change_pct": value_change_pct if "value_change_pct" in locals() else 0,
-                    "sell_price_usd": sell_price_usd if "sell_price_usd" in locals() else 0,
-                    "buy_price_usd": buy_price_usd if "buy_price_usd" in locals() else 0,
-                },
-            }
+                return {
+                    "status": "success",
+                    "message": "Swap executed successfully!",
+                    "order": order_data,
+                    "analytics": {
+                        "executed_sell_amount": executed_sell,
+                        "executed_buy_amount": executed_buy,
+                    },
+                }
+            else:
+                # Other status (expired, cancelled, etc)
+                return {
+                    "status": "success",
+                    "message": f"Order placed with status: {status}",
+                    "order": order_data,
+                }
         else:
-            return {
-                "status": "pending",
-                "message": "Swap order placed, waiting for execution or failed",
-            }
+            raise HTTPException(status_code=400, detail="Failed to place swap order")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error swapping tokens: {e}")
-        # import traceback
-        # logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
@@ -292,19 +284,23 @@ def get_swap_max_amount(
 ):
     """Get the maximum amount for a swap."""
     try:
+        # Get token address and decimals
+        chain_interface = ChainInterfaces().get(chain)
+        chain_obj = chain_interface.chain
+        sell_token_addr = chain_obj.get_token_address(sell_token)
+        sell_decimals = get_cached_decimals(sell_token_addr, chain)
+
         # Get the sell token balance
         sell_balance = wallet.balance_service.get_erc20_balance_wei(account, sell_token, chain)
         if sell_balance is None or sell_balance == 0:
             return {"max_amount": 0.0, "mode": mode}
 
-        sell_balance_eth = float(Web3.from_wei(sell_balance, "ether"))
+        sell_balance_eth = sell_balance / (10**sell_decimals)
 
         if mode == "sell":
             return {"max_amount": sell_balance_eth, "mode": "sell"}
 
         # For buy mode, use CowSwap to get quote in a separate thread
-        chain_interface = ChainInterfaces().get(chain)
-        chain_obj: SupportedChain = chain_interface.chain  # type: ignore[assignment]
         account_obj = wallet.account_service.resolve_account(account)
         signer = wallet.key_storage.get_signer(account_obj.address)
 
@@ -331,7 +327,22 @@ def get_swap_max_amount(
             future = executor.submit(run_async_quote)
             max_buy_wei = future.result(timeout=30)
 
-        max_buy_eth = float(Web3.from_wei(max_buy_wei, "ether"))
+        # Convert buy amount using buy token decimals (which involves querying decimals for buy token too)
+        # Note: cow.get_max_buy_amount_wei returns result in terms of BUY token amount if we asked for max sell?
+        # Re-reading: The function calculates "max buy amount".
+        # If mode is buy, we want to know how much SELL token we need? No, function is "get_swap_max_amount".
+        # If mode is buy, frontend is asking "I want to buy MAX?". That doesn't make sense.
+        # "MAX" button is usually only for SELL.
+        # The frontend calls this endpoint with mode="sell" or "buy" depending on button.
+        # If mode="buy", handleMaxClick(false) calls this. But Max Buy button is usually HIDDEN in UI for sell mode.
+        # In buy mode (Buy exact amount), MAX means "Buy as much as possible with my sell token".
+        # So we return the max BUY amount.
+
+        # We need buy token decimals
+        buy_token_addr = chain_obj.get_token_address(buy_token)
+        buy_decimals = get_cached_decimals(buy_token_addr, chain)
+
+        max_buy_eth = max_buy_wei / (10**buy_decimals)
         return {"max_amount": max_buy_eth, "mode": "buy", "sell_balance": sell_balance_eth}
 
     except Exception as e:

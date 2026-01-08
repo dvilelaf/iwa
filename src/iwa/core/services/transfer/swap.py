@@ -46,6 +46,33 @@ class SwapMixin:
         chain = ChainInterfaces().get(chain_name).chain
         account = self.account_service.resolve_account(account_address_or_tag)
 
+        # Validate balance before proceeding (for SELL orders)
+        if order_type == OrderType.SELL:
+            current_balance = self.balance_service.get_erc20_balance_wei(
+                account_address_or_tag, sell_token_name, chain_name
+            )
+            if current_balance is not None and current_balance < amount_wei:
+                # Precision tolerance: if the discrepancy is tiny (e.g. < 0.0001 tokens),
+                # just use the actual balance instead of failing.
+                # This handles float precision issues from the frontend.
+                diff = amount_wei - current_balance
+                tolerance = 10**14  # 0.0001 tokens (handles most rounding issues)
+
+                if diff <= tolerance:
+                    logger.warning(
+                        f"Adjusting swap amount due to precision discrepancy: "
+                        f"requested {amount_wei}, balance {current_balance} (diff: {diff})"
+                    )
+                    amount_wei = current_balance
+                else:
+                    balance_eth = current_balance / 1e18
+                    amount_eth_val = amount_wei / 1e18
+                    raise ValueError(
+                        f"Insufficient {sell_token_name} balance: have {balance_eth:.6f}, need {amount_eth_val:.6f}"
+                    )
+            elif current_balance is None:
+                raise ValueError(f"Could not retrieve balance for {sell_token_name}")
+
         # Get signer (LocalAccount)
         signer = self.key_storage.get_signer(account.address)
         if not signer:
@@ -69,6 +96,9 @@ class SwapMixin:
         )
 
         # Execute Swap
+        logger.debug(
+            f"Executing swap: amount_wei={amount_wei}, sell={sell_token_name}, buy={buy_token_name}, order_type={order_type}"
+        )
         result = await cow.swap(
             amount_wei=amount_wei,
             sell_token_name=sell_token_name,
@@ -133,20 +163,18 @@ class SwapMixin:
                 account_address_or_tag, sell_token_name, chain_name
             )
         else:
-        else:
-            # FIX: Use actual token decimals instead of assuming 18 (ether)
+            # Get decimals correctly!
+            decimals = 18
             try:
                 chain_interface = ChainInterfaces().get(chain_name)
-                token_address = chain_interface.chain.get_token_address(sell_token_name)
-                if token_address:
-                    checksum_address = Web3.to_checksum_address(token_address)
-                    decimals = ERC20Contract(checksum_address, chain_name).decimals
-                    return int(amount_eth * (10**decimals))
+                token_addr = chain_interface.chain.get_token_address(sell_token_name)
+                if token_addr:
+                    checksum_addr = Web3.to_checksum_address(token_addr)
+                    decimals = ERC20Contract(checksum_addr, chain_name).decimals
             except Exception as e:
-                logger.warning(f"Failed to fetch decimals for {sell_token_name}, defaulting to 18: {e}")
+                logger.warning(f"Could not get decimals for {sell_token_name}, assuming 18: {e}")
 
-            # Fallback to 18 decimals
-            return int(amount_eth * (10**18))
+            return int(amount_eth * (10**decimals))
 
     async def _ensure_allowance_for_swap(
         self: "TransferService",
