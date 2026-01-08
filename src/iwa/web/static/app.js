@@ -1516,13 +1516,21 @@ document.addEventListener("DOMContentLoaded", () => {
           const hashDisplay = result.hash ? `TX: ${result.hash.substring(0, 10)}...` : "";
           showToast(`${result.message} ${hashDisplay}`, "success", 5000);
           wrapAmountInput.value = "";
-          // Refresh balances
-          loadWrapBalances();
-          loadMasterBalanceTable(true);
+
+          // Refresh balances safely (don't fail the whole operation if this fails)
+          try {
+            await Promise.all([
+              loadWrapBalances(),
+              loadMasterBalanceTable(true)
+            ]);
+          } catch (e) {
+            console.error("Error refreshing balances after wrap/unwrap:", e);
+          }
         } else {
           showToast(`Error: ${result.detail}`, "error");
         }
       } catch (err) {
+        console.error("Wrap/Unwrap error:", err);
         showToast("Network error during wrap/unwrap", "error");
       } finally {
         wrapSubmitBtn.textContent = originalText;
