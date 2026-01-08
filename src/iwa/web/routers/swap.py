@@ -561,7 +561,7 @@ def _process_order_for_frontend(
         total_duration = valid_to - created_ts
         time_remaining = valid_to - current_time
         if total_duration > 0:
-            progress_pct = max(0, min(100, (time_remaining / total_duration) * 100))
+            progress_pct = int(max(0, min(100, (time_remaining / total_duration) * 100)))
     else:
         time_remaining = 0
 
