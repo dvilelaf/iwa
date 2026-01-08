@@ -22,7 +22,8 @@ jobs:
           enable-cache: true
 
       - name: Install just
-        run: uv tool install just
+        uses: extractions/setup-just@v2
+
 
       - name: Install dependencies
         run: just install
