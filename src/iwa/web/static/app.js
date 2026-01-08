@@ -1187,6 +1187,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json();
       const orders = data.orders || [];
 
+      // Detect status transitions to "fulfilled" and refresh balances
+      for (const order of orders) {
+        const prevStatus = previousOrderStatuses[order.uid];
+        if (prevStatus && prevStatus !== "fulfilled" && order.status === "fulfilled") {
+          // Order just became fulfilled - refresh balances
+          loadMasterBalanceTable(true);
+          break; // Only need to refresh once per poll cycle
+        }
+        previousOrderStatuses[order.uid] = order.status;
+      }
+
       if (orders.length === 0) {
         const noOrdersHtml = `<tr><td colspan="6" class="text-center text-muted">No recent orders</td></tr>`;
         if (tableBody.innerHTML !== noOrdersHtml) {
@@ -1289,6 +1300,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Adaptive polling for orders
   let ordersTimeoutId = null;
   let isPolling = false;
+  const previousOrderStatuses = {}; // Track order status for detecting fulfilled transitions
 
   function scheduleNextPoll(delay) {
     if (ordersTimeoutId) clearTimeout(ordersTimeoutId);
