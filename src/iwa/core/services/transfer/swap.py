@@ -46,6 +46,33 @@ class SwapMixin:
         chain = ChainInterfaces().get(chain_name).chain
         account = self.account_service.resolve_account(account_address_or_tag)
 
+        # Validate balance before proceeding (for SELL orders)
+        if order_type == OrderType.SELL:
+            current_balance = self.balance_service.get_erc20_balance_wei(
+                account_address_or_tag, sell_token_name, chain_name
+            )
+            if current_balance is not None and current_balance < amount_wei:
+                # Precision tolerance: if the discrepancy is tiny (e.g. < 0.0001 tokens),
+                # just use the actual balance instead of failing.
+                # This handles float precision issues from the frontend.
+                diff = amount_wei - current_balance
+                tolerance = 10**14  # 0.0001 tokens (handles most rounding issues)
+
+                if diff <= tolerance:
+                    logger.warning(
+                        f"Adjusting swap amount due to precision discrepancy: "
+                        f"requested {amount_wei}, balance {current_balance} (diff: {diff})"
+                    )
+                    amount_wei = current_balance
+                else:
+                    balance_eth = current_balance / 1e18
+                    amount_eth_val = amount_wei / 1e18
+                    raise ValueError(
+                        f"Insufficient {sell_token_name} balance: have {balance_eth:.6f}, need {amount_eth_val:.6f}"
+                    )
+            elif current_balance is None:
+                raise ValueError(f"Could not retrieve balance for {sell_token_name}")
+
         # Get signer (LocalAccount)
         signer = self.key_storage.get_signer(account.address)
         if not signer:
@@ -69,6 +96,9 @@ class SwapMixin:
         )
 
         # Execute Swap
+        logger.debug(
+            f"Executing swap: amount_wei={amount_wei}, sell={sell_token_name}, buy={buy_token_name}, order_type={order_type}"
+        )
         result = await cow.swap(
             amount_wei=amount_wei,
             sell_token_name=sell_token_name,
