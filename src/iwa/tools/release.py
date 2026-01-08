@@ -62,12 +62,21 @@ def main() -> None:
     if status:
         error("Working directory is not clean. Commit changes first.")
 
-    # 2. Update remote info (best effort)
-    print("Fetching remote info...")
     try:
-        run("git fetch origin", check=True, capture=True)
-        exists_remotely = run(f"git ls-remote --tags origin {tag}", check=False, capture=True)
-    except SystemExit:
+        # User requested SSH agent usage. If origin is HTTPS, we try to use SSH for the check explicitly.
+        # This bypasses the HTTPS auth prompt if the user has SSH keys configured.
+        origin_url = run("git remote get-url origin", capture=True)
+        check_url = origin_url
+        if origin_url.startswith("https://github.com/"):
+            # Convert https://github.com/user/repo.git -> git@github.com:user/repo.git
+            ssh_url = origin_url.replace("https://github.com/", "git@github.com:")
+            check_url = ssh_url
+            print(f"checking remote tags via SSH ({ssh_url})...")
+
+        # Use ls-remote on the specific URL (SSH) to check tags without prompting for HTTPS creds
+        exists_remotely = run(f"git ls-remote --tags {check_url} {tag}", check=False, capture=True)
+
+    except Exception as e:
         # fetch failed (likely auth), assume we can proceed to push (which might prompt or work if user is right)
         print("⚠️  Could not fetch remote info (auth needed?). Assuming tag is new remotely.")
         exists_remotely = ""
