@@ -1,494 +1,543 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IWA Terminal</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet" />
-</head>
-
-<body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-    </div>
-    <div class="app-container">
-        <header>
-            <div class="logo">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)"
-                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon">
-                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                    <polyline points="2 17 12 22 22 17"></polyline>
-                    <polyline points="2 12 12 17 22 12"></polyline>
-                </svg>
-                <h1>
-                    IWA <span>Terminal</span>
-                </h1>
-            </div>
-            <div class="chain-selector">
-                <label for="active-chain">Network</label>
-                <select id="active-chain">
-                    <option value="gnosis">Gnosis</option>
-                    <option value="ethereum">Ethereum</option>
-                    <option value="base">Base</option>
-                </select>
-            </div>
-            <div class="status-indicator" id="global-status">
-                <span class="pulse"></span>
-                <span id="status-text">Connected</span>
-            </div>
-        </header>
-        <nav class="tabs">
-            <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-            <button class="tab-btn" data-tab="olas">Olas</button>
-            <button class="tab-btn" data-tab="cowswap">CowSwap</button>
-            <button class="tab-btn" data-tab="rpc">RPC Status</button>
-        </nav>
-        <main class="tab-content">
-            <!-- Dashboard Tab (Merged Wallets & Transactions) -->
-            <section id="dashboard" class="tab-pane active">
-                <div class="section-header">
-                    <h2>Accounts</h2>
-                    <div class="actions">
-                        <button id="refresh-btn" class="btn-icon" title="Refresh Balances">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M23 4v6h-6"></path>
-                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                            </svg>
-                        </button>
-                    </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IWA Terminal</title>
+        <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+        <link rel="stylesheet" href="/static/style.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
+              rel="stylesheet" />
+    </head>
+    <body>
+        <div class="background-blobs">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
+        </div>
+        <div class="app-container">
+            <header>
+                <div class="logo">
+                    <svg width="24"
+                         height="24"
+                         viewBox="0 0 24 24"
+                         fill="none"
+                         stroke="var(--accent-color)"
+                         stroke-width="2"
+                         stroke-linecap="round"
+                         stroke-linejoin="round"
+                         class="logo-icon">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                    <h1>
+                        IWA <span>Terminal</span>
+                    </h1>
                 </div>
-                <!-- Token Selector -->
-                <div class="token-selector-row mb-1">
-                    <span class="label">Track Tokens:</span>
-                    <div id="token-toggles" class="token-toggles">
-                        <!-- Dynamic checkboxes -->
-                    </div>
+                <div class="chain-selector">
+                    <label for="active-chain">Network</label>
+                    <select id="active-chain">
+                        <option value="gnosis">Gnosis</option>
+                        <option value="ethereum">Ethereum</option>
+                        <option value="base">Base</option>
+                    </select>
                 </div>
-                <div class="table-container glass">
-                    <table id="accounts-table">
-                        <thead>
-                            <tr id="accounts-header-row">
-                                <th>Tag</th>
-                                <th>Address</th>
-                                <th>Type</th>
-                                <!-- Dynamic token columns -->
-                            </tr>
-                        </thead>
-                        <tbody id="accounts-body">
-                            <!-- Rows loaded via JS -->
-                        </tbody>
-                    </table>
+                <div class="status-indicator" id="global-status">
+                    <span class="pulse"></span>
+                    <span id="status-text">Connected</span>
                 </div>
-                <!-- Buttons below accounts table -->
-                <div class="account-actions mt-2">
-                    <button id="create-eoa-btn" class="btn-primary">Create EOA</button>
-                    <button id="create-safe-btn" class="btn-warning">Create Safe</button>
-                </div>
-                <div class="tx-form glass mt-2">
-                    <h3>Send Transaction</h3>
-                    <form id="send-tx-form">
-                        <div class="form-grid form-grid-5">
-                            <div class="form-group">
-                                <label>From</label>
-                                <select id="tx-from" required></select>
-                            </div>
-                            <div class="form-group">
-                                <label>To</label>
-                                <select id="tx-to" required></select>
-                            </div>
-                            <div class="form-group">
-                                <label>Amount</label>
-                                <input type="number" id="tx-amount" step="1" placeholder="0.00" required />
-                            </div>
-                            <div class="form-group">
-                                <label>Token</label>
-                                <select id="tx-token"></select>
-                            </div>
-                            <div class="form-group form-group-btn">
-                                <label>&nbsp;</label>
-                                <button type="submit" class="btn-send">Send</button>
-                            </div>
+            </header>
+            <nav class="tabs">
+                <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+                <button class="tab-btn" data-tab="olas">Olas</button>
+                <button class="tab-btn" data-tab="cowswap">CowSwap</button>
+                <button class="tab-btn" data-tab="rpc">RPC Status</button>
+            </nav>
+            <main class="tab-content">
+                <!-- Dashboard Tab (Merged Wallets & Transactions) -->
+                <section id="dashboard" class="tab-pane active">
+                    <div class="section-header">
+                        <h2>Accounts</h2>
+                        <div class="actions">
+                            <button id="refresh-btn" class="btn-icon" title="Refresh Balances">
+                                <svg width="16"
+                                     height="16"
+                                     viewBox="0 0 24 24"
+                                     fill="none"
+                                     stroke="currentColor"
+                                     stroke-width="2"
+                                     stroke-linecap="round"
+                                     stroke-linejoin="round">
+                                    <path d="M23 4v6h-6"></path>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
                         </div>
-                    </form>
-                </div>
-                <div class="section-header mt-2">
-                    <h2>Recent Activity</h2>
-                </div>
-                <div class="table-container glass">
-                    <table id="tx-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Chain</th>
-                                <th>From</th>
-                                <th>To</th>
-                                <th>Token</th>
-                                <th class="val">Amount</th>
-                                <th class="val">Value (€)</th>
-                                <th>Status</th>
-                                <th>Hash</th>
-                                <th>Gas (Wei)</th>
-                                <th>Gas (€)</th>
-                                <th>Tags</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tx-body">
-                            <!-- Rows loaded via JS -->
-                        </tbody>
-                    </table>
-                </div>
-                <div class="mb-3"></div>
-            </section>
-            <!-- Olas Tab -->
-            <section id="olas" class="tab-pane">
-                <div class="section-header">
-                    <h2>Olas Services</h2>
-                    <div class="actions">
-                        <button id="refresh-olas-btn" class="btn-icon" title="Refresh All Services">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <polyline points="23 4 23 10 17 10"></polyline>
-                                <polyline points="1 20 1 14 7 14"></polyline>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                        </button>
                     </div>
-                </div>
-                <div id="olas-summary-container">
-                    <!-- Summary header loaded via JS -->
-                </div>
-                <div id="olas-services-container" class="olas-services-grid">
-                    <!-- Service cards loaded via JS -->
-                    <div class="empty-state glass">
-                        <p>No Olas services found for this chain.</p>
+                    <!-- Token Selector -->
+                    <div class="token-selector-row mb-1">
+                        <span class="label">Track Tokens:</span>
+                        <div id="token-toggles" class="token-toggles">
+                            <!-- Dynamic checkboxes -->
+                        </div>
                     </div>
-                </div>
-                <!-- Actions below service cards -->
-                <div class="olas-actions mt-2 text-center mb-3">
-                    <button id="create-service-btn" class="btn-primary">Create Service</button>
-                </div>
-            </section>
-            <!-- CowSwap Tab -->
-            <section id="cowswap" class="tab-pane">
-                <div class="swap-wrapper">
-                    <!-- Master Balance Table (CowSwap specific) -->
                     <div class="table-container glass">
-                        <table id="cowswap-master-table">
+                        <table id="accounts-table">
                             <thead>
-                                <tr id="cowswap-master-header">
-                                    <th>Account</th>
-                                    <!-- Dynamic tokens -->
+                                <tr id="accounts-header-row">
+                                    <th>Tag</th>
+                                    <th>Address</th>
+                                    <th>Type</th>
+                                    <!-- Dynamic token columns -->
                                 </tr>
                             </thead>
-                            <tbody id="cowswap-master-body">
-                                <!-- Master row -->
+                            <tbody id="accounts-body">
+                                <!-- Rows loaded via JS -->
                             </tbody>
                         </table>
                     </div>
-                    <div class="swap-cards-grid">
-                        <div class="swap-container glass">
-                            <h3>Token Swap</h3>
-                            <form id="swap-form">
-                                <div class="swap-mode-toggle">
-                                    <label class="radio-item">
-                                        <input type="radio" name="swap-mode" value="sell" checked />
-                                        <span>Sell exact amount</span>
-                                    </label>
-                                    <label class="radio-item">
-                                        <input type="radio" name="swap-mode" value="buy" />
-                                        <span>Buy exact amount</span>
-                                    </label>
+                    <!-- Buttons below accounts table -->
+                    <div class="account-actions mt-2">
+                        <button id="create-eoa-btn" class="btn-primary">Create EOA</button>
+                        <button id="create-safe-btn" class="btn-warning">Create Safe</button>
+                    </div>
+                    <div class="tx-form glass mt-2">
+                        <h3>Send Transaction</h3>
+                        <form id="send-tx-form">
+                            <div class="form-grid form-grid-5">
+                                <div class="form-group">
+                                    <label>From</label>
+                                    <select id="tx-from" required></select>
                                 </div>
-                                <div class="swap-cards">
-                                    <!-- Sell Card -->
-                                    <div class="swap-card" id="sell-card">
-                                        <div class="swap-card-header">Sell</div>
-                                        <select id="swap-sell-token" required></select>
-                                        <div class="swap-card-amount">
-                                            <input type="number" id="swap-sell-amount" step="any" min="0"
-                                                placeholder="0.00" />
-                                            <button type="button" id="swap-max-sell" class="btn-max">Max</button>
-                                        </div>
-                                    </div>
-                                    <!-- Arrow (click to swap tokens) -->
-                                    <div class="swap-arrow" id="swap-tokens-btn" title="Swap tokens"
-                                        style="cursor: pointer;">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <path d="M5 12h14M13 5l7 7-7 7" />
-                                        </svg>
-                                    </div>
-                                    <!-- Buy Card -->
-                                    <div class="swap-card" id="buy-card">
-                                        <div class="swap-card-header">Buy</div>
-                                        <select id="swap-buy-token" required></select>
-                                        <div class="swap-card-amount">
-                                            <input type="number" id="swap-buy-amount" class="no-spinners" step="any"
-                                                min="0" placeholder="0.00" readonly />
-                                            <button type="button" id="swap-max-buy" class="btn-max hidden">Max</button>
-                                        </div>
-                                    </div>
+                                <div class="form-group">
+                                    <label>To</label>
+                                    <select id="tx-to" required></select>
                                 </div>
-                                <button type="submit" class="btn-swap">Swap Tokens</button>
-                            </form>
-                        </div>
-                        <div class="swap-container glass">
-                            <h3>Wrap / Unwrap</h3>
-                            <form id="wrap-form">
-                                <div class="swap-mode-toggle">
-                                    <label class="radio-item">
-                                        <input type="radio" name="wrap-mode" value="wrap" checked />
-                                        <span>Wrap xDAI → WXDAI</span>
-                                    </label>
-                                    <label class="radio-item">
-                                        <input type="radio" name="wrap-mode" value="unwrap" />
-                                        <span>Unwrap WXDAI → xDAI</span>
-                                    </label>
-                                </div>
-                                <div class="form-group mb-1">
+                                <div class="form-group">
                                     <label>Amount</label>
-                                    <div class="swap-card-amount">
-                                        <input type="number" id="wrap-amount" step="any" min="0" placeholder="0.00"
-                                            required />
-                                        <button type="button" id="wrap-max-btn" class="btn-max">Max</button>
-                                    </div>
+                                    <input type="number" id="tx-amount" step="1" placeholder="0.00" required />
                                 </div>
-                                <button type="submit" class="btn-swap" id="wrap-submit-btn">Wrap xDAI</button>
-                            </form>
+                                <div class="form-group">
+                                    <label>Token</label>
+                                    <select id="tx-token"></select>
+                                </div>
+                                <div class="form-group form-group-btn">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn-send">Send</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="section-header mt-2">
+                        <h2>Recent Activity</h2>
+                    </div>
+                    <div class="table-container glass">
+                        <table id="tx-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Chain</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Token</th>
+                                    <th class="val">Amount</th>
+                                    <th class="val">Value (€)</th>
+                                    <th>Status</th>
+                                    <th>Hash</th>
+                                    <th>Gas (Wei)</th>
+                                    <th>Gas (€)</th>
+                                    <th>Tags</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tx-body">
+                                <!-- Rows loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3"></div>
+                </section>
+                <!-- Olas Tab -->
+                <section id="olas" class="tab-pane">
+                    <div class="section-header">
+                        <h2>Olas Services</h2>
+                        <div class="actions">
+                            <button id="refresh-olas-btn" class="btn-icon" title="Refresh All Services">
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                     width="16"
+                                     height="16"
+                                     viewBox="0 0 24 24"
+                                     fill="none"
+                                     stroke="currentColor"
+                                     stroke-width="2"
+                                     stroke-linecap="round"
+                                     stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
                         </div>
                     </div>
-                    <!-- Recent Orders Table -->
-                    <div class="recent-orders-section mt-2">
-                        <h3>Recent Orders</h3>
+                    <div id="olas-summary-container">
+                        <!-- Summary header loaded via JS -->
+                    </div>
+                    <div id="olas-services-container" class="olas-services-grid">
+                        <!-- Service cards loaded via JS -->
+                        <div class="empty-state glass">
+                            <p>No Olas services found for this chain.</p>
+                        </div>
+                    </div>
+                    <!-- Actions below service cards -->
+                    <div class="olas-actions mt-2 text-center mb-3">
+                        <button id="create-service-btn" class="btn-primary">Create Service</button>
+                    </div>
+                </section>
+                <!-- CowSwap Tab -->
+                <section id="cowswap" class="tab-pane">
+                    <div class="swap-wrapper">
+                        <!-- Master Balance Table (CowSwap specific) -->
                         <div class="table-container glass">
-                            <table id="recent-orders-table">
+                            <table id="cowswap-master-table">
                                 <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Order ID</th>
-                                        <th>Status</th>
-                                        <th>Sell</th>
-                                        <th>Buy</th>
-                                        <th>Expiring in</th>
+                                    <tr id="cowswap-master-header">
+                                        <th>Account</th>
+                                        <!-- Dynamic tokens -->
                                     </tr>
                                 </thead>
-                                <tbody id="recent-orders-body">
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted">Loading orders...</td>
-                                    </tr>
+                                <tbody id="cowswap-master-body">
+                                    <!-- Master row -->
                                 </tbody>
                             </table>
                         </div>
+                        <div class="swap-cards-grid">
+                            <div class="swap-container glass">
+                                <h3>Token Swap</h3>
+                                <form id="swap-form">
+                                    <div class="swap-mode-toggle">
+                                        <label class="radio-item">
+                                            <input type="radio" name="swap-mode" value="sell" checked />
+                                            <span>Sell exact amount</span>
+                                        </label>
+                                        <label class="radio-item">
+                                            <input type="radio" name="swap-mode" value="buy" />
+                                            <span>Buy exact amount</span>
+                                        </label>
+                                    </div>
+                                    <div class="swap-cards">
+                                        <!-- Sell Card -->
+                                        <div class="swap-card" id="sell-card">
+                                            <div class="swap-card-header">Sell</div>
+                                            <select id="swap-sell-token" required></select>
+                                            <div class="swap-card-amount">
+                                                <input type="number"
+                                                       id="swap-sell-amount"
+                                                       step="any"
+                                                       min="0"
+                                                       placeholder="0.00" />
+                                                <button type="button" id="swap-max-sell" class="btn-max">Max</button>
+                                            </div>
+                                        </div>
+                                        <!-- Arrow (click to swap tokens) -->
+                                        <div class="swap-arrow"
+                                             id="swap-tokens-btn"
+                                             title="Swap tokens"
+                                             style="cursor: pointer">
+                                            <svg width="24"
+                                                 height="24"
+                                                 viewBox="0 0 24 24"
+                                                 fill="none"
+                                                 stroke="currentColor"
+                                                 stroke-width="2">
+                                                <path d="M5 12h14M13 5l7 7-7 7" />
+                                            </svg>
+                                        </div>
+                                        <!-- Buy Card -->
+                                        <div class="swap-card" id="buy-card">
+                                            <div class="swap-card-header">Buy</div>
+                                            <select id="swap-buy-token" required></select>
+                                            <div class="swap-card-amount">
+                                                <input type="number"
+                                                       id="swap-buy-amount"
+                                                       class="no-spinners"
+                                                       step="any"
+                                                       min="0"
+                                                       placeholder="0.00"
+                                                       readonly />
+                                                <button type="button" id="swap-max-buy" class="btn-max hidden">Max</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn-swap">Swap Tokens</button>
+                                </form>
+                            </div>
+                            <div class="swap-container glass">
+                                <h3>Wrap / Unwrap</h3>
+                                <form id="wrap-form">
+                                    <div class="swap-mode-toggle">
+                                        <label class="radio-item">
+                                            <input type="radio" name="wrap-mode" value="wrap" checked />
+                                            <span>Wrap xDAI → WXDAI</span>
+                                        </label>
+                                        <label class="radio-item">
+                                            <input type="radio" name="wrap-mode" value="unwrap" />
+                                            <span>Unwrap WXDAI → xDAI</span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group mb-1">
+                                        <label>Amount</label>
+                                        <div class="swap-card-amount">
+                                            <input type="number"
+                                                   id="wrap-amount"
+                                                   step="any"
+                                                   min="0"
+                                                   placeholder="0.00"
+                                                   required />
+                                            <button type="button" id="wrap-max-btn" class="btn-max">Max</button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn-swap" id="wrap-submit-btn">Wrap xDAI</button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Recent Orders Table -->
+                        <div class="recent-orders-section mt-2">
+                            <h3>Recent Orders</h3>
+                            <div class="table-container glass">
+                                <table id="recent-orders-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Order ID</th>
+                                            <th>Status</th>
+                                            <th>Sell</th>
+                                            <th>Buy</th>
+                                            <th>Expiring in</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recent-orders-body">
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">Loading orders...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </section>
-            <!-- RPC Tab -->
-            <section id="rpc" class="tab-pane">
-                <div class="section-header">
-                    <h2>Node Connectivity</h2>
-                </div>
-                <div class="rpc-grid" id="rpc-cards">
-                    <!-- Cards loaded via JS -->
-                </div>
-            </section>
-        </main>
-    </div>
-    <!-- Safe Creation Modal -->
-    <div id="safe-modal" class="modal">
-        <div class="modal-content glass modal-md">
-            <h2>Create Multisig Safe</h2>
-            <form id="create-safe-form">
-                <div class="form-group mb-1">
-                    <label>Tag Name</label>
-                    <input type="text" id="safe-tag" placeholder="e.g. Treasury Safe" required />
-                </div>
-                <div class="form-group mb-1">
-                    <label>Threshold (Signatures needed)</label>
-                    <input type="number" id="safe-threshold" min="1" value="1" required />
-                </div>
-                <div class="form-group mb-1">
-                    <label>Select Owners</label>
-                    <div id="safe-owners-list" class="checkbox-grid">
-                        <!-- Dynamic account checkboxes -->
+                </section>
+                <!-- RPC Tab -->
+                <section id="rpc" class="tab-pane">
+                    <div class="section-header">
+                        <h2>Node Connectivity</h2>
                     </div>
-                </div>
-                <div class="form-group mb-1">
-                    <label>Chains (Select at least one)</label>
-                    <div id="safe-chains-list" class="checkbox-grid">
-                        <!-- Dynamic -->
+                    <div class="rpc-grid" id="rpc-cards">
+                        <!-- Cards loaded via JS -->
                     </div>
-                </div>
-                <div class="modal-actions mt-2">
-                    <button type="button" class="btn-secondary" id="close-safe-modal">Cancel</button>
-                    <button type="submit" class="btn-primary">Deploy Safe</button>
-                </div>
-            </form>
+                </section>
+            </main>
         </div>
-    </div>
-    <!-- EOA Creation Modal -->
-    <div id="eoa-modal" class="modal">
-        <div class="modal-content glass">
-            <h2>Create EOA Account</h2>
-            <form id="create-eoa-form">
-                <div class="form-group mb-1">
-                    <label>Tag Name (optional)</label>
-                    <input type="text" id="eoa-tag" placeholder="e.g. Trading Account" />
-                </div>
-                <div class="modal-actions mt-2">
-                    <button type="button" class="btn-secondary" id="close-eoa-modal">Cancel</button>
-                    <button type="submit" class="btn-primary">Create Account</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content glass modal-md">
-            <h2 id="confirm-title">Confirm Action</h2>
-            <p id="confirm-message" class="text-muted mb-2"></p>
-            <div class="modal-actions">
-                <button type="button" class="btn-secondary" id="confirm-cancel">Cancel</button>
-                <button type="button" class="btn-primary" id="confirm-ok">Confirm</button>
+        <!-- Safe Creation Modal -->
+        <div id="safe-modal" class="modal">
+            <div class="modal-content glass modal-md">
+                <h2>Create Multisig Safe</h2>
+                <form id="create-safe-form">
+                    <div class="form-group mb-1">
+                        <label>Tag Name</label>
+                        <input type="text" id="safe-tag" placeholder="e.g. Treasury Safe" required />
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Threshold (Signatures needed)</label>
+                        <input type="number" id="safe-threshold" min="1" value="1" required />
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Select Owners</label>
+                        <div id="safe-owners-list" class="checkbox-grid">
+                            <!-- Dynamic account checkboxes -->
+                        </div>
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Chains (Select at least one)</label>
+                        <div id="safe-chains-list" class="checkbox-grid">
+                            <!-- Dynamic -->
+                        </div>
+                    </div>
+                    <div class="modal-actions mt-2">
+                        <button type="button" class="btn-secondary" id="close-safe-modal">Cancel</button>
+                        <button type="submit" class="btn-primary">Deploy Safe</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-    <!-- Stake Modal -->
-    <div id="stake-modal" class="modal">
-        <div class="modal-content glass modal-lg">
-            <h2>Stake Service</h2>
-            <p class="text-muted mb-1">Select a staking contract for this service:</p>
-            <input type="hidden" id="stake-service-key" />
-            <div class="form-group mb-1">
-                <label>Staking Contract</label>
-                <div id="stake-contract-spinner" class="hidden">
-                    <span class="cell-spinner"></span> Loading contracts...
-                </div>
-                <select id="stake-contract-select">
-                    <option value="">Loading contracts...</option>
-                </select>
-            </div>
-            <div class="modal-actions mt-2">
-                <button type="button" class="btn-secondary" id="stake-cancel">Cancel</button>
-                <button type="button" class="btn-primary" id="stake-confirm">Stake</button>
+        <!-- EOA Creation Modal -->
+        <div id="eoa-modal" class="modal">
+            <div class="modal-content glass">
+                <h2>Create EOA Account</h2>
+                <form id="create-eoa-form">
+                    <div class="form-group mb-1">
+                        <label>Tag Name (optional)</label>
+                        <input type="text" id="eoa-tag" placeholder="e.g. Trading Account" />
+                    </div>
+                    <div class="modal-actions mt-2">
+                        <button type="button" class="btn-secondary" id="close-eoa-modal">Cancel</button>
+                        <button type="submit" class="btn-primary">Create Account</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-    <!-- Create Service Modal -->
-    <div id="create-service-modal" class="modal">
-        <div class="modal-content glass modal-lg">
-            <h2>Create Olas Service</h2>
-            <form id="create-service-form">
-                <div class="form-group mb-1">
-                    <label>Service Name</label>
-                    <input type="text" id="new-service-name" placeholder="e.g. My Trader" required />
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="modal">
+            <div class="modal-content glass modal-md">
+                <h2 id="confirm-title">Confirm Action</h2>
+                <p id="confirm-message" class="text-muted mb-2"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="confirm-cancel">Cancel</button>
+                    <button type="button" class="btn-primary" id="confirm-ok">Confirm</button>
                 </div>
-                <div class="form-group mb-1">
-                    <label>Chain</label>
-                    <select id="new-service-chain">
-                        <option value="gnosis" selected>Gnosis</option>
-                    </select>
-                </div>
-                <div class="form-group mb-1">
-                    <label>Agent Type</label>
-                    <select id="new-service-agent-type">
-                        <option value="trader" selected>Trader</option>
-                    </select>
-                </div>
+            </div>
+        </div>
+        <!-- Stake Modal -->
+        <div id="stake-modal" class="modal">
+            <div class="modal-content glass modal-lg">
+                <h2>Stake Service</h2>
+                <p class="text-muted mb-1">Select a staking contract for this service:</p>
+                <input type="hidden" id="stake-service-key" />
                 <div class="form-group mb-1">
                     <label>Staking Contract</label>
-                    <div id="staking-contract-spinner" class="hidden">
+                    <div id="stake-contract-spinner" class="hidden">
                         <span class="cell-spinner"></span> Loading contracts...
                     </div>
-                    <select id="new-service-staking-contract">
-                        <option value="">None (don't stake)</option>
-                        <!-- Populated via JS -->
+                    <select id="stake-contract-select">
+                        <option value="">Loading contracts...</option>
                     </select>
                 </div>
                 <div class="modal-actions mt-2">
-                    <button type="button" class="btn-secondary" id="close-create-service-modal">Cancel</button>
-                    <button type="submit" class="btn-primary">Create Service</button>
+                    <button type="button" class="btn-secondary" id="stake-cancel">Cancel</button>
+                    <button type="button" class="btn-primary" id="stake-confirm">Stake</button>
                 </div>
-            </form>
-        </div>
-    </div>
-    <!-- Fund Service Modal -->
-    <div id="fund-service-modal" class="modal">
-        <div class="modal-content glass modal-lg">
-            <h2>Fund Service</h2>
-            <p class="text-muted mb-1">Send native tokens from master wallet to service accounts:</p>
-            <input type="hidden" id="fund-service-key" />
-            <div class="form-group mb-1">
-                <label>
-                    Agent Amount (<span id="fund-native-symbol">xDAI</span>)
-                </label>
-                <input type="number" id="fund-agent-amount" step="0.01" min="0" value="0" placeholder="0.00" />
-            </div>
-            <div class="form-group mb-1">
-                <label>
-                    Safe Amount (<span id="fund-safe-symbol">xDAI</span>)
-                </label>
-                <input type="number" id="fund-safe-amount" step="0.01" min="0" value="0" placeholder="0.00" />
-            </div>
-            <div class="modal-actions mt-2">
-                <button type="button" class="btn-secondary" id="close-fund-modal">Cancel</button>
-                <button type="button" class="btn-primary" id="fund-confirm">Fund Service</button>
             </div>
         </div>
-    </div>
-    <!-- Terminate Service Modal -->
-    <div id="terminate-modal" class="modal">
-        <div class="modal-content glass modal-lg">
-            <h2 class="text-error">⚠️ Terminate Service</h2>
-            <p class="text-muted mb-1">
-                This action will:
-                <br />
-                • Unstake the service (if staked)
-                <br />
-                • Terminate the service
-                <br />
-                • Unbond all operators
-                <br />
-                <br />
-                The service will return to PRE_REGISTRATION state.
-            </p>
-            <input type="hidden" id="terminate-service-key" />
-            <div class="modal-actions mt-2">
-                <button type="button" class="btn-secondary" id="terminate-cancel">Cancel</button>
-                <button type="button" class="btn-danger" id="terminate-confirm">Terminate</button>
+        <!-- Create Service Modal -->
+        <div id="create-service-modal" class="modal">
+            <div class="modal-content glass modal-lg">
+                <h2>Create Olas Service</h2>
+                <form id="create-service-form">
+                    <div class="form-group mb-1">
+                        <label>Service Name</label>
+                        <input type="text"
+                               id="new-service-name"
+                               placeholder="e.g. My Trader"
+                               required />
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Chain</label>
+                        <select id="new-service-chain">
+                            <option value="gnosis" selected>Gnosis</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Agent Type</label>
+                        <select id="new-service-agent-type">
+                            <option value="trader" selected>Trader</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-1">
+                        <label>Staking Contract</label>
+                        <div id="staking-contract-spinner" class="hidden">
+                            <span class="cell-spinner"></span> Loading contracts...
+                        </div>
+                        <select id="new-service-staking-contract">
+                            <option value="">None (don't stake)</option>
+                            <!-- Populated via JS -->
+                        </select>
+                    </div>
+                    <div class="modal-actions mt-2">
+                        <button type="button" class="btn-secondary" id="close-create-service-modal">Cancel</button>
+                        <button type="submit" class="btn-primary">Create Service</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal">
-        <div class="modal-content glass modal-sm">
-            <h2>🔐 Authentication Required</h2>
-            <p class="text-muted mb-2">Enter your Web UI password to continue:</p>
-            <form id="login-form">
+        <!-- Fund Service Modal -->
+        <div id="fund-service-modal" class="modal">
+            <div class="modal-content glass modal-lg">
+                <h2>Fund Service</h2>
+                <p class="text-muted mb-1">Send native tokens from master wallet to service accounts:</p>
+                <input type="hidden" id="fund-service-key" />
                 <div class="form-group mb-1">
-                    <label>Password</label>
-                    <input type="password" id="login-password" placeholder="Enter password" required
-                        autocomplete="current-password" />
+                    <label>
+                        Agent Amount (<span id="fund-native-symbol">xDAI</span>)
+                    </label>
+                    <input type="number"
+                           id="fund-agent-amount"
+                           step="0.01"
+                           min="0"
+                           value="0"
+                           placeholder="0.00" />
+                </div>
+                <div class="form-group mb-1">
+                    <label>
+                        Safe Amount (<span id="fund-safe-symbol">xDAI</span>)
+                    </label>
+                    <input type="number"
+                           id="fund-safe-amount"
+                           step="0.01"
+                           min="0"
+                           value="0"
+                           placeholder="0.00" />
                 </div>
                 <div class="modal-actions mt-2">
-                    <button type="submit" class="btn-primary w-100">Login</button>
+                    <button type="button" class="btn-secondary" id="close-fund-modal">Cancel</button>
+                    <button type="button" class="btn-primary" id="fund-confirm">Fund Service</button>
                 </div>
-            </form>
+            </div>
         </div>
-    </div>
-    <!-- Modals (minimal implementation for now) -->
-    <div id="toast-container" class="toast-container"></div>
-    <script src="/static/app.js?v=1.0.4"></script>
-</body>
-
+        <!-- Terminate Service Modal -->
+        <div id="terminate-modal" class="modal">
+            <div class="modal-content glass modal-lg">
+                <h2 class="text-error">⚠️ Terminate Service</h2>
+                <p class="text-muted mb-1">
+                    This action will:
+                    <br />
+                    • Unstake the service (if staked)
+                    <br />
+                    • Terminate the service
+                    <br />
+                    • Unbond all operators
+                    <br />
+                    <br />
+                    The service will return to PRE_REGISTRATION state.
+                </p>
+                <input type="hidden" id="terminate-service-key" />
+                <div class="modal-actions mt-2">
+                    <button type="button" class="btn-secondary" id="terminate-cancel">Cancel</button>
+                    <button type="button" class="btn-danger" id="terminate-confirm">Terminate</button>
+                </div>
+            </div>
+        </div>
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content glass modal-sm">
+                <h2>🔐 Authentication Required</h2>
+                <p class="text-muted mb-2">Enter your Web UI password to continue:</p>
+                <form id="login-form">
+                    <div class="form-group mb-1">
+                        <label>Password</label>
+                        <input type="password"
+                               id="login-password"
+                               placeholder="Enter password"
+                               required
+                               autocomplete="current-password" />
+                    </div>
+                    <div class="modal-actions mt-2">
+                        <button type="submit" class="btn-primary w-100">Login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- Modals (minimal implementation for now) -->
+        <div id="toast-container" class="toast-container"></div>
+        <script src="/static/app.js?v=1.0.4"></script>
+    </body>
 </html>

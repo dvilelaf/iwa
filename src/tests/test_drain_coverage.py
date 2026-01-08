@@ -43,9 +43,7 @@ def test_claim_rewards_claim_tx_fails(mock_drain_manager):
     mock_drain_manager.service.staking_contract_address = "0xStaking"
     mock_drain_manager.service.service_id = 1
 
-    with patch(
-        "iwa.plugins.olas.service_manager.drain.StakingContract"
-    ) as mock_staking_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.get_accrued_rewards.return_value = 1000000000000000000
@@ -62,9 +60,7 @@ def test_claim_rewards_send_fails(mock_drain_manager):
     mock_drain_manager.service.service_id = 1
     mock_drain_manager.wallet.master_account.address = "0xMaster"
 
-    with patch(
-        "iwa.plugins.olas.service_manager.drain.StakingContract"
-    ) as mock_staking_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.get_accrued_rewards.return_value = 1000000000000000000
@@ -82,9 +78,7 @@ def test_claim_rewards_success_no_event(mock_drain_manager):
     mock_drain_manager.service.service_id = 1
     mock_drain_manager.wallet.master_account.address = "0xMaster"
 
-    with patch(
-        "iwa.plugins.olas.service_manager.drain.StakingContract"
-    ) as mock_staking_cls:
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.get_accrued_rewards.return_value = 1000000000000000000
@@ -148,14 +142,13 @@ def test_drain_owner_account_exception(mock_drain_manager):
 
 def test_normalize_drain_result_tuple(mock_drain_manager):
     """Test _normalize_drain_result with tuple input."""
+
     # Success tuple with HexBytes-like object
     class FakeHexBytes:
         def hex(self):
             return "0xABCDEF"
 
-    result = mock_drain_manager._normalize_drain_result(
-        (True, {"transactionHash": FakeHexBytes()})
-    )
+    result = mock_drain_manager._normalize_drain_result((True, {"transactionHash": FakeHexBytes()}))
     assert result == "0xABCDEF"
 
 
@@ -179,4 +172,3 @@ def test_drain_owner_skipped_when_equals_target(mock_drain_manager):
     # Should skip and return None without calling drain
     assert result is None
     mock_drain_manager.wallet.drain.assert_not_called()
-

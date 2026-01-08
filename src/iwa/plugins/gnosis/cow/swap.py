@@ -179,6 +179,7 @@ class CowSwap:
 
         Returns:
             dict with order info (uid, url, status) or None on error.
+
         """
         amount_eth = Web3.from_wei(amount_wei, "ether")
 
@@ -233,7 +234,7 @@ class CowSwap:
             else:
                 # Non-blocking mode: return immediately with order details
                 return {
-                    "uid": order.uid.root if hasattr(order.uid, 'root') else str(order.uid),
+                    "uid": order.uid.root if hasattr(order.uid, "root") else str(order.uid),
                     "url": order.url,
                     "status": "open",
                     "validTo": valid_to,

@@ -96,6 +96,7 @@ class ChainInterface:
 
         Args:
             show_progress_bar: If True, display a large ASCII progress bar (for startup).
+
         """
         if not self.is_tenderly or self._initial_block == 0:
             return

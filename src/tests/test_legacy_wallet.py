@@ -570,7 +570,9 @@ async def test_swap_success(wallet, mock_key_storage, mock_chain_interfaces, moc
         chain_interface.sign_and_send_transaction.return_value = (True, {})
 
         # Mock balance for pre-swap validation
-        wallet.balance_service.get_erc20_balance_wei.return_value = 2000000000000000000  # 2 ETH (> 1.0 ETH)
+        wallet.balance_service.get_erc20_balance_wei.return_value = (
+            2000000000000000000  # 2 ETH (> 1.0 ETH)
+        )
         wallet.balance_service.get_native_balance_wei.return_value = 2000000000000000000  # 2 ETH
 
         success = await wallet.swap("sender", 1.0, "SELL", "BUY")

@@ -46,7 +46,8 @@ class SwapRequest(BaseModel):
     sell_token: str = Field(description="Token symbol to sell (e.g., WXDAI)")
     buy_token: str = Field(description="Token symbol to buy (e.g., OLAS)")
     amount_eth: Optional[float] = Field(
-        default=None, description="Amount in human-readable units (ETH). If null, uses entire balance."
+        default=None,
+        description="Amount in human-readable units (ETH). If null, uses entire balance.",
     )
     order_type: str = Field(description="Type of order: 'sell' or 'buy'")
     chain: str = Field(default="gnosis", description="Blockchain network name")
@@ -149,7 +150,7 @@ async def swap_tokens(request: Request, req: SwapRequest, auth: bool = Depends(v
                 # Non-blocking: order placed but not yet executed
                 return {
                     "status": "success",
-                    "message": f"Swap order placed! Track progress in Recent Orders.",
+                    "message": "Swap order placed! Track progress in Recent Orders.",
                     "order": order_data,
                 }
             elif status == "fulfilled":
@@ -197,7 +198,6 @@ def get_swap_quote(
     auth: bool = Depends(verify_auth),
 ):
     """Get a quote for a swap."""
-
     try:
         chain_interface = ChainInterfaces().get(chain)
         chain_obj: SupportedChain = chain_interface.chain  # type: ignore[assignment]
@@ -537,9 +537,10 @@ def get_recent_orders(
         return {"orders": []}
 
 
-def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, current_time: int) -> dict:
+def _process_order_for_frontend(
+    order: dict, chain_interface: Any, chain: str, current_time: int
+) -> dict:
     """Process a single order for frontend display."""
-
     valid_to = int(order.get("validTo", 0))
     created = order.get("creationDate", "")
     status = order.get("status", "unknown")
@@ -553,9 +554,7 @@ def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, c
             try:
                 from datetime import datetime
 
-                created_ts = int(
-                    datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
-                )
+                created_ts = int(datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp())
             except ValueError:
                 created_ts = current_time - 180  # Default 3 min ago
 
@@ -569,8 +568,12 @@ def _process_order_for_frontend(order: dict, chain_interface: Any, chain: str, c
     # Resolve token addresses to names
     sell_token_addr = order.get("sellToken", "")
     buy_token_addr = order.get("buyToken", "")
-    sell_token_name = chain_interface.chain.get_token_name(sell_token_addr) or sell_token_addr[:8] + "..."
-    buy_token_name = chain_interface.chain.get_token_name(buy_token_addr) or buy_token_addr[:8] + "..."
+    sell_token_name = (
+        chain_interface.chain.get_token_name(sell_token_addr) or sell_token_addr[:8] + "..."
+    )
+    buy_token_name = (
+        chain_interface.chain.get_token_name(buy_token_addr) or buy_token_addr[:8] + "..."
+    )
 
     # Calculate human-readable amounts
     try:

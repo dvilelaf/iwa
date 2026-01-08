@@ -348,18 +348,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td class="address-cell" data-action="copy" data-value="${escapeHtml(acc.address)}">${escapeHtml(shortenAddr(acc.address))}</td>
                     <td>${escapeHtml(acc.type)}</td>
                     ${allTokens
-            .map((t) => {
-              const isActive = state.activeTokens.has(t);
-              if (!isActive) {
-                return `<td class="val balance-cell opacity-30" data-token="${t}">-</td>`;
-              }
-              const bal = cached[t];
-              if (bal !== undefined && bal !== null) {
-                return `<td class="val balance-cell" data-token="${t}">${escapeHtml(formatBalance(bal))}</td>`;
-              }
-              return `<td class="val balance-cell" data-token="${t}"><span class="cell-spinner"></span></td>`;
-            })
-            .join("")}
+                      .map((t) => {
+                        const isActive = state.activeTokens.has(t);
+                        if (!isActive) {
+                          return `<td class="val balance-cell opacity-30" data-token="${t}">-</td>`;
+                        }
+                        const bal = cached[t];
+                        if (bal !== undefined && bal !== null) {
+                          return `<td class="val balance-cell" data-token="${t}">${escapeHtml(formatBalance(bal))}</td>`;
+                        }
+                        return `<td class="val balance-cell" data-token="${t}"><span class="cell-spinner"></span></td>`;
+                      })
+                      .join("")}
                 </tr>
             `;
       })
@@ -914,7 +914,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-
   // Debounced quote fetching
   async function fetchQuote() {
     const mode = document.querySelector(
@@ -1070,10 +1069,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ).value;
 
       // Check if user used Max button (to avoid float precision loss)
-      const isMaxSell = swapMode === "sell" && sellAmountInput.dataset.isMax === "true";
+      const isMaxSell =
+        swapMode === "sell" && sellAmountInput.dataset.isMax === "true";
 
       const amount = isMaxSell
-        ? null  // Send null to use exact wei balance on backend
+        ? null // Send null to use exact wei balance on backend
         : swapMode === "sell"
           ? parseFloat(sellAmountInput.value)
           : parseFloat(buyAmountInput.value);
@@ -1086,7 +1086,6 @@ document.addEventListener("DOMContentLoaded", () => {
         order_type: swapMode,
         chain: state.activeChain,
       };
-
 
       try {
         const resp = await authFetch("/api/swap", {
@@ -1101,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const execPrice =
               result.analytics.execution_price ||
               result.analytics.executed_buy_amount /
-              result.analytics.executed_sell_amount;
+                result.analytics.executed_sell_amount;
             // value_change_pct comes from backend now
 
             msg += `\nPrice: ${execPrice.toFixed(4)}`;
@@ -1193,7 +1192,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!tableBody) return;
 
     // Do not show loading spinner if we already have content (prevents flicker)
-    if (tableBody.children.length === 0 || tableBody.innerHTML.includes("Loading...")) {
+    if (
+      tableBody.children.length === 0 ||
+      tableBody.innerHTML.includes("Loading...")
+    ) {
       // Only show loading on initial load or if empty
       // tableBody.innerHTML = `<tr><td colspan="4" class="text-center"><span class="cell-spinner"></span> Loading...</td></tr>`;
     }
@@ -1201,7 +1203,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let hasPendingOrders = false;
 
     try {
-      const resp = await authFetch(`/api/swap/orders?chain=${state.activeChain}`);
+      const resp = await authFetch(
+        `/api/swap/orders?chain=${state.activeChain}`,
+      );
       if (!resp.ok) throw new Error("Failed to fetch orders");
 
       const data = await resp.json();
@@ -1210,7 +1214,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Detect status transitions to "fulfilled" and refresh balances
       for (const order of orders) {
         const prevStatus = previousOrderStatuses[order.uid];
-        if (prevStatus && prevStatus !== "fulfilled" && order.status === "fulfilled") {
+        if (
+          prevStatus &&
+          prevStatus !== "fulfilled" &&
+          order.status === "fulfilled"
+        ) {
           // Order just became fulfilled - refresh balances
           loadMasterBalanceTable(true);
           break; // Only need to refresh once per poll cycle
@@ -1240,7 +1248,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const dateStr = formatOrderDate(order.created);
 
         // Status badge class
-        const statusClass = order.status.replace(/([A-Z])/g, "-$1").toLowerCase();
+        const statusClass = order.status
+          .replace(/([A-Z])/g, "-$1")
+          .toLowerCase();
 
         // Progress bar for open orders
         let progressHtml = "-";
@@ -1284,7 +1294,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (tableBody.innerHTML !== html) {
         tableBody.innerHTML = html;
       }
-
     } catch (err) {
       console.error("Error loading orders:", err);
       // Don't wipe table on error, just log
@@ -1300,12 +1309,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Client-side countdown timer for smooth updates
   setInterval(() => {
-    const timers = document.querySelectorAll('.progress-time[data-valid-to]');
+    const timers = document.querySelectorAll(".progress-time[data-valid-to]");
     if (timers.length === 0) return;
 
     const now = Math.floor(Date.now() / 1000);
 
-    timers.forEach(timer => {
+    timers.forEach((timer) => {
       const validTo = parseInt(timer.dataset.validTo);
       const remaining = validTo - now;
 
@@ -1354,7 +1363,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Check if reload needed
     const currentChain = state.activeChain || "gnosis";
-    if (!forceRefresh && masterTableLoadedChain === currentChain && tableBody.children.length > 0 && !tableBody.innerHTML.includes("Loading")) {
+    if (
+      !forceRefresh &&
+      masterTableLoadedChain === currentChain &&
+      tableBody.children.length > 0 &&
+      !tableBody.innerHTML.includes("Loading")
+    ) {
       return;
     }
 
@@ -1369,7 +1383,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Header Generation
     let headerHtml = "<th>Account</th>";
     headerHtml += `<th>${escapeHtml(nativeSymbol)}</th>`; // Native column
-    erc20s.forEach(t => {
+    erc20s.forEach((t) => {
       headerHtml += `<th>${escapeHtml(t)}</th>`;
     });
     headerRow.innerHTML = headerHtml;
@@ -1380,11 +1394,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const tokensToFetch = ["native", ...erc20s];
       const tokensParam = tokensToFetch.join(",");
 
-      const resp = await authFetch(`/api/accounts?chain=${chain}&tokens=${tokensParam}`);
+      const resp = await authFetch(
+        `/api/accounts?chain=${chain}&tokens=${tokensParam}`,
+      );
       if (!resp.ok) throw new Error("Failed to fetch accounts");
 
       const accounts = await resp.json();
-      const master = accounts.find(a => a.tag === "master");
+      const master = accounts.find((a) => a.tag === "master");
 
       const colSpan = 2 + erc20s.length; // Account + Native + ERC20s
 
@@ -1402,26 +1418,28 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
 
       // Native Balance (remove color classes)
-      const nativeBalance = master.balances["native"] !== undefined ? master.balances["native"] : 0;
+      const nativeBalance =
+        master.balances["native"] !== undefined ? master.balances["native"] : 0;
       rowHtml += `<td class="val font-bold">${formatBalance(nativeBalance)}</td>`;
 
       // ERC20 Balances (remove color classes)
-      erc20s.forEach(token => {
-        const balance = master.balances && master.balances[token] !== undefined ? master.balances[token] : 0;
+      erc20s.forEach((token) => {
+        const balance =
+          master.balances && master.balances[token] !== undefined
+            ? master.balances[token]
+            : 0;
         rowHtml += `<td class="val">${formatBalance(balance)}</td>`;
       });
 
       rowHtml += `</tr>`;
       tableBody.innerHTML = rowHtml;
       masterTableLoadedChain = currentChain;
-
     } catch (err) {
       console.error("Error loading master table:", err);
       tableBody.innerHTML = `<tr><td colspan="10" class="text-center text-error">Error loading balances</td></tr>`;
       masterTableLoadedChain = null;
     }
   }
-
 
   // ===== Wrap/Unwrap Functions =====
   const wrapForm = document.getElementById("wrap-form");
@@ -1436,7 +1454,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateWrapButtonText() {
     if (!wrapSubmitBtn) return;
-    const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+    const mode =
+      document.querySelector('input[name="wrap-mode"]:checked')?.value ||
+      "wrap";
     wrapSubmitBtn.textContent = mode === "wrap" ? "Wrap xDAI" : "Unwrap WXDAI";
   }
 
@@ -1453,13 +1473,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Max button handler - fetches balance from API
   if (wrapMaxBtn) {
     wrapMaxBtn.addEventListener("click", async () => {
-      const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+      const mode =
+        document.querySelector('input[name="wrap-mode"]:checked')?.value ||
+        "wrap";
 
       wrapMaxBtn.disabled = true;
       wrapMaxBtn.innerHTML = '<span class="btn-spinner"></span>';
 
       try {
-        const resp = await authFetch(`/api/swap/wrap/balance?account=master&chain=${state.activeChain}`);
+        const resp = await authFetch(
+          `/api/swap/wrap/balance?account=master&chain=${state.activeChain}`,
+        );
         if (resp.ok) {
           const data = await resp.json();
           const maxAmount = mode === "wrap" ? data.native : data.wxdai;
@@ -1486,7 +1510,9 @@ document.addEventListener("DOMContentLoaded", () => {
       wrapSubmitBtn.textContent = "Processing...";
       wrapSubmitBtn.disabled = true;
 
-      const mode = document.querySelector('input[name="wrap-mode"]:checked')?.value || "wrap";
+      const mode =
+        document.querySelector('input[name="wrap-mode"]:checked')?.value ||
+        "wrap";
       const account = "master";
       const amount = parseFloat(wrapAmountInput.value);
 
@@ -1513,7 +1539,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const result = await resp.json();
 
         if (resp.ok) {
-          const hashDisplay = result.hash ? `TX: ${result.hash.substring(0, 10)}...` : "";
+          const hashDisplay = result.hash
+            ? `TX: ${result.hash.substring(0, 10)}...`
+            : "";
           showToast(`${result.message} ${hashDisplay}`, "success", 5000);
           wrapAmountInput.value = "";
 
@@ -1521,7 +1549,7 @@ document.addEventListener("DOMContentLoaded", () => {
           try {
             await Promise.all([
               loadWrapBalances(),
-              loadMasterBalanceTable(true)
+              loadMasterBalanceTable(true),
             ]);
           } catch (e) {
             console.error("Error refreshing balances after wrap/unwrap:", e);
@@ -2036,76 +2064,80 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="staking-info">
                     <div class="staking-row">
                         <span class="label">Status:</span>
-                        <span class="value ${isLoading
-        ? ""
-        : isStaked
-          ? "staked"
-          : service.state === "DEPLOYED"
-            ? "deployed"
-            : "not-staked"
-      }">
+                        <span class="value ${
+                          isLoading
+                            ? ""
+                            : isStaked
+                              ? "staked"
+                              : service.state === "DEPLOYED"
+                                ? "deployed"
+                                : "not-staked"
+                        }">
                             ${isLoading ? '<span class="cell-spinner"></span>' : service.state ? service.state : isStaked ? "✓ STAKED" : "○ NOT STAKED"}
                         </span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Staking contract:</span>
                         <span class="value address-cell">
-                            ${isLoading
-        ? '<span class="cell-spinner"></span>'
-        : isStaked && staking.staking_contract_address
-          ? `
+                            ${
+                              isLoading
+                                ? '<span class="cell-spinner"></span>'
+                                : isStaked && staking.staking_contract_address
+                                  ? `
                                 <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
                                     ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
                                 </a>
                             `
-          : "-"
-      }
+                                  : "-"
+                            }
                         </span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Rewards:</span>
                         <span class="value rewards">${isLoading ? '<span class="cell-spinner"></span>' : isStaked ? escapeHtml(formatBalance(staking.accrued_reward_olas) || "0") + " OLAS" : "-"}</span>
                     </div>
-                    ${isLoading
-        ? `
+                    ${
+                      isLoading
+                        ? `
                     <div class="staking-row">
                         <span class="label">Liveness:</span>
                         <span class="value"><span class="cell-spinner"></span></span>
                     </div>
                     `
-        : isStaked && livenessProgressHtml
-          ? livenessProgressHtml
-          : `
+                        : isStaked && livenessProgressHtml
+                          ? livenessProgressHtml
+                          : `
                     <div class="staking-row">
                         <span class="label">Liveness:</span>
                         <span class="value">-</span>
                     </div>
                     `
-      }
+                    }
                     <div class="staking-row">
                         <span class="label">${isStaked && staking.epoch_number !== undefined ? `Epoch #${staking.epoch_number} ends in:` : "Epoch:"}</span>
                         <span class="value">${isLoading ? '<span class="cell-spinner"></span>' : isStaked ? epochCountdown || "-" : "-"}</span>
                     </div>
                     <div class="staking-row">
                         <span class="label">Unstake available:</span>
-                        <span class="value" ${staking.unstake_available_at ? `data-unstake-at="${staking.unstake_available_at}"` : ""}>${isLoading
-        ? '<span class="cell-spinner"></span>'
-        : (() => {
-          if (!isStaked) return "-";
-          if (!staking.unstake_available_at) return "-";
-          const diffMs =
-            new Date(staking.unstake_available_at) -
-            new Date();
-          if (diffMs <= 0)
-            return '<span class="text-success font-bold">AVAILABLE</span>';
-          const diffMins = Math.ceil(diffMs / 60000);
-          const hours = Math.floor(diffMins / 60);
-          const mins = diffMins % 60;
-          return hours > 0
-            ? `${hours}h ${mins}m`
-            : `${mins}m`;
-        })()
-      }</span>
+                        <span class="value" ${staking.unstake_available_at ? `data-unstake-at="${staking.unstake_available_at}"` : ""}>${
+                          isLoading
+                            ? '<span class="cell-spinner"></span>'
+                            : (() => {
+                                if (!isStaked) return "-";
+                                if (!staking.unstake_available_at) return "-";
+                                const diffMs =
+                                  new Date(staking.unstake_available_at) -
+                                  new Date();
+                                if (diffMs <= 0)
+                                  return '<span class="text-success font-bold">AVAILABLE</span>';
+                                const diffMins = Math.ceil(diffMs / 60000);
+                                const hours = Math.floor(diffMins / 60);
+                                const mins = diffMins % 60;
+                                return hours > 0
+                                  ? `${hours}h ${mins}m`
+                                  : `${mins}m`;
+                              })()
+                        }</span>
                     </div>
                 </div>
 
@@ -2113,193 +2145,196 @@ document.addEventListener("DOMContentLoaded", () => {
                     <button class="btn-primary btn-sm" data-action="fund-service" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" ${loadingDisabled}>
                         Fund
                     </button>
-                    ${isStaked
-        ? `
+                    ${
+                      isStaked
+                        ? `
                         ${(() => {
-          const checkpointDisabled =
-            isLoading || staking.remaining_epoch_seconds > 0;
-          let checkpointTitle =
-            "Call checkpoint to close the epoch";
-          if (isLoading) {
-            checkpointTitle = "Loading...";
-          } else if (staking.remaining_epoch_seconds > 0) {
-            const h = Math.floor(
-              staking.remaining_epoch_seconds / 3600,
-            );
-            const m = Math.floor(
-              (staking.remaining_epoch_seconds % 3600) / 60,
-            );
-            checkpointTitle = `Checkpoint not needed yet. Epoch ends in ${h}h ${m}m.`;
-          }
-          return `
+                          const checkpointDisabled =
+                            isLoading || staking.remaining_epoch_seconds > 0;
+                          let checkpointTitle =
+                            "Call checkpoint to close the epoch";
+                          if (isLoading) {
+                            checkpointTitle = "Loading...";
+                          } else if (staking.remaining_epoch_seconds > 0) {
+                            const h = Math.floor(
+                              staking.remaining_epoch_seconds / 3600,
+                            );
+                            const m = Math.floor(
+                              (staking.remaining_epoch_seconds % 3600) / 60,
+                            );
+                            checkpointTitle = `Checkpoint not needed yet. Epoch ends in ${h}h ${m}m.`;
+                          }
+                          return `
                         <button class="btn-primary btn-sm btn-checkpoint ${loadingClass}" data-action="checkpoint" data-key="${escapeHtml(service.key)}" ${checkpointDisabled ? "disabled" : ""} title="${escapeHtml(checkpointTitle)}">
                             Checkpoint
                         </button>
                             `;
-        })()}
+                        })()}
                         ${(() => {
-          const canUnstake =
-            !staking.unstake_available_at ||
-            new Date() >=
-            new Date(staking.unstake_available_at);
-          const unstakeLabel = "Unstake";
-          let unstakeDisabled = isLoading ? "disabled" : "";
-          const disabledStyle =
-            "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
-          let timeText = "";
+                          const canUnstake =
+                            !staking.unstake_available_at ||
+                            new Date() >=
+                              new Date(staking.unstake_available_at);
+                          const unstakeLabel = "Unstake";
+                          let unstakeDisabled = isLoading ? "disabled" : "";
+                          const disabledStyle =
+                            "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
+                          let timeText = "";
 
-          if (!canUnstake) {
-            unstakeDisabled = "disabled";
-            const diffMs =
-              new Date(staking.unstake_available_at) -
-              new Date();
-            const diffMins = Math.ceil(diffMs / 60000);
-            timeText =
-              diffMins > 60
-                ? `~${Math.ceil(diffMins / 60)}h`
-                : `${diffMins}m`;
-          }
+                          if (!canUnstake) {
+                            unstakeDisabled = "disabled";
+                            const diffMs =
+                              new Date(staking.unstake_available_at) -
+                              new Date();
+                            const diffMins = Math.ceil(diffMs / 60000);
+                            timeText =
+                              diffMins > 60
+                                ? `~${Math.ceil(diffMins / 60)}h`
+                                : `${diffMins}m`;
+                          }
 
-          return `
+                          return `
                         <button class="btn-danger btn-sm ${isLoading || !canUnstake ? "opacity-60 not-allowed grayscale" : ""}" data-action="unstake" data-key="${escapeHtml(service.key)}" ${unstakeDisabled}
                                 title="${isLoading ? "Loading..." : !canUnstake ? `Cannot unstake yet. Minimum staking duration (72h) ends in ${timeText}` : "Unstake service"}">
                             ${escapeHtml(unstakeLabel)}
                         </button>
                         `;
-        })()}
+                        })()}
                     `
-        : service.state === "DEPLOYED"
-          ? `
+                        : service.state === "DEPLOYED"
+                          ? `
                         <button class="btn-danger btn-sm opacity-60 not-allowed grayscale" disabled
                                 title="Cannot stake a deployed service. Terminate first to change staking configuration.">
                             Stake
                         </button>
                     `
-          : service.state === "PRE_REGISTRATION"
-            ? `
+                          : service.state === "PRE_REGISTRATION"
+                            ? `
                         <button class="btn-primary btn-sm ${loadingClass}" data-action="deploy" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" data-name="${escapeHtml(service.name || "")}" data-id="${escapeHtml(service.service_id)}" ${loadingDisabled}>
                             Deploy
                         </button>
                     `
-            : ""
-      }
-                ${service.state !== "PRE_REGISTRATION"
-        ? (() => {
-          // Terminate button - now uses wind_down which handles unstake automatically
-          // Only show if service is not in PRE_REGISTRATION (nothing to wind down)
-          const terminateLabel = "Terminate";
-          let terminateDisabled = isLoading ? "disabled" : "";
-          let terminateStyle = isLoading
-            ? "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
-            : "";
-          let terminateTitle =
-            "Wind down service: unstake (if staked) → terminate → unbond";
+                            : ""
+                    }
+                ${
+                  service.state !== "PRE_REGISTRATION"
+                    ? (() => {
+                        // Terminate button - now uses wind_down which handles unstake automatically
+                        // Only show if service is not in PRE_REGISTRATION (nothing to wind down)
+                        const terminateLabel = "Terminate";
+                        let terminateDisabled = isLoading ? "disabled" : "";
+                        let terminateStyle = isLoading
+                          ? "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
+                          : "";
+                        let terminateTitle =
+                          "Wind down service: unstake (if staked) → terminate → unbond";
 
-          // If staked, check if we can unstake
-          if (isStaked) {
-            const canUnstake =
-              !staking.unstake_available_at ||
-              new Date() >=
-              new Date(staking.unstake_available_at);
+                        // If staked, check if we can unstake
+                        if (isStaked) {
+                          const canUnstake =
+                            !staking.unstake_available_at ||
+                            new Date() >=
+                              new Date(staking.unstake_available_at);
 
-            if (!canUnstake) {
-              terminateDisabled = "disabled";
-              terminateStyle =
-                "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
+                          if (!canUnstake) {
+                            terminateDisabled = "disabled";
+                            terminateStyle =
+                              "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
 
-              const diffMs =
-                new Date(staking.unstake_available_at) -
-                new Date();
-              const diffMins = Math.ceil(diffMs / 60000);
-              const timeText =
-                diffMins > 60
-                  ? `~${Math.ceil(diffMins / 60)}h`
-                  : `${diffMins}m`;
+                            const diffMs =
+                              new Date(staking.unstake_available_at) -
+                              new Date();
+                            const diffMins = Math.ceil(diffMs / 60000);
+                            const timeText =
+                              diffMins > 60
+                                ? `~${Math.ceil(diffMins / 60)}h`
+                                : `${diffMins}m`;
 
-              terminateTitle = `Cannot terminate yet (must unstake first). Minimum staking duration ends in ${timeText}`;
-            }
-          }
+                            terminateTitle = `Cannot terminate yet (must unstake first). Minimum staking duration ends in ${timeText}`;
+                          }
+                        }
 
-          if (isLoading) {
-            terminateTitle = "Loading...";
-          }
+                        if (isLoading) {
+                          terminateTitle = "Loading...";
+                        }
 
-          const isDisabled = terminateDisabled === "disabled";
-          return `
+                        const isDisabled = terminateDisabled === "disabled";
+                        return `
                         <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="terminate" data-key="${escapeHtml(service.key)}" ${terminateDisabled}
                                 title="${escapeHtml(terminateTitle)}">
                             ${escapeHtml(terminateLabel)}
                         </button>
                     `;
-        })()
-        : ""
-      }
+                      })()
+                    : ""
+                }
             ${(() => {
-        const drainLabel = "Drain";
-        let drainDisabled = isLoading ? "disabled" : "";
-        let drainStyle = isLoading
-          ? "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
-          : "";
-        let drainTitle = isLoading
-          ? "Loading..."
-          : "Drain all service funds to master account";
+              const drainLabel = "Drain";
+              let drainDisabled = isLoading ? "disabled" : "";
+              let drainStyle = isLoading
+                ? "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);"
+                : "";
+              let drainTitle = isLoading
+                ? "Loading..."
+                : "Drain all service funds to master account";
 
-        // Check if there's anything to drain (Agent or Safe have non-zero balance)
-        const agentBalance = service.accounts?.agent
-          ? (parseFloat(service.accounts.agent.native) || 0) +
-          (parseFloat(service.accounts.agent.olas) || 0)
-          : 0;
-        const safeBalance = service.accounts?.safe
-          ? (parseFloat(service.accounts.safe.native) || 0) +
-          (parseFloat(service.accounts.safe.olas) || 0)
-          : 0;
-        const hasBalanceToDrain = agentBalance > 0 || safeBalance > 0;
+              // Check if there's anything to drain (Agent or Safe have non-zero balance)
+              const agentBalance = service.accounts?.agent
+                ? (parseFloat(service.accounts.agent.native) || 0) +
+                  (parseFloat(service.accounts.agent.olas) || 0)
+                : 0;
+              const safeBalance = service.accounts?.safe
+                ? (parseFloat(service.accounts.safe.native) || 0) +
+                  (parseFloat(service.accounts.safe.olas) || 0)
+                : 0;
+              const hasBalanceToDrain = agentBalance > 0 || safeBalance > 0;
 
-        if (!hasBalanceToDrain && !isLoading) {
-          drainDisabled = "disabled";
-          drainStyle =
-            "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
-          drainTitle =
-            "Nothing to drain (Agent and Safe have zero balance)";
-        } else if (isStaked && !isLoading) {
-          // Check if we can unstake yet
-          const canUnstake =
-            !staking.unstake_available_at ||
-            new Date() >= new Date(staking.unstake_available_at);
-          if (!canUnstake) {
-            drainDisabled = "disabled";
-            drainStyle =
-              "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
-            const diffMs =
-              new Date(staking.unstake_available_at) - new Date();
-            const diffMins = Math.ceil(diffMs / 60000);
-            const timeText =
-              diffMins > 60
-                ? `~${Math.ceil(diffMins / 60)}h`
-                : `${diffMins}m`;
-            drainTitle = `Cannot drain while staked. Unstake available in ${timeText}.`;
-          } else {
-            drainTitle =
-              "Service is staked. Will unstake and claim rewards first.";
-          }
-        }
+              if (!hasBalanceToDrain && !isLoading) {
+                drainDisabled = "disabled";
+                drainStyle =
+                  "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
+                drainTitle =
+                  "Nothing to drain (Agent and Safe have zero balance)";
+              } else if (isStaked && !isLoading) {
+                // Check if we can unstake yet
+                const canUnstake =
+                  !staking.unstake_available_at ||
+                  new Date() >= new Date(staking.unstake_available_at);
+                if (!canUnstake) {
+                  drainDisabled = "disabled";
+                  drainStyle =
+                    "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
+                  const diffMs =
+                    new Date(staking.unstake_available_at) - new Date();
+                  const diffMins = Math.ceil(diffMs / 60000);
+                  const timeText =
+                    diffMins > 60
+                      ? `~${Math.ceil(diffMins / 60)}h`
+                      : `${diffMins}m`;
+                  drainTitle = `Cannot drain while staked. Unstake available in ${timeText}.`;
+                } else {
+                  drainTitle =
+                    "Service is staked. Will unstake and claim rewards first.";
+                }
+              }
 
-        const isDisabled = drainDisabled === "disabled";
-        return `
+              const isDisabled = drainDisabled === "disabled";
+              return `
                     <button class="btn-danger btn-sm ${isDisabled ? "opacity-60 not-allowed grayscale" : ""}" data-action="drain" data-key="${escapeHtml(service.key)}" ${drainDisabled}
                             title="${escapeHtml(drainTitle)}">
                         ${escapeHtml(drainLabel)}
                     </button>
                 `;
-      })()}
-                ${isStaked && parseFloat(staking.accrued_reward_olas) > 0
-        ? `
+            })()}
+                ${
+                  isStaked && parseFloat(staking.accrued_reward_olas) > 0
+                    ? `
                     <button class="btn-primary btn-sm ${loadingClass}" data-action="claim-rewards" data-key="${escapeHtml(service.key)}" ${loadingDisabled}>
                         Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS
                     </button>
                 `
-        : ""
-      }
+                    : ""
+                }
             </div>
             </div>
     `;

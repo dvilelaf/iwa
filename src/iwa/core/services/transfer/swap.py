@@ -258,9 +258,13 @@ class SwapMixin:
                 sell_addr = chain_interface.chain.get_token_address(sell_token_name)
                 buy_addr = chain_interface.chain.get_token_address(buy_token_name)
                 if sell_addr:
-                    sell_decimals = ERC20Contract(Web3.to_checksum_address(sell_addr), chain_name).decimals
+                    sell_decimals = ERC20Contract(
+                        Web3.to_checksum_address(sell_addr), chain_name
+                    ).decimals
                 if buy_addr:
-                    buy_decimals = ERC20Contract(Web3.to_checksum_address(buy_addr), chain_name).decimals
+                    buy_decimals = ERC20Contract(
+                        Web3.to_checksum_address(buy_addr), chain_name
+                    ).decimals
         except Exception as e:
             logger.warning(f"Could not get decimals for analytics: {e}")
 
