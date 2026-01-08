@@ -1143,11 +1143,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isoString) return "-";
     try {
       const date = new Date(isoString);
-      const day = String(date.getDate()).padStart(2, "0");
+      const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
       const hours = String(date.getHours()).padStart(2, "0");
       const mins = String(date.getMinutes()).padStart(2, "0");
-      return `${day}/${month} ${hours}:${mins}`;
+      return `${year}-${month}-${day} ${hours}:${mins}`;
     } catch (e) {
       return "-";
     }
@@ -1173,7 +1174,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const orders = data.orders || [];
 
       if (orders.length === 0) {
-        const noOrdersHtml = `<tr><td colspan="5" class="text-center text-muted">No recent orders</td></tr>`;
+        const noOrdersHtml = `<tr><td colspan="6" class="text-center text-muted">No recent orders</td></tr>`;
         if (tableBody.innerHTML !== noOrdersHtml) {
           tableBody.innerHTML = noOrdersHtml;
         }
@@ -1217,9 +1218,14 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        // Build CowSwap explorer URL
+        const explorerUrl = `https://explorer.cow.fi/gc/orders/${order.full_uid}`;
+        const shortUid = order.uid;
+
         html += `
           <tr>
             <td class="text-muted">${dateStr}</td>
+            <td><a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="order-link">${escapeHtml(shortUid)}</a></td>
             <td><span class="order-status ${statusClass}">${order.status}</span></td>
             <td>${sellAmt} ${escapeHtml(sellSymbol)}</td>
             <td>${buyAmt} ${escapeHtml(buySymbol)}</td>

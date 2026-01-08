@@ -216,7 +216,7 @@
                                         <div class="swap-card-header">Sell</div>
                                         <select id="swap-sell-token" required></select>
                                         <div class="swap-card-amount">
-                                            <input type="number" id="swap-sell-amount" step="0.01" min="0"
+                                            <input type="number" id="swap-sell-amount" step="any" min="0"
                                                 placeholder="0.00" />
                                             <button type="button" id="swap-max-sell" class="btn-max">Max</button>
                                         </div>
@@ -233,7 +233,7 @@
                                         <div class="swap-card-header">Buy</div>
                                         <select id="swap-buy-token" required></select>
                                         <div class="swap-card-amount">
-                                            <input type="number" id="swap-buy-amount" class="no-spinners" step="0.01"
+                                            <input type="number" id="swap-buy-amount" class="no-spinners" step="any"
                                                 min="0" placeholder="0.00" readonly />
                                             <button type="button" id="swap-max-buy" class="btn-max hidden">Max</button>
                                         </div>
@@ -258,7 +258,7 @@
                                 <div class="form-group mb-1">
                                     <label>Amount</label>
                                     <div class="swap-card-amount">
-                                        <input type="number" id="wrap-amount" step="0.01" min="0" placeholder="0.00"
+                                        <input type="number" id="wrap-amount" step="any" min="0" placeholder="0.00"
                                             required />
                                         <button type="button" id="wrap-max-btn" class="btn-max">Max</button>
                                     </div>
@@ -275,6 +275,7 @@
                                 <thead>
                                     <tr>
                                         <th>Date</th>
+                                        <th>Order ID</th>
                                         <th>Status</th>
                                         <th>Sell</th>
                                         <th>Buy</th>
@@ -283,7 +284,7 @@
                                 </thead>
                                 <tbody id="recent-orders-body">
                                     <tr>
-                                        <td colspan="5" class="text-center text-muted">Loading orders...</td>
+                                        <td colspan="6" class="text-center text-muted">Loading orders...</td>
                                     </tr>
                                 </tbody>
                             </table>
