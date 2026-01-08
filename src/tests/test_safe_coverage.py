@@ -119,18 +119,21 @@ def test_redeploy_safes(safe_service, mock_deps):
 
     mock_deps["key_storage"].accounts = {"0xSafe1": account1}
 
-    with patch("iwa.core.services.safe.EthereumClient") as mock_eth_client:
-        with patch.object(safe_service, "create_safe") as mock_create:
-            mock_w3 = mock_eth_client.return_value.w3
+    with patch("iwa.core.services.safe.settings") as mock_settings:
+        mock_settings.gnosis_rpc.get_secret_value.return_value = "http://rpc"
 
-            # Case 1: Code exists (no redeploy)
-            mock_w3.eth.get_code.return_value = b"code"
-            safe_service.redeploy_safes()
-            mock_create.assert_not_called()
+        with patch("iwa.core.services.safe.EthereumClient") as mock_eth_client:
+            with patch.object(safe_service, "create_safe") as mock_create:
+                mock_w3 = mock_eth_client.return_value.w3
 
-            # Case 2: No code (redeploy)
-            mock_w3.eth.get_code.return_value = b""
-            # Need to mock remove_account
-            safe_service.redeploy_safes()
-            mock_deps["key_storage"].remove_account.assert_called_with("0xSafe1")
-            mock_create.assert_called()
+                # Case 1: Code exists (no redeploy)
+                mock_w3.eth.get_code.return_value = b"code"
+                safe_service.redeploy_safes()
+                mock_create.assert_not_called()
+
+                # Case 2: No code (redeploy)
+                mock_w3.eth.get_code.return_value = b""
+                # Need to mock remove_account
+                safe_service.redeploy_safes()
+                mock_deps["key_storage"].remove_account.assert_called_with("0xSafe1")
+                mock_create.assert_called()

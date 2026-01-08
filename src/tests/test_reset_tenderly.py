@@ -158,41 +158,45 @@ def test_main(mock_requests, mock_tenderly_config):
     ):
         # Mock TenderlyConfig.load
         with patch("iwa.core.models.TenderlyConfig.load", return_value=mock_tenderly_config):
-            # Mock KeyStorage
-            with patch("iwa.tools.reset_tenderly.KeyStorage") as mock_key_storage:
-                mock_keys = mock_key_storage.return_value
-                mock_keys.get_account.return_value.address = "0xAddress"
-                mock_keys.accounts.keys.return_value = ["tag1"]
+            with patch(
+                "iwa.tools.reset_tenderly.get_tenderly_credentials",
+                return_value=("acc", "proj", "key"),
+            ):
+                # Mock KeyStorage
+                with patch("iwa.tools.reset_tenderly.KeyStorage") as mock_key_storage:
+                    mock_keys = mock_key_storage.return_value
+                    mock_keys.get_account.return_value.address = "0xAddress"
+                    mock_keys.accounts.keys.return_value = ["tag1"]
 
-                # Mock _create_vnet return values (since we mock requests, _create_vnet logic runs, but we can also mock _create_vnet directly)
-                # But let's let it run with mocked requests
-                mock_response_create = MagicMock()
-                mock_response_create.json.return_value = {
-                    "id": "new_id",
-                    "rpcs": [
-                        {"name": "Admin RPC", "url": "admin"},
-                        {"name": "Public RPC", "url": "public"},
-                    ],
-                }
+                    # Mock _create_vnet return values (since we mock requests, _create_vnet logic runs, but we can also mock _create_vnet directly)
+                    # But let's let it run with mocked requests
+                    mock_response_create = MagicMock()
+                    mock_response_create.json.return_value = {
+                        "id": "new_id",
+                        "rpcs": [
+                            {"name": "Admin RPC", "url": "admin"},
+                            {"name": "Public RPC", "url": "public"},
+                        ],
+                    }
 
-                # Mock requests.post for create and fund
-                # We need side_effect to handle different calls
-                def post_side_effect(*args, **kwargs):
-                    if "vnets" in kwargs.get("url", ""):
-                        return mock_response_create
-                    return MagicMock(status_code=200)
+                    # Mock requests.post for create and fund
+                    # We need side_effect to handle different calls
+                    def post_side_effect(*args, **kwargs):
+                        if "vnets" in kwargs.get("url", ""):
+                            return mock_response_create
+                        return MagicMock(status_code=200)
 
-                mock_requests.post.side_effect = post_side_effect
+                    mock_requests.post.side_effect = post_side_effect
 
-                # Mock update_rpc_variables to avoid file I/O
-                with patch("iwa.tools.reset_tenderly.update_rpc_variables") as mock_update:
-                    # Mock SafeService
-                    with patch("iwa.core.services.SafeService") as mock_safe_service_cls:
-                        main()
+                    # Mock update_rpc_variables to avoid file I/O
+                    with patch("iwa.tools.reset_tenderly.update_rpc_variables") as mock_update:
+                        # Mock SafeService
+                        with patch("iwa.core.services.SafeService") as mock_safe_service_cls:
+                            main()
 
-                        # Verify interactions
-                        mock_requests.delete.assert_called()  # _delete_vnet
-                        mock_tenderly_config.save.assert_called()
-                        mock_update.assert_called()
-                        # mock_keys.redeploy_safes.assert_called() # Removed
-                        mock_safe_service_cls.return_value.redeploy_safes.assert_called()
+                            # Verify interactions
+                            mock_requests.delete.assert_called()  # _delete_vnet
+                            mock_tenderly_config.save.assert_called()
+                            mock_update.assert_called()
+                            # mock_keys.redeploy_safes.assert_called() # Removed
+                            mock_safe_service_cls.return_value.redeploy_safes.assert_called()
