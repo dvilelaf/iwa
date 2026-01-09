@@ -1,27 +1,36 @@
-"""Configuration settings module."""
+"""Secrets module - loads sensitive values from environment variables.
+
+Secrets are injected via docker-compose env_file, NOT from mounted volume.
+This is more secure as secrets don't persist in the container's filesystem.
+"""
 
 from typing import Optional
 
-from dotenv import load_dotenv
-from pydantic import ConfigDict, SecretStr, model_validator
-from pydantic_settings import BaseSettings
-
-from iwa.core.constants import SECRETS_PATH
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Secrets(BaseSettings):
-    """Application Secrets loaded from environment and secrets file."""
+    """Application Secrets loaded from environment variables.
+
+    In production, these are injected via docker-compose:
+        env_file:
+          - ./secrets.env
+
+    For local development, set environment variables or use a .env file
+    at the project root (not in data/).
+    """
 
     # Testing mode - when True, uses Tenderly test RPCs; when False, uses production RPCs
-    testing: bool = True
+    testing: bool = False
 
-    # RPC endpoints (loaded from gnosis_rpc/ethereum_rpc/base_rpc in secrets.env)
+    # RPC endpoints
     # When testing=True, these get overwritten with *_test_rpc values
     gnosis_rpc: Optional[SecretStr] = None
     base_rpc: Optional[SecretStr] = None
     ethereum_rpc: Optional[SecretStr] = None
 
-    # Test RPCs
+    # Test RPCs (Tenderly)
     gnosis_test_rpc: Optional[SecretStr] = None
     ethereum_test_rpc: Optional[SecretStr] = None
     base_test_rpc: Optional[SecretStr] = None
@@ -31,13 +40,8 @@ class Secrets(BaseSettings):
 
     webui_password: Optional[SecretStr] = None
 
-    model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
-
-    def __init__(self, **values):
-        """Initialize Secrets and load environment variables."""
-        # Force load dotenv to ensure os.environ variables are set
-        load_dotenv(SECRETS_PATH, override=True)
-        super().__init__(**values)
+    # Load from environment only (no file)
+    model_config = SettingsConfigDict(extra="ignore")
 
     @model_validator(mode="after")
     def load_tenderly_profile_credentials(self) -> "Secrets":

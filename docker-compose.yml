@@ -4,5 +4,5 @@ services:
     volumes:
       - ./data:/app/data
     env_file:
-      - .env
+      - ./secrets.env
     command: [ "web", "--host", "0.0.0.0" ]
