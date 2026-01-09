@@ -8,7 +8,6 @@ from pydantic import ConfigDict, SecretStr, model_validator
 from pydantic_settings import BaseSettings
 
 from iwa.core.constants import SECRETS_PATH
-from iwa.core.utils import singleton
 
 
 class Settings(BaseSettings):
@@ -31,7 +30,6 @@ class Settings(BaseSettings):
     gnosisscan_api_key: Optional[SecretStr] = None
     coingecko_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
-    security_word: Optional[SecretStr] = None
 
     # Tenderly profile (1 or 2) - determines which credentials to load
     tenderly_profile: int = 1
