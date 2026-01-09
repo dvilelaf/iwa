@@ -1,7 +1,9 @@
 """Tests for staking.py router coverage."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 
 @pytest.fixture(autouse=True)
 def mock_key_storage():
