@@ -27,11 +27,8 @@ class Settings(BaseSettings):
     ethereum_test_rpc: Optional[SecretStr] = None
     base_test_rpc: Optional[SecretStr] = None
 
-    gnosisscan_api_key: Optional[SecretStr] = None
     coingecko_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
-
-    agnostic_rpc: bool = False
 
     web_enabled: bool = False
     web_port: int = 8080
