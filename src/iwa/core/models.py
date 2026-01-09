@@ -32,12 +32,6 @@ class StoredSafeAccount(StoredAccount):
 class CoreConfig(BaseModel):
     """Core configuration settings."""
 
-    manual_claim_enabled: bool = Field(
-        default=False, description="Enable manual claiming of rewards"
-    )
-    request_activity_alert_enabled: bool = Field(
-        default=True, description="Enable alerts for suspicious activity"
-    )
     whitelist: Dict[str, EthereumAddress] = Field(
         default_factory=dict, description="Address whitelist for security"
     )
