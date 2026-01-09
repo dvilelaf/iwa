@@ -1,8 +1,9 @@
 """Mech contract interaction."""
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from iwa.core.contracts.contract import ContractInstance
+from iwa.core.ipfs import metadata_to_request_data
 from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
@@ -38,7 +39,13 @@ class MechContract(ContractInstance):
         data: bytes,
         value: Optional[int] = None,
     ) -> Optional[Dict]:
-        """Prepare a request transaction."""
+        """Prepare a request transaction from raw data bytes.
+
+        :param from_address: The address initiating the request.
+        :param data: The raw request data bytes (typically an IPFS hash).
+        :param value: The value to send with the transaction. Defaults to contract price.
+        :return: The prepared transaction dict, or None if preparation fails.
+        """
         if value is None:
             value = self.get_price()
 
@@ -47,3 +54,24 @@ class MechContract(ContractInstance):
             method_kwargs={"data": data},
             tx_params={"from": from_address, "value": value},
         )
+
+    def prepare_request_from_metadata(
+        self,
+        from_address: EthereumAddress,
+        metadata: Dict[str, Any],
+        value: Optional[int] = None,
+    ) -> Optional[Dict]:
+        """Prepare a mech request by pushing metadata to IPFS.
+
+        This method handles the full flow:
+        1. Pushing the metadata JSON to IPFS
+        2. Converting the IPFS hash to request data bytes
+        3. Preparing the request transaction
+
+        :param from_address: The address initiating the request.
+        :param metadata: The metadata dict to push to IPFS (e.g., {"prompt": ..., "tool": ...}).
+        :param value: The value to send with the transaction. Defaults to contract price.
+        :return: The prepared transaction dict, or None if preparation fails.
+        """
+        request_data = metadata_to_request_data(metadata)
+        return self.prepare_request_tx(from_address, request_data, value)

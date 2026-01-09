@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     web_port: int = 8080
     webui_password: Optional[SecretStr] = None
 
+    # IPFS configuration
+    ipfs_api_url: str = "http://localhost:5001"
+
     model_config = ConfigDict(env_file=str(SECRETS_PATH), env_file_encoding="utf-8", extra="ignore")
 
     def __init__(self, **values):

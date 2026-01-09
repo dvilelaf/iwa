@@ -33,6 +33,8 @@ dependencies = [
     "aiohttp>=3.13.3",
     "pynacl>=1.6.2",
     "urllib3>=2.6.3",
+    "multiformats>=0.3.1",
+    "requests>=2.32.0",
 ]
 
 [project.scripts]
