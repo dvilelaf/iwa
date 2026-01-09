@@ -31,17 +31,7 @@ class Settings(BaseSettings):
     coingecko_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
 
-    # Tenderly profile (1 or 2) - determines which credentials to load
-    tenderly_profile: int = 1
-
-    # Tenderly credentials - loaded dynamically based on profile
-    tenderly_account_slug: Optional[SecretStr] = None
-    tenderly_project_slug: Optional[SecretStr] = None
-    tenderly_access_key: Optional[SecretStr] = None
-
-    # Tenderly funding configuration
-    tenderly_native_funds: float = 1000.0
-    tenderly_olas_funds: float = 100000.0
+    agnostic_rpc: bool = False
 
     web_enabled: bool = False
     web_port: int = 8080
@@ -61,19 +51,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def load_tenderly_profile_credentials(self) -> "Settings":
         """Load Tenderly credentials based on the selected profile."""
-        profile = self.tenderly_profile
-
-        # Load profile-specific credentials from environment
-        account = os.getenv(f"tenderly_account_slug_{profile}")
-        project = os.getenv(f"tenderly_project_slug_{profile}")
-        access_key = os.getenv(f"tenderly_access_key_{profile}")
-
-        if account:
-            self.tenderly_account_slug = SecretStr(account)
-        if project:
-            self.tenderly_project_slug = SecretStr(project)
-        if access_key:
-            self.tenderly_access_key = SecretStr(access_key)
+        # Note: Logic moved to dynamic loading in tools/reset_tenderly.py
+        # using Config().core.tenderly_profile
 
         # When in testing mode, override RPCs with test RPCs (Tenderly)
         if self.testing:

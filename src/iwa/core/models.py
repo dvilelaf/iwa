@@ -45,6 +45,11 @@ class CoreConfig(BaseModel):
         default_factory=dict, description="Custom token definitions per chain"
     )
 
+    # Tenderly Configuration
+    tenderly_profile: int = Field(default=1, description="Tenderly profile ID (1, 2, 3)")
+    tenderly_native_funds: float = Field(default=1000.0, description="Native ETH amount for vNet funding")
+    tenderly_olas_funds: float = Field(default=100000.0, description="OLAS amount for vNet funding")
+
 
 T = TypeVar("T", bound="StorableModel")
 

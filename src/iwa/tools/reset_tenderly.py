@@ -14,21 +14,16 @@ from web3 import Web3
 
 from iwa.core.constants import SECRETS_PATH, get_tenderly_config_path
 from iwa.core.keys import KeyStorage
-from iwa.core.models import TenderlyConfig
-from iwa.core.settings import settings
+from iwa.core.models import Config, TenderlyConfig
 
 
-def get_tenderly_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Get Tenderly credentials from settings (based on current profile)."""
-    return (
-        settings.tenderly_account_slug.get_secret_value()
-        if settings.tenderly_account_slug
-        else None,
-        settings.tenderly_project_slug.get_secret_value()
-        if settings.tenderly_project_slug
-        else None,
-        settings.tenderly_access_key.get_secret_value() if settings.tenderly_access_key else None,
-    )
+def get_tenderly_credentials(profile: int) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Get Tenderly credentials dynamically based on profile."""
+    # Secrets are still in env, keyed by profile
+    account = os.getenv(f"tenderly_account_slug_{profile}")
+    project = os.getenv(f"tenderly_project_slug_{profile}")
+    access_key = os.getenv(f"tenderly_access_key_{profile}")
+    return account, project, access_key
 
 
 def _generate_default_config() -> TenderlyConfig:
@@ -38,6 +33,7 @@ def _generate_default_config() -> TenderlyConfig:
 
     vnets = {}
     chains = SupportedChains()
+    config = Config()
 
     for chain_name, chain in [
         ("gnosis", chains.gnosis),
@@ -53,7 +49,7 @@ def _generate_default_config() -> TenderlyConfig:
                 TokenAmount(
                     address=str(olas_address),
                     symbol="OLAS",
-                    amount_eth=settings.tenderly_olas_funds,
+                    amount_eth=config.core.tenderly_olas_funds,
                 )
             )
 
@@ -61,7 +57,7 @@ def _generate_default_config() -> TenderlyConfig:
             chain_id=chain.chain_id,
             funds_requirements={
                 "all": FundRequirements(
-                    native_eth=settings.tenderly_native_funds,
+                    native_eth=config.core.tenderly_native_funds,
                     tokens=tokens,
                 )
             },
@@ -295,11 +291,12 @@ def _fund_vnet_accounts(vnet, keys) -> None:
 
 
 def main() -> None:
-    """Main - uses tenderly_profile from settings."""
-    profile = settings.tenderly_profile
+    """Main - uses tenderly_profile from Config."""
+    config = Config()
+    profile = config.core.tenderly_profile
     print(f"Recreating Tenderly Networks (Profile {profile})")
 
-    account_slug, project_slug, tenderly_access_key = get_tenderly_credentials()
+    account_slug, project_slug, tenderly_access_key = get_tenderly_credentials(profile)
 
     if not account_slug or not project_slug or not tenderly_access_key:
         print(f"Missing Tenderly environment variables for profile {profile}")
