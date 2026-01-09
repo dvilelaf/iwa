@@ -3,7 +3,8 @@
 
 import requests
 
-from iwa.core.settings import settings
+from iwa.core.models import Config
+from iwa.core.secrets import secrets
 
 
 def check_rpc_status(rpc_url):
@@ -16,8 +17,8 @@ def check_rpc_status(rpc_url):
 
     headers = {"Content-Type": "application/json"}
     # Include access key if present
-    if settings.tenderly_access_key:
-        headers["X-Access-Key"] = settings.tenderly_access_key.get_secret_value()
+    if secrets.tenderly_access_key:
+        headers["X-Access-Key"] = secrets.tenderly_access_key.get_secret_value()
 
     payload = {"jsonrpc": "2.0", "method": "eth_blockNumber", "params": [], "id": 1}
 
@@ -56,10 +57,10 @@ def check_rpc_status(rpc_url):
 
 def main():
     """Check and display the active Tenderly profile status."""
-    print(f"Active Tenderly Profile: {settings.tenderly_profile}")
+    print(f"Active Tenderly Profile: {Config().core.tenderly_profile}")
 
     # Check Gnosis RPC as primary indicator
-    rpc = settings.gnosis_rpc.get_secret_value() if settings.gnosis_rpc else None
+    rpc = secrets.gnosis_rpc.get_secret_value() if secrets.gnosis_rpc else None
     check_rpc_status(rpc)
 
 

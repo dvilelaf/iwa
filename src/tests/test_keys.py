@@ -11,8 +11,8 @@ from iwa.core.keys import EncryptedAccount, KeyStorage, StoredSafeAccount
 
 @pytest.fixture
 def mock_secrets():
-    """Mock settings to provide test password."""
-    with patch("iwa.core.keys.settings") as mock:
+    """Mock secrets to provide test password."""
+    with patch("iwa.core.keys.secrets") as mock:
         mock.wallet_password.get_secret_value.return_value = "test_password"
         mock.gnosis_rpc.get_secret_value.return_value = "http://rpc"
         yield mock

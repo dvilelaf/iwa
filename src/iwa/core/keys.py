@@ -16,7 +16,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, StoredAccount, StoredSafeAccount
-from iwa.core.settings import settings
+from iwa.core.secrets import secrets
 from iwa.core.utils import (
     configure_logger,
 )
@@ -45,10 +45,10 @@ class EncryptedAccount(StoredAccount):
 
     def decrypt_private_key(self, password: Optional[str] = None) -> str:
         """decrypt_private_key"""
-        if not password and not settings.wallet_password:
+        if not password and not secrets.wallet_password:
             raise ValueError("Password must be provided or set in secrets.env (WALLET_PASSWORD)")
         if not password:
-            password = settings.wallet_password.get_secret_value()
+            password = secrets.wallet_password.get_secret_value()
         salt_bytes = base64.b64decode(self.salt)
         nonce_bytes = base64.b64decode(self.nonce)
         ciphertext_bytes = base64.b64decode(self.ciphertext)
@@ -109,7 +109,7 @@ class KeyStorage(BaseModel):
 
         self._path = path
         if password is None:
-            password = settings.wallet_password.get_secret_value()
+            password = secrets.wallet_password.get_secret_value()
         self._password = password
 
         if os.path.exists(path):

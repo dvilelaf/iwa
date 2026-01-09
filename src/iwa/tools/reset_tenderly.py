@@ -347,13 +347,13 @@ if __name__ == "__main__":  # pragma: no cover
     os.environ["TENDERLY_PROFILE"] = str(args.profile)
 
     # Reset the singleton to reload with new env
-    from iwa.core.settings import Settings
+    from iwa.core.secrets import Secrets
 
-    Settings._instance = None  # type: ignore
+    Secrets._instance = None  # type: ignore
 
-    # Reimport settings to get fresh instance
-    if "iwa.core.settings" in sys.modules:
-        del sys.modules["iwa.core.settings"]
-    from iwa.core.settings import settings  # noqa: F401
+    # Reimport secrets to get fresh instance
+    if "iwa.core.secrets" in sys.modules:
+        del sys.modules["iwa.core.secrets"]
+    from iwa.core.secrets import secrets  # noqa: F401
 
     main()

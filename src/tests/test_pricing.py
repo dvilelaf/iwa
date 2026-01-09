@@ -8,7 +8,7 @@ from iwa.core.pricing import PriceService
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.core.pricing.settings") as mock:
+    with patch("iwa.core.pricing.secrets") as mock:
         mock.coingecko_api_key.get_secret_value.return_value = "test_api_key"
         yield mock
 
@@ -81,8 +81,8 @@ def test_get_token_price_key_not_found(price_service):
 
 def test_get_token_price_rate_limit():
     """Test rate limit (429) handling with retries."""
-    with patch("iwa.core.pricing.settings") as mock_settings:
-        mock_settings.coingecko_api_key = None
+    with patch("iwa.core.pricing.secrets") as mock_secrets:
+        mock_secrets.coingecko_api_key = None
 
         service = PriceService()
 
@@ -102,8 +102,8 @@ def test_get_token_price_rate_limit_then_success():
     """Test rate limit recovery on retry."""
     from unittest.mock import MagicMock
 
-    with patch("iwa.core.pricing.settings") as mock_settings:
-        mock_settings.coingecko_api_key = None
+    with patch("iwa.core.pricing.secrets") as mock_secrets:
+        mock_secrets.coingecko_api_key = None
 
         service = PriceService()
 
@@ -126,8 +126,8 @@ def test_get_token_price_rate_limit_then_success():
 
 def test_get_token_price_no_api_key():
     """Test getting price without API key."""
-    with patch("iwa.core.pricing.settings") as mock_settings:
-        mock_settings.coingecko_api_key = None
+    with patch("iwa.core.pricing.secrets") as mock_secrets:
+        mock_secrets.coingecko_api_key = None
 
         service = PriceService()
 

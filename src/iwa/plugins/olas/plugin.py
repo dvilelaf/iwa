@@ -65,9 +65,9 @@ class OlasPlugin(Plugin):
             from safe_eth.eth import EthereumClient
             from safe_eth.safe import Safe
 
-            from iwa.core.settings import settings
+            from iwa.core.secrets import secrets
 
-            rpc_secret = getattr(settings, f"{chain_name}_rpc", None)
+            rpc_secret = getattr(secrets, f"{chain_name}_rpc", None)
             if not rpc_secret:
                 return None, None  # Can't verify, skip
 

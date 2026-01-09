@@ -62,9 +62,8 @@ class ChainInterface:
                 try:
                     from iwa.core.constants import get_tenderly_config_path
                     from iwa.core.models import TenderlyConfig
-                    from iwa.core.settings import settings
 
-                    profile = settings.tenderly_profile
+                    profile = Config().core.tenderly_profile
                     config_path = get_tenderly_config_path(profile)
 
                     if config_path.exists():

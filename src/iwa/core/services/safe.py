@@ -11,7 +11,7 @@ from safe_eth.safe.safe_tx import SafeTx
 from iwa.core.constants import ZERO_ADDRESS
 from iwa.core.db import log_transaction
 from iwa.core.models import StoredSafeAccount
-from iwa.core.settings import settings
+from iwa.core.secrets import secrets
 from iwa.core.utils import (
     get_safe_master_copy_address,
     get_safe_proxy_factory_address,
@@ -99,7 +99,7 @@ class SafeService:
         return owner_addresses
 
     def _get_ethereum_client(self, chain_name: str) -> EthereumClient:
-        rpc_secret = getattr(settings, f"{chain_name}_rpc")
+        rpc_secret = getattr(secrets, f"{chain_name}_rpc")
         return EthereumClient(rpc_secret.get_secret_value())
 
     def _deploy_safe_contract(
@@ -248,7 +248,7 @@ class SafeService:
                 continue
 
             for chain in account.chains:
-                rpc_secret = getattr(settings, f"{chain}_rpc")
+                rpc_secret = getattr(secrets, f"{chain}_rpc")
                 ethereum_client = EthereumClient(rpc_secret.get_secret_value())
 
                 code = ethereum_client.w3.eth.get_code(account.address)

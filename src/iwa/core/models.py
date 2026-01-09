@@ -45,6 +45,13 @@ class CoreConfig(BaseModel):
         default_factory=dict, description="Custom token definitions per chain"
     )
 
+    # Web UI Configuration
+    web_enabled: bool = Field(default=False, description="Enable Web UI")
+    web_port: int = Field(default=8080, description="Web UI port")
+
+    # IPFS Configuration
+    ipfs_api_url: str = Field(default="http://localhost:5001", description="IPFS API URL")
+
     # Tenderly Configuration
     tenderly_profile: int = Field(default=1, description="Tenderly profile ID (1, 2, 3)")
     tenderly_native_funds: float = Field(default=1000.0, description="Native ETH amount for vNet funding")

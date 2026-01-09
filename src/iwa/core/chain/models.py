@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 from iwa.core.models import EthereumAddress
-from iwa.core.settings import settings
+from iwa.core.secrets import secrets
 from iwa.core.utils import singleton
 
 
@@ -75,8 +75,8 @@ class Gnosis(SupportedChain):
     def __init__(self, **data):
         """Initialize with RPCs from settings (after testing override is applied)."""
         super().__init__(**data)
-        if not self.rpcs and settings.gnosis_rpc:
-            self.rpcs = settings.gnosis_rpc.get_secret_value().split(",")
+        if not self.rpcs and secrets.gnosis_rpc:
+            self.rpcs = secrets.gnosis_rpc.get_secret_value().split(",")
 
 
 @singleton
@@ -95,8 +95,8 @@ class Ethereum(SupportedChain):
     def __init__(self, **data):
         """Initialize with RPCs from settings (after testing override is applied)."""
         super().__init__(**data)
-        if not self.rpcs and settings.ethereum_rpc:
-            self.rpcs = settings.ethereum_rpc.get_secret_value().split(",")
+        if not self.rpcs and secrets.ethereum_rpc:
+            self.rpcs = secrets.ethereum_rpc.get_secret_value().split(",")
 
 
 @singleton
@@ -115,8 +115,8 @@ class Base(SupportedChain):
     def __init__(self, **data):
         """Initialize with RPCs from settings (after testing override is applied)."""
         super().__init__(**data)
-        if not self.rpcs and settings.base_rpc:
-            self.rpcs = settings.base_rpc.get_secret_value().split(",")
+        if not self.rpcs and secrets.base_rpc:
+            self.rpcs = secrets.base_rpc.get_secret_value().split(",")
 
 
 @singleton

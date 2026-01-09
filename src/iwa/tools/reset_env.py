@@ -13,7 +13,7 @@ import sys
 import yaml
 
 from iwa.core.constants import CONFIG_PATH, WALLET_PATH
-from iwa.core.settings import settings
+from iwa.core.models import Config
 
 
 def _reset_tenderly(profile: int) -> None:
@@ -97,7 +97,7 @@ def _clean_wallet_accounts() -> None:
 
 def main():
     """Reset the environment by clearing networks, services, and accounts."""
-    profile = settings.tenderly_profile
+    profile = Config().core.tenderly_profile
     print(f"Detected Tenderly profile: {profile}")
 
     _reset_tenderly(profile)

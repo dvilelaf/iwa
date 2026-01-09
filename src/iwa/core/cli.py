@@ -164,10 +164,10 @@ def web_server(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to listen on"),
 ):
     """Start Web Interface."""
-    from iwa.core.settings import settings
+    from iwa.core.models import Config
     from iwa.web.server import run_server
 
-    server_port = port or settings.web_port
+    server_port = port or Config().core.web_port
     typer.echo(f"Starting web server on http://{host}:{server_port}")
     run_server(host=host, port=server_port)
 

@@ -8,7 +8,7 @@ from safe_eth.safe import Safe, SafeOperationEnum
 from safe_eth.safe.safe_tx import SafeTx
 
 from iwa.core.models import StoredSafeAccount
-from iwa.core.settings import settings
+from iwa.core.secrets import secrets
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()
@@ -28,7 +28,7 @@ class SafeMultisig:
         if chain_name.lower() not in normalized_chains:
             raise ValueError(f"Safe account is not deployed on chain: {chain_name}")
 
-        rpc_secret = getattr(settings, f"{chain_name.lower()}_rpc")
+        rpc_secret = getattr(secrets, f"{chain_name.lower()}_rpc")
         ethereum_client = EthereumClient(rpc_secret.get_secret_value())
         self.multisig = Safe(safe_account.address, ethereum_client)
         self.ethereum_client = ethereum_client
