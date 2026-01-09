@@ -11,7 +11,6 @@ from iwa.core.constants import SECRETS_PATH
 from iwa.core.utils import singleton
 
 
-@singleton
 class Settings(BaseSettings):
     """Application Settings loaded from environment and secrets file."""
 

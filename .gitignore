@@ -28,9 +28,7 @@ TODO.md
 *.db-wal
 *.db-shm
 
-tenderly_1.yaml
-tenderly_2.yaml
-tenderly_3.yaml
+tenderly_*.yaml
 
 config.yaml
 
