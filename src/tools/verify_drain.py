@@ -71,7 +71,7 @@ def verify_drain():  # noqa: C901, D103
             assert manager.olas_config is not None, "Olas config not initialized"
             service = manager.olas_config.get_service("gnosis", service_id)
             if not service:
-                 raise ValueError(f"Service {service_id} not found in config")
+                raise ValueError(f"Service {service_id} not found in config")
             safe_addr = service.multisig_address
             agent_addr = service.agent_address
 

@@ -351,9 +351,11 @@ input:focus {
 
 .btn-send {
   width: 100%;
-  background: linear-gradient(135deg,
-      var(--primary-color),
-      var(--accent-color));
+  background: linear-gradient(
+    135deg,
+    var(--primary-color),
+    var(--accent-color)
+  );
   border: none;
   color: white;
   padding: 0.7rem 1rem;

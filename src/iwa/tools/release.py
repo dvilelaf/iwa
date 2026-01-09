@@ -3,6 +3,7 @@
 
 Usage: python release.py <version>
 """
+
 import argparse
 import subprocess  # nosec: B404
 import sys
@@ -18,7 +19,7 @@ def run(cmd: str, check: bool = True, capture: bool = False) -> str:
             check=check,
             text=True,
             stdout=subprocess.PIPE if capture else None,
-            stderr=subprocess.PIPE if capture else None
+            stderr=subprocess.PIPE if capture else None,
         )
         return result.stdout.strip() if capture else ""
     except subprocess.CalledProcessError as e:
@@ -26,26 +27,30 @@ def run(cmd: str, check: bool = True, capture: bool = False) -> str:
             print(f"Error output: {e.stderr}")
         sys.exit(e.returncode)
 
+
 def error(msg: str) -> NoReturn:
     """Print error and exit."""
     print(f"❌ Error: {msg}")
     sys.exit(1)
 
+
 def info(msg: str) -> None:
     """Print info message."""
     print(f"🚀 {msg}")
+
 
 def confirm(question: str) -> bool:
     """Ask for user confirmation."""
     while True:
         try:
             choice = input(f"{question} [y/N] ").lower()
-            if not choice or choice == 'n':
+            if not choice or choice == "n":
                 return False
-            if choice == 'y':
+            if choice == "y":
                 return True
         except EOFError:
             return False
+
 
 def main() -> None:
     """Execute the release process."""
@@ -106,6 +111,7 @@ def main() -> None:
         # Push to the explicit URL (likely SSH) to avoid HTTPS prompts
         run(f"git push {check_url} {tag}")
         print(f"✅ Release {tag} triggered! Check GitHub Actions.")
+
 
 if __name__ == "__main__":
     main()
