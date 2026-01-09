@@ -119,7 +119,7 @@ def test_redeploy_safes(safe_service, mock_deps):
 
     mock_deps["key_storage"].accounts = {"0xSafe1": account1}
 
-    with patch("iwa.core.services.safe.settings") as mock_settings:
+    with patch("iwa.core.services.safe.secrets") as mock_settings:
         mock_settings.gnosis_rpc.get_secret_value.return_value = "http://rpc"
 
         with patch("iwa.core.services.safe.EthereumClient") as mock_eth_client:

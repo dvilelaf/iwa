@@ -27,7 +27,7 @@ def mock_web3():
 
 @pytest.fixture
 def mock_secrets():
-    with patch("iwa.core.chain.models.settings") as mock:
+    with patch("iwa.core.chain.models.secrets") as mock:
         yield mock
 
 

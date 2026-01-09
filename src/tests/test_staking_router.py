@@ -1,6 +1,14 @@
 """Tests for staking.py router coverage."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import pytest
+
+@pytest.fixture(autouse=True)
+def mock_key_storage():
+    """Bypass KeyStorage security check."""
+    with patch("iwa.core.keys.KeyStorage.__init__", return_value=None), \
+         patch("iwa.web.dependencies.wallet", MagicMock()):
+        yield
 
 
 def test_check_availability_exception():

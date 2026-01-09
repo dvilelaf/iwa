@@ -103,14 +103,14 @@ def test_import_services_cli_full(plugin, runner):
 def test_get_safe_signers_edge_cases(plugin):
     """Test _get_safe_signers with various failure scenarios."""
     # 1. No RPC configured
-    with patch("iwa.core.settings.settings") as mock_settings:
+    with patch("iwa.core.secrets.secrets") as mock_settings:
         mock_settings.gnosis_rpc = None
         signers, exists = plugin._get_safe_signers("0x1", "gnosis")
         assert signers is None
         assert exists is None
 
     # 2. Safe doesn't exist (raises exception)
-    with patch("iwa.core.settings.settings") as mock_settings:
+    with patch("iwa.core.secrets.secrets") as mock_settings:
         mock_settings.gnosis_rpc = MagicMock()
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
@@ -121,7 +121,7 @@ def test_get_safe_signers_edge_cases(plugin):
             assert exists is False
 
     # 3. Success path
-    with patch("iwa.core.settings.settings") as mock_settings:
+    with patch("iwa.core.secrets.secrets") as mock_settings:
         mock_settings.gnosis_rpc = MagicMock()
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
