@@ -10,11 +10,16 @@ import sys
 from typing import List, Optional, Tuple
 
 import requests
+from dotenv import load_dotenv
 from web3 import Web3
 
 from iwa.core.constants import SECRETS_PATH, get_tenderly_config_path
 from iwa.core.keys import KeyStorage
 from iwa.core.models import Config, TenderlyConfig
+
+# Load secrets.env for local development
+if SECRETS_PATH.exists():
+    load_dotenv(SECRETS_PATH, override=True)
 
 
 def get_tenderly_credentials(profile: int) -> Tuple[Optional[str], Optional[str], Optional[str]]:
