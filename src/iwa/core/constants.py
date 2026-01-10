@@ -6,11 +6,11 @@ from iwa.core.types import EthereumAddress
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
-# Data directory for sensitive/runtime files
-# Uses relative path from cwd so each project can have its own data/secrets.env
+# Data directory for runtime files
 DATA_DIR = Path("data")
 
-SECRETS_PATH = DATA_DIR / "secrets.env"
+# secrets.env is at project root (NOT in data/)
+SECRETS_PATH = Path("secrets.env")
 CONFIG_PATH = DATA_DIR / "config.yaml"
 WALLET_PATH = DATA_DIR / "wallet.json"
 BACKUP_DIR = DATA_DIR / "backup"
