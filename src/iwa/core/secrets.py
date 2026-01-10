@@ -1,13 +1,18 @@
 """Secrets module - loads sensitive values from environment variables.
 
-Secrets are injected via docker-compose env_file, NOT from mounted volume.
-This is more secure as secrets don't persist in the container's filesystem.
+Secrets are loaded from:
+1. Environment variables (injected by docker-compose env_file in production)
+2. secrets.env file at project root (for local development)
 """
 
+from pathlib import Path
 from typing import Optional
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# secrets.env is at project root (not in data/)
+SECRETS_FILE = Path("secrets.env")
 
 
 class Secrets(BaseSettings):
@@ -17,8 +22,7 @@ class Secrets(BaseSettings):
         env_file:
           - ./secrets.env
 
-    For local development, set environment variables or use a .env file
-    at the project root (not in data/).
+    For local development, secrets are loaded from secrets.env at project root.
     """
 
     # Testing mode - when True, uses Tenderly test RPCs; when False, uses production RPCs
@@ -40,8 +44,12 @@ class Secrets(BaseSettings):
 
     webui_password: Optional[SecretStr] = None
 
-    # Load from environment only (no file)
-    model_config = SettingsConfigDict(extra="ignore")
+    # Load from environment AND secrets.env file (for local dev)
+    model_config = SettingsConfigDict(
+        env_file=str(SECRETS_FILE) if SECRETS_FILE.exists() else None,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @model_validator(mode="after")
     def load_tenderly_profile_credentials(self) -> "Secrets":
