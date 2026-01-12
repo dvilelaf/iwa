@@ -267,30 +267,14 @@ class ChainInterface:
         if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
             return False
 
-        original_index = self._current_rpc_index
-        attempts = 0
-
-        while attempts < len(self.chain.rpcs) - 1:
-            self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
-            attempts += 1
-
-            if self._rpc_failure_counts.get(self._current_rpc_index, 0) >= 5:
-                continue
-
-            logger.info(f"Rotating RPC for {self.chain.name} to index {self._current_rpc_index}")
-            self._init_web3()
-
-            if self.check_rpc_health():
-                return True
-            else:
-                logger.warning(f"RPC at index {self._current_rpc_index} failed health check")
-                self._rpc_failure_counts[self._current_rpc_index] = (
-                    self._rpc_failure_counts.get(self._current_rpc_index, 0) + 1
-                )
-
-        self._current_rpc_index = original_index
+        # Simple Round Robin rotation
+        # We don't check health here because the health check itself might consume rate limits
+        # or fail flakily. Better to just switch and try the operation.
+        self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
         self._init_web3()
-        return False
+
+        logger.info(f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}")
+        return True
 
     def check_rpc_health(self) -> bool:
         """Check if the current RPC is healthy."""

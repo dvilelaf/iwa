@@ -183,7 +183,10 @@ class ContractInstance:
         """
         method = getattr(self.contract.functions, method_name)
         try:
-            return method(*args).call()
+            return self.chain_interface.with_retry(
+                lambda: method(*args).call(),
+                operation_name=f"call {method_name} on {self.name}",
+            )
         except Exception as e:
             error_data = self._extract_error_data(e)
             if error_data:
