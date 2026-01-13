@@ -1,7 +1,7 @@
 
-import json
 from iwa.core.keys import EncryptedAccount
 from iwa.core.models import EncryptedData
+
 
 def test_legacy_account_migration():
     """Test that a legacy account dict is correctly upgraded."""
