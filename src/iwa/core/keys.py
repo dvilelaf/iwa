@@ -55,17 +55,23 @@ from iwa.core.models import (
 class EncryptedAccount(StoredAccount, EncryptedData):
     """EncryptedAccount"""
 
-    # Legacy field support
-    salt: Optional[str] = None
+    # We do NOT define 'salt' here to avoid serialization duplication.
+    # Legacy 'salt' is handled in the validator.
 
     @model_validator(mode="before")
     @classmethod
     def upgrade_legacy_format(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         """Upgrade legacy account format to new EncryptedData structure."""
         if isinstance(data, dict):
-            # Check if this is a legacy format (has 'salt' but no 'kdf_salt')
-            if "salt" in data and "kdf_salt" not in data:
-                data["kdf_salt"] = data["salt"]
+            # Check if this is a legacy format (has 'salt')
+            if "salt" in data:
+                # Map to kdf_salt if missing
+                if "kdf_salt" not in data:
+                    data["kdf_salt"] = data["salt"]
+
+                # Remove 'salt' to avoid "extra fields" error and duplication
+                data.pop("salt")
+
                 # Default KDF params for legacy accounts were:
                 # n=2**14 (16384), r=8, p=1, len=32
                 data.setdefault("kdf_n", SCRYPT_N)
@@ -159,8 +165,7 @@ class EncryptedAccount(StoredAccount, EncryptedData):
             cipher="aesgcm",
             nonce=base64.b64encode(nonce).decode("utf-8"),
             ciphertext=base64.b64encode(ciphertext).decode("utf-8"),
-            # Legacy field for backward compat
-            salt=base64.b64encode(salt).decode("utf-8"),
+            # NO redundant 'salt' field
         )
 
 

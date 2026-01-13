@@ -48,7 +48,5 @@ def test_new_account_format():
     assert data["kdf_n"] == 16384
     assert data["cipher"] == "aesgcm"
 
-    # Ensure legacy salt is also present for backward compatibility (if we decided to keep it)
-    # The implementation adds it.
-    assert "salt" in data
-    assert data["salt"] == data["kdf_salt"]
+    # Ensure legacy salt is NOT present (avoid duplication)
+    assert "salt" not in data
