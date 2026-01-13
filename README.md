@@ -123,7 +123,8 @@ just test
 ### Security Checks
 
 ```bash
-just security  # Runs gitleaks, bandit, and pip-audit
+just security      # Runs gitleaks, bandit, and pip-audit
+just wallet-check  # Verifies password, keys, and mnemonic integrity
 ```
 
 ### Docker
