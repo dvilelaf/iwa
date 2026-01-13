@@ -43,10 +43,15 @@ def configure_logger():
     if hasattr(configure_logger, "configured"):
         return logger
 
+    from iwa.core.constants import DATA_DIR
+
     logger.remove()
 
+    # Ensure data directory exists
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     logger.add(
-        "iwa.log",
+        DATA_DIR / "iwa.log",
         rotation="10 MB",
         level="INFO",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
