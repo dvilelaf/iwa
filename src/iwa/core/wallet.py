@@ -29,6 +29,10 @@ class Wallet:
     def __init__(self):
         """Initialize wallet."""
         self.key_storage = KeyStorage()
+
+        # Display mnemonic if a new master account was just created
+        self.key_storage.display_pending_mnemonic()
+
         self.account_service = AccountService(self.key_storage)
         self.balance_service = BalanceService(self.key_storage, self.account_service)
         self.safe_service = SafeService(self.key_storage, self.account_service)

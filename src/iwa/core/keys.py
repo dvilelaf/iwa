@@ -280,6 +280,36 @@ class KeyStorage(BaseModel):
         self._pending_mnemonic = None
         return mnemonic
 
+    def display_pending_mnemonic(self) -> bool:
+        """Display the pending mnemonic to the user and wait for confirmation.
+
+        Returns:
+            True if a mnemonic was displayed, False otherwise.
+
+        """
+        mnemonic = self.get_pending_mnemonic()
+        if not mnemonic:
+            return False
+
+        print("\n" + "=" * 60)
+        print("⚠️  NEW MASTER ACCOUNT CREATED - BACKUP YOUR MNEMONIC!")
+        print("=" * 60)
+        print("\nWrite down these 24 words and store them in a safe place.")
+        print("This is the ONLY time they will be shown.\n")
+        print("-" * 60)
+        words = mnemonic.split()
+        for i in range(0, 24, 4):
+            print(
+                f"  {i+1:2}. {words[i]:12}  {i+2:2}. {words[i+1]:12}  "
+                f"{i+3:2}. {words[i+2]:12}  {i+4:2}. {words[i+3]:12}"
+            )
+        print("-" * 60)
+        print("\n⚠️  If you lose this mnemonic, you CANNOT recover your funds!")
+        print("=" * 60)
+        input("\nPress ENTER after you have saved your mnemonic...")
+        print()
+        return True
+
     def remove_account(self, address_or_tag: str):
         """Remove account"""
         account = self.find_stored_account(address_or_tag)
