@@ -178,14 +178,23 @@ class RateLimitedWeb3:
         self._rate_limiter = rate_limiter
         self._chain_interface = chain_interface
         self._eth_wrapper = None
+        # Initialize eth wrapper immediately
+        self._update_eth_wrapper()
+
+    def set_backend(self, new_web3):
+        """Update the underlying Web3 instance (hot-swap)."""
+        self._web3 = new_web3
+        self._update_eth_wrapper()
+
+    def _update_eth_wrapper(self):
+        """Update the eth wrapper to point to the current _web3.eth."""
+        self._eth_wrapper = RateLimitedEth(
+            self._web3.eth, self._rate_limiter, self._chain_interface
+        )
 
     @property
     def eth(self):
         """Return rate-limited eth interface."""
-        if self._eth_wrapper is None:
-            self._eth_wrapper = RateLimitedEth(
-                self._web3.eth, self._rate_limiter, self._chain_interface
-            )
         return self._eth_wrapper
 
     def __getattr__(self, name):

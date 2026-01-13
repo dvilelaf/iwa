@@ -159,7 +159,11 @@ class ChainInterface:
         """Initialize Web3 with current RPC."""
         rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
         raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
-        self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
+
+        if hasattr(self, "web3") and isinstance(self.web3, RateLimitedWeb3):
+            self.web3.set_backend(raw_web3)
+        else:
+            self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """Check if error is a rate limit (429) error."""
