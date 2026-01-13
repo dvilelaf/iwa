@@ -35,3 +35,4 @@ config.yaml
 iwa.code-workspace
 
 node_modules/
+site/
