@@ -24,7 +24,7 @@ from eth_account.signers.local import LocalAccount
 from pydantic import BaseModel, PrivateAttr, model_validator
 
 from iwa.core.constants import WALLET_PATH
-from iwa.core.models import EthereumAddress, StoredAccount, StoredSafeAccount
+from iwa.core.models import EncryptedData, EthereumAddress, StoredAccount, StoredSafeAccount
 from iwa.core.secrets import secrets
 from iwa.core.utils import (
     configure_logger,
@@ -42,15 +42,7 @@ AES_NONCE_LEN = 12
 SALT_LEN = 16
 
 
-from iwa.core.models import (
-    CoreConfig,
-    EncryptedData,
-    StoredAccount,
-    StoredSafeAccount,
-    VirtualNet,
-)
 
-# ... (omitted)
 
 class EncryptedAccount(StoredAccount, EncryptedData):
     """EncryptedAccount"""
@@ -390,6 +382,7 @@ class KeyStorage(BaseModel):
 
         Returns:
             True if a mnemonic was displayed, False otherwise.
+
         """
         # SECURITY: Do NOT print mnemonic if not in an interactive terminal (avoids Docker logs)
         if not sys.stdout.isatty():
