@@ -83,7 +83,7 @@ def test_encrypted_mnemonic_decrypt_unsupported_kdf():
 
 def test_encrypted_mnemonic_decrypt_unsupported_cipher():
     em = EncryptedMnemonic(
-        cypher="unsupported", kdf_salt="salt", nonce="nonce", ciphertext="ciphertext"
+        cipher="unsupported", kdf_salt="salt", nonce="nonce", ciphertext="ciphertext"
     )
     with pytest.raises(ValueError, match="Unsupported cipher"):
         em.decrypt("password")

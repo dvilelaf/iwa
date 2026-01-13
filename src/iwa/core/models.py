@@ -14,6 +14,18 @@ from iwa.core.types import EthereumAddress  # noqa: F401 - re-exported for backw
 from iwa.core.utils import singleton
 
 
+class EncryptedData(BaseModel):
+    """Encrypted data structure with explicit KDF parameters."""
+
+    kdf: str = "scrypt"
+    kdf_salt: str
+    kdf_n: int = 16384  # 2**14
+    kdf_r: int = 8
+    kdf_p: int = 1
+    kdf_len: int = 32
+    cipher: str = "aesgcm"
+    nonce: str
+    ciphertext: str
 class StoredAccount(BaseModel):
     """StoredAccount representing an EOA or contract account."""
 

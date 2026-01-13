@@ -7,7 +7,7 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from bip_utils import (
     Bip39MnemonicGenerator,
@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, model_validator
 
 from iwa.core.constants import WALLET_PATH
 from iwa.core.models import EthereumAddress, StoredAccount, StoredSafeAccount
@@ -42,22 +42,56 @@ AES_NONCE_LEN = 12
 SALT_LEN = 16
 
 
-class EncryptedAccount(StoredAccount):
+from iwa.core.models import (
+    CoreConfig,
+    EncryptedData,
+    StoredAccount,
+    StoredSafeAccount,
+    VirtualNet,
+)
+
+# ... (omitted)
+
+class EncryptedAccount(StoredAccount, EncryptedData):
     """EncryptedAccount"""
 
-    salt: str
-    nonce: str
-    ciphertext: str
+    # Legacy field support
+    salt: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def upgrade_legacy_format(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Upgrade legacy account format to new EncryptedData structure."""
+        if isinstance(data, dict):
+            # Check if this is a legacy format (has 'salt' but no 'kdf_salt')
+            if "salt" in data and "kdf_salt" not in data:
+                data["kdf_salt"] = data["salt"]
+                # Default KDF params for legacy accounts were:
+                # n=2**14 (16384), r=8, p=1, len=32
+                data.setdefault("kdf_n", SCRYPT_N)
+                data.setdefault("kdf_r", SCRYPT_R)
+                data.setdefault("kdf_p", SCRYPT_P)
+                data.setdefault("kdf_len", SCRYPT_LEN)
+                data.setdefault("kdf", "scrypt")
+                data.setdefault("cipher", "aesgcm")
+        return data
 
     @staticmethod
-    def derive_key(password: str, salt: bytes) -> bytes:
+    def derive_key(
+        password: str,
+        salt: bytes,
+        n: int = SCRYPT_N,
+        r: int = SCRYPT_R,
+        p: int = SCRYPT_P,
+        length: int = SCRYPT_LEN,
+    ) -> bytes:
         """Derive key"""
         kdf = Scrypt(
             salt=salt,
-            length=32,
-            n=2**14,
-            r=8,
-            p=1,
+            length=length,
+            n=n,
+            r=r,
+            p=p,
         )
         return kdf.derive(password.encode())
 
@@ -67,10 +101,20 @@ class EncryptedAccount(StoredAccount):
             raise ValueError("Password must be provided or set in secrets.env (WALLET_PASSWORD)")
         if not password:
             password = secrets.wallet_password.get_secret_value()
-        salt_bytes = base64.b64decode(self.salt)
+
+        # Use kdf_salt (populated by upgrade_legacy_format if needed)
+        salt_bytes = base64.b64decode(self.kdf_salt)
         nonce_bytes = base64.b64decode(self.nonce)
         ciphertext_bytes = base64.b64decode(self.ciphertext)
-        key = EncryptedAccount.derive_key(password, salt_bytes)
+
+        key = EncryptedAccount.derive_key(
+            password,
+            salt_bytes,
+            n=self.kdf_n,
+            r=self.kdf_r,
+            p=self.kdf_p,
+            length=self.kdf_len,
+        )
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce_bytes, ciphertext_bytes, None).decode()
 
@@ -79,19 +123,44 @@ class EncryptedAccount(StoredAccount):
         private_key: str, password: str, tag: Optional[str] = None
     ) -> "EncryptedAccount":
         """Encrypt private key"""
-        salt = os.urandom(16)
-        key = EncryptedAccount.derive_key(password, salt)
+        # Generate new random salt
+        salt = os.urandom(SALT_LEN)
+
+        # Use standard constants for new encryptions
+        kdf_n = SCRYPT_N
+        kdf_r = SCRYPT_R
+        kdf_p = SCRYPT_P
+        kdf_len = SCRYPT_LEN
+
+        key = EncryptedAccount.derive_key(
+            password,
+            salt,
+            n=kdf_n,
+            r=kdf_r,
+            p=kdf_p,
+            length=kdf_len
+        )
         aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
+        nonce = os.urandom(AES_NONCE_LEN)
         ciphertext = aesgcm.encrypt(nonce, private_key.encode(), None)
 
         acct = Account.from_key(private_key)
+
         return EncryptedAccount(
             address=acct.address,
-            salt=base64.b64encode(salt).decode(),
-            nonce=base64.b64encode(nonce).decode(),
-            ciphertext=base64.b64encode(ciphertext).decode(),
-            tag=tag,
+            tag=tag or "",
+            # EncryptedData fields
+            kdf="scrypt",
+            kdf_salt=base64.b64encode(salt).decode("utf-8"),
+            kdf_n=kdf_n,
+            kdf_r=kdf_r,
+            kdf_p=kdf_p,
+            kdf_len=kdf_len,
+            cipher="aesgcm",
+            nonce=base64.b64encode(nonce).decode("utf-8"),
+            ciphertext=base64.b64encode(ciphertext).decode("utf-8"),
+            # Legacy field for backward compat
+            salt=base64.b64encode(salt).decode("utf-8"),
         )
 
 

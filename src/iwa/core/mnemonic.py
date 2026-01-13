@@ -21,7 +21,7 @@ from eth_account import Account
 from pydantic import BaseModel
 
 from iwa.core.constants import WALLET_PATH
-from iwa.core.models import EthereumAddress, StoredAccount
+from iwa.core.models import EncryptedData, EthereumAddress, StoredAccount
 
 MNEMONIC_WORD_NUMBER = Bip39WordsNum.WORDS_NUM_24
 SCRYPT_N = 2**14
@@ -32,18 +32,8 @@ AES_NONCE_LEN = 12
 SALT_LEN = 16
 
 
-class EncryptedMnemonic(BaseModel):
+class EncryptedMnemonic(EncryptedData):
     """EncryptedMnemonic"""
-
-    kdf: str = "scrypt"
-    kdf_salt: str
-    kdf_n: int = SCRYPT_N
-    kdf_r: int = SCRYPT_R
-    kdf_p: int = SCRYPT_P
-    kdf_len: int = SCRYPT_LEN
-    cypher: str = "aesgcm"
-    nonce: str
-    ciphertext: str
 
     def derive_key(self, password: bytes) -> bytes:
         """Derive a key from a password and salt using scrypt."""
@@ -61,7 +51,7 @@ class EncryptedMnemonic(BaseModel):
         # validate expected algorithms
         if self.kdf != "scrypt":
             raise ValueError(f"Unsupported kdf: {self.kdf}")
-        if self.cypher != "aesgcm":
+        if self.cipher != "aesgcm":
             raise ValueError("Unsupported cipher, expected 'aesgcm'")
 
         nonce = base64.b64decode(self.nonce)
