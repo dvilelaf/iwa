@@ -152,17 +152,19 @@ class RateLimitedEth:
             delattr(self._eth, name)
 
     def _wrap_with_rate_limit(self, method, method_name):
-        """Wrap a method with rate limiting and error handling."""
+        """Wrap a method with rate limiting.
+
+        Note: Error handling (rotation, retry) is NOT done here.
+        It is the responsibility of `ChainInterface.with_retry()` to handle
+        errors and rotate RPCs as needed. This wrapper only ensures
+        rate limiting.
+        """
 
         def wrapper(*args, **kwargs):
             if not self._rate_limiter.acquire(timeout=30.0):
                 raise TimeoutError(f"Rate limit timeout waiting for {method_name}")
 
-            try:
-                return method(*args, **kwargs)
-            except Exception as e:
-                self._chain_interface._handle_rpc_error(e)
-                raise
+            return method(*args, **kwargs)
 
         return wrapper
 
