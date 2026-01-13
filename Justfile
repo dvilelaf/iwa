@@ -115,3 +115,7 @@ release version:
 # List contracts status (sort options: name, rewards, epoch, slots, olas)
 contracts sort="name":
     PYTHONPATH=src uv run src/iwa/tools/list_contracts.py --sort {{sort}}
+
+# Check wallet integrity (accounts and mnemonic)
+wallet-check:
+    PYTHONPATH=src uv run src/iwa/tools/wallet_check.py
