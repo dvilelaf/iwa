@@ -118,4 +118,4 @@ contracts sort="name":
 
 # Check wallet integrity (accounts and mnemonic)
 wallet-check:
-    PYTHONPATH=src uv run src/iwa/tools/wallet_check.py
+    uv run iwa-wallet-check

@@ -39,6 +39,7 @@ dependencies = [
 
 [project.scripts]
 iwa = "iwa.core.cli:iwa_cli"
+iwa-wallet-check = "iwa.tools.wallet_check:check_wallet"
 
 [dependency-groups]
 dev = [
