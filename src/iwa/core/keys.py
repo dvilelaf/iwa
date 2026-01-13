@@ -6,8 +6,16 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
+from bip_utils import (
+    Bip39MnemonicGenerator,
+    Bip39SeedGenerator,
+    Bip39WordsNum,
+    Bip44,
+    Bip44Changes,
+    Bip44Coins,
+)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from eth_account import Account
@@ -22,6 +30,15 @@ from iwa.core.utils import (
 )
 
 logger = configure_logger()
+
+# Mnemonic constants
+MNEMONIC_WORD_NUMBER = Bip39WordsNum.WORDS_NUM_24
+SCRYPT_N = 2**14
+SCRYPT_R = 8
+SCRYPT_P = 1
+SCRYPT_LEN = 32
+AES_NONCE_LEN = 12
+SALT_LEN = 16
 
 
 class EncryptedAccount(StoredAccount):
@@ -81,8 +98,10 @@ class KeyStorage(BaseModel):
     """KeyStorage"""
 
     accounts: Dict[EthereumAddress, Union[EncryptedAccount, StoredSafeAccount]] = {}
+    encrypted_mnemonic: Optional[dict] = None  # Encrypted BIP-39 mnemonic for master
     _path: Path = PrivateAttr()  # not stored nor validated
     _password: str = PrivateAttr()
+    _pending_mnemonic: Optional[str] = PrivateAttr(default=None)  # Temp storage for display
 
     def __init__(self, path: Path = Path(WALLET_PATH), password: Optional[str] = None):
         """Initialize key storage."""
@@ -165,20 +184,101 @@ class KeyStorage(BaseModel):
         # Enforce read/write only for the owner
         os.chmod(self._path, 0o600)
 
+    @staticmethod
+    def _encrypt_mnemonic(mnemonic: str, password: str) -> dict:
+        """Encrypt a mnemonic with AES-GCM using a scrypt-derived key."""
+        password_b = password.encode("utf-8")
+        salt = os.urandom(SALT_LEN)
+        kdf = Scrypt(salt=salt, length=SCRYPT_LEN, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)
+        key = kdf.derive(password_b)
+        aesgcm = AESGCM(key)
+        nonce = os.urandom(AES_NONCE_LEN)
+        ct = aesgcm.encrypt(nonce, mnemonic.encode("utf-8"), None)
+        return {
+            "kdf": "scrypt",
+            "kdf_salt": base64.b64encode(salt).decode(),
+            "kdf_n": SCRYPT_N,
+            "kdf_r": SCRYPT_R,
+            "kdf_p": SCRYPT_P,
+            "kdf_len": SCRYPT_LEN,
+            "cipher": "aesgcm",
+            "nonce": base64.b64encode(nonce).decode(),
+            "ciphertext": base64.b64encode(ct).decode(),
+        }
+
+    @staticmethod
+    def _derive_private_key_from_mnemonic(mnemonic: str, index: int = 0) -> str:
+        """Derive ETH private key from mnemonic using BIP-44 path."""
+        seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
+        bip44_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
+        addr_ctx = (
+            bip44_ctx.Purpose()
+            .Coin()
+            .Account(0)
+            .Change(Bip44Changes.CHAIN_EXT)
+            .AddressIndex(index)
+        )
+        return addr_ctx.PrivateKey().Raw().ToHex()
+
+    def _create_master_from_mnemonic(self) -> Tuple[EncryptedAccount, str]:
+        """Create master account from a new BIP-39 mnemonic.
+
+        Returns:
+            Tuple of (EncryptedAccount, plaintext_mnemonic).
+            The mnemonic should be shown to user ONCE and never stored in plaintext.
+
+        """
+        # Generate 24-word mnemonic
+        mnemonic = Bip39MnemonicGenerator().FromWordsNumber(MNEMONIC_WORD_NUMBER)
+        mnemonic_str = mnemonic.ToStr()
+
+        # Derive first account (index 0)
+        private_key_hex = self._derive_private_key_from_mnemonic(mnemonic_str, 0)
+
+        # Encrypt mnemonic for storage
+        self.encrypted_mnemonic = self._encrypt_mnemonic(mnemonic_str, self._password)
+
+        # Encrypt private key and create account
+        encrypted_acct = EncryptedAccount.encrypt_private_key(
+            private_key_hex, self._password, "master"
+        )
+        self.accounts[encrypted_acct.address] = encrypted_acct
+        self.save()
+
+        return encrypted_acct, mnemonic_str
+
     def create_account(self, tag: str) -> EncryptedAccount:
-        """Create account"""
+        """Create account. Master is derived from mnemonic, others are random."""
         tags = [acct.tag for acct in self.accounts.values()]
         if not tags:
             tag = "master"  # First account is always master
         if tag in tags:
             raise ValueError(f"Tag '{tag}' already exists in wallet.")
 
-        acct = Account.create()
+        # Master account: derive from mnemonic
+        if tag == "master":
+            encrypted_acct, mnemonic = self._create_master_from_mnemonic()
+            self._pending_mnemonic = mnemonic  # Store temporarily for display
+            return encrypted_acct
 
+        # Non-master: random key as before
+        acct = Account.create()
         encrypted = EncryptedAccount.encrypt_private_key(acct.key.hex(), self._password, tag)
         self.accounts[acct.address] = encrypted
         self.save()
         return encrypted
+
+    def get_pending_mnemonic(self) -> Optional[str]:
+        """Get and clear the pending mnemonic (for one-time display).
+
+        Returns:
+            The mnemonic string if available, None otherwise.
+            Clears the pending mnemonic after returning.
+
+        """
+        mnemonic = self._pending_mnemonic
+        self._pending_mnemonic = None
+        return mnemonic
 
     def remove_account(self, address_or_tag: str):
         """Remove account"""
