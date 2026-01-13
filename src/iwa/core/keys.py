@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
@@ -207,6 +208,35 @@ class KeyStorage(BaseModel):
         }
 
     @staticmethod
+    def _decrypt_mnemonic(encobj: dict, password: str) -> str:
+        """Decrypt a mnemonic previously created by `_encrypt_mnemonic`."""
+        if encobj.get("kdf") != "scrypt":
+            raise ValueError(f"Unsupported kdf: {encobj.get('kdf')}")
+        if encobj.get("cipher") != "aesgcm":
+            raise ValueError(f"Unsupported cipher: {encobj.get('cipher')}")
+
+        salt = base64.b64decode(encobj["kdf_salt"])
+        nonce = base64.b64decode(encobj["nonce"])
+        ct = base64.b64decode(encobj["ciphertext"])
+
+        n = encobj.get("kdf_n", SCRYPT_N)
+        r = encobj.get("kdf_r", SCRYPT_R)
+        p = encobj.get("kdf_p", SCRYPT_P)
+        length = encobj.get("kdf_len", SCRYPT_LEN)
+
+        kdf = Scrypt(salt=salt, length=length, n=n, r=r, p=p)
+        key = kdf.derive(password.encode("utf-8"))
+        aesgcm = AESGCM(key)
+        pt = aesgcm.decrypt(nonce, ct, None)
+        return pt.decode("utf-8")
+
+    def decrypt_mnemonic(self) -> str:
+        """Decrypt the stored mnemonic using the wallet password."""
+        if not self.encrypted_mnemonic:
+            raise ValueError("No encrypted mnemonic found in wallet.")
+        return self._decrypt_mnemonic(self.encrypted_mnemonic, self._password)
+
+    @staticmethod
     def _derive_private_key_from_mnemonic(mnemonic: str, index: int = 0) -> str:
         """Derive ETH private key from mnemonic using BIP-44 path."""
         seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
@@ -285,8 +315,21 @@ class KeyStorage(BaseModel):
 
         Returns:
             True if a mnemonic was displayed, False otherwise.
-
         """
+        # SECURITY: Do NOT print mnemonic if not in an interactive terminal (avoids Docker logs)
+        if not sys.stdout.isatty():
+            if self._pending_mnemonic:
+                print("\n" + "!" * 60)
+                print("⚠️  SECURITY WARNING: MASTER ACCOUNT CREATED FROM MNEMONIC")
+                print("!" * 60)
+                print("\nSince this is a non-interactive terminal (e.g. Docker background),")
+                print("the mnemonic is NOT displayed here to prevent it from being")
+                print("stored in log files.")
+                print("\nTo view and backup your mnemonic, run:")
+                print("  just mnemonic")
+                print("!" * 60 + "\n")
+            return False
+
         mnemonic = self.get_pending_mnemonic()
         if not mnemonic:
             return False

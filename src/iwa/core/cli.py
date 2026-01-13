@@ -67,6 +67,31 @@ def account_list(
     )
 
 
+@wallet_cli.command("mnemonic")
+def show_mnemonic():
+    """Show the master account mnemonic (requires password)"""
+    key_storage = KeyStorage()
+    try:
+        mnemonic = key_storage.decrypt_mnemonic()
+        print("\n" + "=" * 60)
+        print("📜 MASTER ACCOUNT MNEMONIC (BIP-39)")
+        print("=" * 60)
+        print("\nWrite down these 24 words and store them in a safe place.")
+        print("-" * 60)
+        words = mnemonic.split()
+        for i in range(0, 24, 4):
+            print(
+                f"  {i+1:2}. {words[i]:12}  {i+2:2}. {words[i+1]:12}  "
+                f"{i+3:2}. {words[i+2]:12}  {i+4:2}. {words[i+3]:12}"
+            )
+        print("-" * 60)
+        print("\n⚠️  Keep this phrase secret! Anyone with it can access your funds.")
+        print("=" * 60)
+    except Exception as e:
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1) from e
+
+
 @wallet_cli.command("send")
 def account_send(
     from_address_or_tag: str = typer.Option(..., "--from", "-f", help="From address or tag"),
