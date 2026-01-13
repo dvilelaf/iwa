@@ -112,6 +112,6 @@ release-check:
 # Create a new release (tag and push) - triggers GitHub Actions
 release version:
 
-# List contracts status
-contracts:
-    PYTHONPATH=src uv run src/iwa/tools/list_contracts.py
+# List contracts status (sort options: name, rewards, epoch, slots, olas)
+contracts sort="name":
+    PYTHONPATH=src uv run src/iwa/tools/list_contracts.py --sort {{sort}}
