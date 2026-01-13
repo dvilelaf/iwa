@@ -21,8 +21,8 @@ DEFAULT_RPC_TIMEOUT = 10
 class ChainInterface:
     """ChainInterface with rate limiting, retry logic, and RPC rotation support."""
 
-    DEFAULT_MAX_RETRIES = 3
-    DEFAULT_RETRY_DELAY = 0.5
+    DEFAULT_MAX_RETRIES = 6  # Allow trying most/all available RPCs on rate limit
+    DEFAULT_RETRY_DELAY = 1.0  # Base delay between retries (exponential backoff)
 
     chain: SupportedChain
 
@@ -160,7 +160,9 @@ class ChainInterface:
         rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
         raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
 
-        if hasattr(self, "web3") and isinstance(self.web3, RateLimitedWeb3):
+        # Use duck typing to check if current web3 is a RateLimitedWeb3 wrapper
+        # (isinstance check fails when RateLimitedWeb3 is mocked in tests)
+        if hasattr(self, "web3") and hasattr(self.web3, "set_backend"):
             self.web3.set_backend(raw_web3)
         else:
             self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
