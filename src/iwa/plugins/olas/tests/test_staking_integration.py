@@ -247,8 +247,8 @@ def test_staking_contract(tmp_path):  # noqa: C901
                 assert staking.call("nonexistent") == 0
 
                 # Activity checker interactions - nonces now returns [safe_nonce, mech_requests]
-                mock_contract.functions.getMultisigNonces.return_value.call.return_value = [5, 3]
-                staking.activity_checker.contract = mock_contract
+                # Mock via patch since contract is now a property
+                staking.activity_checker.get_multisig_nonces = MagicMock(return_value=(5, 3))
 
                 staking.ts_checkpoint = MagicMock(return_value=0)
 

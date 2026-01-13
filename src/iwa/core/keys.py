@@ -137,9 +137,10 @@ class KeyStorage(BaseModel):
                 with open(path, "r") as f:
                     data = json.load(f)
                     self.accounts = {
-                        k: EncryptedAccount(**v) if "signers" not in v else StoredSafeAccount(**v)
+                        EthereumAddress(k): EncryptedAccount(**v) if "signers" not in v else StoredSafeAccount(**v)
                         for k, v in data.get("accounts", {}).items()
                     }
+                    self.encrypted_mnemonic = data.get("encrypted_mnemonic")
             except json.JSONDecodeError:
                 logger.error(f"Failed to load wallet from {path}: File is corrupted.")
                 self.accounts = {}

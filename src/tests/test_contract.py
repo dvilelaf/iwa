@@ -44,6 +44,8 @@ def test_init_abi_dict(mock_chain_interface):
 def test_call(mock_chain_interface, mock_abi_file):
     contract = MockContract("0xAddress", "gnosis")
     contract.contract.functions.testFunc.return_value.call.return_value = "result"
+    # with_retry now wraps the call - make it execute the lambda
+    mock_chain_interface.with_retry.side_effect = lambda fn, **kwargs: fn()
     assert contract.call("testFunc") == "result"
 
 
