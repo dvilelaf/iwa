@@ -1,8 +1,8 @@
 """Tool to list Olas staking contracts status."""
 
 import argparse
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from rich.console import Console
 from rich.progress import track
