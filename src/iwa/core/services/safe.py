@@ -99,8 +99,11 @@ class SafeService:
         return owner_addresses
 
     def _get_ethereum_client(self, chain_name: str) -> EthereumClient:
-        rpc_secret = getattr(secrets, f"{chain_name}_rpc")
-        return EthereumClient(rpc_secret.get_secret_value())
+        from iwa.core.chain import ChainInterfaces
+
+        # Use ChainInterface which has proper RPC rotation and parsing
+        chain_interface = ChainInterfaces().get(chain_name)
+        return EthereumClient(chain_interface.chain.rpc)
 
     def _deploy_safe_contract(
         self,
@@ -248,8 +251,11 @@ class SafeService:
                 continue
 
             for chain in account.chains:
-                rpc_secret = getattr(secrets, f"{chain}_rpc")
-                ethereum_client = EthereumClient(rpc_secret.get_secret_value())
+                from iwa.core.chain import ChainInterfaces
+
+                # Use ChainInterface which has proper RPC rotation and parsing
+                chain_interface = ChainInterfaces().get(chain)
+                ethereum_client = EthereumClient(chain_interface.chain.rpc)
 
                 code = ethereum_client.w3.eth.get_code(account.address)
 

@@ -28,8 +28,10 @@ class SafeMultisig:
         if chain_name.lower() not in normalized_chains:
             raise ValueError(f"Safe account is not deployed on chain: {chain_name}")
 
-        rpc_secret = getattr(secrets, f"{chain_name.lower()}_rpc")
-        ethereum_client = EthereumClient(rpc_secret.get_secret_value())
+        from iwa.core.chain import ChainInterfaces
+
+        chain_interface = ChainInterfaces().get(chain_name.lower())
+        ethereum_client = EthereumClient(chain_interface.chain.rpc)
         self.multisig = Safe(safe_account.address, ethereum_client)
         self.ethereum_client = ethereum_client
 

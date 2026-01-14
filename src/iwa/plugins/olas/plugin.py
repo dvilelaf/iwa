@@ -65,13 +65,16 @@ class OlasPlugin(Plugin):
             from safe_eth.eth import EthereumClient
             from safe_eth.safe import Safe
 
-            from iwa.core.secrets import secrets
 
-            rpc_secret = getattr(secrets, f"{chain_name}_rpc", None)
-            if not rpc_secret:
-                return None, None  # Can't verify, skip
 
-            ethereum_client = EthereumClient(rpc_secret.get_secret_value())
+            from iwa.core.chain import ChainInterfaces
+
+            try:
+                chain_interface = ChainInterfaces().get(chain_name)
+            except ValueError:
+                return None, None  # Chain not supported/configured
+
+            ethereum_client = EthereumClient(chain_interface.chain.rpc)
             safe = Safe(safe_address, ethereum_client)
             owners = safe.retrieve_owners()
             return owners, True
