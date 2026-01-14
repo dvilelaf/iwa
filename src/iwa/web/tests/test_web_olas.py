@@ -28,7 +28,7 @@ async def override_verify_auth():
 app.dependency_overrides[verify_auth] = override_verify_auth
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
     """TestClient for FastAPI app."""
     return TestClient(app)
