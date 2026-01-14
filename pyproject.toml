@@ -40,6 +40,9 @@ dependencies = [
 [project.scripts]
 iwa = "iwa.core.cli:iwa_cli"
 iwa-wallet-check = "iwa.tools.wallet_check:check_wallet"
+iwa-reset-tenderly = "iwa.tools.reset_tenderly:main"
+iwa-reset-env = "iwa.tools.reset_env:main"
+iwa-check-profile = "iwa.tools.check_profile:main"
 
 [dependency-groups]
 dev = [
