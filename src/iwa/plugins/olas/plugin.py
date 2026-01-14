@@ -48,12 +48,8 @@ class OlasPlugin(Plugin):
         """Create a new Olas service"""
         wallet = Wallet()
         manager = ServiceManager(wallet)
-        manager.create(
-            chain_name=chain_name,
-            service_owner_address_or_tag=owner,
-            token_address_or_tag=token,
-            bond_amount_wei=bond,
-        )
+        # Note: Manager logic currently depends on internal config state which might need setup
+        manager.create(chain_name, owner, token, bond)
 
     def _get_safe_signers(self, safe_address: str, chain_name: str) -> tuple:
         """Query Safe signers on-chain.
