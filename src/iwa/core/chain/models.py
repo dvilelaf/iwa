@@ -78,13 +78,11 @@ class Gnosis(SupportedChain):
         if not self.rpcs and secrets.gnosis_rpc:
             self.rpcs = secrets.gnosis_rpc.get_secret_value().split(",")
 
-        # Defensive: ensure no comma-separated strings in list
+        # Defensive: ensure no comma-separated strings and NO quotes in list
         new_rpcs = []
         for rpc in self.rpcs:
-            if "," in rpc:
-                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
-            else:
-                new_rpcs.append(rpc)
+            parts = [r.strip().strip("'\"") for r in rpc.split(",") if r.strip()]
+            new_rpcs.extend(parts)
         self.rpcs = new_rpcs
 
 
@@ -107,13 +105,11 @@ class Ethereum(SupportedChain):
         if not self.rpcs and secrets.ethereum_rpc:
             self.rpcs = secrets.ethereum_rpc.get_secret_value().split(",")
 
-        # Defensive: ensure no comma-separated strings in list
+        # Defensive: ensure no comma-separated strings and NO quotes in list
         new_rpcs = []
         for rpc in self.rpcs:
-            if "," in rpc:
-                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
-            else:
-                new_rpcs.append(rpc)
+            parts = [r.strip().strip("'\"") for r in rpc.split(",") if r.strip()]
+            new_rpcs.extend(parts)
         self.rpcs = new_rpcs
 
 
@@ -136,13 +132,11 @@ class Base(SupportedChain):
         if not self.rpcs and secrets.base_rpc:
             self.rpcs = secrets.base_rpc.get_secret_value().split(",")
 
-        # Defensive: ensure no comma-separated strings in list
+        # Defensive: ensure no comma-separated strings and NO quotes in list
         new_rpcs = []
         for rpc in self.rpcs:
-            if "," in rpc:
-                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
-            else:
-                new_rpcs.append(rpc)
+            parts = [r.strip().strip("'\"") for r in rpc.split(",") if r.strip()]
+            new_rpcs.extend(parts)
         self.rpcs = new_rpcs
 
 
