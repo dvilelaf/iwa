@@ -111,8 +111,10 @@ def test_get_safe_signers_edge_cases(plugin):
         assert exists is None
 
     # 2. Safe doesn't exist (raises exception)
-    with patch("iwa.core.secrets.secrets") as mock_settings:
-        mock_settings.gnosis_rpc = MagicMock()
+    with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
+        mock_ci = mock_ci_cls.return_value
+        mock_ci.get.return_value.chain.rpcs = ["http://rpc"]
+        mock_ci.get.return_value.chain.rpc = "http://rpc"
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
             mock_safe.retrieve_owners.side_effect = Exception("Generic error")
@@ -122,8 +124,10 @@ def test_get_safe_signers_edge_cases(plugin):
             assert exists is False
 
     # 3. Success path
-    with patch("iwa.core.secrets.secrets") as mock_settings:
-        mock_settings.gnosis_rpc = MagicMock()
+    with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
+        mock_ci = mock_ci_cls.return_value
+        mock_ci.get.return_value.chain.rpcs = ["http://rpc"]
+        mock_ci.get.return_value.chain.rpc = "http://rpc"
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
             mock_safe.retrieve_owners.return_value = ["0xAgent"]
