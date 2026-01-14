@@ -64,10 +64,10 @@ class ServiceRegistryContract(ContractInstance):
         """Get the token address for a service."""
         return self.call("token", service_id)
 
-    def get_agent_params(self, service_id: int, agent_id: int) -> Dict:
-        """Get agent params (slots, bond) for a service."""
-        (slots, bond) = self.call("getAgentParams", service_id, agent_id)
-        return {"slots": slots, "bond": bond}
+    def get_agent_params(self, service_id: int) -> list:
+        """Get agent params (slots, bond) for all agents in a service."""
+        num_ids, params = self.call("getAgentParams", service_id)
+        return [{"slots": p[0], "bond": p[1]} for p in params]
 
     def prepare_approve_tx(
         self,

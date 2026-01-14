@@ -228,7 +228,9 @@ class StakingManagerMixin:
                 return None
 
             agent_id = agent_ids[0]
-            agent_params = self.registry.get_agent_params(self.service.service_id, agent_id)
+            params_list = self.registry.get_agent_params(self.service.service_id)
+            # Find params for the first agent (trader)
+            agent_params = params_list[0]
             current_bond = agent_params["bond"]
 
             if current_bond < required_bond:
