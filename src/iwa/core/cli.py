@@ -70,7 +70,8 @@ def account_list(
 @wallet_cli.command("mnemonic")
 def show_mnemonic():
     """Show the master account mnemonic (requires password)"""
-    key_storage = KeyStorage()
+    password = typer.prompt("Enter wallet password", hide_input=True)
+    key_storage = KeyStorage(password=password)
     try:
         mnemonic = key_storage.decrypt_mnemonic()
         print("\n" + "=" * 60)
