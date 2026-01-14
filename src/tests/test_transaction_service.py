@@ -55,6 +55,10 @@ def mock_chain_interfaces():
         gnosis_interface.web3.eth.wait_for_transaction_receipt.return_value = mock_receipt
 
         instance.get.return_value = gnosis_interface
+
+        # Mock with_retry to execute the operation
+        gnosis_interface.with_retry.side_effect = lambda op, **kwargs: op()
+
         yield instance
 
 

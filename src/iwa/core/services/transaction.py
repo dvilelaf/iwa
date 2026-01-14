@@ -30,7 +30,7 @@ class TransactionService:
         """Sign and send a transaction with retry logic for gas."""
         chain_interface = ChainInterfaces().get(chain_name)
         tx = dict(transaction)
-        max_retries = 3
+        max_retries = 10
 
         if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
             return False, {}
@@ -39,7 +39,12 @@ class TransactionService:
             try:
                 signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
                 txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-                receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
+
+                # Use chain_interface.with_retry for waiting for receipt to handle timeouts/RPC errors
+                def wait_for_receipt():
+                    return chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
+
+                receipt = chain_interface.with_retry(wait_for_receipt, operation_name="wait_for_receipt")
 
                 if receipt and getattr(receipt, "status", None) == 1:
                     signer_account = self.account_service.resolve_account(signer_address_or_tag)
@@ -89,7 +94,9 @@ class TransactionService:
             )
             current_gas = int(tx.get("gas", 30_000))
             tx["gas"] = int(current_gas * 1.5)
-            time.sleep(0.5 * attempt)
+            tx["gas"] = int(current_gas * 1.5)
+            # Exponential backoff for gas errors
+            time.sleep(min(2**attempt, 30))
             return True
         logger.exception(f"Error sending transaction: {e}")
         return False
@@ -97,9 +104,11 @@ class TransactionService:
     def _handle_generic_error(self, e, chain_interface, attempt, max_retries) -> bool:
         if attempt < max_retries:
             logger.warning(f"Error encountered: {e}. Attempting to rotate RPC...")
+
             if chain_interface.rotate_rpc():
                 logger.info("Retrying with new RPC...")
-                time.sleep(0.5 * attempt)
+                # Exponential backoff
+                time.sleep(min(2**attempt, 30))
                 return True
         logger.exception(f"Unexpected error sending transaction: {e}")
         return False
