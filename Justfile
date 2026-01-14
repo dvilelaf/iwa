@@ -109,9 +109,22 @@ release-check:
     @just build
     @echo "✅ All checks passed! Ready for release."
 
-# Create a new release (tag and push) - triggers GitHub Actions
-release version:
+# Create a new release (tag and push) based on pyproject.toml version
+release: release-check
+    #!/usr/bin/env bash
+    VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
+    echo "🚀 Releasing version v$VERSION..."
 
+    # Check if tag already exists
+    if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+        echo "❌ Error: Tag v$VERSION already exists!"
+        exit 1
+    fi
+
+    # Create tag and push
+    git tag -a "v$VERSION" -m "Release v$VERSION"
+    git push origin "v$VERSION"
+    echo "✅ v$VERSION released and pushed!"
 # List contracts status (sort options: name, rewards, epoch, slots, olas)
 contracts sort="name":
     PYTHONPATH=src uv run src/iwa/tools/list_contracts.py --sort {{sort}}
