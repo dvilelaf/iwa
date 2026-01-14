@@ -54,41 +54,44 @@ class ChainInterface:
         return "tenderly" in rpc.lower() or "virtual" in rpc.lower()
 
     def init_block_tracking(self):
-        """Initialize block tracking for limit detection."""
+        """Initialize block tracking for limit detection.
+
+        Only enables block limit warnings if we have a valid tenderly config file
+        with initial_block set. Otherwise, leaves _initial_block at 0 which
+        disables the warnings (since we can't accurately track usage without
+        knowing the fork point).
+        """
+        if not self.is_tenderly:
+            return  # Only track for Tenderly vNets
+
         try:
-            self._initial_block = self.web3.eth.block_number
+            from iwa.core.constants import get_tenderly_config_path
+            from iwa.core.models import TenderlyConfig
 
-            if self.is_tenderly:
-                try:
-                    from iwa.core.constants import get_tenderly_config_path
-                    from iwa.core.models import TenderlyConfig
+            profile = Config().core.tenderly_profile
+            config_path = get_tenderly_config_path(profile)
 
-                    profile = Config().core.tenderly_profile
-                    config_path = get_tenderly_config_path(profile)
+            if not config_path.exists():
+                logger.debug(f"Tenderly config not found at {config_path}, skipping block tracking")
+                return
 
-                    if config_path.exists():
-                        t_config = TenderlyConfig.load(config_path)
-                        vnet = t_config.vnets.get(self.chain.name)
-                        if not vnet:
-                            vnet = t_config.vnets.get(self.chain.name.lower())
+            t_config = TenderlyConfig.load(config_path)
+            vnet = t_config.vnets.get(self.chain.name)
+            if not vnet:
+                vnet = t_config.vnets.get(self.chain.name.lower())
 
-                        if vnet and vnet.initial_block > 0:
-                            self._initial_block = vnet.initial_block
-                            logger.info(
-                                f"Tenderly detected! Limit tracking relative to genesis block: {self._initial_block}"
-                            )
-                        else:
-                            logger.warning(
-                                f"Tenderly detected but no initial_block in config. using session start: {self._initial_block}"
-                            )
+            if vnet and vnet.initial_block > 0:
+                self._initial_block = vnet.initial_block
+                logger.info(
+                    f"Tenderly block tracking enabled (genesis: {self._initial_block})"
+                )
+            else:
+                logger.debug(
+                    f"Tenderly config exists but no initial_block for {self.chain.name}"
+                )
 
-                    logger.warning(
-                        "Monitoring Tenderly vNet block usage (Limit ~50 blocks from vNet start)"
-                    )
-                except Exception as ex:
-                    logger.warning(f"Failed to load Tenderly config for block tracking: {ex}")
-        except Exception as e:
-            logger.warning(f"Failed to init block tracking: {e}")
+        except Exception as ex:
+            logger.warning(f"Failed to load Tenderly config for block tracking: {ex}")
 
     def check_block_limit(self, show_progress_bar: bool = False):
         """Check if approaching block limit (heuristic).
