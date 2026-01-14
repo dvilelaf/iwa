@@ -47,8 +47,8 @@ def reset_wallet_mocks():
 
 def test_get_state(client):
     """Cover get_state endpoint (lines 172-188)."""
-    with patch("iwa.core.chain.ChainInterfaces") as mock_chains:
-        mock_chains.get_instance.return_value.chains = {"gnosis": MagicMock(name="gnosis")}
+    with patch("iwa.web.routers.state.ChainInterfaces") as mock_chains:
+        mock_chains.return_value.get.return_value.chains = {"gnosis": MagicMock(name="gnosis")}
         response = client.get("/api/state")
         assert response.status_code == 200
         data = response.json()
