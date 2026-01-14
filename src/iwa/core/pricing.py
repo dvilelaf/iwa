@@ -57,6 +57,13 @@ class PriceService:
 
                 response = requests.get(url, params=params, headers=headers, timeout=10)
 
+                if response.status_code == 401 and self.api_key:
+                    logger.warning("CoinGecko API key invalid (401). Retrying without key...")
+                    # Remove key and retry immediately
+                    self.api_key = None
+                    headers.pop("x-cg-demo-api-key", None)
+                    response = requests.get(url, params=params, headers=headers, timeout=10)
+
                 if response.status_code == 429:
                     logger.warning(
                         f"CoinGecko rate limit reached (429) for {token_id}. Attempt {attempt + 1}/{max_retries + 1}"
