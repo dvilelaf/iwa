@@ -190,10 +190,15 @@ class ContractInstance:
             Exception: If the call fails, with decoded error information.
 
         """
-        method = getattr(self.contract.functions, method_name)
         try:
+            def do_call():
+                # Re-evaluate self.contract on each retry to get current provider
+                # This is critical for RPC rotation to work correctly
+                method = getattr(self.contract.functions, method_name)
+                return method(*args).call()
+
             return self.chain_interface.with_retry(
-                lambda: method(*args).call(),
+                do_call,
                 operation_name=f"call {method_name} on {self.name}",
             )
         except Exception as e:
