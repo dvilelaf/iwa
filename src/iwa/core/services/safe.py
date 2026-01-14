@@ -143,7 +143,7 @@ class SafeService:
                 gas=5_000_000,
                 gas_price=gas_price,
             )
-            return tx_sent.contract_address, tx_sent.tx_hash.hex()
+            return tx_sent.contract_address, f"0x{tx_sent.tx_hash.hex()}"
 
         else:
             # Standard random salt via Safe.create
@@ -155,7 +155,7 @@ class SafeService:
                 threshold=threshold,
                 proxy_factory_address=proxy_factory_address,
             )
-            return create_tx.contract_address, create_tx.tx_hash.hex()
+            return create_tx.contract_address, f"0x{create_tx.tx_hash.hex()}"
 
     def _log_safe_deployment(
         self,
@@ -309,7 +309,7 @@ class SafeService:
             # Execute using the first signer
             safe_tx.execute(signer_keys[0])
 
-            return safe_tx.tx_hash.hex()
+            return f"0x{safe_tx.tx_hash.hex()}"
         finally:
             # SECURITY: Overwrite keys with zeros before clearing (best effort)
             for i in range(len(signer_keys)):

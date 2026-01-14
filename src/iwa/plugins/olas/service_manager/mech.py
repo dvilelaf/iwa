@@ -296,7 +296,7 @@ class MechManagerMixin:
                 chain_name=self.chain_name,
                 tags=["olas_mech_request"],
             )
-            tx_hash = receipt.get("transactionHash").hex() if success else None
+            tx_hash = Web3.to_hex(receipt.get("transactionHash")) if success else None
 
         if not tx_hash:
             logger.error("Failed to send mech request transaction")

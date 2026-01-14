@@ -62,7 +62,7 @@ def mock_dependencies():
         mock_create_tx = MagicMock()
         # Valid Checksum Address - New Safe (Matches Pydantic output)
         mock_create_tx.contract_address = "0xbEC49fa140ACaa83533f900357DCD37866d50618"
-        mock_create_tx.tx_hash.hex.return_value = "0xTxHash"
+        mock_create_tx.tx_hash.hex.return_value = "TxHash"
 
         mock_safe.create.return_value = mock_create_tx
 
@@ -70,7 +70,7 @@ def mock_dependencies():
         mock_deploy_tx = MagicMock()
         # Valid checksum address - Salted Safe
         mock_deploy_tx.contract_address = "0xDAFEA492D9c6733ae3d56b7Ed1ADB60692c98Bc5"
-        mock_deploy_tx.tx_hash.hex.return_value = "0xTxHashSalted"
+        mock_deploy_tx.tx_hash.hex.return_value = "TxHashSalted"
 
         mock_proxy_factory.return_value.deploy_proxy_contract_with_nonce.return_value = (
             mock_deploy_tx

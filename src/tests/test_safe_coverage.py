@@ -56,7 +56,7 @@ def test_execute_safe_transaction_success(safe_service, mock_deps):
         mock_safe_instance = mock_safe_multisig_cls.return_value
         mock_safe_tx = MagicMock()
         mock_safe_instance.build_tx.return_value = mock_safe_tx
-        mock_safe_tx.tx_hash.hex.return_value = "0xTxHash"
+        mock_safe_tx.tx_hash.hex.return_value = "TxHash"
 
         # Execute
         tx_hash = safe_service.execute_safe_transaction(safe_address, to_address, value, chain_name)
@@ -90,7 +90,7 @@ def test_get_sign_and_execute_callback(safe_service, mock_deps):
 
     # Test executing callback
     mock_safe_tx = MagicMock()
-    mock_safe_tx.tx_hash.hex.return_value = "0xTxHash"
+    mock_safe_tx.tx_hash.hex.return_value = "TxHash"
 
     result = callback(mock_safe_tx)
 
