@@ -41,8 +41,8 @@ class TransactionService:
                 txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
                 # Use chain_interface.with_retry for waiting for receipt to handle timeouts/RPC errors
-                def wait_for_receipt():
-                    return chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
+                def wait_for_receipt(tx_h=txn_hash):
+                    return chain_interface.web3.eth.wait_for_transaction_receipt(tx_h)
 
                 receipt = chain_interface.with_retry(wait_for_receipt, operation_name="wait_for_receipt")
 

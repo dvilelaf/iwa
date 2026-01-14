@@ -17,6 +17,10 @@ def mock_chain_interfaces():
         gnosis_interface.chain = mock_chain
         gnosis_interface.web3 = MagicMock()
         instance.get.return_value = gnosis_interface
+
+        # Mock with_retry to execute the operation
+        gnosis_interface.with_retry.side_effect = lambda op, **kwargs: op()
+
         yield instance
 
 
@@ -115,8 +119,8 @@ def test_sign_and_send_max_retries_exhausted(
     # Should fail after max retries
     assert success is False
     assert receipt == {}  # Returns empty dict on failure
-    # Should have tried 3 times (max_retries)
-    assert chain_interface.web3.eth.send_raw_transaction.call_count == 3
+    # Should have tried 10 times (max_retries)
+    assert chain_interface.web3.eth.send_raw_transaction.call_count == 10
 
 
 def test_sign_and_send_transaction_reverted(
