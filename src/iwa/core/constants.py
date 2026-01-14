@@ -16,7 +16,7 @@ WALLET_PATH = DATA_DIR / "wallet.json"
 BACKUP_DIR = DATA_DIR / "backup"
 TENDERLY_CONFIG_PATH = Path("tenderly.yaml")
 
-ABI_PATH = PROJECT_ROOT / "src" / "iwa" / "core" / "contracts" / "abis"
+ABI_PATH = Path(__file__).parent / "contracts" / "abis"
 
 # Standard Ethereum addresses
 ZERO_ADDRESS = EthereumAddress("0x0000000000000000000000000000000000000000")
