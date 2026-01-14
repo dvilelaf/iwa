@@ -39,6 +39,17 @@ def mock_transaction_service():
         yield instance
 
 
+@pytest.fixture(autouse=True)
+def mock_chain_sleeps():
+    """Mock time.sleep in chain modules to speed up tests."""
+    with (
+        patch("iwa.core.chain.interface.time.sleep"),
+        patch("iwa.core.chain.rate_limiter.time.sleep"),
+        patch("time.sleep"),
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_key_storage():
     with patch("iwa.core.wallet.KeyStorage") as mock:
