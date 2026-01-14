@@ -78,6 +78,15 @@ class Gnosis(SupportedChain):
         if not self.rpcs and secrets.gnosis_rpc:
             self.rpcs = secrets.gnosis_rpc.get_secret_value().split(",")
 
+        # Defensive: ensure no comma-separated strings in list
+        new_rpcs = []
+        for rpc in self.rpcs:
+            if "," in rpc:
+                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
+            else:
+                new_rpcs.append(rpc)
+        self.rpcs = new_rpcs
+
 
 @singleton
 class Ethereum(SupportedChain):
@@ -98,6 +107,15 @@ class Ethereum(SupportedChain):
         if not self.rpcs and secrets.ethereum_rpc:
             self.rpcs = secrets.ethereum_rpc.get_secret_value().split(",")
 
+        # Defensive: ensure no comma-separated strings in list
+        new_rpcs = []
+        for rpc in self.rpcs:
+            if "," in rpc:
+                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
+            else:
+                new_rpcs.append(rpc)
+        self.rpcs = new_rpcs
+
 
 @singleton
 class Base(SupportedChain):
@@ -117,6 +135,15 @@ class Base(SupportedChain):
         super().__init__(**data)
         if not self.rpcs and secrets.base_rpc:
             self.rpcs = secrets.base_rpc.get_secret_value().split(",")
+
+        # Defensive: ensure no comma-separated strings in list
+        new_rpcs = []
+        for rpc in self.rpcs:
+            if "," in rpc:
+                new_rpcs.extend([r.strip() for r in rpc.split(",") if r.strip()])
+            else:
+                new_rpcs.append(rpc)
+        self.rpcs = new_rpcs
 
 
 @singleton
