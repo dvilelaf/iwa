@@ -265,8 +265,6 @@ def test_call_uses_fresh_provider_after_rotation(mock_chain_interface, mock_abi_
     provider_versions = []
     current_provider_version = [1]  # Mutable to track version changes
 
-    original_web3 = mock_chain_interface.web3
-
     def mock_contract_factory(address, abi):
         mock = MagicMock()
         # Capture which provider version was used when this contract was created
