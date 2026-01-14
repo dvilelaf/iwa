@@ -1,5 +1,6 @@
 """ChainInterface class for blockchain interactions."""
 
+import threading
 import time
 from typing import Callable, Dict, Optional, Tuple, TypeVar, Union
 
@@ -45,6 +46,7 @@ class ChainInterface:
             )
 
         self._initial_block = 0
+        self._rotation_lock = threading.Lock()
         self._init_web3()
 
     @property
@@ -154,17 +156,6 @@ class ChainInterface:
         print("╚══════════════════════════════════════════════════╝")
         print("")
 
-    def _init_web3(self):
-        """Initialize Web3 with current RPC."""
-        rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
-        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
-
-        # Use duck typing to check if current web3 is a RateLimitedWeb3 wrapper
-        # (isinstance check fails when RateLimitedWeb3 is mocked in tests)
-        if hasattr(self, "web3") and hasattr(self.web3, "set_backend"):
-            self.web3.set_backend(raw_web3)
-        else:
-            self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """Check if error is a rate limit (429) error."""
@@ -269,19 +260,36 @@ class ChainInterface:
 
     def rotate_rpc(self) -> bool:
         """Rotate to the next available RPC."""
-        if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
-            return False
+        with self._rotation_lock:
+            if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
+                return False
 
-        # Simple Round Robin rotation
-        # We don't check health here because the health check itself might consume rate limits
-        # or fail flakily. Better to just switch and try the operation.
-        self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
-        self._init_web3()
+            # Simple Round Robin rotation
+            self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
+            # Internal call to _init_web3 already expects to be under lock if called from here,
+            # but _init_web3 itself doesn't have a lock. Let's make it consistent.
+            self._init_web3_under_lock()
 
-        logger.info(
-            f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}"
-        )
-        return True
+            logger.info(
+                f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}"
+            )
+            return True
+
+    def _init_web3(self):
+        """Initialize Web3 with current RPC (thread-safe)."""
+        with self._rotation_lock:
+            self._init_web3_under_lock()
+
+    def _init_web3_under_lock(self):
+        """Internal non-thread-safe web3 initialization."""
+        rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
+        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
+
+        # Use duck typing to check if current web3 is a RateLimitedWeb3 wrapper
+        if hasattr(self, "web3") and hasattr(self.web3, "set_backend"):
+            self.web3.set_backend(raw_web3)
+        else:
+            self.web3 = RateLimitedWeb3(raw_web3, self._rate_limiter, self)
 
     def check_rpc_health(self) -> bool:
         """Check if the current RPC is healthy."""

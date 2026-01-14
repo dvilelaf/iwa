@@ -36,23 +36,18 @@ def get_staking_contracts(
     try:
         import json
 
-        from iwa.core.chain import ChainInterface
+        from iwa.core.chain import ChainInterfaces
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
-        from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
         contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain, {})
 
         # Get service bond and token if filtered
         service_bond, service_token = _get_service_filter_info(service_key)
 
-        # Load ABI once
-        with open(OLAS_ABI_PATH / "staking.json", "r") as f:
-            abi = json.load(f)
+        # Get correct interface from singleton manager
+        interface = ChainInterfaces().get(chain)
 
-        # Get correct web3 instance
-        w3 = ChainInterface(chain).web3
-
-        results = _fetch_all_contracts(contracts, w3, abi)
+        results = _fetch_all_contracts(contracts, interface)
         filtered_results = _filter_contracts(results, service_bond, service_token)
 
         # Return with filter metadata so frontend can explain filtering
@@ -109,14 +104,18 @@ def _get_service_filter_info(service_key: Optional[str]) -> tuple[Optional[int],
     return service_bond, service_token
 
 
-def _check_availability(name, address, w3, abi):
+def _check_availability(name, address, interface):
     """Check availability of a single staking contract."""
     try:
-        contract = w3.eth.contract(address=address, abi=abi)
-        service_ids = contract.functions.getServiceIds().call()
-        max_services = contract.functions.maxNumServices().call()
-        min_deposit = contract.functions.minStakingDeposit().call()
-        staking_token = contract.functions.stakingToken().call()
+        from iwa.plugins.olas.contracts.staking import StakingContract
+
+        contract = StakingContract(address, chain_name=interface.chain.name)
+
+        # StakingContract uses .call() which handles with_retry and rotation
+        service_ids = contract.call("getServiceIds")
+        max_services = contract.call("maxNumServices")
+        min_deposit = contract.call("minStakingDeposit")
+        staking_token = contract.call("stakingToken")
         used = len(service_ids)
 
         return {
@@ -141,15 +140,14 @@ def _check_availability(name, address, w3, abi):
         }
 
 
-def _fetch_all_contracts(contracts: dict, w3, abi) -> list:
+def _fetch_all_contracts(contracts: dict, interface) -> list:
     """Fetch availability for all contracts using threads."""
     from concurrent.futures import ThreadPoolExecutor
 
     results = []
     with ThreadPoolExecutor(max_workers=10) as executor:
-        # Pass w3 and abi to the helper
         futures = [
-            executor.submit(_check_availability, name, addr, w3, abi)
+            executor.submit(_check_availability, name, addr, interface)
             for name, addr in contracts.items()
         ]
         for future in futures:
