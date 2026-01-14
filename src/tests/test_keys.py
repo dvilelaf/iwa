@@ -67,8 +67,8 @@ def mock_account():
         def from_key_side_effect(private_key):
             # 1. Handle the master private key
             if (
-                private_key == "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-            ):  # gitleaks:allow
+                private_key == "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # gitleaks:allow
+            ):
                 addr = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
             # 2. Handle our mock key format
             elif isinstance(private_key, str) and private_key.startswith("0xPrivateKey"):
