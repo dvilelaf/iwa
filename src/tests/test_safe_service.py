@@ -56,6 +56,7 @@ def mock_dependencies():
         patch("iwa.core.services.safe.log_transaction") as mock_log,
         patch("iwa.core.services.safe.get_safe_master_copy_address") as mock_master,
         patch("iwa.core.services.safe.get_safe_proxy_factory_address") as mock_factory,
+        patch("time.sleep"),  # Avoid any retry delays
     ):
 
         # Setup Safe creation return

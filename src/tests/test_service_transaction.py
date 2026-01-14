@@ -174,7 +174,8 @@ def test_sign_and_send_signer_not_found(
     # Signing raises ValueError for unknown account
     mock_key_storage.sign_transaction.side_effect = ValueError("Account not found")
 
-    success, receipt = transaction_service.sign_and_send(tx, "unknown_signer")
+    with patch("time.sleep"):  # Avoid real retry delays
+        success, receipt = transaction_service.sign_and_send(tx, "unknown_signer")
 
     assert success is False
     assert receipt == {}  # Returns empty dict on failure
