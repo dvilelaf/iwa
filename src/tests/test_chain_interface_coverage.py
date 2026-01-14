@@ -6,16 +6,19 @@ from iwa.core.chain.interface import ChainInterface
 
 # from iwa.core.chain.errors import RPCError, MaxRetriesExceededError  <-- These don't exist
 
+
 @pytest.fixture
 def mock_web3():
     with patch("iwa.core.chain.interface.Web3") as mock_w3:
         yield mock_w3
+
 
 def test_rpc_rotation_exhaustion(mock_web3):
     """Test that generic Exception is raised when all RPCs fail."""
     # Setup chain interface with valid Chain object
     # We must mock SupportedChain or use Gnosis
     from iwa.core.chain.models import Gnosis
+
     chain_obj = Gnosis()
     chain_obj.rpcs = ["rpc1", "rpc2"]
 
@@ -31,9 +34,11 @@ def test_rpc_rotation_exhaustion(mock_web3):
     with pytest.raises(Exception, match="Connection Error"):
         chain.with_retry(lambda: chain.web3.eth.get_block("latest"))
 
+
 def test_rate_limiting_backoff(mock_web3):
     """Test that rate limiting triggers sleep."""
     from iwa.core.chain.models import Gnosis
+
     chain_obj = Gnosis()
     chain_obj.rpcs = ["rpc1"]
 
@@ -47,10 +52,7 @@ def test_rate_limiting_backoff(mock_web3):
     chain.web3 = mock_provider
 
     # First call raises rate limit, second succeeds
-    mock_provider.eth.get_block.side_effect = [
-        Exception("429 Too Many Requests"),
-        {"number": 100}
-    ]
+    mock_provider.eth.get_block.side_effect = [Exception("429 Too Many Requests"), {"number": 100}]
 
     # ChainInterface calls get_block on self.web3.eth?
     # No, ChainInterface doesn't have get_block method in the snippet I saw!
@@ -68,7 +70,8 @@ def test_rate_limiting_backoff(mock_web3):
         block = chain.with_retry(my_op)
 
         assert block["number"] == 100
-        mock_sleep.assert_called() # Should sleep on 429
+        mock_sleep.assert_called()  # Should sleep on 429
+
 
 def test_custom_rpc_headers(mock_web3):
     """Test that custom headers are applied to HTTPProvider."""
@@ -77,6 +80,7 @@ def test_custom_rpc_headers(mock_web3):
     with patch("iwa.core.chain.interface.Web3"):
         # We need a chain definition
         from iwa.core.chain.models import Ethereum
+
         chain_obj = Ethereum()
         chain_obj.rpcs = ["https://rpc.com"]
 
@@ -85,4 +89,4 @@ def test_custom_rpc_headers(mock_web3):
         # Checking interface.py source... line 29 init.
         # It does NOT take rpc_headers arg.
         # So this feature might be missing or automated via Config?
-        pass # Feature doesn't exist in __init__, removing test.
+        pass  # Feature doesn't exist in __init__, removing test.

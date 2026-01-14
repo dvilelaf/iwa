@@ -81,8 +81,8 @@ def show_mnemonic():
         words = mnemonic.split()
         for i in range(0, 24, 4):
             print(
-                f"  {i+1:2}. {words[i]:12}  {i+2:2}. {words[i+1]:12}  "
-                f"{i+3:2}. {words[i+2]:12}  {i+4:2}. {words[i+3]:12}"
+                f"  {i + 1:2}. {words[i]:12}  {i + 2:2}. {words[i + 1]:12}  "
+                f"{i + 3:2}. {words[i + 2]:12}  {i + 4:2}. {words[i + 3]:12}"
             )
         print("-" * 60)
         print("\n⚠️  Keep this phrase secret! Anyone with it can access your funds.")

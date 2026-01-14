@@ -64,8 +64,7 @@ def _check_accounts(storage: KeyStorage) -> bool:
                 fail_count += 1
         except Exception as e:
             print(
-                f"❌ [EOA]   {account.address} (tag: {account.tag or 'none'}) "
-                "- DECRYPTION FAILED!"
+                f"❌ [EOA]   {account.address} (tag: {account.tag or 'none'}) - DECRYPTION FAILED!"
             )
             print(f"    Error: {e}")
             fail_count += 1

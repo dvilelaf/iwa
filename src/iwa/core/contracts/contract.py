@@ -66,9 +66,7 @@ class ContractInstance:
         """
         # Always create a fresh contract to use the current Web3 provider
         # This is necessary because RPC rotation changes the underlying provider
-        return self.chain_interface.web3.eth.contract(
-            address=self.address, abi=self.abi
-        )
+        return self.chain_interface.web3.eth.contract(address=self.address, abi=self.abi)
 
     def load_error_selectors(self) -> Dict[str, Any]:
         """Load error selectors from the contract ABI."""

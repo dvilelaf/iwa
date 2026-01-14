@@ -8,8 +8,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def mock_key_storage():
     """Bypass KeyStorage security check."""
-    with patch("iwa.core.keys.KeyStorage.__init__", return_value=None), \
-         patch("iwa.web.dependencies.wallet", MagicMock()):
+    with (
+        patch("iwa.core.keys.KeyStorage.__init__", return_value=None),
+        patch("iwa.web.dependencies.wallet", MagicMock()),
+    ):
         yield
 
 

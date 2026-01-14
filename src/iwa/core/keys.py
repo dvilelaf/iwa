@@ -42,8 +42,6 @@ AES_NONCE_LEN = 12
 SALT_LEN = 16
 
 
-
-
 class EncryptedAccount(StoredAccount, EncryptedData):
     """EncryptedAccount"""
 
@@ -130,14 +128,7 @@ class EncryptedAccount(StoredAccount, EncryptedData):
         kdf_p = SCRYPT_P
         kdf_len = SCRYPT_LEN
 
-        key = EncryptedAccount.derive_key(
-            password,
-            salt,
-            n=kdf_n,
-            r=kdf_r,
-            p=kdf_p,
-            length=kdf_len
-        )
+        key = EncryptedAccount.derive_key(password, salt, n=kdf_n, r=kdf_r, p=kdf_p, length=kdf_len)
         aesgcm = AESGCM(key)
         nonce = os.urandom(AES_NONCE_LEN)
         ciphertext = aesgcm.encrypt(nonce, private_key.encode(), None)
@@ -203,7 +194,9 @@ class KeyStorage(BaseModel):
                 with open(path, "r") as f:
                     data = json.load(f)
                     self.accounts = {
-                        EthereumAddress(k): EncryptedAccount(**v) if "signers" not in v else StoredSafeAccount(**v)
+                        EthereumAddress(k): EncryptedAccount(**v)
+                        if "signers" not in v
+                        else StoredSafeAccount(**v)
                         for k, v in data.get("accounts", {}).items()
                     }
                     self.encrypted_mnemonic = data.get("encrypted_mnemonic")
@@ -309,11 +302,7 @@ class KeyStorage(BaseModel):
         seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
         bip44_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
         addr_ctx = (
-            bip44_ctx.Purpose()
-            .Coin()
-            .Account(0)
-            .Change(Bip44Changes.CHAIN_EXT)
-            .AddressIndex(index)
+            bip44_ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(index)
         )
         return addr_ctx.PrivateKey().Raw().ToHex()
 
@@ -411,8 +400,8 @@ class KeyStorage(BaseModel):
         words = mnemonic.split()
         for i in range(0, 24, 4):
             print(
-                f"  {i+1:2}. {words[i]:12}  {i+2:2}. {words[i+1]:12}  "
-                f"{i+3:2}. {words[i+2]:12}  {i+4:2}. {words[i+3]:12}"
+                f"  {i + 1:2}. {words[i]:12}  {i + 2:2}. {words[i + 1]:12}  "
+                f"{i + 3:2}. {words[i + 2]:12}  {i + 4:2}. {words[i + 3]:12}"
             )
         print("-" * 60)
         print("\n⚠️  If you lose this mnemonic, you CANNOT recover your funds!")

@@ -15,7 +15,6 @@ with patch("iwa.core.wallet.Wallet") as MockWallet:
     from iwa.web.server import app
 
 
-
 @pytest.fixture
 def client():
     """Create a test client with patched dependnecies."""
@@ -26,6 +25,7 @@ def client():
             with TestClient(app) as c:
                 yield c
 
+
 @pytest.fixture
 def mock_cow_plugin():
     """Mock the CowSwap plugin."""
@@ -33,6 +33,7 @@ def mock_cow_plugin():
         mock_instance = MagicMock()
         mock_cow.return_value = mock_instance
         yield mock_instance
+
 
 def test_get_quote_errors(client, mock_cow_plugin):
     """Test error handling in get_quote."""
@@ -54,17 +55,20 @@ def test_get_quote_errors(client, mock_cow_plugin):
             "buy_token": "OLAS",
             "amount": "100",
             "mode": "sell",
-            "chain": "gnosis"
-        }
+            "chain": "gnosis",
+        },
     )
 
     assert response.status_code == 400
     assert "CowSwap API Error" in response.json()["detail"]
 
+
 def test_swap_tokens_success(client):
     """Test successful token swap."""
     # We need to mock wallet.transfer_service.swap returns a coroutine (AsyncMock)
-    with patch("iwa.web.routers.swap.wallet.transfer_service.swap", new_callable=AsyncMock) as mock_swap:
+    with patch(
+        "iwa.web.routers.swap.wallet.transfer_service.swap", new_callable=AsyncMock
+    ) as mock_swap:
         mock_swap.return_value = {
             "status": "open",
             "uid": "0x123",
@@ -72,7 +76,7 @@ def test_swap_tokens_success(client):
             "buyToken": "0xBuy",
             "sellAmount": "1000",
             "buyAmount": "990",
-            "validTo": 1234567890
+            "validTo": 1234567890,
         }
 
         response = client.post(
@@ -83,17 +87,20 @@ def test_swap_tokens_success(client):
                 "buy_token": "OLAS",
                 "amount_eth": 10.0,
                 "order_type": "sell",
-                "chain": "gnosis"
-            }
+                "chain": "gnosis",
+            },
         )
 
         assert response.status_code == 200, response.json()
         assert response.json()["status"] == "success"
         assert response.json()["order"]["uid"] == "0x123"
 
+
 def test_swap_tokens_error(client):
     """Test error when swapping tokens."""
-    with patch("iwa.web.routers.swap.wallet.transfer_service.swap", new_callable=AsyncMock) as mock_swap:
+    with patch(
+        "iwa.web.routers.swap.wallet.transfer_service.swap", new_callable=AsyncMock
+    ) as mock_swap:
         mock_swap.side_effect = Exception("Swap Failed")
 
         response = client.post(
@@ -104,12 +111,13 @@ def test_swap_tokens_error(client):
                 "buy_token": "OLAS",
                 "amount_eth": 10.0,
                 "order_type": "sell",
-                "chain": "gnosis"
-            }
+                "chain": "gnosis",
+            },
         )
 
         assert response.status_code == 400
         assert "Swap Failed" in response.json()["detail"]
+
 
 def test_get_orders_history(client):
     """Test retrieving order history."""
@@ -125,7 +133,7 @@ def test_get_orders_history(client):
                 "sellToken": "0xSell",
                 "buyToken": "0xBuy",
                 "sellAmount": "1000000000000000000",
-                "buyAmount": "900000000000000000"
+                "buyAmount": "900000000000000000",
             }
         ]
 
@@ -134,15 +142,15 @@ def test_get_orders_history(client):
             mock_resolve.return_value.address = "0xUser"
 
             with patch("iwa.web.routers.swap.ChainInterfaces") as mock_chain_interfaces:
-                 mock_chain = MagicMock()
-                 mock_chain.chain.chain_id = 100
-                 mock_chain.chain.get_token_name.return_value = "TOKEN"
-                 mock_chain_interfaces.return_value.get.return_value = mock_chain
+                mock_chain = MagicMock()
+                mock_chain.chain.chain_id = 100
+                mock_chain.chain.get_token_name.return_value = "TOKEN"
+                mock_chain_interfaces.return_value.get.return_value = mock_chain
 
-                 response = client.get("/api/swap/orders", params={"account": "master"})
+                response = client.get("/api/swap/orders", params={"account": "master"})
 
-                 assert response.status_code == 200
-                 data = response.json()
-                 assert "orders" in data
-                 assert len(data["orders"]) == 1
-                 assert data["orders"][0]["status"] == "open"
+                assert response.status_code == 200
+                data = response.json()
+                assert "orders" in data
+                assert len(data["orders"]) == 1
+                assert data["orders"][0]["status"] == "open"

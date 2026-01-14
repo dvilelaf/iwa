@@ -50,17 +50,19 @@ def fetch_contract_data(chain_name):
             rewards_olas = contract.available_rewards / 1e18
             balance_olas = contract.balance / 1e18
 
-            contract_data.append({
-                "name": name,
-                "needed_olas": needed_olas,
-                "occupied_slots": len(service_ids),
-                "max_slots": max_slots,
-                "free_slots": max_slots - len(service_ids),
-                "rewards_olas": rewards_olas,
-                "balance_olas": balance_olas,
-                "epoch_end": contract.get_next_epoch_start(),
-                "error": None
-            })
+            contract_data.append(
+                {
+                    "name": name,
+                    "needed_olas": needed_olas,
+                    "occupied_slots": len(service_ids),
+                    "max_slots": max_slots,
+                    "free_slots": max_slots - len(service_ids),
+                    "rewards_olas": rewards_olas,
+                    "balance_olas": balance_olas,
+                    "epoch_end": contract.get_next_epoch_start(),
+                    "error": None,
+                }
+            )
         except Exception as e:
             contract_data.append({"name": name, "error": str(e)})
 
@@ -72,14 +74,22 @@ def sort_contract_data(contract_data, sort_criterion):
     if sort_criterion == "name":
         contract_data.sort(key=lambda x: x["name"])
     elif sort_criterion == "rewards":
-        contract_data.sort(key=lambda x: (x.get("rewards_olas", -1) if not x.get("error") else -1), reverse=True)
+        contract_data.sort(
+            key=lambda x: (x.get("rewards_olas", -1) if not x.get("error") else -1), reverse=True
+        )
     elif sort_criterion == "epoch":
         safe_max = 32503680000
         contract_data.sort(key=lambda x: safe_max if x.get("error") else x["epoch_end"].timestamp())
     elif sort_criterion == "slots":
-        contract_data.sort(key=lambda x: (x.get("free_slots", -1) if not x.get("error") else -1), reverse=True)
+        contract_data.sort(
+            key=lambda x: (x.get("free_slots", -1) if not x.get("error") else -1), reverse=True
+        )
     elif sort_criterion == "olas":
-        contract_data.sort(key=lambda x: (x.get("needed_olas", float('inf')) if not x.get("error") else float('inf')))
+        contract_data.sort(
+            key=lambda x: (
+                x.get("needed_olas", float("inf")) if not x.get("error") else float("inf")
+            )
+        )
 
 
 def print_table(console, contract_data, chain_name, sort_criterion):

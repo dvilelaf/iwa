@@ -66,7 +66,9 @@ def mock_account():
 
         def from_key_side_effect(private_key):
             # 1. Handle the master private key
-            if private_key == "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef":  # gitleaks:allow
+            if (
+                private_key == "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ):  # gitleaks:allow
                 addr = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
             # 2. Handle our mock key format
             elif isinstance(private_key, str) and private_key.startswith("0xPrivateKey"):
@@ -86,12 +88,15 @@ def mock_account():
 @pytest.fixture
 def mock_bip_utils():
     """Mock BIP-utils for mnemonic derivation."""
-    with patch("iwa.core.keys.Bip39MnemonicGenerator") as mock_gen, \
-         patch("iwa.core.keys.Bip39SeedGenerator") as mock_seed, \
-         patch("iwa.core.keys.Bip44") as mock_bip44:
-
+    with (
+        patch("iwa.core.keys.Bip39MnemonicGenerator") as mock_gen,
+        patch("iwa.core.keys.Bip39SeedGenerator") as mock_seed,
+        patch("iwa.core.keys.Bip44") as mock_bip44,
+    ):
         # Generator
-        mock_gen.return_value.FromWordsNumber.return_value.ToStr.return_value = "word " * 23 + "word"
+        mock_gen.return_value.FromWordsNumber.return_value.ToStr.return_value = (
+            "word " * 23 + "word"
+        )
 
         # Derivation chain
         mock_bip44.FromSeed.return_value.Purpose.return_value.Coin.return_value.Account.return_value.Change.return_value.AddressIndex.return_value.PrivateKey.return_value.Raw.return_value.ToHex.return_value = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -139,7 +144,9 @@ def test_encrypted_account_decrypt_private_key(mock_scrypt, mock_aesgcm, mock_se
 # --- KeyStorage tests using tmp_path ---
 
 
-def test_keystorage_init_new(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils):
+def test_keystorage_init_new(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
+):
     """Test initialization of new KeyStorage creates master account."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
@@ -170,7 +177,9 @@ def test_keystorage_init_existing(tmp_path, mock_secrets):
     assert storage.get_account("master") is not None
 
 
-def test_keystorage_init_corrupted(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils):
+def test_keystorage_init_corrupted(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
+):
     """Test handling of corrupted wallet file."""
     wallet_path = tmp_path / "wallet.json"
     wallet_path.write_text("{invalid json")
@@ -183,7 +192,9 @@ def test_keystorage_init_corrupted(tmp_path, mock_secrets, mock_account, mock_ae
         mock_logger.error.assert_called()
 
 
-def test_keystorage_save(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils):
+def test_keystorage_save(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
+):
     """Test saving wallet to file."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
@@ -195,7 +206,9 @@ def test_keystorage_save(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock
     assert "accounts" in data
 
 
-def test_keystorage_create_account(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils):
+def test_keystorage_create_account(
+    tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
+):
     """Test creating additional accounts."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")

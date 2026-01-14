@@ -82,13 +82,9 @@ class ChainInterface:
 
             if vnet and vnet.initial_block > 0:
                 self._initial_block = vnet.initial_block
-                logger.info(
-                    f"Tenderly block tracking enabled (genesis: {self._initial_block})"
-                )
+                logger.info(f"Tenderly block tracking enabled (genesis: {self._initial_block})")
             else:
-                logger.debug(
-                    f"Tenderly config exists but no initial_block for {self.chain.name}"
-                )
+                logger.debug(f"Tenderly config exists but no initial_block for {self.chain.name}")
 
         except Exception as ex:
             logger.warning(f"Failed to load Tenderly config for block tracking: {ex}")
@@ -282,7 +278,9 @@ class ChainInterface:
         self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
         self._init_web3()
 
-        logger.info(f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}")
+        logger.info(
+            f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}"
+        )
         return True
 
     def check_rpc_health(self) -> bool:
