@@ -19,10 +19,13 @@ def test_check_availability_exception():
     """Test _check_availability handles contract call failures."""
     from iwa.web.routers.olas.staking import _check_availability
 
-    mock_w3 = MagicMock()
-    mock_w3.eth.contract.side_effect = Exception("Contract error")
+    mock_interface = MagicMock()
+    mock_interface.chain.name = "gnosis"
 
-    result = _check_availability("Test", "0xAddr", mock_w3, [])
+    with patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_contract_cls:
+        mock_contract_cls.side_effect = Exception("Contract error")
+        result = _check_availability("Test", "0xAddr", mock_interface)
+
     assert result["name"] == "Test"
     assert result["usage"] is None
 
