@@ -39,6 +39,7 @@ def reset_wallet_mocks():
     # Reset any modified wallet attributes to fresh MagicMocks
     wallet.balance_service = MagicMock()
     wallet.account_service = MagicMock()
+    wallet.key_storage = MagicMock()
 
 
 # === GET /api/state endpoint ===
