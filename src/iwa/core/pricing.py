@@ -45,7 +45,13 @@ class PriceService:
             if datetime.now() - entry["timestamp"] < self.cache_ttl:
                 return entry["price"]
 
-        # Fetch from API with 2 retries
+        price = self._fetch_price_from_api(token_id, vs_currency)
+        if price is not None:
+            self.cache[cache_key] = {"price": price, "timestamp": datetime.now()}
+        return price
+
+    def _fetch_price_from_api(self, token_id: str, vs_currency: str) -> Optional[float]:
+        """Fetch price from API with retries and key fallback."""
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
@@ -59,14 +65,14 @@ class PriceService:
 
                 if response.status_code == 401 and self.api_key:
                     logger.warning("CoinGecko API key invalid (401). Retrying without key...")
-                    # Remove key and retry immediately
                     self.api_key = None
                     headers.pop("x-cg-demo-api-key", None)
                     response = requests.get(url, params=params, headers=headers, timeout=10)
 
                 if response.status_code == 429:
                     logger.warning(
-                        f"CoinGecko rate limit reached (429) for {token_id}. Attempt {attempt + 1}/{max_retries + 1}"
+                        f"CoinGecko rate limit reached (429) for {token_id}. "
+                        f"Attempt {attempt + 1}/{max_retries + 1}"
                     )
                     if attempt < max_retries:
                         time.sleep(2 * (attempt + 1))
@@ -74,25 +80,19 @@ class PriceService:
                     return None
 
                 response.raise_for_status()
-
                 data = response.json()
-                if token_id in data and vs_currency in data[token_id]:
-                    price = float(data[token_id][vs_currency])
 
-                    # Update cache
-                    self.cache[cache_key] = {"price": price, "timestamp": datetime.now()}
-                    return price
-                else:
-                    logger.warning(
-                        f"Price for {token_id} in {vs_currency} not found in response: {data}"
-                    )
-                    # Don't cache None, might be a temporary hiccup
-                    return None
+                if token_id in data and vs_currency in data[token_id]:
+                    return float(data[token_id][vs_currency])
+
+                logger.warning(
+                    f"Price for {token_id} in {vs_currency} not found in response: {data}"
+                )
+                return None
 
             except Exception as e:
                 logger.error(f"Failed to fetch price for {token_id} (Attempt {attempt + 1}): {e}")
                 if attempt < max_retries:
                     time.sleep(1)
                     continue
-                return None
         return None
