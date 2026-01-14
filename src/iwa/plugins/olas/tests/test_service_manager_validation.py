@@ -45,21 +45,22 @@ def test_drain_service_partial_failures(sm, mock_wallet):
     # 2. Safe drain failure
     # 3. Agent drain success
 
-    with patch.object(sm, "claim_rewards", return_value=(True, 10**18)):
-        # Wallet.drain is called for Safe and Agent
-        def mock_drain(from_address_or_tag=None, to_address_or_tag=None, chain_name=None):
-            if from_address_or_tag == VALID_ADDR_2:  # Safe
-                raise Exception("Safe drain failed")
-            return {"native": 0.5}
+    with patch("time.sleep"):  # Avoid real delays in drain operations
+        with patch.object(sm, "claim_rewards", return_value=(True, 10**18)):
+            # Wallet.drain is called for Safe and Agent
+            def mock_drain(from_address_or_tag=None, to_address_or_tag=None, chain_name=None):
+                if from_address_or_tag == VALID_ADDR_2:  # Safe
+                    raise Exception("Safe drain failed")
+                return {"native": 0.5}
 
-        mock_wallet.drain.side_effect = mock_drain
+            mock_wallet.drain.side_effect = mock_drain
 
-        result = sm.drain_service()
+            result = sm.drain_service()
 
-        assert "safe" not in result
-        assert "agent" in result
-        assert result["agent"]["native"] == 0.5
-        # Verify it continued after Safe failure
+            assert "safe" not in result
+            assert "agent" in result
+            assert result["agent"]["native"] == 0.5
+            # Verify it continued after Safe failure
 
 
 def test_unstake_failed_event_extraction(sm):

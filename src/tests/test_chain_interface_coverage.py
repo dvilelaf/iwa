@@ -31,8 +31,9 @@ def test_rpc_rotation_exhaustion(mock_web3):
     # We also need to prevent rotation from working or make rotation also fail
     # Since we only have 2 RPCs, eventually it will give up.
 
-    with pytest.raises(Exception, match="Connection Error"):
-        chain.with_retry(lambda: chain.web3.eth.get_block("latest"))
+    with patch("time.sleep"):  # Avoid real exponential backoff delays
+        with pytest.raises(Exception, match="Connection Error"):
+            chain.with_retry(lambda: chain.web3.eth.get_block("latest"))
 
 
 def test_rate_limiting_backoff(mock_web3):
