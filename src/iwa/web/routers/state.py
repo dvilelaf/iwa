@@ -30,6 +30,7 @@ def get_state(auth: bool = Depends(verify_auth)):
         "tokens": tokens,
         "native_currencies": native_currencies,
         "default_chain": "gnosis",
+        "testing": ChainInterfaces().gnosis.is_tenderly,
     }
 
 
