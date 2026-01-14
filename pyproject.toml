@@ -1,6 +1,6 @@
 [project]
 name = "iwa"
-version = "0.0.1a3"
+version = "0.0.1a4"
 description = "A secure, modular, and plugin-based framework for crypto agents and ops"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -62,6 +62,12 @@ dev = [
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yaml", "*.yml", "*.html", "*.css", "*.js"]
 
 [tool.ruff]
 line-length = 100
