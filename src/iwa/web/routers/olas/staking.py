@@ -34,7 +34,6 @@ def get_staking_contracts(
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
     try:
-        import json
 
         from iwa.core.chain import ChainInterfaces
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
@@ -106,9 +105,11 @@ def _get_service_filter_info(service_key: Optional[str]) -> tuple[Optional[int],
 
 def _check_availability(name, address, interface):
     """Check availability of a single staking contract."""
-    try:
-        from iwa.plugins.olas.contracts.staking import StakingContract
+    # Import at module level would cause circular import, but we can cache it
+    # The import is cached by Python after first call so this is efficient
+    from iwa.plugins.olas.contracts.staking import StakingContract
 
+    try:
         contract = StakingContract(address, chain_name=interface.chain.name)
 
         # StakingContract uses .call() which handles with_retry and rotation
