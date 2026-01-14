@@ -32,3 +32,4 @@
 # erc20.decimals false positives (method call, not a secret)
 8cb2d0591cab5e040032011d92cb9a5fa0424fdc:src/iwa/tui/screens/wallets.py:generic-api-key:667
 8cb2d0591cab5e040032011d92cb9a5fa0424fdc:src/iwa/web/routers/transactions.py:generic-api-key:105
+4f3fe045d306c2aec68dde4932c93fda4d1e01c4:src/tests/test_keys.py:generic-api-key:70
