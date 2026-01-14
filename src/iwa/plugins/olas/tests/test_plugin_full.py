@@ -103,8 +103,9 @@ def test_import_services_cli_full(plugin, runner):
 def test_get_safe_signers_edge_cases(plugin):
     """Test _get_safe_signers with various failure scenarios."""
     # 1. No RPC configured
-    with patch("iwa.core.secrets.secrets") as mock_settings:
-        mock_settings.gnosis_rpc = None
+    with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
+        mock_ci = mock_ci_cls.return_value
+        mock_ci.get.return_value.chain.rpcs = []
         signers, exists = plugin._get_safe_signers("0x1", "gnosis")
         assert signers is None
         assert exists is None

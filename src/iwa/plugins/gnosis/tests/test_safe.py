@@ -11,9 +11,8 @@ from iwa.plugins.gnosis.safe import SafeMultisig
 @pytest.fixture
 def mock_settings():
     """Mock settings."""
-    with patch("iwa.plugins.gnosis.safe.secrets") as mock:
-        mock.gnosis_rpc.get_secret_value.return_value = "http://rpc"
-        yield mock
+    # secrets is no longer used in this module, so we don't need to patch it here
+    yield None
 
 
 @pytest.fixture
@@ -41,10 +40,13 @@ def safe_account():
 
 def test_init(safe_account, mock_settings, mock_safe_eth):
     """Test initialization."""
-    ms = SafeMultisig(safe_account, "gnosis")
-    assert ms.multisig is not None
-    mock_safe_eth[0].assert_called_with("http://rpc")  # EthereumClient init
-    mock_safe_eth[1].assert_called()  # Safe init
+    with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
+        mock_ci = mock_ci_cls.return_value
+        mock_ci.get.return_value.chain.rpc = "http://rpc"
+        ms = SafeMultisig(safe_account, "gnosis")
+        assert ms.multisig is not None
+        mock_safe_eth[0].assert_called_with("http://rpc")  # EthereumClient init
+        mock_safe_eth[1].assert_called()  # Safe init
 
 
 def test_init_invalid_chain(safe_account, mock_settings, mock_safe_eth):

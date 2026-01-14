@@ -8,7 +8,6 @@ from safe_eth.safe import Safe, SafeOperationEnum
 from safe_eth.safe.safe_tx import SafeTx
 
 from iwa.core.models import StoredSafeAccount
-from iwa.core.secrets import secrets
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()

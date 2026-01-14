@@ -11,7 +11,6 @@ from safe_eth.safe.safe_tx import SafeTx
 from iwa.core.constants import ZERO_ADDRESS
 from iwa.core.db import log_transaction
 from iwa.core.models import StoredSafeAccount
-from iwa.core.secrets import secrets
 from iwa.core.utils import (
     get_safe_master_copy_address,
     get_safe_proxy_factory_address,

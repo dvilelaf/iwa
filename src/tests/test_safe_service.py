@@ -53,12 +53,10 @@ def mock_dependencies():
         patch("iwa.core.services.safe.EthereumClient") as mock_client,
         patch("iwa.core.services.safe.Safe") as mock_safe,
         patch("iwa.core.services.safe.ProxyFactory") as mock_proxy_factory,
-        patch("iwa.core.services.safe.secrets") as mock_secrets,
         patch("iwa.core.services.safe.log_transaction") as mock_log,
         patch("iwa.core.services.safe.get_safe_master_copy_address") as mock_master,
         patch("iwa.core.services.safe.get_safe_proxy_factory_address") as mock_factory,
     ):
-        mock_secrets.gnosis_rpc.get_secret_value.return_value = "http://rpc"
 
         # Setup Safe creation return
         mock_create_tx = MagicMock()
@@ -104,7 +102,6 @@ def mock_dependencies():
             "client": mock_client,
             "safe": mock_safe,
             "proxy_factory": mock_proxy_factory,
-            "secrets": mock_secrets,
             "log": mock_log,
             "master": mock_master,
             "factory": mock_factory,
