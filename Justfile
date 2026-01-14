@@ -85,7 +85,7 @@ tui:
     uv run iwa tui
 
 # Launch Web Server (kills any existing process on the port first)
-web port="8080" host="127.0.0.1":
+web port="8080" host="0.0.0.0":
     -fuser -k {{port}}/tcp 2>/dev/null || true
     PYTHONPATH=src uv run python -m iwa.core.cli web --port {{port}} --host {{host}}
 
