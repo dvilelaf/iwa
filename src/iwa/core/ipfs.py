@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 from multiformats import CID
 
-from iwa.core.secrets import secrets
+from iwa.core.models import Config
 
 
 def _compute_cid_v1_hex(data: bytes) -> str:
@@ -47,7 +47,7 @@ async def push_to_ipfs_async(
     :param pin: Whether to pin the content (default True).
     :return: Tuple of (CIDv1 string, CIDv1 hex representation).
     """
-    url = api_url or secrets.ipfs_api_url
+    url = api_url or Config().core.ipfs_api_url
     endpoint = f"{url}/api/v0/add"
 
     params = {"pin": str(pin).lower(), "cid-version": "1"}
@@ -85,7 +85,7 @@ def push_to_ipfs_sync(
     """
     import requests
 
-    url = api_url or secrets.ipfs_api_url
+    url = api_url or Config().core.ipfs_api_url
     endpoint = f"{url}/api/v0/add"
 
     params = {"pin": str(pin).lower(), "cid-version": "1"}

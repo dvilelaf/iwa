@@ -44,9 +44,6 @@ class Secrets(BaseSettings):
 
     webui_password: Optional[SecretStr] = None
 
-    # IPFS API URL (e.g., https://registry.autonolas.tech or http://localhost:5001)
-    ipfs_api_url: str = "http://localhost:5001"
-
     # Load from environment AND secrets.env file (for local dev)
     model_config = SettingsConfigDict(
         env_file=str(SECRETS_FILE) if SECRETS_FILE.exists() else None,
