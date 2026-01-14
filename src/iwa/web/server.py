@@ -29,12 +29,6 @@ from iwa.web.routers import accounts, olas, state, swap, transactions  # noqa: E
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-
-# Silence noisy loggers
-logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
-logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
 logger = logging.getLogger(__name__)
 
 

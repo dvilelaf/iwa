@@ -1,13 +1,9 @@
-import logging
+"""CLI"""
+
 from typing import Optional
 
 import typer
 from web3 import Web3
-
-# Silence noisy loggers
-logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
-logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS

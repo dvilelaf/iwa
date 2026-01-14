@@ -43,7 +43,14 @@ def configure_logger():
     if hasattr(configure_logger, "configured"):
         return logger
 
+    import logging
+
     from iwa.core.constants import DATA_DIR
+
+    # Silence noisy third-party loggers (these use stdlib logging, not loguru)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     logger.remove()
 
