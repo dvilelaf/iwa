@@ -354,46 +354,31 @@ class LifecycleManagerMixin:
             The agent bond in wei, or None if the query fails.
 
         """
+        from iwa.plugins.olas.contracts.service import ServiceRegistryTokenUtilityContract
+
         try:
             protocol_contracts = OLAS_CONTRACTS.get(self.chain_name.lower(), {})
             utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
             if not utility_address:
-                logger.warning("Token Utility address not found for chain")
+                logger.warning("[ACTIVATE] Token Utility address not found for chain")
                 return None
 
             # Get agent ID (first agent in the service)
             service_info = self.registry.get_service(self.service.service_id)
             agent_ids = service_info.get("agent_ids", [])
             if not agent_ids:
-                logger.warning("No agent IDs found for service")
+                logger.warning("[ACTIVATE] No agent IDs found for service")
                 return None
             agent_id = agent_ids[0]
 
-            # Build minimal ABI for getAgentBond call
-            get_agent_bond_abi = [
-                {
-                    "inputs": [
-                        {"name": "serviceId", "type": "uint256"},
-                        {"name": "agentId", "type": "uint256"},
-                    ],
-                    "name": "getAgentBond",
-                    "outputs": [{"name": "bond", "type": "uint256"}],
-                    "stateMutability": "view",
-                    "type": "function",
-                }
-            ]
-
-            # Get web3 instance and call the contract
-            web3 = self.chain_interface.web3
-            token_utility_contract = web3.eth.contract(
-                address=Web3.to_checksum_address(str(utility_address)),
-                abi=get_agent_bond_abi,
+            # Use the ServiceRegistryTokenUtilityContract with official ABI
+            token_utility = ServiceRegistryTokenUtilityContract(
+                address=str(utility_address),
+                chain_name=self.chain_name,
             )
 
-            bond = token_utility_contract.functions.getAgentBond(
-                self.service.service_id, agent_id
-            ).call()
+            bond = token_utility.get_agent_bond(self.service.service_id, agent_id)
 
             logger.debug(
                 f"[ACTIVATE] Token Utility getAgentBond({self.service.service_id}, {agent_id}) = {bond}"
