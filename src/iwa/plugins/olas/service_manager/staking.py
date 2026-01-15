@@ -189,7 +189,9 @@ class StakingManagerMixin:
         logger.info("[STAKE] Step 1 OK: All requirements met")
 
         min_deposit = requirements["min_deposit"]
-        logger.info(f"[STAKE] Min deposit required: {min_deposit} wei ({min_deposit / 1e18:.2f} OLAS)")
+        logger.info(
+            f"[STAKE] Min deposit required: {min_deposit} wei ({min_deposit / 1e18:.2f} OLAS)"
+        )
 
         # 2. Approve Tokens
         logger.info("[STAKE] Step 2: Approving tokens...")
@@ -262,7 +264,9 @@ class StakingManagerMixin:
             params_list = self.registry.get_agent_params(self.service.service_id)
             agent_params = params_list[0]
             current_bond = agent_params["bond"]
-            logger.info(f"[STAKE] Agent bond on-chain: {current_bond} wei (required: {required_bond} wei)")
+            logger.info(
+                f"[STAKE] Agent bond on-chain: {current_bond} wei (required: {required_bond} wei)"
+            )
 
             if current_bond < required_bond:
                 logger.warning(
@@ -296,9 +300,7 @@ class StakingManagerMixin:
         )
 
         if master_balance < min_deposit:
-            logger.error(
-                f"[STAKE] FAIL: Insufficient balance ({master_balance} < {min_deposit})"
-            )
+            logger.error(f"[STAKE] FAIL: Insufficient balance ({master_balance} < {min_deposit})")
             return None
         logger.debug("[STAKE] OK: Sufficient balance")
 

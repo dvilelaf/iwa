@@ -58,7 +58,6 @@ def mock_dependencies():
         patch("iwa.core.services.safe.get_safe_proxy_factory_address") as mock_factory,
         patch("time.sleep"),  # Avoid any retry delays
     ):
-
         # Setup Safe creation return
         mock_create_tx = MagicMock()
         # Valid Checksum Address - New Safe (Matches Pydantic output)

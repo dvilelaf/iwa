@@ -156,7 +156,6 @@ class ChainInterface:
         print("╚══════════════════════════════════════════════════╝")
         print("")
 
-
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """Check if error is a rate limit (429) error."""
         err_text = str(error).lower()

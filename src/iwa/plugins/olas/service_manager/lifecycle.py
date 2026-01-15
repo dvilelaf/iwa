@@ -325,9 +325,7 @@ class LifecycleManagerMixin:
 
     def _send_activation_transaction(self, service_id: int, security_deposit: Wei) -> bool:
         """Send the activation transaction."""
-        logger.debug(
-            f"[ACTIVATE] Preparing tx: service_id={service_id}, value={security_deposit}"
-        )
+        logger.debug(f"[ACTIVATE] Preparing tx: service_id={service_id}, value={security_deposit}")
         activate_tx = self.manager.prepare_activate_registration_tx(
             from_address=self.wallet.master_account.address,
             service_id=service_id,
@@ -373,9 +371,7 @@ class LifecycleManagerMixin:
             True if registration succeeded, False otherwise.
 
         """
-        logger.info(
-            f"[REGISTER] Starting agent registration for service {self.service.service_id}"
-        )
+        logger.info(f"[REGISTER] Starting agent registration for service {self.service.service_id}")
         logger.debug(f"[REGISTER] agent_address={agent_address}, bond={bond_amount_wei}")
 
         if not self._validate_active_registration_state():
@@ -727,7 +723,9 @@ class LifecycleManagerMixin:
         logger.info("=" * 50)
         logger.info(f"[SPIN-UP] Starting spin_up for service {service_id}")
         logger.info(f"[SPIN-UP] Parameters: agent_address={agent_address}, bond={bond_amount_wei}")
-        logger.info(f"[SPIN-UP] Staking contract: {staking_contract.address if staking_contract else 'None'}")
+        logger.info(
+            f"[SPIN-UP] Staking contract: {staking_contract.address if staking_contract else 'None'}"
+        )
         logger.info("=" * 50)
 
         current_state = self._get_service_state_safe(service_id)

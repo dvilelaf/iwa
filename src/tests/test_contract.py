@@ -219,7 +219,9 @@ def test_call_reevaluates_contract_on_retry(mock_chain_interface, mock_abi_file)
         mock = MagicMock()
         # First call fails, second succeeds
         if contract_creation_count[0] == 1:
-            mock.functions.testFunc.return_value.call.side_effect = Exception("429 Too Many Requests")
+            mock.functions.testFunc.return_value.call.side_effect = Exception(
+                "429 Too Many Requests"
+            )
         else:
             mock.functions.testFunc.return_value.call.return_value = "success"
         return mock
@@ -283,6 +285,7 @@ def test_call_uses_fresh_provider_after_rotation(mock_chain_interface, mock_abi_
 
     # Make with_retry call rotation between attempts
     attempt_count = [0]
+
     def mock_with_retry(fn, **kwargs):
         attempt_count[0] += 1
         if attempt_count[0] == 1:
@@ -317,7 +320,9 @@ def test_call_with_429_triggers_retry_with_new_contract(mock_chain_interface, mo
 
     # Create distinct mock contracts for each call
     mock_contract_1 = MagicMock()
-    mock_contract_1.functions.testFunc.return_value.call.side_effect = Exception("429 Too Many Requests")
+    mock_contract_1.functions.testFunc.return_value.call.side_effect = Exception(
+        "429 Too Many Requests"
+    )
 
     mock_contract_2 = MagicMock()
     mock_contract_2.functions.testFunc.return_value.call.return_value = "success_from_rotated_rpc"
@@ -352,5 +357,6 @@ def test_call_with_429_triggers_retry_with_new_contract(mock_chain_interface, mo
 
     assert result == "success_from_rotated_rpc"
     # Verify we created 2 contract instances (one per attempt)
-    assert contract_call_count[0] == 2, f"Expected 2 contract creations, got {contract_call_count[0]}"
-
+    assert contract_call_count[0] == 2, (
+        f"Expected 2 contract creations, got {contract_call_count[0]}"
+    )

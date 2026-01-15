@@ -191,6 +191,7 @@ class ContractInstance:
 
         """
         try:
+
             def do_call():
                 # Re-evaluate self.contract on each retry to get current provider
                 # This is critical for RPC rotation to work correctly

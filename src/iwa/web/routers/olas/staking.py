@@ -33,7 +33,6 @@ def get_staking_contracts(
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
     try:
-
         from iwa.core.chain import ChainInterfaces
         from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 

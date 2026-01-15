@@ -44,7 +44,9 @@ class TransactionService:
                 def wait_for_receipt(tx_h=txn_hash):
                     return chain_interface.web3.eth.wait_for_transaction_receipt(tx_h)
 
-                receipt = chain_interface.with_retry(wait_for_receipt, operation_name="wait_for_receipt")
+                receipt = chain_interface.with_retry(
+                    wait_for_receipt, operation_name="wait_for_receipt"
+                )
 
                 if receipt and getattr(receipt, "status", None) == 1:
                     signer_account = self.account_service.resolve_account(signer_address_or_tag)
