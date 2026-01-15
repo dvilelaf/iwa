@@ -9,17 +9,19 @@ from loguru import logger
 
 from iwa.core.secrets import secrets
 
+# Global cache shared across all PriceService instances
+_PRICE_CACHE: Dict[str, Dict] = {}
+_CACHE_TTL = timedelta(minutes=30)
+
 
 class PriceService:
     """Service to fetch token prices from CoinGecko."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
 
-    def __init__(self, cache_ttl_minutes: int = 5):
+    def __init__(self):
         """Initialize PriceService."""
         self.secrets = secrets
-        self.cache: Dict[str, Dict] = {}  # {id_currency: {"price": float, "timestamp": datetime}}
-        self.cache_ttl = timedelta(minutes=cache_ttl_minutes)
         self.api_key = (
             self.secrets.coingecko_api_key.get_secret_value()
             if self.secrets.coingecko_api_key
@@ -39,15 +41,15 @@ class PriceService:
         """
         cache_key = f"{token_id}_{vs_currency}"
 
-        # Check cache
-        if cache_key in self.cache:
-            entry = self.cache[cache_key]
-            if datetime.now() - entry["timestamp"] < self.cache_ttl:
+        # Check global cache
+        if cache_key in _PRICE_CACHE:
+            entry = _PRICE_CACHE[cache_key]
+            if datetime.now() - entry["timestamp"] < _CACHE_TTL:
                 return entry["price"]
 
         price = self._fetch_price_from_api(token_id, vs_currency)
         if price is not None:
-            self.cache[cache_key] = {"price": price, "timestamp": datetime.now()}
+            _PRICE_CACHE[cache_key] = {"price": price, "timestamp": datetime.now()}
         return price
 
     def _fetch_price_from_api(self, token_id: str, vs_currency: str) -> Optional[float]:
