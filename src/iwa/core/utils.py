@@ -38,6 +38,17 @@ def get_safe_proxy_factory_address(target_version: str = "1.4.1") -> str:
     raise ValueError(f"Did not find proxy factory for version {target_version}")
 
 
+def get_tx_hash(receipt: dict) -> str:
+    """Safely extract transaction hash from receipt (handles bytes/str/None)."""
+    if not receipt:
+        return "unknown"
+
+    tx_hash = receipt.get("transactionHash", "")
+    if hasattr(tx_hash, "hex"):
+        return tx_hash.hex()
+    return str(tx_hash) if tx_hash else "unknown"
+
+
 def configure_logger():
     """Configure the logger for the application."""
     if hasattr(configure_logger, "configured"):

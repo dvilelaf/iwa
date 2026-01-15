@@ -8,6 +8,7 @@ from web3 import Web3
 
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.types import EthereumAddress
+from iwa.core.utils import get_tx_hash
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.plugins.olas.models import StakingStatus
 
@@ -327,11 +328,7 @@ class StakingManagerMixin:
             logger.error("[STAKE] FAIL: Service NFT approval failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[STAKE] Service NFT approved: {tx_hash}")
 
         # Approve OLAS tokens
@@ -357,11 +354,7 @@ class StakingManagerMixin:
             logger.error("[STAKE] FAIL: OLAS token approval failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[STAKE] OLAS tokens approved: {tx_hash}")
         return True
 
@@ -387,11 +380,7 @@ class StakingManagerMixin:
             logger.error("[STAKE] Stake transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[STAKE] TX sent: {tx_hash}")
 
         events = staking_contract.extract_events(receipt)
@@ -483,9 +472,7 @@ class StakingManagerMixin:
             logger.error(f"Failed to unstake service {self.service.service_id}: Transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
+        tx_hash = get_tx_hash(receipt)
         logger.info(
             f"Unstake transaction sent: {tx_hash if receipt else 'No Receipt'}"
         )

@@ -9,6 +9,7 @@ from web3.types import Wei
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS, ZERO_ADDRESS
 from iwa.core.types import EthereumAddress
+from iwa.core.utils import get_tx_hash
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     TRADER_CONFIG_HASH,
@@ -343,11 +344,7 @@ class LifecycleManagerMixin:
             logger.error("[ACTIVATE] Transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[ACTIVATE] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
@@ -510,11 +507,7 @@ class LifecycleManagerMixin:
             logger.error("[REGISTER] Transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[REGISTER] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
@@ -566,11 +559,7 @@ class LifecycleManagerMixin:
             logger.error("[DEPLOY] Transaction failed")
             return None
 
-        tx_hash = receipt.get("transactionHash", "")
-        if hasattr(tx_hash, "hex"):
-            tx_hash = tx_hash.hex()
-        if not tx_hash:
-            tx_hash = "unknown"
+        tx_hash = get_tx_hash(receipt)
         logger.info(f"[DEPLOY] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
