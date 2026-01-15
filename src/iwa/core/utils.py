@@ -57,12 +57,16 @@ def configure_logger():
     # Ensure data directory exists
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    import sys
+
     logger.add(
         DATA_DIR / "iwa.log",
         rotation="10 MB",
         level="INFO",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
     )
+    # Restore console logging (stderr) so logs are visible in docker/systemd/frontend streams
+    logger.add(sys.stderr, level="INFO")
     # Also keep stderr for console if needed, but Textual captures it?
     # Textual usually captures stderr. Writing to file is safer for debugging.
     # Users previous logs show stdout format?

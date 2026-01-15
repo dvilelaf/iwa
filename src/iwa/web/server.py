@@ -28,7 +28,11 @@ get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
 # Import routers
 from iwa.web.routers import accounts, olas, state, swap, transactions  # noqa: E402
 
-# Silence noisy third-party loggers
+from iwa.core.utils import configure_logger
+
+# Configure logging (writes to iwa.log for frontend visibility)
+configure_logger()
+# Initialize standard logging for third-party libs (silenced by configure_logger but needed for basics)
 logging.basicConfig(level=logging.INFO)
 
 
