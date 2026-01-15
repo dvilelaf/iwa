@@ -2872,23 +2872,39 @@ document.addEventListener("DOMContentLoaded", () => {
           'button[type="submit"]',
         );
         contractSelect.style.display = "none";
+
+        // Remove hidden class to ensure visibility (overrides CSS !important)
+        spinnerDiv.classList.remove("hidden");
         spinnerDiv.style.display = "block";
         spinnerDiv.innerHTML = '<span class="loading-spinner"></span> Loading contracts...';
+
         submitBtn.disabled = true;
+
         authFetch("/api/olas/staking-contracts?chain=gnosis")
           .then((resp) => resp.json())
           .then((contracts) => {
             state.stakingContractsCache = contracts;
             contractSelect.innerHTML = renderContractOptions(contracts);
+
             contractSelect.style.display = "";
+            contractSelect.classList.remove("hidden");
+
+            // Hide spinner
             spinnerDiv.style.display = "none";
+            spinnerDiv.classList.add("hidden");
+
             submitBtn.disabled = false;
           })
           .catch(() => {
             contractSelect.innerHTML =
               '<option value="">None (don\'t stake)</option>';
             contractSelect.style.display = "";
+            contractSelect.classList.remove("hidden");
+
+            // Hide spinner even on error
             spinnerDiv.style.display = "none";
+            spinnerDiv.classList.add("hidden");
+
             submitBtn.disabled = false;
           });
       }
