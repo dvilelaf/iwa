@@ -343,7 +343,11 @@ class LifecycleManagerMixin:
             logger.error("[ACTIVATE] Transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[ACTIVATE] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
@@ -506,7 +510,11 @@ class LifecycleManagerMixin:
             logger.error("[REGISTER] Transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[REGISTER] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
@@ -522,7 +530,7 @@ class LifecycleManagerMixin:
         logger.info("[REGISTER] Success - service is now FINISHED_REGISTRATION")
         return True
 
-    def deploy(self) -> Optional[str]:
+    def deploy(self) -> Optional[str]:  # noqa: C901
         """Deploy the service."""
         logger.info(f"[DEPLOY] Starting deployment for service {self.service.service_id}")
 
@@ -558,7 +566,11 @@ class LifecycleManagerMixin:
             logger.error("[DEPLOY] Transaction failed")
             return None
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[DEPLOY] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)

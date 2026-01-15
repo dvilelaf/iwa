@@ -18,6 +18,13 @@ def price_service(mock_secrets):
     return PriceService()
 
 
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear global cache before each test to ensure isolation."""
+    with patch("iwa.core.pricing._PRICE_CACHE", {}):
+        yield
+
+
 def test_get_token_price_success(price_service):
     with patch("iwa.core.pricing.requests.get") as mock_get:
         mock_get.return_value.status_code = 200
@@ -36,30 +43,36 @@ def test_get_token_price_cached(price_service):
     # Pre-populate cache
     from datetime import datetime
 
-    price_service.cache["ethereum_eur"] = {"price": 100.0, "timestamp": datetime.now()}
+    cache_data = {
+        "ethereum_eur": {"price": 100.0, "timestamp": datetime.now()}
+    }
 
-    with patch("iwa.core.pricing.requests.get") as mock_get:
-        price = price_service.get_token_price("ethereum", "eur")
-        assert price == 100.0
-        mock_get.assert_not_called()
+    with patch.dict("iwa.core.pricing._PRICE_CACHE", cache_data):
+        with patch("iwa.core.pricing.requests.get") as mock_get:
+            price = price_service.get_token_price("ethereum", "eur")
+            assert price == 100.0
+            mock_get.assert_not_called()
 
 
 def test_get_token_price_cache_expired(price_service):
     # Pre-populate expired cache
     from datetime import datetime
 
-    price_service.cache["ethereum_eur"] = {
-        "price": 100.0,
-        "timestamp": datetime.now() - timedelta(minutes=10),
+    cache_data = {
+        "ethereum_eur": {
+            "price": 100.0,
+            "timestamp": datetime.now() - timedelta(minutes=60), # > 30 min TTL
+        }
     }
 
-    with patch("iwa.core.pricing.requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"ethereum": {"eur": 200.0}}
+    with patch.dict("iwa.core.pricing._PRICE_CACHE", cache_data):
+        with patch("iwa.core.pricing.requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"ethereum": {"eur": 200.0}}
 
-        price = price_service.get_token_price("ethereum", "eur")
-        assert price == 200.0
-        mock_get.assert_called_once()
+            price = price_service.get_token_price("ethereum", "eur")
+            assert price == 200.0
+            mock_get.assert_called_once()
 
 
 def test_get_token_price_api_error(price_service):
@@ -84,7 +97,9 @@ def test_get_token_price_rate_limit():
     with patch("iwa.core.pricing.secrets") as mock_secrets:
         mock_secrets.coingecko_api_key = None
 
+        # Need to re-instantiate or patch secrets on instance since it's read in __init__
         service = PriceService()
+        service.api_key = None
 
         with patch("iwa.core.pricing.requests.get") as mock_get, patch("time.sleep"):
             # Return 429 for all attempts
@@ -94,7 +109,7 @@ def test_get_token_price_rate_limit():
             price = service.get_token_price("ethereum", "eur")
 
             assert price is None
-            # Should have tried max_retries + 1 times
+            # Should have tried max_retries + 1 times (3 total)
             assert mock_get.call_count == 3
 
 
@@ -106,6 +121,7 @@ def test_get_token_price_rate_limit_then_success():
         mock_secrets.coingecko_api_key = None
 
         service = PriceService()
+        service.api_key = None
 
         with patch("iwa.core.pricing.requests.get") as mock_get, patch("time.sleep"):
             # First call returns 429, second succeeds
@@ -130,6 +146,7 @@ def test_get_token_price_no_api_key():
         mock_secrets.coingecko_api_key = None
 
         service = PriceService()
+        service.api_key = None
 
         with patch("iwa.core.pricing.requests.get") as mock_get:
             mock_get.return_value.status_code = 200

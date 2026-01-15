@@ -327,7 +327,11 @@ class StakingManagerMixin:
             logger.error("[STAKE] FAIL: Service NFT approval failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[STAKE] Service NFT approved: {tx_hash}")
 
         # Approve OLAS tokens
@@ -353,7 +357,11 @@ class StakingManagerMixin:
             logger.error("[STAKE] FAIL: OLAS token approval failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[STAKE] OLAS tokens approved: {tx_hash}")
         return True
 
@@ -379,7 +387,11 @@ class StakingManagerMixin:
             logger.error("[STAKE] Stake transaction failed")
             return False
 
-        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
+        if not tx_hash:
+            tx_hash = "unknown"
         logger.info(f"[STAKE] TX sent: {tx_hash}")
 
         events = staking_contract.extract_events(receipt)
@@ -406,7 +418,7 @@ class StakingManagerMixin:
         logger.info(f"[STAKE] Service {self.service.service_id} is now STAKED")
         return True
 
-    def unstake(self, staking_contract) -> bool:
+    def unstake(self, staking_contract) -> bool:  # noqa: C901
         """Unstake the service from the staking contract."""
         if not self.service:
             logger.error("No active service")
@@ -467,13 +479,15 @@ class StakingManagerMixin:
             chain_name=self.chain_name,
             tags=["olas_unstake_service"],
         )
-
         if not success:
             logger.error(f"Failed to unstake service {self.service.service_id}: Transaction failed")
             return False
 
+        tx_hash = receipt.get("transactionHash", "")
+        if hasattr(tx_hash, "hex"):
+            tx_hash = tx_hash.hex()
         logger.info(
-            f"Unstake transaction sent: {receipt.get('transactionHash', '').hex() if receipt else 'No Receipt'}"
+            f"Unstake transaction sent: {tx_hash if receipt else 'No Receipt'}"
         )
 
         events = staking_contract.extract_events(receipt)
