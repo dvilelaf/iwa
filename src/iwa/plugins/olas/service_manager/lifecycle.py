@@ -219,26 +219,36 @@ class LifecycleManagerMixin:
     def activate_registration(self) -> bool:
         """Activate registration for the service."""
         service_id = self.service.service_id
+        logger.info(f"[ACTIVATE] Starting activation for service {service_id}")
+
         if not self._validate_pre_registration_state(service_id):
             return False
 
         token_address = self._get_service_token(service_id)
+        logger.debug(f"[ACTIVATE] Token address: {token_address}")
+
         service_info = self.registry.get_service(service_id)
         security_deposit = service_info["security_deposit"]
+        logger.info(f"[ACTIVATE] Security deposit required: {security_deposit} wei")
 
         if not self._ensure_token_approval_for_activation(token_address, security_deposit):
+            logger.error("[ACTIVATE] Token approval failed")
             return False
 
+        logger.info("[ACTIVATE] Sending activation transaction...")
         return self._send_activation_transaction(service_id, security_deposit)
 
     def _validate_pre_registration_state(self, service_id: int) -> bool:
         """Check if service is in PRE_REGISTRATION state."""
-        # Check that the service is created
         service_info = self.registry.get_service(service_id)
         service_state = service_info["state"]
+        logger.debug(f"[ACTIVATE] Current state: {service_state.name}")
         if service_state != ServiceState.PRE_REGISTRATION:
-            logger.error("Service is not created, cannot activate registration")
+            logger.error(
+                f"[ACTIVATE] Service is in {service_state.name}, expected PRE_REGISTRATION"
+            )
             return False
+        logger.debug("[ACTIVATE] State validated: PRE_REGISTRATION")
         return True
 
     def _get_service_token(self, service_id: int) -> str:
@@ -315,17 +325,16 @@ class LifecycleManagerMixin:
 
     def _send_activation_transaction(self, service_id: int, security_deposit: Wei) -> bool:
         """Send the activation transaction."""
-        # Prepare activation transaction
-        # NOTE: For token-based services, the security deposit is handled by the TokenUtility via transferFrom.
-        # However, the ServiceManager (and Registry) REQUIRES that msg.value == security_deposit
-        # even for token-based services (where security_deposit is typically 1 wei).
-        # This native value (1 wei) acts as a protocol validation or fee and MUST be sent.
-        # The 'value' parameter here corresponds to msg.value in the transaction.
+        logger.debug(
+            f"[ACTIVATE] Preparing tx: service_id={service_id}, value={security_deposit}"
+        )
         activate_tx = self.manager.prepare_activate_registration_tx(
             from_address=self.wallet.master_account.address,
             service_id=service_id,
             value=security_deposit,
         )
+        logger.debug(f"[ACTIVATE] TX prepared: to={activate_tx.get('to')}")
+
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -333,17 +342,21 @@ class LifecycleManagerMixin:
         )
 
         if not success:
-            logger.error("Failed to activate registration")
+            logger.error("[ACTIVATE] Transaction failed")
             return False
 
-        logger.info("Registration activation transaction sent successfully")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[ACTIVATE] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
+        event_names = [e["name"] for e in events]
+        logger.debug(f"[ACTIVATE] Events: {event_names}")
 
-        if "ActivateRegistration" not in [event["name"] for event in events]:
-            logger.error("Activation event not found")
+        if "ActivateRegistration" not in event_names:
+            logger.error("[ACTIVATE] ActivateRegistration event not found")
             return False
 
+        logger.info("[ACTIVATE] Success - service is now ACTIVE_REGISTRATION")
         return True
 
     def register_agent(
@@ -360,24 +373,37 @@ class LifecycleManagerMixin:
             True if registration succeeded, False otherwise.
 
         """
+        logger.info(
+            f"[REGISTER] Starting agent registration for service {self.service.service_id}"
+        )
+        logger.debug(f"[REGISTER] agent_address={agent_address}, bond={bond_amount_wei}")
+
         if not self._validate_active_registration_state():
             return False
 
         agent_account_address = self._get_or_create_agent_account(agent_address)
         if not agent_account_address:
+            logger.error("[REGISTER] Failed to get/create agent account")
             return False
+        logger.info(f"[REGISTER] Agent address: {agent_account_address}")
 
         if not self._ensure_agent_token_approval(agent_account_address, bond_amount_wei):
+            logger.error("[REGISTER] Token approval failed")
             return False
 
+        logger.info("[REGISTER] Sending register agent transaction...")
         return self._send_register_agent_transaction(agent_account_address)
 
     def _validate_active_registration_state(self) -> bool:
         """Check that the service is in active registration."""
         service_state = self.registry.get_service(self.service.service_id)["state"]
+        logger.debug(f"[REGISTER] Current state: {service_state.name}")
         if service_state != ServiceState.ACTIVE_REGISTRATION:
-            logger.error("Service is not in active registration, cannot register agent")
+            logger.error(
+                f"[REGISTER] Service is in {service_state.name}, expected ACTIVE_REGISTRATION"
+            )
             return False
+        logger.debug("[REGISTER] State validated: ACTIVE_REGISTRATION")
         return True
 
     def _get_or_create_agent_account(self, agent_address: Optional[str]) -> Optional[str]:
@@ -457,14 +483,22 @@ class LifecycleManagerMixin:
         service_id = self.service.service_id
         service_info = self.registry.get_service(service_id)
         security_deposit = service_info["security_deposit"]
+        total_value = security_deposit * len(self.service.agent_ids)
+
+        logger.debug(
+            f"[REGISTER] Preparing tx: agent={agent_account_address}, "
+            f"agent_ids={self.service.agent_ids}, value={total_value}"
+        )
 
         register_tx = self.manager.prepare_register_agents_tx(
             from_address=self.wallet.master_account.address,
             service_id=service_id,
             agent_instances=[agent_account_address],
             agent_ids=self.service.agent_ids,
-            value=(security_deposit * len(self.service.agent_ids)),
+            value=total_value,
         )
+        logger.debug(f"[REGISTER] TX prepared: to={register_tx.get('to')}")
+
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=register_tx,
             signer_address_or_tag=self.wallet.master_account.address,
@@ -473,33 +507,45 @@ class LifecycleManagerMixin:
         )
 
         if not success:
-            logger.error("Failed to register agent")
+            logger.error("[REGISTER] Transaction failed")
             return False
 
-        logger.info("Agent registration transaction sent successfully")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[REGISTER] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
+        event_names = [e["name"] for e in events]
+        logger.debug(f"[REGISTER] Events: {event_names}")
 
-        if "RegisterInstance" not in [event["name"] for event in events]:
-            logger.error("Agent registration event not found")
+        if "RegisterInstance" not in event_names:
+            logger.error("[REGISTER] RegisterInstance event not found")
             return False
 
         self.service.agent_address = EthereumAddress(agent_account_address)
         self._update_and_save_service_state()
+        logger.info("[REGISTER] Success - service is now FINISHED_REGISTRATION")
         return True
 
     def deploy(self) -> Optional[str]:
         """Deploy the service."""
-        # Check that the service has finished registration
+        logger.info(f"[DEPLOY] Starting deployment for service {self.service.service_id}")
+
         service_state = self.registry.get_service(self.service.service_id)["state"]
+        logger.debug(f"[DEPLOY] Current state: {service_state.name}")
+
         if service_state != ServiceState.FINISHED_REGISTRATION:
-            logger.error("Service registration is not finished, cannot deploy")
+            logger.error(
+                f"[DEPLOY] Service is in {service_state.name}, expected FINISHED_REGISTRATION"
+            )
             return False
 
+        logger.debug(f"[DEPLOY] Preparing deploy tx for owner {self.service.service_owner_address}")
         deploy_tx = self.manager.prepare_deploy_tx(
             from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
         )
+        logger.debug(f"[DEPLOY] TX prepared: to={deploy_tx.get('to')}")
+
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=deploy_tx,
             signer_address_or_tag=self.service.service_owner_address,
@@ -508,29 +554,31 @@ class LifecycleManagerMixin:
         )
 
         if not success:
-            logger.error("Failed to deploy service")
+            logger.error("[DEPLOY] Transaction failed")
             return None
 
-        logger.info("Service deployment transaction sent successfully")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[DEPLOY] TX sent: {tx_hash}")
 
         events = self.registry.extract_events(receipt)
+        event_names = [e["name"] for e in events]
+        logger.debug(f"[DEPLOY] Events: {event_names}")
 
-        if "DeployService" not in [event["name"] for event in events]:
-            logger.error("Deploy service event not found")
+        if "DeployService" not in event_names:
+            logger.error("[DEPLOY] DeployService event not found")
             return None
 
         multisig_address = None
-
         for event in events:
             if event["name"] == "CreateMultisigWithAgents":
                 multisig_address = event["args"]["multisig"]
-                logger.info(f"Service deployed with multisig address: {multisig_address}")
                 break
 
         if multisig_address is None:
-            logger.error("Multisig address not found in deployment events")
+            logger.error("[DEPLOY] Multisig address not found in events")
             return None
 
+        logger.info(f"[DEPLOY] Multisig created: {multisig_address}")
         self.service.multisig_address = EthereumAddress(multisig_address)
         self._update_and_save_service_state()
 
@@ -551,11 +599,11 @@ class LifecycleManagerMixin:
             )
             self.wallet.key_storage.accounts[multisig_address] = safe_account
             self.wallet.key_storage.save()
-            logger.info(f"Registered multisig {multisig_address} in wallet")
+            logger.debug("[DEPLOY] Registered multisig in wallet")
         except Exception as e:
-            logger.warning(f"Failed to register multisig in wallet: {e}")
+            logger.warning(f"[DEPLOY] Failed to register multisig in wallet: {e}")
 
-        logger.info("Service deployed successfully")
+        logger.info("[DEPLOY] Success - service is now DEPLOYED")
         return multisig_address
 
     def terminate(self) -> bool:
@@ -667,21 +715,29 @@ class LifecycleManagerMixin:
         """
         if not service_id:
             if not self.service:
-                logger.error("No active service and no service_id provided")
+                logger.error("[SPIN-UP] No active service and no service_id provided")
                 return False
             service_id = self.service.service_id
-        logger.info(f"Spinning up service {service_id}")
+
+        logger.info("=" * 50)
+        logger.info(f"[SPIN-UP] Starting spin_up for service {service_id}")
+        logger.info(f"[SPIN-UP] Parameters: agent_address={agent_address}, bond={bond_amount_wei}")
+        logger.info(f"[SPIN-UP] Staking contract: {staking_contract.address if staking_contract else 'None'}")
+        logger.info("=" * 50)
 
         current_state = self._get_service_state_safe(service_id)
         if not current_state:
             return False
 
-        logger.info(f"Service {service_id} initial state: {current_state.name}")
+        logger.info(f"[SPIN-UP] Initial state: {current_state.name}")
 
+        step = 1
         while current_state != ServiceState.DEPLOYED:
             previous_state = current_state
+            logger.info(f"[SPIN-UP] Step {step}: Processing {current_state.name}...")
 
             if not self._process_spin_up_state(current_state, agent_address, bond_amount_wei):
+                logger.error(f"[SPIN-UP] Step {step} FAILED at state {current_state.name}")
                 return False
 
             # Refresh state
@@ -690,21 +746,25 @@ class LifecycleManagerMixin:
                 return False
 
             if current_state == previous_state:
-                logger.error(f"State stuck at {current_state.name} after action")
+                logger.error(f"[SPIN-UP] State stuck at {current_state.name} after action")
                 return False
 
-        logger.info(f"Service deployed successfully (State: {current_state.name})")
+            logger.info(f"[SPIN-UP] Step {step} OK: {previous_state.name} -> {current_state.name}")
+            step += 1
+
+        logger.info(f"[SPIN-UP] Service {service_id} is now DEPLOYED")
 
         # Stake if requested
         if staking_contract:
-            logger.info("Staking service...")
+            logger.info(f"[SPIN-UP] Step {step}: Staking service...")
             if not self.stake(staking_contract):
-                logger.error("Failed to stake service")
-                # Note: Service is DEPLOYED even if stake fails. Return False or True?
-                # Original logic returned False.
+                logger.error("[SPIN-UP] Staking FAILED")
                 return False
-            logger.info("Service staked successfully")
+            logger.info(f"[SPIN-UP] Step {step} OK: Service staked successfully")
 
+        logger.info("=" * 50)
+        logger.info(f"[SPIN-UP] COMPLETE - Service {service_id} is deployed and ready")
+        logger.info("=" * 50)
         return True
 
     def _process_spin_up_state(
@@ -715,24 +775,21 @@ class LifecycleManagerMixin:
     ) -> bool:
         """Process a single state transition for spin up."""
         if current_state == ServiceState.PRE_REGISTRATION:
-            logger.info("Activating registration...")
+            logger.info("[SPIN-UP] Action: activate_registration()")
             if not self.activate_registration():
-                logger.error("Failed to activate registration")
                 return False
         elif current_state == ServiceState.ACTIVE_REGISTRATION:
-            logger.info("Registering agent...")
+            logger.info("[SPIN-UP] Action: register_agent()")
             if not self.register_agent(
                 agent_address=agent_address, bond_amount_wei=bond_amount_wei
             ):
-                logger.error("Failed to register agent")
                 return False
         elif current_state == ServiceState.FINISHED_REGISTRATION:
-            logger.info("Deploying service...")
+            logger.info("[SPIN-UP] Action: deploy()")
             if not self.deploy():
-                logger.error("Failed to deploy service")
                 return False
         else:
-            logger.error(f"Unknown or invalid state for spin up: {current_state.name}")
+            logger.error(f"[SPIN-UP] Invalid state: {current_state.name}")
             return False
         return True
 

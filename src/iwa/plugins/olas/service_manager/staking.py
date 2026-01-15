@@ -175,93 +175,135 @@ class StakingManagerMixin:
             True if staking succeeded, False otherwise.
 
         """
+        logger.info("=" * 50)
+        logger.info(f"[STAKE] Starting staking for service {self.service.service_id}")
+        logger.info(f"[STAKE] Contract: {staking_contract.address}")
+        logger.info("=" * 50)
+
         # 1. Validation
+        logger.info("[STAKE] Step 1: Checking requirements...")
         requirements = self._check_stake_requirements(staking_contract)
         if not requirements:
+            logger.error("[STAKE] Step 1 FAILED: Requirements not met")
             return False
+        logger.info("[STAKE] Step 1 OK: All requirements met")
 
         min_deposit = requirements["min_deposit"]
+        logger.info(f"[STAKE] Min deposit required: {min_deposit} wei ({min_deposit / 1e18:.2f} OLAS)")
 
         # 2. Approve Tokens
+        logger.info("[STAKE] Step 2: Approving tokens...")
         if not self._approve_staking_tokens(staking_contract, min_deposit):
+            logger.error("[STAKE] Step 2 FAILED: Token approval failed")
             return False
+        logger.info("[STAKE] Step 2 OK: Tokens approved")
 
         # 3. Execute Stake Transaction
-        return self._execute_stake_transaction(staking_contract)
+        logger.info("[STAKE] Step 3: Executing stake transaction...")
+        result = self._execute_stake_transaction(staking_contract)
+        if result:
+            logger.info("[STAKE] Step 3 OK: Staking successful")
+            logger.info("=" * 50)
+            logger.info(f"[STAKE] COMPLETE - Service {self.service.service_id} is now staked")
+            logger.info("=" * 50)
+        else:
+            logger.error("[STAKE] Step 3 FAILED: Stake transaction failed")
+        return result
 
     def _check_stake_requirements(self, staking_contract) -> Optional[dict]:
         """Validate all conditions required for staking."""
         from iwa.plugins.olas.contracts.service import ServiceState
 
-        # Check centralized staking requirements
+        logger.debug("[STAKE] Fetching contract requirements...")
         reqs = staking_contract.get_requirements()
         min_deposit = reqs["min_staking_deposit"]
         required_bond = reqs["required_agent_bond"]
         staking_token = Web3.to_checksum_address(reqs["staking_token"])
         staking_token_lower = staking_token.lower()
 
-        logger.info(f"Checking stake requirements for service {self.service.service_id}")
+        logger.info("[STAKE] Contract requirements:")
+        logger.info(f"[STAKE]   - min_staking_deposit: {min_deposit} wei")
+        logger.info(f"[STAKE]   - required_agent_bond: {required_bond} wei")
+        logger.info(f"[STAKE]   - staking_token: {staking_token}")
 
         # Check service state
+        logger.debug("[STAKE] Checking service state...")
         service_info = self.registry.get_service(self.service.service_id)
         service_state = service_info["state"]
-        logger.info(f"Service state: {service_state.name}")
+        logger.info(f"[STAKE] Service state: {service_state.name}")
 
         if service_state != ServiceState.DEPLOYED:
-            logger.error("Service is not deployed, cannot stake")
+            logger.error(f"[STAKE] FAIL: Service is {service_state.name}, expected DEPLOYED")
             return None
+        logger.debug("[STAKE] OK: Service is DEPLOYED")
 
         # Check token compatibility
         service_token = (self.service.token_address or "").lower()
+        logger.debug(f"[STAKE] Service token: {service_token}")
         if service_token != staking_token_lower:
             logger.error(
-                f"Token mismatch: service was created with {service_token or 'native'}, "
-                f"but staking contract requires {staking_token_lower}"
+                f"[STAKE] FAIL: Token mismatch - service={service_token or 'native'}, "
+                f"contract requires={staking_token_lower}"
             )
             return None
+        logger.debug("[STAKE] OK: Token matches")
 
         # Check agent bond
+        logger.debug("[STAKE] Checking agent bond...")
         try:
             agent_ids = service_info["agent_ids"]
             if not agent_ids:
-                logger.error("No agent IDs found for service")
+                logger.error("[STAKE] FAIL: No agent IDs found")
                 return None
 
             params_list = self.registry.get_agent_params(self.service.service_id)
-            # Find params for the first agent (trader)
             agent_params = params_list[0]
             current_bond = agent_params["bond"]
+            logger.info(f"[STAKE] Agent bond: {current_bond} wei (required: {required_bond} wei)")
 
             if current_bond < required_bond:
                 logger.error(
-                    f"Service agent bond is too low ({current_bond} < {required_bond}). "
-                    "Service must be created with the correct bond amount to be stakeable."
+                    f"[STAKE] FAIL: Agent bond too low ({current_bond} < {required_bond})"
                 )
                 return None
+            logger.debug("[STAKE] OK: Agent bond sufficient")
         except Exception as e:
-            logger.warning(f"Could not verify agent bond: {e}")
+            logger.warning(f"[STAKE] WARN: Could not verify agent bond: {e}")
 
         # Check free slots
+        logger.debug("[STAKE] Checking available slots...")
         staked_count = len(staking_contract.get_service_ids())
         max_services = staking_contract.max_num_services
+        free_slots = max_services - staked_count
+        logger.info(f"[STAKE] Slots: {staked_count}/{max_services} used, {free_slots} free")
+
         if staked_count >= max_services:
-            logger.error("Staking contract is full, no free slots available")
+            logger.error("[STAKE] FAIL: No free slots")
             return None
+        logger.debug("[STAKE] OK: Slots available")
 
         # Check OLAS balance
+        logger.debug("[STAKE] Checking master OLAS balance...")
         erc20_contract = ERC20Contract(staking_token)
         master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
+        logger.info(
+            f"[STAKE] Master OLAS balance: {master_balance} wei "
+            f"({master_balance / 1e18:.2f} OLAS, need {min_deposit / 1e18:.2f} OLAS)"
+        )
+
         if master_balance < min_deposit:
             logger.error(
-                f"Not enough tokens to stake service (have {master_balance}, need {min_deposit})"
+                f"[STAKE] FAIL: Insufficient balance ({master_balance} < {min_deposit})"
             )
             return None
+        logger.debug("[STAKE] OK: Sufficient balance")
 
         return {"min_deposit": min_deposit, "staking_token": staking_token}
 
     def _approve_staking_tokens(self, staking_contract, min_deposit: int) -> bool:
         """Approve both the service NFT and OLAS tokens for staking."""
         # Approve service NFT
+        logger.debug("[STAKE] Approving service NFT for staking contract...")
         approve_tx = self.registry.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
             spender=staking_contract.address,
@@ -276,14 +318,14 @@ class StakingManagerMixin:
         )
 
         if not success:
-            logger.error("Failed to approve staking contract [Service Registry]")
+            logger.error("[STAKE] FAIL: Service NFT approval failed")
             return False
 
-        logger.info("Service token approved for staking contract")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[STAKE] Service NFT approved: {tx_hash}")
 
         # Approve OLAS tokens
-        # We need to get the token address from the contract requirements again or pass it
-        # Retching for simplicity and safety
+        logger.debug(f"[STAKE] Approving OLAS tokens ({min_deposit} wei)...")
         reqs = staking_contract.get_requirements()
         staking_token = Web3.to_checksum_address(reqs["staking_token"])
         erc20_contract = ERC20Contract(staking_token)
@@ -302,18 +344,21 @@ class StakingManagerMixin:
         )
 
         if not success:
-            logger.error("Failed to approve OLAS tokens for staking contract")
+            logger.error("[STAKE] FAIL: OLAS token approval failed")
             return False
 
-        logger.info("OLAS tokens approved for staking contract")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[STAKE] OLAS tokens approved: {tx_hash}")
         return True
 
     def _execute_stake_transaction(self, staking_contract) -> bool:
         """Send the stake transaction and verify the result."""
+        logger.debug("[STAKE] Preparing stake transaction...")
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=self.wallet.master_account.address,
             service_id=self.service.service_id,
         )
+        logger.debug(f"[STAKE] TX prepared: to={stake_tx.get('to')}")
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=stake_tx,
@@ -324,30 +369,35 @@ class StakingManagerMixin:
 
         if not success:
             if receipt and "status" in receipt and receipt["status"] == 0:
-                logger.error(f"Stake transaction reverted. Receipt: {receipt}")
-            logger.error("Failed to stake service")
+                logger.error(f"[STAKE] TX reverted. Receipt: {receipt}")
+            logger.error("[STAKE] Stake transaction failed")
             return False
 
-        logger.info("Service stake transaction sent successfully")
+        tx_hash = receipt.get("transactionHash", "").hex() if receipt else "unknown"
+        logger.info(f"[STAKE] TX sent: {tx_hash}")
 
         events = staking_contract.extract_events(receipt)
         event_names = [event["name"] for event in events]
+        logger.debug(f"[STAKE] Events: {event_names}")
 
         if "ServiceStaked" not in event_names:
-            logger.error("Stake service event not found")
+            logger.error("[STAKE] ServiceStaked event not found")
             return False
+        logger.debug("[STAKE] ServiceStaked event confirmed")
 
         # Verify state
         staking_state = staking_contract.get_staking_state(self.service.service_id)
+        logger.debug(f"[STAKE] Final staking state: {staking_state.name}")
+
         if staking_state != StakingState.STAKED:
-            logger.error("Service is not staked after transaction")
+            logger.error(f"[STAKE] FAIL: Service not staked (state={staking_state.name})")
             return False
 
         # Update local state
         self.service.staking_contract_address = EthereumAddress(staking_contract.address)
         self._update_and_save_service_state()
 
-        logger.info("Service staked successfully")
+        logger.info(f"[STAKE] Service {self.service.service_id} is now STAKED")
         return True
 
     def unstake(self, staking_contract) -> bool:
