@@ -48,7 +48,12 @@ class TestOlasPlugin:
 
         mock_wallet_class.assert_called_once()
         mock_sm_class.assert_called_once_with(mock_wallet)
-        mock_manager.create.assert_called_once_with("gnosis", "0x1234", "OLAS", 100)
+        mock_manager.create.assert_called_once_with(
+            chain_name="gnosis",
+            service_owner_address_or_tag="0x1234",
+            token_address_or_tag="OLAS",
+            bond_amount_wei=100,
+        )
 
     @patch("iwa.plugins.olas.plugin.Wallet")
     @patch("iwa.plugins.olas.plugin.ServiceManager")
