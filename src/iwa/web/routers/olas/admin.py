@@ -1,8 +1,7 @@
 """Olas Admin Router."""
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -10,7 +9,6 @@ from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
 from iwa.web.dependencies import verify_auth, wallet
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
 limiter = Limiter(key_func=get_remote_address)
 

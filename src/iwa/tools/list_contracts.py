@@ -11,8 +11,8 @@ from iwa.core.utils import configure_logger
 from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 from iwa.plugins.olas.contracts.staking import StakingContract
 
-# Configure logger to avoid noise during execution
-logger = configure_logger()
+# Configure logger and silence noisy third-party loggers
+configure_logger()
 logging.getLogger("web3").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 

@@ -1,16 +1,15 @@
 """Accounts Router for Web API."""
 
-import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from iwa.web.dependencies import verify_auth, wallet
 from iwa.web.models import AccountCreateRequest, SafeCreateRequest
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 # Rate limiter for this router

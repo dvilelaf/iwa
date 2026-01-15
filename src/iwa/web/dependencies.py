@@ -1,15 +1,13 @@
 """Shared dependencies for Web API routers."""
 
-import logging
 import secrets
 from typing import Optional
 
 from fastapi import Header, HTTPException, Security
 from fastapi.security import APIKeyHeader
+from loguru import logger
 
 from iwa.core.wallet import Wallet
-
-logger = logging.getLogger(__name__)
 
 # Singleton wallet instance for the web app
 wallet = Wallet()

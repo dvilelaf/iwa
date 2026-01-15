@@ -1,12 +1,12 @@
 """Swap Router for Web API."""
 
 import asyncio
-import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -16,7 +16,6 @@ from iwa.core.chain import ChainInterfaces, SupportedChain
 from iwa.plugins.gnosis.cow import CowSwap
 from iwa.web.dependencies import verify_auth, wallet
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/swap", tags=["swap"])
 
 limiter = Limiter(key_func=get_remote_address)

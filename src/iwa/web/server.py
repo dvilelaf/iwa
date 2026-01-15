@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -27,9 +28,8 @@ get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
 # Import routers
 from iwa.web.routers import accounts, olas, state, swap, transactions  # noqa: E402
 
-# Configure logging
+# Silence noisy third-party loggers
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 # Rate limiter (in-memory storage, resets on restart)

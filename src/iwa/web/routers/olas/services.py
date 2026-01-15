@@ -1,16 +1,15 @@
 """Olas Services Router."""
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
 from iwa.web.dependencies import verify_auth, wallet
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
 
 

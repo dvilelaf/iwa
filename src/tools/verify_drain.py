@@ -1,14 +1,11 @@
 """Verification script for draining services."""
 
-import logging
 import subprocess  # nosec: B404
 import sys
 import time
 from typing import List
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def run_command(command: List[str]):  # noqa: D103

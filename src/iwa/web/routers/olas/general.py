@@ -1,12 +1,10 @@
 """Olas General Router."""
 
-import logging
-
 from fastapi import APIRouter, Depends
+from loguru import logger
 
 from iwa.web.dependencies import verify_auth
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["olas"])
 
 

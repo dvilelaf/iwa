@@ -30,19 +30,18 @@ The staking contract checks that:
 4. Agent bond was deposited during service registration
 """
 
-import logging
 import math
 import time
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
+from loguru import logger
+
 from iwa.core.contracts.contract import ContractInstance
 from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.contracts.activity_checker import ActivityCheckerContract
 from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
-
-logger = logging.getLogger(__name__)
 
 
 class StakingState(Enum):

@@ -2,7 +2,6 @@
 
 import datetime
 import json
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -13,7 +12,6 @@ from web3 import Web3
 from iwa.core.db import SentTransaction
 from iwa.web.dependencies import verify_auth, wallet
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["transactions"])
 
 # Rate limiter for this router
