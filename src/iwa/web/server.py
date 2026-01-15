@@ -15,6 +15,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from iwa.core.utils import configure_logger
 from iwa.core.wallet import init_db
 
 # Pre-load cowdao_cowpy modules BEFORE async loop starts
@@ -22,13 +23,10 @@ from iwa.core.wallet import init_db
 # which fails if called from an already running event loop
 from iwa.plugins.gnosis.cow_utils import get_cowpy_module
 
-get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
-
-# Import dependencies to ensure initialization
 # Import routers
-from iwa.web.routers import accounts, olas, state, swap, transactions  # noqa: E402
+from iwa.web.routers import accounts, olas, state, swap, transactions
 
-from iwa.core.utils import configure_logger
+get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
 
 # Configure logging (writes to iwa.log for frontend visibility)
 configure_logger()
