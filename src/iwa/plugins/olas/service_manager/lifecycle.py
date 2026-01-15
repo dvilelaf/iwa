@@ -455,19 +455,20 @@ class LifecycleManagerMixin:
             # But approval will fail if we try to approve None.
             return True
 
-        # 1. Service Owner Approves Token Utility (for Bond)
-        # The service owner (operator) pays the bond, not the agent.
+        # Service Owner approves Token Utility for the Bond.
+        # The bond is paid by the service owner, not the agent instance.
         logger.info(f"Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
 
         utility_address = str(
             OLAS_CONTRACTS[self.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
         )
 
+        # Use service owner which holds the OLAS tokens (not necessarily master)
         approve_success = self.wallet.transfer_service.approve_erc20(
             token_address_or_name=token_address,
             spender_address_or_tag=utility_address,
             amount_wei=bond_amount_wei,
-            owner_address_or_tag=agent_account_address,
+            owner_address_or_tag=self.service.service_owner_address,
             chain_name=self.chain_name,
         )
         if not approve_success:

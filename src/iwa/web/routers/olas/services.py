@@ -54,7 +54,31 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
                 staking_contract = StakingContract(req.staking_contract, req.chain)
                 reqs = staking_contract.get_requirements()
                 bond_amount = reqs["required_agent_bond"]
+                min_staking_deposit = reqs["min_staking_deposit"]
                 logger.info(f"Required bond amount from contract: {bond_amount} wei")
+                logger.info(f"Required min_staking_deposit: {min_staking_deposit} wei")
+
+                # Validate upfront: total OLAS needed = bond + min_staking_deposit
+                if req.stake_on_create:
+                    total_olas_needed = bond_amount + min_staking_deposit
+                    logger.info(f"Total OLAS needed for create + stake: {total_olas_needed / 1e18:.2f} OLAS")
+
+                    # Check owner balance (master is default owner for new services)
+                    from iwa.core.contracts.erc20 import ERC20Contract
+
+                    staking_token = reqs.get("staking_token")
+                    if staking_token:
+                        erc20 = ERC20Contract(staking_token, req.chain)
+                        owner_balance = erc20.balance_of_wei(wallet.master_account.address)
+                        logger.info(f"Owner OLAS balance: {owner_balance / 1e18:.2f} OLAS")
+
+                        if owner_balance < total_olas_needed:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Insufficient OLAS balance. Need {total_olas_needed / 1e18:.2f} OLAS "
+                                f"(bond: {bond_amount / 1e18:.2f} + deposit: {min_staking_deposit / 1e18:.2f}), "
+                                f"but owner has {owner_balance / 1e18:.2f} OLAS",
+                            )
             else:
                 # Default to 1 wei of the service token if no staking contract specified
                 bond_amount = Web3.to_wei(1, "wei")

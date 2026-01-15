@@ -291,17 +291,18 @@ class StakingManagerMixin:
             return None
         logger.debug("[STAKE] OK: Slots available")
 
-        # Check OLAS balance
-        logger.debug("[STAKE] Checking master OLAS balance...")
+        # Check OLAS balance of service owner
+        logger.debug("[STAKE] Checking service owner OLAS balance...")
         erc20_contract = ERC20Contract(staking_token)
-        master_balance = erc20_contract.balance_of_wei(self.wallet.master_account.address)
+        owner_address = self.service.service_owner_address
+        owner_balance = erc20_contract.balance_of_wei(owner_address)
         logger.info(
-            f"[STAKE] Master OLAS balance: {master_balance} wei "
-            f"({master_balance / 1e18:.2f} OLAS, need {min_deposit / 1e18:.2f} OLAS)"
+            f"[STAKE] Owner OLAS balance: {owner_balance} wei "
+            f"({owner_balance / 1e18:.2f} OLAS, need {min_deposit / 1e18:.2f} OLAS)"
         )
 
-        if master_balance < min_deposit:
-            logger.error(f"[STAKE] FAIL: Insufficient balance ({master_balance} < {min_deposit})")
+        if owner_balance < min_deposit:
+            logger.error(f"[STAKE] FAIL: Insufficient balance ({owner_balance} < {min_deposit})")
             return None
         logger.debug("[STAKE] OK: Sufficient balance")
 
