@@ -140,11 +140,17 @@ def _check_availability(name, address, interface):
 
 
 def _fetch_all_contracts(contracts: dict, interface) -> list:
-    """Fetch availability for all contracts using threads."""
+    """Fetch availability for all contracts using threads.
+
+    Note: Using limited parallelism (2 workers) to avoid overwhelming RPC
+    endpoints with parallel requests that cause 429 rate limit errors.
+    The RPC rotation mechanism is global but Contract objects are thread-local,
+    so excessive parallelism leads to stale providers being used.
+    """
     from concurrent.futures import ThreadPoolExecutor
 
     results = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [
             executor.submit(_check_availability, name, addr, interface)
             for name, addr in contracts.items()

@@ -92,7 +92,8 @@ class Wallet:
                 return addr, t_name, 0.0
 
         # Use ThreadPoolExecutor for parallel balance fetching
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        # Limited to 4 workers to avoid overwhelming RPC endpoints
+        with ThreadPoolExecutor(max_workers=4) as executor:
             tasks = []
             for addr in accounts_data.keys():
                 for t_name in token_names:
