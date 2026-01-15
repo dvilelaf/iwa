@@ -325,12 +325,29 @@ class LifecycleManagerMixin:
             return True
 
     def _send_activation_transaction(self, service_id: int, security_deposit: Wei) -> bool:
-        """Send the activation transaction."""
-        logger.debug(f"[ACTIVATE] Preparing tx: service_id={service_id}, value={security_deposit}")
+        """Send the activation transaction.
+
+        For token-bonded services (e.g., OLAS), we pass MIN_AGENT_BOND (1 wei) as native value.
+        The Token Utility handles OLAS transfers internally based on the service configuration.
+        For native currency services, we pass the full security_deposit.
+        """
+        # Determine if this is a token-bonded service
+        token_address = self._get_service_token(service_id)
+        is_native = str(token_address).lower() == str(ZERO_ADDRESS).lower()
+
+        # For token services, use MIN_AGENT_BOND (1 wei) as native value
+        # The OLAS token approval was done in _ensure_token_approval_for_activation
+        activation_value = security_deposit if is_native else 1
+        logger.info(
+            f"[ACTIVATE] Token={token_address}, is_native={is_native}, "
+            f"activation_value={activation_value} wei"
+        )
+
+        logger.debug(f"[ACTIVATE] Preparing tx: service_id={service_id}, value={activation_value}")
         activate_tx = self.manager.prepare_activate_registration_tx(
             from_address=self.wallet.master_account.address,
             service_id=service_id,
-            value=security_deposit,
+            value=activation_value,
         )
         logger.debug(f"[ACTIVATE] TX prepared: to={activate_tx.get('to')}")
 
@@ -477,11 +494,30 @@ class LifecycleManagerMixin:
         return True
 
     def _send_register_agent_transaction(self, agent_account_address: str) -> bool:
-        """Send the register agent transaction."""
+        """Send the register agent transaction.
+
+        For token-bonded services (e.g., OLAS), we pass MIN_AGENT_BOND (1 wei) as native value.
+        The Token Utility handles OLAS transfers internally via transferFrom.
+        For native currency services, we pass the full security_deposit * num_agents.
+        """
         service_id = self.service.service_id
-        service_info = self.registry.get_service(service_id)
-        security_deposit = service_info["security_deposit"]
-        total_value = security_deposit * len(self.service.agent_ids)
+        token_address = self._get_service_token(service_id)
+        is_native = str(token_address).lower() == str(ZERO_ADDRESS).lower()
+
+        # For token services, use MIN_AGENT_BOND (1 wei) per agent
+        # For native services, use security_deposit * num_agents
+        if is_native:
+            service_info = self.registry.get_service(service_id)
+            security_deposit = service_info["security_deposit"]
+            total_value = security_deposit * len(self.service.agent_ids)
+        else:
+            # MIN_AGENT_BOND = 1 wei per agent
+            total_value = 1 * len(self.service.agent_ids)
+
+        logger.info(
+            f"[REGISTER] Token={token_address}, is_native={is_native}, "
+            f"total_value={total_value} wei"
+        )
 
         logger.debug(
             f"[REGISTER] Preparing tx: agent={agent_account_address}, "
