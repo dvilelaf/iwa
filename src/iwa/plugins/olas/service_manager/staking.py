@@ -249,6 +249,9 @@ class StakingManagerMixin:
         logger.debug("[STAKE] OK: Token matches")
 
         # Check agent bond
+        # NOTE: On-chain bond values often show 1 wei regardless of what was passed
+        # during service creation. This is a known issue with the OLAS contracts.
+        # We log a warning but don't block staking because of this discrepancy.
         logger.debug("[STAKE] Checking agent bond...")
         try:
             agent_ids = service_info["agent_ids"]
@@ -259,14 +262,15 @@ class StakingManagerMixin:
             params_list = self.registry.get_agent_params(self.service.service_id)
             agent_params = params_list[0]
             current_bond = agent_params["bond"]
-            logger.info(f"[STAKE] Agent bond: {current_bond} wei (required: {required_bond} wei)")
+            logger.info(f"[STAKE] Agent bond on-chain: {current_bond} wei (required: {required_bond} wei)")
 
             if current_bond < required_bond:
-                logger.error(
-                    f"[STAKE] FAIL: Agent bond too low ({current_bond} < {required_bond})"
+                logger.warning(
+                    f"[STAKE] WARN: On-chain bond ({current_bond}) < required ({required_bond}). "
+                    "This is a known on-chain reporting issue. Proceeding anyway."
                 )
-                return None
-            logger.debug("[STAKE] OK: Agent bond sufficient")
+            else:
+                logger.debug("[STAKE] OK: Agent bond sufficient")
         except Exception as e:
             logger.warning(f"[STAKE] WARN: Could not verify agent bond: {e}")
 

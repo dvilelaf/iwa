@@ -544,6 +544,11 @@ class LifecycleManagerMixin:
             from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
         )
+
+        if not deploy_tx:
+            logger.error("[DEPLOY] Failed to prepare deploy transaction")
+            return None
+
         logger.debug(f"[DEPLOY] TX prepared: to={deploy_tx.get('to')}")
 
         success, receipt = self.wallet.sign_and_send_transaction(
