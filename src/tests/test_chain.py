@@ -195,43 +195,8 @@ def test_wait_for_no_pending_tx(mock_web3):
             assert ci.wait_for_no_pending_tx("0xSender") is False
 
 
-def test_send_native_transfer(mock_web3):
-    chain = MagicMock(spec=SupportedChain, rpcs=["https://rpc"], chain_id=1, native_currency="ETH")
-    chain.name = "TestChain"
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-    ci = ChainInterface(chain)
-    account = MagicMock(address="0xSender", key="key")
-
-    ci.web3.eth.get_transaction_count.return_value = 0
-    ci.web3.eth.gas_price = 10
-    ci.web3.eth.estimate_gas.return_value = 21000
-
-    # Sufficient balance
-    ci.web3.eth.get_balance.return_value = 10**18  # plenty
-    ci.web3.eth.get_balance.return_value = 10**18  # plenty
-    # Valid mock return for success: (True, dict_receipt)
-    # The actual method returns tx_hash.hex().
-    mock_signed_tx = MagicMock()
-    mock_signed_tx.raw_transaction = b"raw"
-    mock_receipt = {"transactionHash": b"hash", "status": 1}
-
-    with (
-        patch.object(ci.web3.eth, "send_raw_transaction", return_value=b"hash"),
-        patch.object(ci.web3.eth, "wait_for_transaction_receipt", return_value=mock_receipt),
-        patch.object(ci, "wait_for_no_pending_tx", return_value=True),
-    ):
-        success, tx_hash = ci.send_native_transfer(
-            account.address, "0xReceiver", 1000, sign_callback=lambda tx: mock_signed_tx
-        )
-        assert success is True
-        assert tx_hash == "68617368"
-
-    # Insufficient balance
-    ci.web3.eth.get_balance.return_value = 0
-    ci.web3.from_wei.return_value = 0.0
-    assert ci.send_native_transfer(
-        account.address, "0xReceiver", 1000, sign_callback=lambda tx: mock_signed_tx
-    ) == (False, None)
+# NOTE: test_send_native_transfer was removed because the method was removed
+# from ChainInterface. Native transfers now go through TransactionService.
 
 
 def test_chain_interfaces_get():
@@ -351,66 +316,6 @@ def test_chain_interface_with_real_chains():
 
 # --- Negative Tests ---
 
-
-def test_send_native_transfer_insufficient_balance(mock_web3):
-    """Test send_native_transfer fails with insufficient balance."""
-    chain = MagicMock(spec=SupportedChain)
-    chain.name = "TestChain"
-    chain.rpcs = ["https://rpc"]
-    chain.chain_id = 1
-    chain.native_currency = "ETH"
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-
-    ci = ChainInterface(chain)
-    ci.web3.eth.get_transaction_count.return_value = 0
-    ci.web3.eth.gas_price = 1000000000  # 1 gwei
-    ci.web3.eth.estimate_gas.return_value = 21000
-    ci.web3.eth.get_balance.return_value = 1000  # Very low balance
-    ci.web3.from_wei.return_value = 0.000001
-
-    sign_callback = MagicMock()
-
-    success, tx_hash = ci.send_native_transfer(
-        from_address="0x1111111111111111111111111111111111111111",
-        to_address="0x2222222222222222222222222222222222222222",
-        value_wei=10**18,  # 1 ETH - more than available
-        sign_callback=sign_callback,
-    )
-
-    assert success is False
-    assert tx_hash is None
-    sign_callback.assert_not_called()
-
-
-def test_send_native_transfer_rpc_error(mock_web3):
-    """Test send_native_transfer handles RPC errors."""
-    chain = MagicMock(spec=SupportedChain)
-    chain.name = "TestChain"
-    chain.rpcs = ["https://rpc"]
-    chain.chain_id = 1
-    chain.native_currency = "ETH"
-    type(chain).rpc = PropertyMock(return_value="https://rpc")
-
-    ci = ChainInterface(chain)
-    ci.web3.eth.get_transaction_count.return_value = 0
-    ci.web3.eth.gas_price = 1000000000
-    ci.web3.eth.estimate_gas.return_value = 21000
-    ci.web3.eth.get_balance.return_value = 10**19  # Enough balance
-    ci.web3.from_wei.return_value = 10.0
-    ci.web3.eth.send_raw_transaction.side_effect = Exception("Connection refused")
-
-    sign_callback = MagicMock()
-    sign_callback.return_value = MagicMock(raw_transaction=b"signed")
-
-    success, tx_hash = ci.send_native_transfer(
-        from_address="0x1111111111111111111111111111111111111111",
-        to_address="0x2222222222222222222222222222222222222222",
-        value_wei=10**17,
-        sign_callback=sign_callback,
-    )
-
-    assert success is False
-    assert tx_hash is None
 
 
 def test_get_token_symbol_fallback_on_error(mock_web3):

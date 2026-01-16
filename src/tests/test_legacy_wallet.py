@@ -345,23 +345,23 @@ def test_send_native_success(wallet, mock_key_storage, mock_chain_interfaces, mo
     mock_key_storage.get_account.return_value = account
 
     chain_interface = mock_chain_interfaces.get.return_value
-    # chain_interface.get_native_balance_wei.return_value = ... # Ignored
     mock_balance_service.get_native_balance_wei.return_value = 2000000000000000000
 
     chain_interface.web3.eth.gas_price = 1000000000
     chain_interface.web3.eth.estimate_gas.return_value = 21000
     chain_interface.web3.from_wei.side_effect = lambda val, unit: float(val) / 10**18
 
-    # Mock return values for success
-    chain_interface.sign_and_send_transaction.return_value = (True, {})
-    chain_interface.send_native_transfer.return_value = (True, "0xHash")
+    # Mock TransactionService return (native transfers now go through TransactionService)
+    wallet.transaction_service.sign_and_send.return_value = (
+        True,
+        {"status": 1, "transactionHash": b"hash"},
+    )
 
     wallet.send(
         "sender", VALID_ADDR_2, amount_wei=1000000000000000000, token_address_or_name="native"
     )  # 1 ETH
 
-    # wallet.transaction_service.sign_and_send.assert_called_once()
-    chain_interface.send_native_transfer.assert_called_once()
+    wallet.transaction_service.sign_and_send.assert_called_once()
 
 
 def test_send_erc20_success(wallet, mock_key_storage, mock_chain_interfaces):

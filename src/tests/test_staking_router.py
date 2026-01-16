@@ -1,17 +1,25 @@
 """Tests for staking.py router coverage."""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def mock_key_storage():
-    """Bypass KeyStorage security check."""
-    with (
-        patch("iwa.core.keys.KeyStorage.__init__", return_value=None),
-        patch("iwa.web.dependencies.wallet", MagicMock()),
-    ):
+def mock_dependencies():
+    """Mock wallet dependency before importing router modules.
+
+    The iwa.web.dependencies module instantiates Wallet() at module level,
+    which fails in test environment. We pre-populate sys.modules to prevent
+    the actual import.
+    """
+    # Create mock module
+    mock_dep_module = MagicMock()
+    mock_dep_module.wallet = MagicMock()
+
+    # Pre-populate sys.modules to prevent real import
+    with patch.dict(sys.modules, {"iwa.web.dependencies": mock_dep_module}):
         yield
 
 

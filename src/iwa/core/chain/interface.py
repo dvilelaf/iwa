@@ -2,9 +2,8 @@
 
 import threading
 import time
-from typing import Callable, Dict, Optional, Tuple, TypeVar, Union
+from typing import Callable, Dict, Optional, TypeVar, Union
 
-from eth_account.datastructures import SignedTransaction
 from web3 import Web3
 
 from iwa.core.chain.errors import TenderlyQuotaExceededError, sanitize_rpc_url
@@ -448,69 +447,6 @@ class ChainInterface:
             time.sleep(poll_interval)
 
         return False
-
-    def send_native_transfer(
-        self,
-        from_address: EthereumAddress,
-        to_address: EthereumAddress,
-        value_wei: int,
-        sign_callback: Callable[[dict], SignedTransaction],
-    ) -> Tuple[bool, Optional[str]]:
-        """Send native currency transaction with retry logic."""
-
-        def _do_transfer() -> Tuple[bool, Optional[str]]:
-            tx = {
-                "from": from_address,
-                "to": to_address,
-                "value": value_wei,
-                "nonce": self.web3.eth.get_transaction_count(from_address),
-                "chainId": self.chain.chain_id,
-            }
-
-            balance_wei = self.get_native_balance_wei(from_address)
-            gas_price = self.web3.eth.gas_price
-            gas_estimate = self.web3.eth.estimate_gas(tx)
-            required_wei = value_wei + (gas_estimate * gas_price)
-
-            if balance_wei < required_wei:
-                logger.error(
-                    f"Insufficient balance. "
-                    f"Balance: {self.web3.from_wei(balance_wei, 'ether'):.4f} "
-                    f"{self.chain.native_currency}, "
-                    f"Required: {self.web3.from_wei(required_wei, 'ether'):.4f} "
-                    f"{self.chain.native_currency}"
-                )
-                return False, None
-
-            tx["gas"] = gas_estimate
-            tx["gasPrice"] = gas_price
-
-            signed_tx = sign_callback(tx)
-            txn_hash = self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
-            receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash)
-
-            status = getattr(receipt, "status", None)
-            if status is None and isinstance(receipt, dict):
-                status = receipt.get("status")
-
-            if receipt and status == 1:
-                self.wait_for_no_pending_tx(from_address)
-                logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
-                # Check Tenderly block limit after each successful transaction
-                self.check_block_limit()
-                return True, receipt["transactionHash"].hex()
-
-            logger.error("Transaction failed (status != 1)")
-            return False, None
-
-        try:
-            return self.with_retry(
-                _do_transfer,
-                operation_name=f"native_transfer to {str(to_address)[:10]}...",
-            )
-        except Exception as e:
-            logger.exception(f"Native transfer failed: {e}")
-            return False, None
 
     def get_token_address(self, token_name: str) -> Optional[EthereumAddress]:
         """Get token address by name"""

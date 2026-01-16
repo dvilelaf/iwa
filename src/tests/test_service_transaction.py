@@ -18,8 +18,19 @@ def mock_chain_interfaces():
         gnosis_interface.web3 = MagicMock()
         instance.get.return_value = gnosis_interface
 
-        # Mock with_retry to execute the operation
-        gnosis_interface.with_retry.side_effect = lambda op, **kwargs: op()
+        # Mock with_retry to simulate retry behavior (up to 6 attempts)
+        def mock_with_retry(op, max_retries=6, **kwargs):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return op()
+                except Exception as e:
+                    last_error = e
+                    if attempt >= max_retries:
+                        raise
+            raise last_error
+
+        gnosis_interface.with_retry.side_effect = mock_with_retry
 
         yield instance
 
@@ -100,7 +111,7 @@ def test_sign_and_send_retry_on_low_gas(
 def test_sign_and_send_max_retries_exhausted(
     transaction_service, mock_key_storage, mock_chain_interfaces
 ):
-    """Test sign_and_send fails after max gas retries."""
+    """Test sign_and_send fails after max retries (with_retry default of 6 + 1)."""
     tx = {"to": "0x123", "value": 100, "nonce": 5, "gas": 10000}
     mock_key_storage.sign_transaction.return_value = MagicMock(raw_transaction=b"raw_tx")
 
@@ -119,8 +130,8 @@ def test_sign_and_send_max_retries_exhausted(
     # Should fail after max retries
     assert success is False
     assert receipt == {}  # Returns empty dict on failure
-    # Should have tried 10 times (max_retries)
-    assert chain_interface.web3.eth.send_raw_transaction.call_count == 10
+    # Should have tried 7 times (6 retries + 1 initial = max_retries+1 from with_retry)
+    assert chain_interface.web3.eth.send_raw_transaction.call_count == 7
 
 
 def test_sign_and_send_transaction_reverted(
@@ -144,7 +155,11 @@ def test_sign_and_send_transaction_reverted(
 def test_sign_and_send_rpc_error_triggers_rotation(
     transaction_service, mock_key_storage, mock_chain_interfaces
 ):
-    """Test sign_and_send rotates RPC on connection error."""
+    """Test sign_and_send retries on connection error via with_retry.
+
+    RPC rotation is now handled internally by with_retry, so we just verify
+    that the operation retries and eventually succeeds.
+    """
     tx = {"to": "0x123", "value": 100, "nonce": 5, "gas": 21000}
     mock_key_storage.sign_transaction.return_value = MagicMock(raw_transaction=b"raw_tx")
 
@@ -156,13 +171,13 @@ def test_sign_and_send_rpc_error_triggers_rotation(
         b"tx_hash",
     ]
     chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
-    chain_interface.rotate_rpc.return_value = True
 
     with patch("time.sleep"):
         success, receipt = transaction_service.sign_and_send(tx, "signer")
 
     assert success is True
-    chain_interface.rotate_rpc.assert_called()
+    # Verify retry happened - send_raw_transaction called twice
+    assert chain_interface.web3.eth.send_raw_transaction.call_count == 2
 
 
 def test_sign_and_send_signer_not_found(

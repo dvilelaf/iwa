@@ -64,6 +64,14 @@ class ERC20TransferMixin:
             value_eur=v_eur,
             tags=["erc20-transfer", "safe-transaction"],
         )
+
+        # Log transfers extracted from receipt events
+        if receipt:
+            from iwa.core.services.transaction import TransferLogger
+
+            transfer_logger = TransferLogger(self.account_service, interface)
+            transfer_logger.log_transfers(receipt)
+
         return tx_hash
 
     def _send_erc20_via_eoa(

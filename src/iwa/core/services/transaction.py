@@ -31,32 +31,37 @@ class TransferLogger:
         self.account_service = account_service
         self.chain_interface = chain_interface
 
-    def log_transfers(self, receipt: Dict, tx: Dict) -> None:
+    def log_transfers(self, receipt: Dict) -> None:
         """Log all transfers (ERC20 and native) from a transaction receipt.
 
         Args:
             receipt: Transaction receipt containing logs.
-            tx: Original transaction dict.
 
         """
-        # Log native value transfer if present
-        native_value = tx.get("value", 0)
-        if native_value and int(native_value) > 0:
-            self._log_native_transfer(tx, native_value)
+        # Get the original transaction to check for native value transfer
+        tx_hash = receipt.get("transactionHash") or getattr(receipt, "transactionHash", None)
+        if tx_hash:
+            try:
+                tx = self.chain_interface.web3.eth.get_transaction(tx_hash)
+                native_value = getattr(tx, "value", 0) or tx.get("value", 0) if isinstance(tx, dict) else getattr(tx, "value", 0)
+                if native_value and int(native_value) > 0:
+                    from_addr = getattr(tx, "from", "") if hasattr(tx, "from") else tx.get("from", "")
+                    # Handle AttributeDict's special 'from' attribute
+                    if not from_addr and hasattr(tx, "__getitem__"):
+                        from_addr = tx["from"]
+                    to_addr = getattr(tx, "to", "") or (tx.get("to", "") if isinstance(tx, dict) else "")
+                    self._log_native_transfer(from_addr, to_addr, native_value)
+            except Exception as e:
+                logger.debug(f"Could not get tx for native transfer logging: {e}")
 
         # Log ERC20 transfers from event logs
-        logs = receipt.get("logs", [])
-        if hasattr(receipt, "logs"):
-            logs = receipt.logs
+        logs = receipt.get("logs", []) if isinstance(receipt, dict) else getattr(receipt, "logs", [])
 
         for log in logs:
             self._process_log(log)
 
-    def _log_native_transfer(self, tx: Dict, value_wei: int) -> None:
+    def _log_native_transfer(self, from_addr: str, to_addr: str, value_wei: int) -> None:
         """Log a native currency transfer."""
-        from_addr = tx.get("from", "")
-        to_addr = tx.get("to", "")
-
         from_label = self._resolve_address_label(from_addr)
         to_label = self._resolve_address_label(to_addr)
 
@@ -213,53 +218,74 @@ class TransactionService:
         chain_name: str = "gnosis",
         tags: Optional[List[str]] = None,
     ) -> Tuple[bool, Dict]:
-        """Sign and send a transaction with retry logic for gas."""
+        """Sign and send a transaction using unified retry mechanism.
+
+        Uses ChainInterface.with_retry() for consistent RPC rotation and retry logic.
+        Gas errors are handled by increasing gas and retrying within the same mechanism.
+        """
         chain_interface = ChainInterfaces().get(chain_name)
         tx = dict(transaction)
-        max_retries = 10
 
         if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
             return False, {}
 
-        for attempt in range(1, max_retries + 1):
+        # Mutable state for retry attempts
+        state = {"gas_retries": 0, "max_gas_retries": 5}
+
+        def _do_sign_send_wait() -> Tuple[bool, Dict, bytes]:
+            """Inner operation wrapped by with_retry."""
             try:
                 signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
-                txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-
-                # Use chain_interface.with_retry for waiting for receipt to handle timeouts/RPC errors
-                def wait_for_receipt(tx_h=txn_hash):
-                    return chain_interface.web3.eth.wait_for_transaction_receipt(tx_h)
-
-                receipt = chain_interface.with_retry(
-                    wait_for_receipt, operation_name="wait_for_receipt"
+                txn_hash = chain_interface.web3.eth.send_raw_transaction(
+                    signed_txn.raw_transaction
                 )
+                receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
 
-                if receipt and getattr(receipt, "status", None) == 1:
-                    signer_account = self.account_service.resolve_account(signer_address_or_tag)
-                    chain_interface.wait_for_no_pending_tx(signer_account.address)
-                    logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                status = getattr(receipt, "status", None)
+                if status is None and isinstance(receipt, dict):
+                    status = receipt.get("status")
 
-                    self._log_successful_transaction(
-                        receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
-                    )
-                    return True, receipt
-
-                # Transaction reverted
+                if receipt and status == 1:
+                    return True, receipt, txn_hash
+                # Transaction mined but reverted - don't retry
                 logger.error("Transaction failed (status 0).")
-                return False, {}
+                raise ValueError("Transaction reverted")
 
             except web3_exceptions.Web3RPCError as e:
-                if self._handle_gas_error(e, tx, attempt, max_retries):
-                    continue
-                return False, {}
+                # Check if it's a gas error - if so, increase gas and re-raise to trigger retry
+                if self._is_gas_too_low_error(str(e)) and state["gas_retries"] < state["max_gas_retries"]:
+                    current_gas = int(tx.get("gas", 30_000))
+                    tx["gas"] = int(current_gas * 1.5)
+                    state["gas_retries"] += 1
+                    logger.warning(
+                        f"Gas too low, increasing to {tx['gas']} "
+                        f"(attempt {state['gas_retries']}/{state['max_gas_retries']})"
+                    )
+                raise  # Re-raise to trigger with_retry's retry mechanism
 
-            except Exception as e:
-                # Attempt RPC rotation
-                if self._handle_generic_error(e, chain_interface, attempt, max_retries):
-                    continue
+        try:
+            success, receipt, txn_hash = chain_interface.with_retry(
+                _do_sign_send_wait,
+                operation_name=f"sign_and_send to {tx.get('to', 'unknown')[:10]}...",
+            )
+            if success:
+                signer_account = self.account_service.resolve_account(signer_address_or_tag)
+                chain_interface.wait_for_no_pending_tx(signer_account.address)
+                logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                self._log_successful_transaction(
+                    receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
+                )
+                return True, receipt
+            return False, {}
+        except ValueError as e:
+            # Transaction reverted - already logged
+            if "reverted" in str(e).lower():
                 return False, {}
-
-        return False, {}
+            logger.exception(f"Transaction failed: {e}")
+            return False, {}
+        except Exception as e:
+            logger.exception(f"Transaction failed after retries: {e}")
+            return False, {}
 
     def _prepare_transaction(self, tx: dict, signer_tag: str, chain_interface) -> bool:
         """Ensure nonce and chainId are set."""
@@ -323,7 +349,7 @@ class TransactionService:
 
             # Log transfer events (ERC20 and native value)
             transfer_logger = TransferLogger(self.account_service, chain_interface)
-            transfer_logger.log_transfers(receipt, tx)
+            transfer_logger.log_transfers(receipt)
 
         except Exception as log_err:
             logger.warning(f"Failed to log transaction: {log_err}")
