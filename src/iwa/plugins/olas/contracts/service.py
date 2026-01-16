@@ -213,3 +213,53 @@ class ServiceManagerContract(ContractInstance):
             tx_params={"from": from_address},
         )
         return tx
+
+
+class ServiceRegistryTokenUtilityContract(ContractInstance):
+    """Class to interact with the service registry token utility contract.
+
+    This contract manages token-bonded services, tracking agent bonds and
+    security deposits for services that use ERC20 tokens (like OLAS) instead
+    of native currency.
+    """
+
+    name = "service_registry_token_utility"
+    abi_path = OLAS_ABI_PATH / "service_registry_token_utility.json"
+
+    def get_agent_bond(self, service_id: int, agent_id: int) -> int:
+        """Get the agent bond for a specific agent in a service.
+
+        Args:
+            service_id: The service ID.
+            agent_id: The agent ID within the service.
+
+        Returns:
+            The bond amount in wei.
+
+        """
+        return self.call("getAgentBond", service_id, agent_id)
+
+    def get_operator_balance(self, operator: str, service_id: int) -> int:
+        """Get the operator balance for a service.
+
+        Args:
+            operator: The operator address.
+            service_id: The service ID.
+
+        Returns:
+            The balance amount in wei.
+
+        """
+        return self.call("getOperatorBalance", operator, service_id)
+
+    def get_service_token_deposit(self, service_id: int) -> tuple:
+        """Get the token deposit info for a service.
+
+        Args:
+            service_id: The service ID.
+
+        Returns:
+            Tuple of (token_address, security_deposit).
+
+        """
+        return self.call("mapServiceIdTokenDeposit", service_id)

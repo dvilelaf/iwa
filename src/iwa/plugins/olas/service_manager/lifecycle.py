@@ -378,29 +378,50 @@ class LifecycleManagerMixin:
     def _ensure_token_approval_for_activation(
         self, token_address: str, security_deposit: Wei
     ) -> bool:
-        """Ensure token approval for activation if not native token."""
+        """Ensure token approval for activation if not native token.
+
+        For token-bonded services (e.g., OLAS), we need to approve the
+        ServiceRegistryTokenUtility contract to spend the security deposit
+        (agent bond) on our behalf.
+
+        IMPORTANT: We query the exact bond amount from the Token Utility contract
+        rather than approving a fixed amount, to match the official OLAS middleware.
+        """
         is_native = str(token_address).lower() == str(ZERO_ADDRESS).lower()
         if is_native:
             return True
 
         try:
-            # Check Master Balance first
+            # Get the exact agent bond from Token Utility contract
+            bond_amount = self._get_agent_bond_from_token_utility()
+            if bond_amount is None or bond_amount == 0:
+                logger.warning(
+                    "[ACTIVATE] Could not get agent bond from Token Utility, using security_deposit"
+                )
+                bond_amount = security_deposit
+
+            logger.info(f"[ACTIVATE] Agent bond from Token Utility: {bond_amount} wei")
+
+            # Check owner balance
             balance = self.wallet.balance_service.get_erc20_balance_wei(
                 account_address_or_tag=self.service.service_owner_address,
                 token_address_or_name=token_address,
                 chain_name=self.chain_name,
             )
 
-            if balance < security_deposit:
+            if balance < bond_amount:
                 logger.error(
-                    f"[ACTIVATE] FAIL: Owner balance {balance} < required {security_deposit}"
+                    f"[ACTIVATE] FAIL: Owner balance {balance} < required {bond_amount}"
                 )
+                return False
 
             protocol_contracts = OLAS_CONTRACTS.get(self.chain_name.lower(), {})
             utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
 
             if utility_address:
-                required_approval = Web3.to_wei(1000, "ether")  # Approve generous amount to be safe
+                # Approve exactly the bond amount (not 1000 OLAS fixed!)
+                # This matches the official OLAS middleware behavior
+                required_approval = bond_amount
 
                 # Check current allowance
                 allowance = self.wallet.transfer_service.get_erc20_allowance(
@@ -410,9 +431,10 @@ class LifecycleManagerMixin:
                     chain_name=self.chain_name,
                 )
 
-                if allowance < Web3.to_wei(10, "ether"):  # Min threshold check
+                if allowance < required_approval:
                     logger.info(
-                        f"Low allowance ({allowance}). Approving Token Utility {utility_address}"
+                        f"[ACTIVATE] Allowance ({allowance}) < required ({required_approval}). "
+                        f"Approving Token Utility {utility_address}"
                     )
                     success_approve = self.wallet.transfer_service.approve_erc20(
                         owner_address_or_tag=self.service.service_owner_address,
@@ -422,19 +444,62 @@ class LifecycleManagerMixin:
                         chain_name=self.chain_name,
                     )
                     if not success_approve:
-                        logger.warning("Token approval transaction returned failure.")
+                        logger.error("[ACTIVATE] Token approval failed")
                         return False
+                    logger.info(f"[ACTIVATE] Approved {required_approval} wei to Token Utility")
+                else:
+                    logger.debug(
+                        f"[ACTIVATE] Sufficient allowance ({allowance} >= {required_approval})"
+                    )
             return True
         except Exception as e:
-            logger.warning(f"Failed to check/approve tokens: {e}")
-            return False  # Return False only if we are strict, or True if we want to try anyway?
-            # Original code swallowed exception but continued.
-            # If we want to return early, we should return False.
-            # However, if we swallow, we return True. Let's stick to original behavior,
-            # BUT original code didn't return False here, it just logged and continued.
-            # To be safer with clean code, if token approval fails, we should probably stop.
-            # Let's assume we return True to match original "swallow" behavior but log it.
-            return True
+            logger.error(f"[ACTIVATE] Failed to check/approve tokens: {e}")
+            return False
+
+    def _get_agent_bond_from_token_utility(self) -> Optional[int]:
+        """Get the agent bond from the ServiceRegistryTokenUtility contract.
+
+        This queries the on-chain Token Utility contract to get the exact bond
+        amount required for the service, matching the official OLAS middleware.
+
+        Returns:
+            The agent bond in wei, or None if the query fails.
+
+        """
+        from iwa.plugins.olas.contracts.service import ServiceRegistryTokenUtilityContract
+
+        try:
+            protocol_contracts = OLAS_CONTRACTS.get(self.chain_name.lower(), {})
+            utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
+
+            if not utility_address:
+                logger.warning("[ACTIVATE] Token Utility address not found for chain")
+                return None
+
+            # Get agent ID (first agent in the service)
+            service_info = self.registry.get_service(self.service.service_id)
+            agent_ids = service_info.get("agent_ids", [])
+            if not agent_ids:
+                logger.warning("[ACTIVATE] No agent IDs found for service")
+                return None
+            agent_id = agent_ids[0]
+
+            # Use the ServiceRegistryTokenUtilityContract with official ABI
+            token_utility = ServiceRegistryTokenUtilityContract(
+                address=str(utility_address),
+                chain_name=self.chain_name,
+            )
+
+            bond = token_utility.get_agent_bond(self.service.service_id, agent_id)
+
+            logger.debug(
+                f"[ACTIVATE] Token Utility getAgentBond({self.service.service_id}, {agent_id}) = {bond}"
+            )
+            return bond
+
+        except Exception as e:
+            logger.warning(f"[ACTIVATE] Failed to get agent bond from Token Utility: {e}")
+            return None
 
     def _send_activation_transaction(self, service_id: int, security_deposit: Wei) -> bool:
         """Send the activation transaction.
@@ -570,7 +635,12 @@ class LifecycleManagerMixin:
     def _ensure_agent_token_approval(
         self, agent_account_address: str, bond_amount_wei: Optional[Wei]
     ) -> bool:
-        """Ensure token approval for agent registration if needed."""
+        """Ensure token approval for agent registration if needed.
+
+        For token-bonded services, the service owner must approve the Token Utility
+        contract to transfer the agent bond. We query the exact bond from the
+        Token Utility contract to match the official OLAS middleware.
+        """
         service_id = self.service.service_id
         token_address = self._get_service_token(service_id)
         is_native = str(token_address) == str(ZERO_ADDRESS)
@@ -578,19 +648,34 @@ class LifecycleManagerMixin:
         if is_native:
             return True
 
+        # Get exact bond from Token Utility if not explicitly provided
         if not bond_amount_wei:
-            logger.warning("No bond amount provided for token bonding. Agent might fail to bond.")
-            # We don't return False here, similar to original logic, just warn.
-            # But approval will fail if we try to approve None.
-            return True
+            bond_amount_wei = self._get_agent_bond_from_token_utility()
+            if not bond_amount_wei:
+                logger.warning(
+                    "[REGISTER] Could not get bond from Token Utility, skipping approval"
+                )
+                return True
 
-        # Service Owner approves Token Utility for the Bond.
-        # The bond is paid by the service owner, not the agent instance.
-        logger.info(f"Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
+        logger.info(f"[REGISTER] Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
 
         utility_address = str(
             OLAS_CONTRACTS[self.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
         )
+
+        # Check current allowance first
+        allowance = self.wallet.transfer_service.get_erc20_allowance(
+            owner_address_or_tag=self.service.service_owner_address,
+            spender_address=utility_address,
+            token_address_or_name=token_address,
+            chain_name=self.chain_name,
+        )
+
+        if allowance >= bond_amount_wei:
+            logger.debug(
+                f"[REGISTER] Sufficient allowance ({allowance} >= {bond_amount_wei})"
+            )
+            return True
 
         # Use service owner which holds the OLAS tokens (not necessarily master)
         approve_success = self.wallet.transfer_service.approve_erc20(
@@ -601,8 +686,10 @@ class LifecycleManagerMixin:
             chain_name=self.chain_name,
         )
         if not approve_success:
-            logger.error("Failed to approve token for agent registration")
+            logger.error("[REGISTER] Failed to approve token for agent registration")
             return False
+
+        logger.info(f"[REGISTER] Approved {bond_amount_wei} wei to Token Utility")
         return True
 
     def _send_register_agent_transaction(self, agent_account_address: str) -> bool:
