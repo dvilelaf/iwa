@@ -79,7 +79,6 @@ def mock_external_deps():
     with (
         patch("iwa.core.services.transaction.log_transaction") as mock_log,
         patch("iwa.core.pricing.PriceService") as mock_price,
-        patch("iwa.core.services.transaction.time.sleep") as _,  # speed up tests
     ):
         mock_price.return_value.get_token_price.return_value = 1.0  # 1 EUR per Token
         yield {

@@ -1,6 +1,5 @@
 """Transaction service module."""
 
-import time
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -252,15 +251,8 @@ class TransactionService:
                 raise ValueError("Transaction reverted")
 
             except web3_exceptions.Web3RPCError as e:
-                # Check if it's a gas error - if so, increase gas and re-raise to trigger retry
-                if self._is_gas_too_low_error(str(e)) and state["gas_retries"] < state["max_gas_retries"]:
-                    current_gas = int(tx.get("gas", 30_000))
-                    tx["gas"] = int(current_gas * 1.5)
-                    state["gas_retries"] += 1
-                    logger.warning(
-                        f"Gas too low, increasing to {tx['gas']} "
-                        f"(attempt {state['gas_retries']}/{state['max_gas_retries']})"
-                    )
+                # Handle gas errors by increasing gas and re-raising
+                self._handle_gas_retry(e, tx, state)
                 raise  # Re-raise to trigger with_retry's retry mechanism
 
         try:
@@ -300,32 +292,16 @@ class TransactionService:
             tx["chainId"] = chain_interface.chain.chain_id
         return True
 
-    def _handle_gas_error(self, e, tx, attempt, max_retries) -> bool:
-        err_text = str(e)
-        if self._is_gas_too_low_error(err_text) and attempt < max_retries:
-            logger.warning(
-                f"Gas too low error detected. Retrying with increased gas (Attempt {attempt}/{max_retries})..."
-            )
+    def _handle_gas_retry(self, e: Exception, tx: dict, state: dict) -> None:
+        """Increase gas if error is gas-related and retries remaining."""
+        if self._is_gas_too_low_error(str(e)) and state["gas_retries"] < state["max_gas_retries"]:
             current_gas = int(tx.get("gas", 30_000))
             tx["gas"] = int(current_gas * 1.5)
-            tx["gas"] = int(current_gas * 1.5)
-            # Exponential backoff for gas errors
-            time.sleep(min(2**attempt, 30))
-            return True
-        logger.exception(f"Error sending transaction: {e}")
-        return False
-
-    def _handle_generic_error(self, e, chain_interface, attempt, max_retries) -> bool:
-        if attempt < max_retries:
-            logger.warning(f"Error encountered: {e}. Attempting to rotate RPC...")
-
-            if chain_interface.rotate_rpc():
-                logger.info("Retrying with new RPC...")
-                # Exponential backoff
-                time.sleep(min(2**attempt, 30))
-                return True
-        logger.exception(f"Unexpected error sending transaction: {e}")
-        return False
+            state["gas_retries"] += 1
+            logger.warning(
+                f"Gas too low, increasing to {tx['gas']} "
+                f"(attempt {state['gas_retries']}/{state['max_gas_retries']})"
+            )
 
     def _log_successful_transaction(
         self, receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
