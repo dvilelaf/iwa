@@ -1,4 +1,61 @@
-"""Lifecycle manager mixin."""
+"""Lifecycle manager mixin for OLAS service lifecycle operations.
+
+OLAS Service Lifecycle & Token Flow
+====================================
+
+This module handles the first 4 steps of the service lifecycle (staking is in staking.py).
+Each step involves specific token movements as detailed below.
+
+STEP 1: CREATE SERVICE
+    - What happens:
+        * Service is registered on-chain with metadata (config hash, agent IDs)
+        * Service ownership NFT (ERC-721) is minted to service owner
+        * Bond parameters are recorded but NO tokens move yet
+    - Token Movement: None
+    - Approval: Service Owner → Token Utility (for 2 × bond_amount OLAS)
+    - Next State: PRE_REGISTRATION
+
+STEP 2: ACTIVATE REGISTRATION
+    - What happens:
+        * Service Owner signals readiness to accept agent registrations
+        * Token Utility pulls min_staking_deposit OLAS from owner via transferFrom()
+    - Token Movement:
+        * 5,000 OLAS: Service Owner → Token Utility (for 10k contract)
+    - Native value sent: 1 wei (not 5k OLAS!)
+        * This is MIN_AGENT_BOND, a placeholder for native-bonded services
+        * For OLAS-bonded services, tokens move via Token Utility, not via msg.value
+    - Next State: ACTIVE_REGISTRATION
+
+STEP 3: REGISTER AGENT
+    - What happens:
+        * Agent instance address is registered to the service
+        * Token Utility pulls agent_bond OLAS from owner via transferFrom()
+    - Token Movement:
+        * 5,000 OLAS: Service Owner → Token Utility (for 10k contract)
+    - Native value sent: 1 wei per agent
+        * Same logic as activation - tokens move via Token Utility
+    - Next State: FINISHED_REGISTRATION
+
+STEP 4: DEPLOY
+    - What happens:
+        * Safe multisig is created with agent instances as owners
+        * Service transitions to operational state
+    - Token Movement: None
+    - Next State: DEPLOYED
+
+After DEPLOYED, see staking.py for STEP 5: STAKE
+
+Token Utility Contract:
+    The Token Utility (0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8 on Gnosis) is the
+    intermediary that holds OLAS deposits. When you call activateRegistration() or
+    registerAgents() on the Service Manager, it internally calls Token Utility's
+    transferFrom() to move OLAS from the service owner.
+
+    This is why:
+    1. We approve Token Utility BEFORE activation/registration
+    2. We send 1 wei native value (not the OLAS amount) in TX
+    3. The actual OLAS moves via transferFrom(), not msg.value
+"""
 
 from typing import List, Optional, Union
 
@@ -20,7 +77,26 @@ from iwa.plugins.olas.models import Service
 
 
 class LifecycleManagerMixin:
-    """Mixin for service lifecycle operations."""
+    """Mixin for OLAS service lifecycle operations.
+
+    Handles the CREATE → ACTIVATE → REGISTER → DEPLOY flow for OLAS services.
+    Each method transitions the service to the next state.
+
+    Token Movement Summary:
+        ┌───────────────┬────────────────────────────────────────────────────┐
+        │ Step          │ OLAS Movement                                      │
+        ├───────────────┼────────────────────────────────────────────────────┤
+        │ create()      │ None (just approval to Token Utility)              │
+        │ activate()    │ 5k OLAS → Token Utility (via transferFrom)         │
+        │ register()    │ 5k OLAS → Token Utility (via transferFrom)         │
+        │ deploy()      │ None (just creates Safe multisig)                  │
+        └───────────────┴────────────────────────────────────────────────────┘
+
+    Usage:
+        manager = ServiceManager(wallet)
+        service_id = manager.create(chain_name="gnosis", token_address_or_tag="OLAS")
+        manager.spin_up(bond_amount_wei=5000e18, staking_contract=staking)
+    """
 
     def create(
         self,
@@ -192,7 +268,22 @@ class LifecycleManagerMixin:
         service_owner_account,
         bond_amount_wei: Wei,
     ) -> None:
-        """Approve token utility if a token address is provided."""
+        """Approve Token Utility to spend OLAS tokens (called during create).
+
+        Why 2× bond amount?
+            - Activation requires min_staking_deposit (= bond_amount)
+            - Registration requires agent_bond (= bond_amount)
+            - Total = 2 × bond_amount
+
+        Token Movement: None (this is just an approval, not a transfer)
+
+        Args:
+            token_address: OLAS token address (or None for native).
+            chain_name: Chain to operate on.
+            service_owner_account: Account that owns the OLAS tokens.
+            bond_amount_wei: Bond amount per agent in wei.
+
+        """
         if not token_address:
             return
 
@@ -204,7 +295,7 @@ class LifecycleManagerMixin:
             logger.error(f"OLAS Service Registry Token Utility not found for chain: {chain_name}")
             return
 
-        # Approve the token utility to move tokens (2 * bond amount as per Triton reference)
+        # Approve the token utility to move tokens (2 * bond amount: activation + registration)
         logger.info(f"Approving Token Utility {utility_address} for {2 * bond_amount_wei} tokens")
         approve_success = self.transfer_service.approve_erc20(
             owner_address_or_tag=service_owner_account.address,
@@ -218,7 +309,28 @@ class LifecycleManagerMixin:
             logger.error("Failed to approve Token Utility")
 
     def activate_registration(self) -> bool:
-        """Activate registration for the service."""
+        """Activate registration for the service (Step 2 of lifecycle).
+
+        What This Does:
+            Transitions service from PRE_REGISTRATION → ACTIVE_REGISTRATION.
+            Signals that the service owner is ready to accept agent registrations.
+
+        Token Movement:
+            5,000 OLAS (for 10k contract): Service Owner → Token Utility
+            - Moved internally by Token Utility via transferFrom()
+            - NOT sent as msg.value (that's just 1 wei)
+
+        Native Value Sent:
+            1 wei (MIN_AGENT_BOND placeholder, not the actual deposit)
+
+        Prerequisites:
+            - Service must be in PRE_REGISTRATION state
+            - Token Utility must be approved to spend owner's OLAS
+
+        Returns:
+            True if activation succeeded, False otherwise.
+
+        """
         service_id = self.service.service_id
         logger.info(f"[ACTIVATE] Starting activation for service {service_id}")
 
