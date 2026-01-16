@@ -2358,7 +2358,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             ? "Claim staking rewards"
                             : "No rewards available to claim";
                         const claimLabel = hasRewards
-                          ? `Claim ${escapeHtml(staking.accrued_reward_olas)} OLAS`
+                          ? `Claim ${escapeHtml(formatBalance(staking.accrued_reward_olas))} OLAS`
                           : "Claim";
                         return `
                         <button class="btn-primary btn-sm"
