@@ -56,8 +56,19 @@ def mock_chain_interfaces():
 
         instance.get.return_value = gnosis_interface
 
-        # Mock with_retry to execute the operation
-        gnosis_interface.with_retry.side_effect = lambda op, **kwargs: op()
+        # Mock with_retry to simulate retry behavior (up to 6 attempts)
+        def mock_with_retry(op, max_retries=6, **kwargs):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return op()
+                except Exception as e:
+                    last_error = e
+                    if attempt >= max_retries:
+                        raise
+            raise last_error
+
+        gnosis_interface.with_retry.side_effect = mock_with_retry
 
         yield instance
 
@@ -146,7 +157,11 @@ def test_sign_and_send_low_gas_retry(
 def test_sign_and_send_rpc_rotation(
     mock_key_storage, mock_account_service, mock_chain_interfaces, mock_external_deps
 ):
-    """Test RPC rotation on generic error."""
+    """Test retry on generic error via with_retry.
+
+    RPC rotation is now handled internally by with_retry, so we just verify
+    that the operation retries and eventually succeeds.
+    """
     service = TransactionService(mock_key_storage, mock_account_service)
     chain_interface = mock_chain_interfaces.get.return_value
 
@@ -155,11 +170,11 @@ def test_sign_and_send_rpc_rotation(
         Exception("Connection reset"),
         b"tx_hash_bytes",
     ]
-    chain_interface.rotate_rpc.return_value = True
 
     tx = {"to": "0xDest", "value": 100}
 
     success, receipt = service.sign_and_send(tx, "signer")
 
     assert success is True
-    chain_interface.rotate_rpc.assert_called_once()
+    # Verify retry happened - send_raw_transaction called twice
+    assert chain_interface.web3.eth.send_raw_transaction.call_count == 2

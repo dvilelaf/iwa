@@ -83,20 +83,38 @@ class NativeTransferMixin:
         to_tag: Optional[str],
         token_symbol: str,
     ) -> Optional[str]:
-        """Send native currency via EOA (externally owned account)."""
-        success, tx_hash = chain_interface.send_native_transfer(
-            from_address=from_account.address,
-            to_address=to_address,
-            value_wei=amount_wei,
-            sign_callback=lambda tx: self.key_storage.sign_transaction(tx, from_account.address),
+        """Send native currency via EOA using unified TransactionService."""
+        # Build transaction dict
+        try:
+            gas_price = chain_interface.web3.eth.gas_price
+            gas_estimate = chain_interface.web3.eth.estimate_gas({
+                "from": from_account.address,
+                "to": to_address,
+                "value": amount_wei,
+            })
+        except Exception as e:
+            logger.error(f"Failed to estimate gas for native transfer: {e}")
+            return None
+
+        tx = {
+            "from": from_account.address,
+            "to": to_address,
+            "value": amount_wei,
+            "gas": gas_estimate,
+            "gasPrice": gas_price,
+        }
+
+        # Use unified TransactionService
+        success, receipt = self.transaction_service.sign_and_send(
+            tx, from_account.address, chain_name, tags=["native-transfer"]
         )
-        if success and tx_hash:
-            # Get receipt for gas calculation
-            receipt = None
-            try:
-                receipt = chain_interface.web3.eth.get_transaction_receipt(tx_hash)
-            except Exception as e:
-                logger.warning(f"Could not get receipt for {tx_hash}: {e}")
+
+        if success and receipt:
+            tx_hash = receipt.get("transactionHash", b"")
+            if hasattr(tx_hash, "hex"):
+                tx_hash = tx_hash.hex()
+            elif isinstance(tx_hash, bytes):
+                tx_hash = tx_hash.hex()
 
             gas_cost, gas_value_eur = self._calculate_gas_info(receipt, chain_name)
             p_eur, v_eur = self._get_token_price_info(token_symbol, amount_wei, chain_name)
@@ -117,11 +135,10 @@ class NativeTransferMixin:
             )
 
             # Log transfers extracted from receipt events
-            if receipt:
-                from iwa.core.services.transaction import TransferLogger
+            from iwa.core.services.transaction import TransferLogger
 
-                transfer_logger = TransferLogger(self.account_service, chain_interface)
-                transfer_logger.log_transfers(receipt)
+            transfer_logger = TransferLogger(self.account_service, chain_interface)
+            transfer_logger.log_transfers(receipt)
 
             return tx_hash
         return None
