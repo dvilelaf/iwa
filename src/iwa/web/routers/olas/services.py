@@ -28,6 +28,50 @@ class CreateServiceRequest(BaseModel):
     )
 
 
+def _determine_bond_amount(req: CreateServiceRequest) -> int:
+    """Determine the bond amount required for the service."""
+    from web3 import Web3
+
+    from iwa.core.contracts.erc20 import ERC20Contract
+    from iwa.plugins.olas.contracts.staking import StakingContract
+    from iwa.web.dependencies import wallet
+
+    # Default to 1 wei of the service token if no staking contract specified
+    bond_amount = Web3.to_wei(1, "wei")
+
+    if req.token_address and req.staking_contract:
+        # If a contract is specified, we MUST use its requirements
+        logger.info(f"Fetching requirements from {req.staking_contract}...")
+        staking_contract = StakingContract(req.staking_contract, req.chain)
+        reqs = staking_contract.get_requirements()
+        bond_amount = reqs["required_agent_bond"]
+        min_staking_deposit = reqs["min_staking_deposit"]
+        logger.info(f"Required bond amount from contract: {bond_amount} wei")
+        logger.info(f"Required min_staking_deposit: {min_staking_deposit} wei")
+
+        # Validate upfront: total OLAS needed = bond + min_staking_deposit
+        if req.stake_on_create:
+            total_olas_needed = bond_amount + min_staking_deposit
+            logger.info(
+                f"Total OLAS needed for create + stake: {total_olas_needed / 1e18:.2f} OLAS"
+            )
+
+            # Check owner balance (master is default owner for new services)
+            staking_token = reqs.get("staking_token")
+            if staking_token:
+                erc20 = ERC20Contract(staking_token, req.chain)
+                owner_balance = erc20.balance_of_wei(wallet.master_account.address)
+                logger.info(f"Owner OLAS balance: {owner_balance / 1e18:.2f} OLAS")
+
+                if owner_balance < total_olas_needed:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Insufficient OLAS balance. Need {total_olas_needed / 1e18:.2f} OLAS "
+                        f"(bond: {bond_amount / 1e18:.2f} + deposit: {min_staking_deposit / 1e18:.2f}), "
+                        f"but owner has {owner_balance / 1e18:.2f} OLAS",
+                    )
+    return bond_amount
+
 @router.post(
     "/create",
     summary="Create Service",
@@ -43,45 +87,8 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
 
         manager = ServiceManager(wallet)
 
-        # Determine bond amount based on staking contract
-        bond_amount = 1  # Default for native token (1 wei)
-
-        staking_contract = None
-        if req.token_address:
-            if req.staking_contract:
-                # If a contract is specified, we MUST use its requirements
-                logger.info(f"Fetching requirements from {req.staking_contract}...")
-                staking_contract = StakingContract(req.staking_contract, req.chain)
-                reqs = staking_contract.get_requirements()
-                bond_amount = reqs["required_agent_bond"]
-                min_staking_deposit = reqs["min_staking_deposit"]
-                logger.info(f"Required bond amount from contract: {bond_amount} wei")
-                logger.info(f"Required min_staking_deposit: {min_staking_deposit} wei")
-
-                # Validate upfront: total OLAS needed = bond + min_staking_deposit
-                if req.stake_on_create:
-                    total_olas_needed = bond_amount + min_staking_deposit
-                    logger.info(f"Total OLAS needed for create + stake: {total_olas_needed / 1e18:.2f} OLAS")
-
-                    # Check owner balance (master is default owner for new services)
-                    from iwa.core.contracts.erc20 import ERC20Contract
-
-                    staking_token = reqs.get("staking_token")
-                    if staking_token:
-                        erc20 = ERC20Contract(staking_token, req.chain)
-                        owner_balance = erc20.balance_of_wei(wallet.master_account.address)
-                        logger.info(f"Owner OLAS balance: {owner_balance / 1e18:.2f} OLAS")
-
-                        if owner_balance < total_olas_needed:
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"Insufficient OLAS balance. Need {total_olas_needed / 1e18:.2f} OLAS "
-                                f"(bond: {bond_amount / 1e18:.2f} + deposit: {min_staking_deposit / 1e18:.2f}), "
-                                f"but owner has {owner_balance / 1e18:.2f} OLAS",
-                            )
-            else:
-                # Default to 1 wei of the service token if no staking contract specified
-                bond_amount = Web3.to_wei(1, "wei")
+        # Determine bond amount
+        bond_amount = _determine_bond_amount(req)
 
         # Step 1: Create the service (PRE_REGISTRATION state)
         logger.info(
