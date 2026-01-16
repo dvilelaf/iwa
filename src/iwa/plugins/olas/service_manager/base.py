@@ -51,6 +51,10 @@ class ServiceManagerBase:
 
     def _init_contracts(self, chain_name: str) -> None:
         """Initialize contracts for the given chain."""
+        # OPTIMIZATION: Skip if already initialized for this chain
+        if getattr(self, "chain_name", None) == chain_name.lower() and hasattr(self, "registry"):
+            return
+
         chain_interface = ChainInterfaces().get(chain_name)
 
         # Get protocol contracts from plugin-local constants
@@ -63,9 +67,9 @@ class ServiceManagerBase:
 
         self.registry = ServiceRegistryContract(registry_address, chain_name=chain_name)
         self.manager = ServiceManagerContract(manager_address, chain_name=chain_name)
-        logger.info(f"[SM-INIT] ServiceManager initialized. Chain: {chain_name}")
-        logger.info(f"[SM-INIT] Registry Address: {self.registry.address}")
-        logger.info(f"[SM-INIT] Manager Address: {self.manager.address}")
+        logger.debug(f"[SM-INIT] ServiceManager initialized. Chain: {chain_name}")
+        logger.debug(f"[SM-INIT] Registry Address: {self.registry.address}")
+        logger.debug(f"[SM-INIT] Manager Address: {self.manager.address}")
         self.chain_interface = chain_interface
         self.chain_name = chain_name.lower()
 

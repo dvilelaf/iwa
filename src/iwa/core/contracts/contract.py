@@ -19,7 +19,18 @@ logger = configure_logger()
 ERROR_SELECTOR = "0x08c379a0"  # Error(string)
 PANIC_SELECTOR = "0x4e487b71"  # Panic(uint256)
 
+# Global cache for ABIs and error selectors to avoid redundant disk I/O and parsing
+# Format: {abi_path: {"abi": [...], "selectors": {...}}}
+_ABI_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def clear_abi_cache() -> None:
+    """Clear the global ABI cache (mainly for testing)."""
+    global _ABI_CACHE
+    _ABI_CACHE = {}
+
 # Panic codes (from Solidity)
+# ... (rest of PANIC_CODES) ...
 PANIC_CODES = {
     0x00: "Generic compiler inserted panic",
     0x01: "Assert failed",
@@ -46,16 +57,25 @@ class ContractInstance:
         self.abi = None
         self.chain_interface = ChainInterfaces().get(chain_name)
 
-        with open(self.abi_path, "r", encoding="utf-8") as abi_file:
-            contract_abi = json.load(abi_file)
+        # Check global cache first
+        cache_key = str(self.abi_path)
+        if cache_key in _ABI_CACHE:
+            self.abi = _ABI_CACHE[cache_key]["abi"]
+            self.error_selectors = _ABI_CACHE[cache_key]["selectors"]
+        else:
+            with open(self.abi_path, "r", encoding="utf-8") as abi_file:
+                contract_abi = json.load(abi_file)
 
-            if isinstance(contract_abi, dict) and "abi" in contract_abi:
-                self.abi = contract_abi.get("abi")
-            else:
-                self.abi = contract_abi
+                if isinstance(contract_abi, dict) and "abi" in contract_abi:
+                    self.abi = contract_abi.get("abi")
+                else:
+                    self.abi = contract_abi
+
+            self.error_selectors = self.load_error_selectors()
+            # Store in global cache
+            _ABI_CACHE[cache_key] = {"abi": self.abi, "selectors": self.error_selectors}
 
         self._contract_cache = None
-        self.error_selectors = self.load_error_selectors()
 
     @property
     def contract(self) -> Contract:

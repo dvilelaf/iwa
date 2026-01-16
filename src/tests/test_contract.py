@@ -4,7 +4,15 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 from web3.exceptions import ContractCustomError
 
-from iwa.core.contracts.contract import ContractInstance
+from iwa.core.contracts.contract import ContractInstance, clear_abi_cache
+
+
+@pytest.fixture(autouse=True)
+def clean_abi_cache():
+    """Clear global ABI cache before each test."""
+    clear_abi_cache()
+    yield
+    clear_abi_cache()
 
 
 @pytest.fixture

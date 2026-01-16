@@ -12,12 +12,14 @@ from iwa.core.secrets import secrets
 # Global cache shared across all PriceService instances
 _PRICE_CACHE: Dict[str, Dict] = {}
 _CACHE_TTL = timedelta(minutes=30)
+_NEGATIVE_CACHE_TTL = timedelta(minutes=5)
 
 
 class PriceService:
     """Service to fetch token prices from CoinGecko."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
+    DEMO_URL = "https://demo-api.coingecko.com/api/v3"
 
     def __init__(self):
         """Initialize PriceService."""
@@ -41,15 +43,16 @@ class PriceService:
         """
         cache_key = f"{token_id}_{vs_currency}"
 
-        # Check global cache
+        # Check global cache (including negative cache)
         if cache_key in _PRICE_CACHE:
             entry = _PRICE_CACHE[cache_key]
-            if datetime.now() - entry["timestamp"] < _CACHE_TTL:
+            ttl = _CACHE_TTL if entry["price"] is not None else _NEGATIVE_CACHE_TTL
+            if datetime.now() - entry["timestamp"] < ttl:
                 return entry["price"]
 
         price = self._fetch_price_from_api(token_id, vs_currency)
-        if price is not None:
-            _PRICE_CACHE[cache_key] = {"price": price, "timestamp": datetime.now()}
+        # We always cache, even if price is None (negative caching)
+        _PRICE_CACHE[cache_key] = {"price": price, "timestamp": datetime.now()}
         return price
 
     def _fetch_price_from_api(self, token_id: str, vs_currency: str) -> Optional[float]:
@@ -57,7 +60,10 @@ class PriceService:
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                url = f"{self.BASE_URL}/simple/price"
+                # Use demo URL if API key is present, otherwise standard URL
+                # NOTE: Demo URL is significantly more reliable for demo keys
+                base_url = self.DEMO_URL if self.api_key else self.BASE_URL
+                url = f"{base_url}/simple/price"
                 params = {"ids": token_id, "vs_currencies": vs_currency}
                 headers = {}
                 if self.api_key:
@@ -69,6 +75,8 @@ class PriceService:
                     logger.warning("CoinGecko API key invalid (401). Retrying without key...")
                     self.api_key = None
                     headers.pop("x-cg-demo-api-key", None)
+                    # Re-run with base URL
+                    url = f"{self.BASE_URL}/simple/price"
                     response = requests.get(url, params=params, headers=headers, timeout=10)
 
                 if response.status_code == 429:
@@ -87,13 +95,16 @@ class PriceService:
                 if token_id in data and vs_currency in data[token_id]:
                     return float(data[token_id][vs_currency])
 
-                logger.warning(
+                # If we got response but price not found, it's likely a wrong ID
+                logger.debug(
                     f"Price for {token_id} in {vs_currency} not found in response: {data}"
                 )
                 return None
 
             except Exception as e:
-                logger.error(f"Failed to fetch price for {token_id} (Attempt {attempt + 1}): {e}")
+                # Only log error on last attempt to avoid spamming
+                if attempt == max_retries:
+                    logger.error(f"Failed to fetch price for {token_id}: {e}")
                 if attempt < max_retries:
                     time.sleep(1)
                     continue
