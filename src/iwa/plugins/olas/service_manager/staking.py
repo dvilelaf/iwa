@@ -39,9 +39,9 @@ Key Insight:
     pulls position data from the Token Utility, not from the owner's wallet.
 
 Contract Addresses (Gnosis):
-    - Token Utility: 0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8
-    - Service Registry L2: 0x9338b5153AE39BB89f50468E608eD9d764B755fD
-    - OLAS Token: 0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f
+    - Token Utility: 0xa45E...8eD8
+    - Service Registry L2: 0x9338...55fD
+    - OLAS Token: 0xcE11...d9f
 """
 
 from datetime import datetime, timezone
