@@ -135,16 +135,23 @@ class TransferLogger:
     def _log_erc20_transfer(
         self, token_addr: str, from_addr: str, to_addr: str, amount_wei: int
     ) -> None:
-        """Log an ERC20 transfer."""
+        """Log an ERC20 transfer (or NFT transfer if detected)."""
         from_label = self._resolve_address_label(from_addr)
         to_label = self._resolve_address_label(to_addr)
         token_label = self._resolve_token_label(token_addr)
 
-        # Get decimals for formatting
-        decimals = self.chain_interface.get_token_decimals(token_addr)
-        amount = amount_wei / (10**decimals)
+        # Try to get decimals - if None, it's an NFT (ERC721)
+        decimals = self.chain_interface.get_token_decimals(token_addr, fallback_to_18=False)
 
-        logger.info(f"[TRANSFER] {amount:.6g} {token_label}: {from_label} → {to_label}")
+        if decimals is not None:
+            amount = amount_wei / (10**decimals)
+            logger.info(f"[TRANSFER] {amount:.6g} {token_label}: {from_label} → {to_label}")
+        else:
+            # Likely an NFT (ERC721) - the amount is the token ID
+            if amount_wei > 0:
+                logger.info(f"[NFT TRANSFER] Token #{amount_wei} {token_label}: {from_label} → {to_label}")
+            else:
+                logger.debug(f"[NFT TRANSFER] {token_label}: {from_label} → {to_label}")
 
     def _resolve_address_label(self, address: str) -> str:
         """Resolve an address to a human-readable label.

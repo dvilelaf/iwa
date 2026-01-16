@@ -365,15 +365,28 @@ class ChainInterface:
         except Exception:
             return address[:6] + "..." + address[-4:]
 
-    def get_token_decimals(self, address: EthereumAddress) -> int:
-        """Get token decimals for an address."""
-        try:
-            from iwa.core.contracts.erc20 import ERC20Contract
+    def get_token_decimals(self, address: EthereumAddress, fallback_to_18: bool = True) -> Optional[int]:
+        """Get token decimals for an address.
 
-            erc20 = ERC20Contract(address, self.chain.name.lower())
-            return erc20.decimals if erc20.decimals is not None else 18
+        Args:
+            address: Token contract address.
+            fallback_to_18: If True, return 18 on error (default).
+                           If False, return None on error (useful for detecting NFTs).
+
+        Returns:
+            Decimals as int, or None if error and fallback_to_18 is False.
+        """
+        try:
+            # Call decimals() directly without with_retry to avoid error logging
+            contract = self.web3.eth.contract(
+                address=self.web3.to_checksum_address(address),
+                abi=[{"constant": True, "inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "type": "function"}]
+            )
+            return contract.functions.decimals().call()
         except Exception:
-            return 18
+            if fallback_to_18:
+                return 18
+            return None
 
     def get_native_balance_wei(self, address: EthereumAddress):
         """Get the native balance in wei"""
