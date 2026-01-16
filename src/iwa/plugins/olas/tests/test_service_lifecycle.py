@@ -95,10 +95,7 @@ def test_sm_stake_fail(sm):
     sm.transfer_service.approve_erc20.return_value = True
     sm.wallet.sign_and_send_transaction.return_value = (False, None)
 
-    with (
-        patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_stk_cls,
-        patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"),
-    ):
+    with patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_stk_cls:
         mock_stk = mock_stk_cls.return_value
         mock_stk.get_service_info.return_value = {"staking_state": 1}
         mock_stk.staking_token_address = addr

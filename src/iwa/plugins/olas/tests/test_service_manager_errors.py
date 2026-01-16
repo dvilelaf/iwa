@@ -121,8 +121,7 @@ def test_service_manager_lifecycle_failures(mock_wallet):
         "num_agent_instances": 1,
         "required_agent_bond": 50000000000000000000,
     }
-    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"):
-        assert manager.stake(mock_staking) is False
+    assert manager.stake(mock_staking) is False
 
     # unstake failures
     # Service not staked

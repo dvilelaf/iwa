@@ -100,11 +100,6 @@ def mock_chain_interfaces():
         yield mock
 
 
-@pytest.fixture
-def mock_erc20_contract():
-    """Mock ERC20 contract fixture."""
-    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock:
-        yield mock
 
 
 @pytest.fixture
@@ -114,7 +109,7 @@ def service_manager(
     mock_registry,
     mock_manager_contract,
     mock_chain_interfaces,
-    mock_erc20_contract,
+
     mock_olas_config,
     mock_service,
 ):
@@ -174,12 +169,11 @@ def test_create_no_event(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = []
 
-    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract"):  # Mock ERC20
-        res = service_manager.create(
-            token_address_or_tag="0x1111111111111111111111111111111111111111"
-        )
-        # create() finds no ID, logs error, returns None for service_id.
-        assert res is None
+    res = service_manager.create(
+        token_address_or_tag="0x1111111111111111111111111111111111111111"
+    )
+    # create() finds no ID, logs error, returns None for service_id.
+    assert res is None
 
 
 def test_activate_registration_success(service_manager, mock_wallet):
@@ -193,7 +187,7 @@ def test_activate_registration_success(service_manager, mock_wallet):
 
     # Mock balance/allowance for the new check
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     assert service_manager.activate_registration() is True
@@ -287,18 +281,15 @@ def test_stake_success(service_manager, mock_wallet):
         "security_deposit": 50000000000000000000,
     }
 
-    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock_erc20:
-        mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
+    staking_contract.get_staking_state.return_value = StakingState.STAKED
 
-        mock_wallet.sign_and_send_transaction.return_value = (True, {})
-        staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
-        staking_contract.get_staking_state.return_value = StakingState.STAKED
+    # We need to make sure prepare_approve_tx is mocked ON THE REGISTRY INSTANCE
+    service_manager.registry.prepare_approve_tx.return_value = {"to": "0xApprove"}
 
-        # We need to make sure prepare_approve_tx is mocked ON THE REGISTRY INSTANCE
-        service_manager.registry.prepare_approve_tx.return_value = {"to": "0xApprove"}
-
-        assert service_manager.stake(staking_contract) is True
-        assert service_manager.service.staking_contract_address == TEST_STAKING_ADDR
+    assert service_manager.stake(staking_contract) is True
+    assert service_manager.service.staking_contract_address == TEST_STAKING_ADDR
 
 
 def test_unstake_success(service_manager, mock_wallet):
@@ -370,60 +361,15 @@ def test_register_agent_fund_fails(service_manager, mock_wallet):
 
 def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
     """Test full spin_up path from PRE_REGISTRATION to DEPLOYED."""
-    # Mock state transitions - need to match actual calls in spin_up
-    # The state after activate_registration should be ACTIVE_REGISTRATION
-    state_sequence = [
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up initial
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # activate_registration check
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # activate_registration internal (get security deposit)
-        {
-            "state": ServiceState.ACTIVE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up verify after activate
-        {
-            "state": ServiceState.ACTIVE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # register_agent check
-        {
-            "state": ServiceState.ACTIVE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # register_agent internal
-        {
-            "state": ServiceState.FINISHED_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up verify after register
-        {
-            "state": ServiceState.FINISHED_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # deploy check
-        {
-            "state": ServiceState.DEPLOYED,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up verify after deploy
-        {
-            "state": ServiceState.DEPLOYED,
-            "security_deposit": 50000000000000000000,
-        },  # final verification
+    # Use a stateful mock that progresses based on extract_events calls
+    states = [
+        ServiceState.PRE_REGISTRATION,  # Before any TX
+        ServiceState.ACTIVE_REGISTRATION,  # After 1st TX (activate)
+        ServiceState.FINISHED_REGISTRATION,  # After 2nd TX (register)
+        ServiceState.DEPLOYED,  # After 3rd TX (deploy)
     ]
-    service_manager.registry.get_service.side_effect = state_sequence
-
-    mock_wallet.send.return_value = "0xMockTxHash"  # wallet.send returns tx_hash
-    mock_wallet.sign_and_send_transaction.return_value = (True, {})
-
-    # Mock balance/allowance for activate_registration internal call
-    mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
-    mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
-    service_manager.registry.extract_events.side_effect = [
+    tx_count = [0]  # Track completed transactions
+    events_side_effects = [
         [{"name": "ActivateRegistration"}],
         [{"name": "RegisterInstance"}],
         [
@@ -431,6 +377,32 @@ def test_spin_up_from_pre_registration_success(service_manager, mock_wallet):
             {"name": "CreateMultisigWithAgents", "args": {"multisig": TEST_MULTISIG_ADDR}},
         ],
     ]
+    event_idx = [0]
+
+    def dynamic_state(*args, **kwargs):
+        """Return state based on completed transactions."""
+        state = states[min(tx_count[0], len(states) - 1)]
+        return {"state": state, "security_deposit": 50000000000000000000}
+
+    def extract_and_progress(*args, **kwargs):
+        """Return events and advance transaction counter."""
+        if event_idx[0] < len(events_side_effects):
+            events = events_side_effects[event_idx[0]]
+            event_idx[0] += 1
+            tx_count[0] += 1
+            return events
+        return []
+
+    service_manager.registry.get_service.side_effect = dynamic_state
+    service_manager.registry.extract_events.side_effect = extract_and_progress
+
+    mock_wallet.send.return_value = "0xMockTxHash"
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+
+    # Mock balance/allowance for activate_registration internal call
+    mock_wallet.balance_service = MagicMock()
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
+    mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     assert service_manager.spin_up() is True
 
@@ -557,14 +529,12 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
         "required_agent_bond": 50000000000000000000,  # 50 OLAS
     }
 
-    with patch("iwa.plugins.olas.service_manager.staking.ERC20Contract") as mock_erc20:
-        mock_erc20.return_value.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
-        mock_wallet.sign_and_send_transaction.return_value = (True, {})
-        staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
-        staking_contract.get_staking_state.return_value = StakingState.STAKED
-        service_manager.registry.prepare_approve_tx.return_value = {"to": "0xApprove"}
+    mock_wallet.sign_and_send_transaction.return_value = (True, {})
+    staking_contract.extract_events.return_value = [{"name": "ServiceStaked"}]
+    staking_contract.get_staking_state.return_value = StakingState.STAKED
+    service_manager.registry.prepare_approve_tx.return_value = {"to": "0xApprove"}
 
-        assert service_manager.spin_up(staking_contract=staking_contract) is True
+    assert service_manager.spin_up(staking_contract=staking_contract) is True
 
 
 def test_spin_up_activate_fails(service_manager, mock_wallet):
@@ -587,7 +557,7 @@ def test_spin_up_activate_fails(service_manager, mock_wallet):
 
     # Mock balance/allowance for activate_registration behavior
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
@@ -931,7 +901,7 @@ def test_activate_registration_token_service_sends_security_deposit_as_value(
 
     # Mock balance check to pass
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18  # Plenty of balance
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18  # Plenty of balance
 
     # Mock allowance to pass check (return an int)
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20  # Plenty of allowance
@@ -964,7 +934,7 @@ def test_activate_registration_native_service_sends_security_deposit_as_value(
 
     # Mock balance/allowance
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     service_manager.activate_registration()
@@ -996,7 +966,7 @@ def test_activate_registration_uses_master_account_as_from_address(service_manag
     # Mock balance/allowance
     mock_wallet.balance_service = MagicMock()
     mock_wallet.transfer_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     service_manager.activate_registration()
@@ -1028,7 +998,7 @@ def test_activate_registration_uses_master_account_as_signer(service_manager, mo
     # Mock balance/allowance
     mock_wallet.balance_service = MagicMock()
     mock_wallet.transfer_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20
 
     service_manager.activate_registration()
@@ -1055,7 +1025,7 @@ def test_activate_registration_token_service_approves_token_utility(service_mana
 
     # Mock low allowance to trigger approval
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 10**18
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 0  # Low allowance
     mock_wallet.transfer_service.approve_erc20.return_value = True
 

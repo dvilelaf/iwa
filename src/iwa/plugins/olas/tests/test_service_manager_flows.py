@@ -45,9 +45,8 @@ def mock_config():
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-@patch("iwa.plugins.olas.service_manager.staking.ERC20Contract")
 def test_create_service_success(
-    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test successful service creation."""
     # Setup Config with new OlasConfig structure
@@ -85,9 +84,8 @@ def test_create_service_success(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-@patch("iwa.plugins.olas.service_manager.staking.ERC20Contract")
 def test_create_service_failures(
-    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test service creation failure modes."""
     mock_config_inst = mock_config_cls.return_value
@@ -141,9 +139,8 @@ def test_create_service_failures(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-@patch("iwa.plugins.olas.service_manager.staking.ERC20Contract")
 def test_create_service_with_approval(
-    mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test service creation with token approval."""
     mock_config_inst = mock_config_cls.return_value
@@ -404,8 +401,7 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
 @patch(
     "iwa.plugins.olas.service_manager.base.ServiceManagerContract"
 )  # MUST mock specifically here
-@patch("iwa.plugins.olas.service_manager.staking.ERC20Contract")  # For checking balance
-def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_stake(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service staking."""
     # Setup mock service
     mock_service = MagicMock()
@@ -445,9 +441,6 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
         "required_agent_bond": 50000000000000000000,
     }
 
-    # Mock ERC20 balance check (100 OLAS = 100e18 wei, enough for 50 min deposit)
-    mock_erc20_inst = mock_erc20.return_value
-    mock_erc20_inst.balance_of_wei.return_value = 100000000000000000000  # 100 OLAS
 
     success = manager.stake(mock_staking)
     assert success is True
@@ -471,10 +464,7 @@ def test_stake(mock_erc20, mock_sm_contract, mock_registry_contract, mock_config
     assert manager.stake(mock_staking) is False
     mock_staking.get_service_ids.return_value = []
 
-    # 3. Not enough funds
-    mock_erc20_inst.balance_of_wei.return_value = 50
-    assert manager.stake(mock_staking) is False
-    mock_erc20_inst.balance_of_wei.return_value = 200
+
 
     # 4. Approve fail
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
