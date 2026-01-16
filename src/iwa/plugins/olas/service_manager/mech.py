@@ -140,11 +140,13 @@ class MechManagerMixin:
             )
             if use_marketplace:
                 priority_mech = priority_mech or detected_priority_mech
+                mech_address = mech_address or detected_marketplace
 
         if use_marketplace:
             return self._send_marketplace_mech_request(
                 data=data,
                 value=value,
+                marketplace_address=mech_address,
                 priority_mech=priority_mech,
                 max_delivery_rate=max_delivery_rate,
                 payment_type=payment_type,
@@ -260,10 +262,39 @@ class MechManagerMixin:
 
         return True
 
+    def _resolve_marketplace_config(
+        self, marketplace_addr: Optional[str], priority_addr: Optional[str]
+    ) -> tuple[str, str]:
+        """Resolve marketplace and priority mech addresses. Returns (marketplace, priority)."""
+        chain_name = self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
+        protocol_contracts = OLAS_CONTRACTS.get(chain_name, {})
+
+        resolved_mp = marketplace_addr or protocol_contracts.get("OLAS_MECH_MARKETPLACE")
+        if not resolved_mp:
+            raise ValueError(f"Mech Marketplace address not found for chain {chain_name}")
+
+        if not priority_addr:
+            raise ValueError("priority_mech is required for marketplace requests")
+
+        return str(resolved_mp), Web3.to_checksum_address(priority_addr)
+
+    def _prepare_marketplace_params(
+        self,
+        value: Optional[int],
+        max_delivery_rate: Optional[int],
+        payment_type: Optional[bytes],
+    ) -> tuple[int, int, bytes]:
+        """Prepare default values for marketplace parameters."""
+        p_type = payment_type or bytes.fromhex(PAYMENT_TYPE_NATIVE)
+        val = value if value is not None else 10_000_000_000_000_000
+        rate = max_delivery_rate if max_delivery_rate is not None else val
+        return val, rate, p_type
+
     def _send_marketplace_mech_request(
         self,
         data: bytes,
         value: Optional[int] = None,
+        marketplace_address: Optional[str] = None,
         priority_mech: Optional[str] = None,
         max_delivery_rate: Optional[int] = None,
         payment_type: Optional[bytes] = None,
@@ -275,43 +306,30 @@ class MechManagerMixin:
             logger.error("No active service")
             return None
 
-        multisig_address = self.service.multisig_address
-        chain_name = self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
-        protocol_contracts = OLAS_CONTRACTS.get(chain_name, {})
-        marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
-
-        if not marketplace_address:
-            logger.error(f"Mech Marketplace address not found for chain {chain_name}")
+        try:
+            marketplace_address, priority_mech = self._resolve_marketplace_config(
+                marketplace_address, priority_mech
+            )
+        except ValueError as e:
+            logger.error(e)
             return None
 
-        if not priority_mech:
-            logger.error("priority_mech is required for marketplace requests")
-            return None
-
-        priority_mech = Web3.to_checksum_address(priority_mech)
-        marketplace = MechMarketplaceContract(str(marketplace_address), chain_name=chain_name)
+        marketplace = MechMarketplaceContract(marketplace_address, chain_name=self.chain_name)
 
         if not self._validate_priority_mech(marketplace, priority_mech):
             return None
 
-        # Set defaults for payment
-        if payment_type is None:
-            payment_type = bytes.fromhex(PAYMENT_TYPE_NATIVE)
-
-        if value is None:
-            value = 10_000_000_000_000_000
-            logger.info(f"Using default value: {value} wei (0.01 xDAI)")
-
-        if max_delivery_rate is None:
-            max_delivery_rate = value
-            logger.info(f"Using value as max_delivery_rate: {max_delivery_rate}")
+        # Set defaults for payment and delivery
+        value, max_delivery_rate, payment_type = self._prepare_marketplace_params(
+            value, max_delivery_rate, payment_type
+        )
 
         if not self._validate_marketplace_params(marketplace, response_timeout, payment_type):
             return None
 
         # Prepare transaction
         tx_data = marketplace.prepare_request_tx(
-            from_address=multisig_address,
+            from_address=self.service.multisig_address,
             request_data=data,
             priority_mech=priority_mech,
             response_timeout=response_timeout,
