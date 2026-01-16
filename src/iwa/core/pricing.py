@@ -19,7 +19,6 @@ class PriceService:
     """Service to fetch token prices from CoinGecko."""
 
     BASE_URL = "https://api.coingecko.com/api/v3"
-    DEMO_URL = "https://demo-api.coingecko.com/api/v3"
 
     def __init__(self):
         """Initialize PriceService."""
@@ -60,9 +59,7 @@ class PriceService:
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                # Use demo URL if API key is present, otherwise standard URL
-                # NOTE: Demo URL is significantly more reliable for demo keys
-                base_url = self.DEMO_URL if self.api_key else self.BASE_URL
+                base_url = self.BASE_URL
                 url = f"{base_url}/simple/price"
                 params = {"ids": token_id, "vs_currencies": vs_currency}
                 headers = {}
