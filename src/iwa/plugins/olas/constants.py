@@ -51,11 +51,21 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
             "0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"
         ),
         "OLAS_SERVICE_MANAGER": EthereumAddress("0x068a4f0946cF8c7f9C1B58a3b5243Ac8843bf473"),
-        # Legacy mech - used by TRADER staking contracts for liveness
+        # Legacy mech - used by NON-MM TRADER staking contracts (e.g., "Expert X (Yk OLAS)")
+        # Activity checker calls agentMech.getRequestsCount(multisig) to count requests.
         "OLAS_MECH": EthereumAddress("0x77af31De935740567Cf4fF1986D04B2c964A786a"),
-        # NEW Marketplace (v2) - no staking support yet
+        # NEW Marketplace (v2) - used by MM staking contracts (e.g., "Expert X MM (Yk OLAS)")
+        # Services staked in "Expert X MM" contracts MUST use marketplace requests.
+        # Legacy mech requests will NOT be counted by the activity checker.
         "OLAS_MECH_MARKETPLACE": EthereumAddress("0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"),
-        # OLD Marketplace (v1) - used by Pearl Beta Mech Marketplace staking
+        # Default priority mech for marketplace requests (from olas-operate-middleware)
+        # This is the mech that will process requests sent via the marketplace.
+        # Source: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
+        # DEFAULT_PRIORITY_MECH["0x735FAAb1c..."] = ("0xC05e7412...", 2182)
+        "OLAS_MECH_MARKETPLACE_PRIORITY": EthereumAddress(
+            "0xC05e7412439bD7e91730a6880E18d5D5873F632C"
+        ),
+        # OLD Marketplace (v1) - legacy, kept for reference
         "OLAS_MECH_MARKETPLACE_OLD": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
     },
     "ethereum": {

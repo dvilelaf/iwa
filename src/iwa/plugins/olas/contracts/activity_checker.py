@@ -43,14 +43,27 @@ class ActivityCheckerContract(ContractInstance):
         """
         super().__init__(address, chain_name=chain_name)
 
-        # Get the mech address this checker tracks
-        agent_mech_function = getattr(self.contract.functions, "agentMech", None)
-        self.agent_mech = (
-            agent_mech_function().call() if agent_mech_function else DEFAULT_MECH_CONTRACT_ADDRESS
-        )
+        # Check for marketplace-aware checker
+        try:
+            mech_mp_function = getattr(self.contract.functions, "mechMarketplace", None)
+            self.mech_marketplace = mech_mp_function().call() if mech_mp_function else None
+        except Exception:
+            self.mech_marketplace = None
+
+        # Get the mech address this checker tracks (legacy or priority mech)
+        try:
+            agent_mech_function = getattr(self.contract.functions, "agentMech", None)
+            self.agent_mech = (
+                agent_mech_function().call() if agent_mech_function else DEFAULT_MECH_CONTRACT_ADDRESS
+            )
+        except Exception:
+            self.agent_mech = DEFAULT_MECH_CONTRACT_ADDRESS
 
         # Get liveness ratio (requests per second * 1e18)
-        self.liveness_ratio = self.contract.functions.livenessRatio().call()
+        try:
+            self.liveness_ratio = self.contract.functions.livenessRatio().call()
+        except Exception:
+            self.liveness_ratio = 0
 
     def get_multisig_nonces(self, multisig: EthereumAddress) -> Tuple[int, int]:
         """Get the nonces for a multisig address.

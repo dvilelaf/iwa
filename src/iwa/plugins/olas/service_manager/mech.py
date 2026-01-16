@@ -1,4 +1,29 @@
-"""Mech manager mixin."""
+"""Mech manager mixin.
+
+This module handles sending mech requests for OLAS services. There are TWO
+distinct flows for mech requests, and the correct one MUST be used based on
+the service's staking contract:
+
+1. **Legacy Mech Flow** (use_marketplace=False):
+   - Sends requests directly to the legacy mech contract (0x77af31De...)
+   - Used by NON-MM staking contracts (e.g., "Expert X (Yk OLAS)")
+   - Activity checker calls `agentMech.getRequestsCount(multisig)` to count
+
+2. **Marketplace Flow** (use_marketplace=True):
+   - Sends requests via MechMarketplace contract (0x735FAAb1c...)
+   - Used by MM staking contracts (e.g., "Expert X MM (Yk OLAS)")
+   - Activity checker calls `mechMarketplace.mapRequestCounts(multisig)` to count
+   - Requires a priority_mech that is registered on the marketplace
+   - Default priority_mech from olas-operate-middleware: 0xC05e7412...
+
+**IMPORTANT**: If a service is staked in an MM contract but sends legacy mech
+requests, those requests will NOT be counted by the activity checker, and the
+service will not receive staking rewards.
+
+The `get_marketplace_config()` method automatically detects which flow to use
+by checking if the staking contract's activity checker has a `mechMarketplace`
+field set to a non-zero address.
+"""
 
 from typing import Optional
 
@@ -17,12 +42,60 @@ from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 class MechManagerMixin:
     """Mixin for Mech interactions."""
 
+    def get_marketplace_config(self) -> tuple:
+        """Check if current service requires marketplace mech requests.
+
+        Queries the staking contract's activityChecker to determine if it
+        tracks marketplace requests.
+
+        Returns:
+            Tuple of (use_marketplace, marketplace_address, priority_mech):
+                - use_marketplace: True if marketplace requests are required.
+                - marketplace_address: Address of the mech marketplace (if applicable).
+                - priority_mech: Address of the priority mech (if applicable).
+
+        """
+        from iwa.core.constants import ZERO_ADDRESS
+
+        if not self.service or not self.service.staking_contract_address:
+            return (False, None, None)
+
+        try:
+            # Get staking contract with its activity checker
+            from iwa.plugins.olas.contracts.staking import StakingContract
+
+            staking = StakingContract(
+                self.service.staking_contract_address, chain_name=self.chain_name
+            )
+
+            # StakingContract has activity_checker attribute set in __init__
+            checker = staking.activity_checker
+
+            if checker.mech_marketplace and checker.mech_marketplace != ZERO_ADDRESS:
+                # Use the default marketplace priority mech from constants
+                from iwa.plugins.olas.constants import OLAS_CONTRACTS
+
+                protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})
+                priority_mech = protocol_contracts.get("OLAS_MECH_MARKETPLACE_PRIORITY")
+
+                logger.info(
+                    f"[MECH] Service {self.service.service_id} requires marketplace requests "
+                    f"(marketplace={checker.mech_marketplace}, priority_mech={priority_mech})"
+                )
+                return (True, checker.mech_marketplace, priority_mech)
+
+            return (False, None, None)
+
+        except Exception as e:
+            logger.debug(f"[MECH] Failed to detect marketplace config: {e}")
+            return (False, None, None)
+
     def send_mech_request(
         self,
         data: bytes,
         value: Optional[int] = None,
         mech_address: Optional[str] = None,
-        use_marketplace: bool = False,
+        use_marketplace: Optional[bool] = None,
         use_new_abi: bool = False,
         priority_mech: Optional[str] = None,
         max_delivery_rate: Optional[int] = None,
@@ -37,6 +110,7 @@ class MechManagerMixin:
             value: Payment value in wei. For marketplace, should match mech's maxDeliveryRate.
             mech_address: Address of the Mech contract (for legacy/direct flow).
             use_marketplace: Whether to use the Mech Marketplace flow.
+                             If None, auto-detects based on staking contract.
             use_new_abi: Whether to use new ABI for legacy flow.
             priority_mech: Priority mech address (required for marketplace).
             max_delivery_rate: Max delivery rate in wei (for marketplace). If None, uses value.
@@ -58,6 +132,14 @@ class MechManagerMixin:
         if not multisig_address:
             logger.error(f"Service {service_id} has no multisig address")
             return None
+
+        # Auto-detect marketplace requirement if not explicitly specified
+        if use_marketplace is None:
+            use_marketplace, detected_marketplace, detected_priority_mech = (
+                self.get_marketplace_config()
+            )
+            if use_marketplace:
+                priority_mech = priority_mech or detected_priority_mech
 
         if use_marketplace:
             return self._send_marketplace_mech_request(
