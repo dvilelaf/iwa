@@ -63,10 +63,15 @@ class ContractInstance:
 
         This property ensures that after an RPC rotation, contract calls
         use the updated provider instead of the original one.
+
+        Note: We use _web3 directly (not the RateLimitedWeb3 wrapper) to ensure
+        the contract is bound to the current provider. The wrapper's set_backend()
+        updates _web3, but contracts created via the wrapper may cache old providers.
         """
         # Always create a fresh contract to use the current Web3 provider
         # This is necessary because RPC rotation changes the underlying provider
-        return self.chain_interface.web3.eth.contract(address=self.address, abi=self.abi)
+        # Access _web3 directly to ensure we get the current provider
+        return self.chain_interface.web3._web3.eth.contract(address=self.address, abi=self.abi)
 
     def load_error_selectors(self) -> Dict[str, Any]:
         """Load error selectors from the contract ABI."""

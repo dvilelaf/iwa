@@ -379,7 +379,8 @@ class ChainInterface:
         """
         try:
             # Call decimals() directly without with_retry to avoid error logging
-            contract = self.web3.eth.contract(
+            # Use _web3 directly to ensure current provider after RPC rotation
+            contract = self.web3._web3.eth.contract(
                 address=self.web3.to_checksum_address(address),
                 abi=[{"constant": True, "inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "type": "function"}]
             )

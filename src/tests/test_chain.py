@@ -340,10 +340,10 @@ def test_chain_interface_with_real_chains():
             sym = interface.get_token_symbol(valid_addr_1)
             assert sym == "SYM"
 
-        # get_token_decimals uses web3.eth.contract directly, not ERC20Contract
+        # get_token_decimals uses web3._web3.eth.contract directly
         mock_contract = MagicMock()
         mock_contract.functions.decimals.return_value.call.return_value = 18
-        interface.web3.eth.contract.return_value = mock_contract
+        interface.web3._web3.eth.contract.return_value = mock_contract
 
         dec = interface.get_token_decimals(valid_addr_1)
         assert dec == 18
@@ -443,8 +443,8 @@ def test_get_token_decimals_fallback_on_error(mock_web3):
 
     ci = ChainInterface(chain)
 
-    # get_token_decimals uses web3.eth.contract directly, mock it to raise error
-    ci.web3.eth.contract.side_effect = Exception("Contract not found")
+    # get_token_decimals uses web3._web3.eth.contract directly
+    ci.web3._web3.eth.contract.side_effect = Exception("Contract not found")
 
     decimals = ci.get_token_decimals("0x1234567890123456789012345678901234567890")
 

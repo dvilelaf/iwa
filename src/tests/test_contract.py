@@ -11,7 +11,8 @@ from iwa.core.contracts.contract import ContractInstance
 def mock_chain_interface():
     with patch("iwa.core.contracts.contract.ChainInterfaces") as mock:
         mock_ci = mock.return_value.get.return_value
-        mock_ci.web3.eth.contract.return_value = MagicMock()
+        # contract.py now uses web3._web3.eth.contract directly for RPC rotation compatibility
+        mock_ci.web3._web3.eth.contract.return_value = MagicMock()
         yield mock_ci
 
 
@@ -226,7 +227,7 @@ def test_call_reevaluates_contract_on_retry(mock_chain_interface, mock_abi_file)
             mock.functions.testFunc.return_value.call.return_value = "success"
         return mock
 
-    mock_chain_interface.web3.eth.contract.side_effect = counting_contract_factory
+    mock_chain_interface.web3._web3.eth.contract.side_effect = counting_contract_factory
 
     # Implement with_retry that actually retries on 429
     def real_with_retry(fn, max_retries=6, operation_name="operation"):
@@ -274,7 +275,7 @@ def test_call_uses_fresh_provider_after_rotation(mock_chain_interface, mock_abi_
         provider_versions.append(current_provider_version[0])
         return mock
 
-    mock_chain_interface.web3.eth.contract.side_effect = mock_contract_factory
+    mock_chain_interface.web3._web3.eth.contract.side_effect = mock_contract_factory
 
     # Simulate RPC rotation by incrementing provider version
     def simulate_rotation():
@@ -335,7 +336,7 @@ def test_call_with_429_triggers_retry_with_new_contract(mock_chain_interface, mo
         contract_call_count[0] += 1
         return result
 
-    mock_chain_interface.web3.eth.contract.side_effect = mock_contract_factory
+    mock_chain_interface.web3._web3.eth.contract.side_effect = mock_contract_factory
 
     # Implement with_retry that actually retries
     def real_with_retry(fn, max_retries=6, operation_name="operation"):
