@@ -61,6 +61,15 @@ class NativeTransferMixin:
             value_eur=v_eur,
             tags=["native-transfer", "safe-transaction"],
         )
+
+        # Log transfers extracted from receipt events
+        if receipt:
+            from iwa.core.services.transaction import TransferLogger
+
+            interface = ChainInterfaces().get(chain_name)
+            transfer_logger = TransferLogger(self.account_service, interface)
+            transfer_logger.log_transfers(receipt)
+
         return tx_hash
 
     def _send_native_via_eoa(
@@ -106,6 +115,14 @@ class NativeTransferMixin:
                 value_eur=v_eur,
                 tags=["native-transfer"],
             )
+
+            # Log transfers extracted from receipt events
+            if receipt:
+                from iwa.core.services.transaction import TransferLogger
+
+                transfer_logger = TransferLogger(self.account_service, chain_interface)
+                transfer_logger.log_transfers(receipt)
+
             return tx_hash
         return None
 
