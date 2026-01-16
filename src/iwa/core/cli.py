@@ -14,6 +14,14 @@ from iwa.core.wallet import Wallet
 from iwa.tui.app import IwaApp
 
 iwa_cli = typer.Typer(help="iwa command line interface")
+
+@iwa_cli.callback()
+def main_callback(ctx: typer.Context):
+    """Initialize IWA CLI."""
+    # Print banner on startup
+    from iwa.core.utils import get_version, print_banner
+    print_banner("iwa", get_version("iwa"))
+
 wallet_cli = typer.Typer(help="Manage wallet")
 
 iwa_cli.add_typer(wallet_cli, name="wallet")

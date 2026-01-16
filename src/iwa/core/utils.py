@@ -84,3 +84,41 @@ def configure_logger():
 
     configure_logger.configured = True
     return logger
+
+def get_version(package_name: str) -> str:
+    """Get package version."""
+    from importlib.metadata import version, PackageNotFoundError
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def print_banner(service_name: str, service_version: str, extra_versions: dict = None) -> None:
+    """Print startup banner."""
+    try:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.text import Text
+
+        console = Console(stderr=True)
+
+        # Build content
+        text = Text()
+        text.append(f"🚀 {service_name.upper()} ", style="bold cyan")
+        text.append(f"v{service_version}", style="bold yellow")
+
+        if extra_versions:
+            for name, ver in extra_versions.items():
+                text.append(f"\n📦 {name.upper()}: ", style="bold green")
+                text.append(f"v{ver}", style="bold yellow")
+
+        console.print(Panel(text, title="Startup", border_style="blue"))
+
+    except ImportError:
+        # Fallback if rich is not available
+        print(f"--- {service_name.upper()} v{service_version} ---")
+        if extra_versions:
+            for name, ver in extra_versions.items():
+                print(f"    {name.upper()}: v{ver}")
+        print("-------------------------------")
