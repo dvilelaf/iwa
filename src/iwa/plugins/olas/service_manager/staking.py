@@ -1,4 +1,48 @@
-"""Staking manager mixin."""
+"""Staking manager mixin for OLAS service staking operations.
+
+OLAS Token Flow Overview
+========================
+
+For OLAS token-bonded services (e.g., Expert 7 MM requiring 10,000 OLAS total),
+the tokens flow through multiple stages:
+
+1. CREATE SERVICE
+   - Service is registered on-chain with bond parameters
+   - Service Owner approves Token Utility to spend OLAS (2 × bond)
+   - NO OLAS tokens move yet
+
+2. ACTIVATION (min_staking_deposit = 5,000 OLAS for 10k contract)
+   - Service Owner approves Token Utility for the security deposit
+   - TX sends 1 wei native value (not 5k OLAS!)
+   - Token Utility internally calls transferFrom() to move 5k OLAS
+   - 5k OLAS moves: Service Owner → Token Utility
+
+3. REGISTRATION (agent_bond = 5,000 OLAS for 10k contract)
+   - Service Owner approves Token Utility for the bond amount
+   - TX sends 1 wei native value per agent (not 5k OLAS!)
+   - Token Utility internally calls transferFrom() to move 5k OLAS
+   - 5k OLAS moves: Service Owner → Token Utility
+
+4. DEPLOY
+   - Creates the Safe multisig for the service
+   - NO OLAS tokens move
+
+5. STAKE (this module) ★
+   - Only the Service NFT is approved to the staking contract
+   - NO OLAS tokens move in this transaction!
+   - The staking contract reads the deposited amounts from Token Utility
+   - Service Registry L2 token (NFT) moves: Owner → Staking Contract
+
+Key Insight:
+    At stake time, the Service Owner's OLAS balance is 0 (all 10k was deposited
+    during activation + registration). This is correct! The staking contract
+    pulls position data from the Token Utility, not from the owner's wallet.
+
+Contract Addresses (Gnosis):
+    - Token Utility: 0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8
+    - Service Registry L2: 0x9338b5153AE39BB89f50468E608eD9d764B755fD
+    - OLAS Token: 0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f
+"""
 
 from datetime import datetime, timezone
 from typing import Optional
@@ -6,7 +50,6 @@ from typing import Optional
 from loguru import logger
 from web3 import Web3
 
-from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.types import EthereumAddress
 from iwa.core.utils import get_tx_hash
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
@@ -14,7 +57,21 @@ from iwa.plugins.olas.models import StakingStatus
 
 
 class StakingManagerMixin:
-    """Mixin for staking operations."""
+    """Mixin for staking operations on OLAS services.
+
+    This mixin handles the final step of the service lifecycle: staking a
+    deployed service into a staking contract to earn OLAS rewards.
+
+    Important: By the time stake() is called, all OLAS tokens have already
+    been deposited to the Token Utility during activation and registration.
+    The stake transaction only transfers the Service NFT, not OLAS tokens.
+
+    Staking Requirements:
+        - Service must be in DEPLOYED state
+        - Service must be created with OLAS token (not native currency)
+        - Staking contract must have available slots
+        - Service token must match staking contract's required token
+    """
 
     def get_staking_status(self) -> Optional[StakingStatus]:
         """Get comprehensive staking status for the active service.
@@ -154,20 +211,28 @@ class StakingManagerMixin:
     def stake(self, staking_contract) -> bool:
         """Stake the service in a staking contract.
 
-        Token Flow:
-            The total OLAS required is split 50/50 between deposit and bond:
-            - minStakingDeposit: Transferred to staking contract during this call
-            - agentBond: Already in Token Utility from service registration
+        This is the final step after create → activate → register → deploy.
+        At this point, all OLAS tokens are already in the Token Utility.
 
-            Example for Hobbyist 1 (100 OLAS total):
-            - minStakingDeposit: 50 OLAS (from master account -> staking contract)
-            - agentBond: 50 OLAS (already in Token Utility)
+        Token Flow at Stake Time:
+            ┌─────────────────────────────────────────────────────────────────┐
+            │  What Moves:                                                    │
+            │    • Service NFT (ERC-721): Owner → Staking Contract            │
+            │                                                                 │
+            │  What does NOT Move:                                            │
+            │    • OLAS tokens - already in Token Utility from earlier steps  │
+            └─────────────────────────────────────────────────────────────────┘
 
-        Requirements:
-            - Service must be in DEPLOYED state
-            - Service must be created with OLAS token (not native currency)
-            - Master account must have >= minStakingDeposit OLAS tokens
-            - Staking contract must have available slots
+        Why no OLAS transfer?
+            The staking contract reads the service's bond/deposit from the
+            Token Utility contract. It doesn't need a new transfer - it just
+            verifies the amounts are sufficient and locks the service.
+
+        Process:
+            1. Validate requirements (state, token, slots)
+            2. Approve Service NFT to staking contract
+            3. Call stake(serviceId) on staking contract
+            4. Verify ServiceStaked event
 
         Args:
             staking_contract: StakingContract instance to stake in.
@@ -194,12 +259,12 @@ class StakingManagerMixin:
             f"[STAKE] Min deposit required: {min_deposit} wei ({min_deposit / 1e18:.2f} OLAS)"
         )
 
-        # 2. Approve Tokens
-        logger.info("[STAKE] Step 2: Approving tokens...")
-        if not self._approve_staking_tokens(staking_contract, min_deposit):
-            logger.error("[STAKE] Step 2 FAILED: Token approval failed")
+        # 2. Approve Service NFT
+        logger.info("[STAKE] Step 2: Approving service NFT...")
+        if not self._approve_staking_tokens(staking_contract):
+            logger.error("[STAKE] Step 2 FAILED: NFT approval failed")
             return False
-        logger.info("[STAKE] Step 2 OK: Tokens approved")
+        logger.info("[STAKE] Step 2 OK: Service NFT approved")
 
         # 3. Execute Stake Transaction
         logger.info("[STAKE] Step 3: Executing stake transaction...")
@@ -214,7 +279,27 @@ class StakingManagerMixin:
         return result
 
     def _check_stake_requirements(self, staking_contract) -> Optional[dict]:
-        """Validate all conditions required for staking."""
+        """Validate all conditions required for staking.
+
+        Checks performed:
+            1. Service State: Must be DEPLOYED (multisig created)
+            2. Token Match: Service token == Staking contract's staking_token
+            3. Agent Bond: Logged (may show 1 wei on-chain, this is normal)
+            4. Available Slots: Contract must have free slots
+
+        Note on OLAS Balance:
+            We do NOT check owner's OLAS balance here. By this point:
+            - 5k OLAS was transferred during activation (to Token Utility)
+            - 5k OLAS was transferred during registration (to Token Utility)
+            - Owner's OLAS balance is 0, and that's correct!
+
+        Args:
+            staking_contract: StakingContract to validate against.
+
+        Returns:
+            Dict with {min_deposit, staking_token} if valid, None otherwise.
+
+        """
         from iwa.plugins.olas.contracts.service import ServiceState
 
         logger.debug("[STAKE] Fetching contract requirements...")
@@ -291,26 +376,36 @@ class StakingManagerMixin:
             return None
         logger.debug("[STAKE] OK: Slots available")
 
-        # Check OLAS balance of service owner
-        logger.debug("[STAKE] Checking service owner OLAS balance...")
-        erc20_contract = ERC20Contract(staking_token)
-        owner_address = self.service.service_owner_address
-        owner_balance = erc20_contract.balance_of_wei(owner_address)
-        logger.info(
-            f"[STAKE] Owner OLAS balance: {owner_balance} wei "
-            f"({owner_balance / 1e18:.2f} OLAS, need {min_deposit / 1e18:.2f} OLAS)"
-        )
-
-        if owner_balance < min_deposit:
-            logger.error(f"[STAKE] FAIL: Insufficient balance ({owner_balance} < {min_deposit})")
-            return None
-        logger.debug("[STAKE] OK: Sufficient balance")
+        # NOTE: We don't check OLAS balance here because OLAS was already
+        # deposited to the Token Utility during activation (min_staking_deposit)
+        # and registration (agent_bond). The staking contract pulls from there.
+        logger.debug("[STAKE] OLAS already deposited to Token Utility during activation/registration")
 
         return {"min_deposit": min_deposit, "staking_token": staking_token}
 
-    def _approve_staking_tokens(self, staking_contract, min_deposit: int) -> bool:
-        """Approve both the service NFT and OLAS tokens for staking."""
-        # Approve service NFT
+    def _approve_staking_tokens(self, staking_contract) -> bool:
+        """Approve the Service NFT for transfer to the staking contract.
+
+        What This Does:
+            Calls approve(stakingContract, serviceId) on the Service Registry L2.
+            This allows the staking contract to transferFrom the NFT.
+
+        What This Does NOT Do:
+            - Does NOT approve OLAS tokens (they're already in Token Utility)
+            - Does NOT transfer any tokens (that happens in _execute_stake_transaction)
+
+        Token/NFT Movement:
+            BEFORE: Owner has NFT, staking contract has no approval
+            AFTER:  Owner has NFT, staking contract is approved to take it
+
+        Who Signs:
+            Master account (must be service owner)
+
+        Returns:
+            True if approval succeeded, False otherwise.
+
+        """
+        # Approve service NFT - this is an ERC-721 approval, not ERC-20
         logger.debug("[STAKE] Approving service NFT for staking contract...")
         approve_tx = self.registry.prepare_approve_tx(
             from_address=self.wallet.master_account.address,
@@ -331,36 +426,29 @@ class StakingManagerMixin:
 
         tx_hash = get_tx_hash(receipt)
         logger.info(f"[STAKE] Service NFT approved: {tx_hash}")
-
-        # Approve OLAS tokens
-        logger.debug(f"[STAKE] Approving OLAS tokens ({min_deposit} wei)...")
-        reqs = staking_contract.get_requirements()
-        staking_token = Web3.to_checksum_address(reqs["staking_token"])
-        erc20_contract = ERC20Contract(staking_token)
-
-        olas_approve_tx = erc20_contract.prepare_approve_tx(
-            from_address=self.wallet.master_account.address,
-            spender=staking_contract.address,
-            amount_wei=min_deposit,
-        )
-
-        success, receipt = self.wallet.sign_and_send_transaction(
-            transaction=olas_approve_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
-            chain_name=self.chain_name,
-            tags=["olas_approve_olas_token"],
-        )
-
-        if not success:
-            logger.error("[STAKE] FAIL: OLAS token approval failed")
-            return False
-
-        tx_hash = get_tx_hash(receipt)
-        logger.info(f"[STAKE] OLAS tokens approved: {tx_hash}")
         return True
 
     def _execute_stake_transaction(self, staking_contract) -> bool:
-        """Send the stake transaction and verify the result."""
+        """Execute the actual stake transaction on the staking contract.
+
+        What Happens Internally:
+            1. Staking contract calls transferFrom to take the Service NFT
+            2. Staking contract reads bond/deposit from Token Utility
+            3. Staking contract records the service as staked
+            4. ServiceStaked event is emitted
+
+        Token Movement:
+            - Service NFT: Owner → Staking Contract (via transferFrom)
+            - OLAS tokens: None! Already in Token Utility
+
+        Why No OLAS Transfer?
+            The staking contract calls ServiceRegistryTokenUtility.getOperatorBalance()
+            to verify the deposited amounts. It doesn't need a new transfer.
+
+        Returns:
+            True if stake succeeded and ServiceStaked event was found.
+
+        """
         logger.debug("[STAKE] Preparing stake transaction...")
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=self.wallet.master_account.address,
