@@ -80,9 +80,7 @@ def _determine_bond_amount(req: CreateServiceRequest) -> int:
 def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
     """Create a new Olas service using spin_up for seamless deployment."""
     try:
-        from web3 import Web3
 
-        from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
 
         manager = ServiceManager(wallet)
@@ -118,11 +116,14 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
 
         # Step 2: Spin up the service (activate → register → deploy → optionally stake)
         # Only pass staking_contract if user wants to stake on create
-        spin_up_staking = staking_contract if req.stake_on_create else None
+        staking_obj = None
+        if req.stake_on_create and req.staking_contract:
+            # We need to instantiate the staking contract object for spin_up
+            staking_obj = StakingContract(req.staking_contract, req.chain)
 
         success = manager.spin_up(
             service_id=service_id,
-            staking_contract=spin_up_staking,
+            staking_contract=staking_obj,
             bond_amount_wei=bond_amount,
         )
 
@@ -141,7 +142,7 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
             "service_key": manager.service.key if manager.service else None,
             "multisig": str(manager.service.multisig_address) if manager.service else None,
             "final_state": final_state,
-            "staked": req.stake_on_create and spin_up_staking is not None,
+            "staked": req.stake_on_create and staking_obj is not None,
         }
 
     except HTTPException:
