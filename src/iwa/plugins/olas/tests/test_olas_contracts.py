@@ -118,6 +118,8 @@ def test_service_manager_complex_registration(mock_erc20_cls, mock_wallet):
         manager.wallet.transfer_service.approve_erc20.return_value = True
         manager.registry.extract_events.return_value = [{"name": "RegisterInstance"}]
         mock_erc20_cls.return_value.balance_of_wei.return_value = 1000
+        # Fix: Mock allowance to return an int, not MagicMock
+        manager.wallet.transfer_service.get_erc20_allowance.return_value = 0
         assert manager.register_agent(VALID_ADDR, 100) is True
 
     # deploy successes
@@ -160,10 +162,12 @@ def test_service_manager_config_edges(mock_wallet):
     """Test ServiceManager configuration and initialization edge cases."""
     with patch("iwa.plugins.olas.service_manager.Config") as mock_cfg_cls:
         mock_cfg = mock_cfg_cls.return_value
-        mock_cfg.plugins = {"olas": MagicMock()}
-        mock_cfg.plugins["olas"].get_service.return_value = Service(
+        olas_mock = MagicMock()
+        olas_mock.get_service.return_value = Service(
             service_name="t", chain_name="gnosis", service_id=1, agent_ids=[1]
         )
+        # Ensure plugins.get("olas") returns our mock
+        mock_cfg.plugins = {"olas": olas_mock}
         with patch("iwa.plugins.olas.service_manager.ChainInterfaces"):
             # hits 56
             with patch(
