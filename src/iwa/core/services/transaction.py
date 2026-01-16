@@ -1,15 +1,194 @@
 """Transaction service module."""
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
+from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.db import log_transaction
 from iwa.core.keys import KeyStorage
 from iwa.core.services.account import AccountService
+
+if TYPE_CHECKING:
+    from iwa.core.chain import ChainInterface
+
+# ERC20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
+TRANSFER_EVENT_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+class TransferLogger:
+    """Parse and log transfer events from transaction receipts."""
+
+    def __init__(
+        self,
+        account_service: AccountService,
+        chain_interface: "ChainInterface",
+    ):
+        """Initialize TransferLogger."""
+        self.account_service = account_service
+        self.chain_interface = chain_interface
+
+    def log_transfers(self, receipt: Dict, tx: Dict) -> None:
+        """Log all transfers (ERC20 and native) from a transaction receipt.
+
+        Args:
+            receipt: Transaction receipt containing logs.
+            tx: Original transaction dict.
+
+        """
+        # Log native value transfer if present
+        native_value = tx.get("value", 0)
+        if native_value and int(native_value) > 0:
+            self._log_native_transfer(tx, native_value)
+
+        # Log ERC20 transfers from event logs
+        logs = receipt.get("logs", [])
+        if hasattr(receipt, "logs"):
+            logs = receipt.logs
+
+        for log in logs:
+            self._process_log(log)
+
+    def _log_native_transfer(self, tx: Dict, value_wei: int) -> None:
+        """Log a native currency transfer."""
+        from_addr = tx.get("from", "")
+        to_addr = tx.get("to", "")
+
+        from_label = self._resolve_address_label(from_addr)
+        to_label = self._resolve_address_label(to_addr)
+
+        native_symbol = self.chain_interface.chain.native_currency
+        amount_eth = Web3.from_wei(value_wei, "ether")
+
+        logger.info(f"[TRANSFER] {amount_eth:.6g} {native_symbol}: {from_label} → {to_label}")
+
+    def _process_log(self, log) -> None:
+        """Process a single log entry for Transfer events."""
+        # Get topics - handle both dict and AttributeDict
+        topics = log.get("topics", []) if isinstance(log, dict) else getattr(log, "topics", [])
+
+        if not topics:
+            return
+
+        # Check if this is a Transfer event
+        first_topic = topics[0]
+        if isinstance(first_topic, bytes):
+            first_topic = "0x" + first_topic.hex()
+        elif hasattr(first_topic, "hex"):
+            first_topic = first_topic.hex()
+            if not first_topic.startswith("0x"):
+                first_topic = "0x" + first_topic
+
+        if first_topic.lower() != TRANSFER_EVENT_TOPIC.lower():
+            return
+
+        # Need at least 3 topics for indexed from/to
+        if len(topics) < 3:
+            return
+
+        try:
+            # Extract from/to from indexed topics (last 20 bytes of 32-byte topic)
+            from_topic = topics[1]
+            to_topic = topics[2]
+
+            from_addr = self._topic_to_address(from_topic)
+            to_addr = self._topic_to_address(to_topic)
+
+            # Extract amount from data
+            data = log.get("data", b"") if isinstance(log, dict) else getattr(log, "data", b"")
+            if isinstance(data, str):
+                data = bytes.fromhex(data.replace("0x", ""))
+
+            amount = int.from_bytes(data, "big") if data else 0
+
+            # Get token address
+            token_addr = (
+                log.get("address", "") if isinstance(log, dict) else getattr(log, "address", "")
+            )
+
+            self._log_erc20_transfer(token_addr, from_addr, to_addr, amount)
+
+        except Exception as e:
+            logger.debug(f"Failed to parse Transfer event: {e}")
+
+    def _topic_to_address(self, topic) -> str:
+        """Convert a 32-byte topic to a 20-byte address."""
+        if isinstance(topic, bytes):
+            # Last 20 bytes
+            addr_bytes = topic[-20:]
+            return Web3.to_checksum_address("0x" + addr_bytes.hex())
+        elif hasattr(topic, "hex"):
+            hex_str = topic.hex()
+            if not hex_str.startswith("0x"):
+                hex_str = "0x" + hex_str
+            # Last 40 chars (20 bytes)
+            return Web3.to_checksum_address("0x" + hex_str[-40:])
+        elif isinstance(topic, str):
+            if topic.startswith("0x"):
+                topic = topic[2:]
+            return Web3.to_checksum_address("0x" + topic[-40:])
+        return ""
+
+    def _log_erc20_transfer(
+        self, token_addr: str, from_addr: str, to_addr: str, amount_wei: int
+    ) -> None:
+        """Log an ERC20 transfer."""
+        from_label = self._resolve_address_label(from_addr)
+        to_label = self._resolve_address_label(to_addr)
+        token_label = self._resolve_token_label(token_addr)
+
+        # Get decimals for formatting
+        decimals = self.chain_interface.get_token_decimals(token_addr)
+        amount = amount_wei / (10**decimals)
+
+        logger.info(f"[TRANSFER] {amount:.6g} {token_label}: {from_label} → {to_label}")
+
+    def _resolve_address_label(self, address: str) -> str:
+        """Resolve an address to a human-readable label.
+
+        Priority:
+        1. Known wallet tag (from wallets.json)
+        2. Known token name (it's a token contract)
+        3. Abbreviated address
+
+        """
+        if not address:
+            return "unknown"
+
+        # 1. Check known wallets
+        tag = self.account_service.get_tag_by_address(address)
+        if tag:
+            return tag
+
+        # 2. Check if it's a known token contract
+        token_name = self.chain_interface.chain.get_token_name(address)
+        if token_name:
+            return f"{token_name}_contract"
+
+        # 3. Fallback to abbreviated address
+        return f"{address[:6]}...{address[-4:]}"
+
+    def _resolve_token_label(self, token_addr: str) -> str:
+        """Resolve a token address to its symbol.
+
+        Priority:
+        1. Known token from chain config
+        2. Abbreviated address
+
+        """
+        if not token_addr:
+            return "UNKNOWN"
+
+        # Check known tokens
+        token_name = self.chain_interface.chain.get_token_name(token_addr)
+        if token_name:
+            return token_name
+
+        # Fallback to abbreviated address
+        return f"{token_addr[:6]}...{token_addr[-4:]}"
 
 
 class TransactionService:
@@ -54,7 +233,7 @@ class TransactionService:
                     logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
 
                     self._log_successful_transaction(
-                        receipt, tx, signer_account, chain_name, txn_hash, tags
+                        receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
                     )
                     return True, receipt
 
@@ -115,7 +294,9 @@ class TransactionService:
         logger.exception(f"Unexpected error sending transaction: {e}")
         return False
 
-    def _log_successful_transaction(self, receipt, tx, signer_account, chain_name, txn_hash, tags):
+    def _log_successful_transaction(
+        self, receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
+    ):
         try:
             gas_cost_wei, gas_value_eur = self._calculate_gas_cost(receipt, tx, chain_name)
             final_tags = self._determine_tags(tx, tags)
@@ -132,6 +313,11 @@ class TransactionService:
                 gas_value_eur=gas_value_eur,
                 tags=final_tags if final_tags else None,
             )
+
+            # Log transfer events (ERC20 and native value)
+            transfer_logger = TransferLogger(self.account_service, chain_interface)
+            transfer_logger.log_transfers(receipt, tx)
+
         except Exception as log_err:
             logger.warning(f"Failed to log transaction: {log_err}")
 
