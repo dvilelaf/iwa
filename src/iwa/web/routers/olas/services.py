@@ -81,6 +81,7 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
     """Create a new Olas service using spin_up for seamless deployment."""
     try:
 
+        from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
 
         manager = ServiceManager(wallet)
