@@ -375,6 +375,7 @@ class ChainInterface:
 
         Returns:
             Decimals as int, or None if error and fallback_to_18 is False.
+
         """
         try:
             # Call decimals() directly without with_retry to avoid error logging
