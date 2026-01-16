@@ -194,9 +194,10 @@ def test_staking_contract(tmp_path):  # noqa: C901
             mock_chain = MagicMock()
             mock_interfaces.return_value.get.return_value = mock_chain
 
-            # Mock web3
+            # Mock web3 - use _web3 since contract.py now accesses _web3 directly
             mock_web3 = MagicMock()
             mock_chain.web3 = mock_web3
+            mock_chain.web3._web3 = mock_web3  # For RPC rotation fix
 
             # Mock contract factory
             mock_contract = MagicMock()
@@ -251,6 +252,9 @@ def test_staking_contract(tmp_path):  # noqa: C901
                 staking.activity_checker.get_multisig_nonces = MagicMock(return_value=(5, 3))
 
                 staking.ts_checkpoint = MagicMock(return_value=0)
+
+                # Mock get_required_requests to return an int (not MagicMock)
+                staking.get_required_requests = MagicMock(return_value=2)
 
                 # Trigger original_open hit
                 try:
