@@ -231,7 +231,12 @@ class MechManagerMixin:
         )
 
     def _validate_priority_mech(self, marketplace, priority_mech: str) -> bool:
-        """Validate priority mech is registered on marketplace."""
+        """Validate priority mech is registered on marketplace.
+
+        Note: OLD marketplace v1 (0x4554...) doesn't have checkMech function.
+        In that case, we skip validation and proceed - v1 doesn't require
+        mech registration.
+        """
         try:
             mech_multisig = marketplace.call("checkMech", priority_mech)
             if mech_multisig == ZERO_ADDRESS:
@@ -239,8 +244,13 @@ class MechManagerMixin:
                 return False
             logger.debug(f"Priority mech {priority_mech} -> multisig {mech_multisig}")
         except Exception as e:
-            logger.error(f"Failed to verify priority mech registration: {e}")
-            return False
+            # v1 marketplaces don't have checkMech - skip validation
+            logger.warning(
+                f"Could not validate priority mech (marketplace may be v1): {e}. "
+                "Proceeding without validation."
+            )
+            # Return True to proceed - v1 marketplaces don't require registration
+            return True
 
         # Log mech factory info (optional validation)
         try:
