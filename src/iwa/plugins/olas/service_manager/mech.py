@@ -1,28 +1,56 @@
 """Mech manager mixin.
 
-This module handles sending mech requests for OLAS services. There are TWO
-distinct flows for mech requests, and the correct one MUST be used based on
-the service's staking contract:
+This module handles sending mech requests for OLAS services. There are THREE
+distinct flows for mech requests, and the correct one is automatically selected
+based on the service's staking contract configuration:
 
-1. **Legacy Mech Flow** (use_marketplace=False):
-   - Sends requests directly to the legacy mech contract (0x77af31De...)
-   - Used by NON-MM staking contracts (e.g., "Expert X (Yk OLAS)")
-   - Activity checker calls `agentMech.getRequestsCount(multisig)` to count
+Flow Selection Logic:
+    1. `get_marketplace_config()` checks if staking contract's activity checker
+       has a non-zero `mechMarketplace` address
+    2. If yes → marketplace request (v1 or v2 depending on address)
+    3. If no → legacy mech request
 
-2. **Marketplace Flow** (use_marketplace=True):
-   - Sends requests via MechMarketplace contract (0x735FAAb1c...)
-   - Used by MM staking contracts (e.g., "Expert X MM (Yk OLAS)")
-   - Activity checker calls `mechMarketplace.mapRequestCounts(multisig)` to count
-   - Requires a priority_mech that is registered on the marketplace
-   - Default priority_mech from olas-operate-middleware: 0xC05e7412...
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FLOW 1: Legacy Mech (use_marketplace=False)                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Contract:    Legacy Mech (0x77af31De...)                                    │
+│ Used by:     NON-MM staking contracts (e.g., "Expert X (Yk OLAS)")          │
+│ Counting:    agentMech.getRequestsCount(multisig)                           │
+│ Method:      _send_legacy_mech_request()                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-**IMPORTANT**: If a service is staked in an MM contract but sends legacy mech
-requests, those requests will NOT be counted by the activity checker, and the
-service will not receive staking rewards.
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FLOW 2: Marketplace v2 (use_marketplace=True, marketplace=0x735F...)        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Contract:    MechMarketplace v2 (0x735FAAb1c...)                            │
+│ Used by:     Newer MM staking contracts                                     │
+│ Counting:    mechMarketplace.mapRequestCounts(multisig)                     │
+│ Method:      _send_marketplace_mech_request() → MechMarketplaceContract     │
+│ Signature:   request(bytes,uint256,bytes32,address,uint256,bytes)           │
+│ Note:        Uses payment types (PAYMENT_TYPE_NATIVE)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-The `get_marketplace_config()` method automatically detects which flow to use
-by checking if the staking contract's activity checker has a `mechMarketplace`
-field set to a non-zero address.
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FLOW 3: Marketplace v1 (use_marketplace=True, marketplace=0x4554...)        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Contract:    MechMarketplace v1 (0x4554fE75...)  [VERSION 1.0.0]            │
+│ Used by:     Older MM contracts (e.g., "Expert 17 MM", trader_ant)          │
+│ Counting:    mechMarketplace.mapRequestCounts(multisig)                     │
+│ Method:      _send_v1_marketplace_request() → MechMarketplaceV1Contract     │
+│ Signature:   request(bytes,address,address,uint256,address,uint256,uint256) │
+│ Note:        Requires staking instance + service ID for mech AND requester  │
+│              No payment types - simpler but different parameter set         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+IMPORTANT:
+    If a service is staked in an MM contract but sends requests to the wrong
+    marketplace (or uses legacy flow), those requests will NOT be counted by
+    the activity checker, and the service will not receive staking rewards.
+
+The dispatch logic:
+    1. _send_marketplace_mech_request() checks if marketplace ∈ V1_MARKETPLACES
+    2. If v1 → dispatches to _send_v1_marketplace_request()
+    3. If v2 → continues with MechMarketplaceContract (v2 ABI)
 """
 
 from typing import Optional
