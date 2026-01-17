@@ -371,7 +371,7 @@ class MechManagerMixin:
         chain_name = self.chain_name if self.service else getattr(self, "chain_name", "gnosis")
         protocol_contracts = OLAS_CONTRACTS.get(chain_name, {})
 
-        resolved_mp = marketplace_addr or protocol_contracts.get("OLAS_MECH_MARKETPLACE")
+        resolved_mp = marketplace_addr or protocol_contracts.get("OLAS_MECH_MARKETPLACE_V2")
         if not resolved_mp:
             raise ValueError(f"Mech Marketplace address not found for chain {chain_name}")
 

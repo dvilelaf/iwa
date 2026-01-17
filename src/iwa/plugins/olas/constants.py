@@ -54,10 +54,10 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         # Legacy mech - used by NON-MM TRADER staking contracts (e.g., "Expert X (Yk OLAS)")
         # Activity checker calls agentMech.getRequestsCount(multisig) to count requests.
         "OLAS_MECH": EthereumAddress("0x77af31De935740567Cf4fF1986D04B2c964A786a"),
-        # NEW Marketplace (v2) - used by MM staking contracts (e.g., "Expert X MM (Yk OLAS)")
-        # Services staked in "Expert X MM" contracts MUST use marketplace requests.
+        # Marketplace v2 - used by newer MM staking contracts (e.g., "Expert X MM v2 (Yk OLAS)")
+        # Services staked in MM v2 contracts MUST use marketplace requests.
         # Legacy mech requests will NOT be counted by the activity checker.
-        "OLAS_MECH_MARKETPLACE": EthereumAddress("0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress("0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"),
         # Default priority mech for marketplace requests (from olas-operate-middleware)
         # This is the mech that will process requests sent via the marketplace.
         # Source: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
@@ -65,8 +65,9 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "OLAS_MECH_MARKETPLACE_PRIORITY": EthereumAddress(
             "0xC05e7412439bD7e91730a6880E18d5D5873F632C"
         ),
-        # OLD Marketplace (v1) - legacy, kept for reference
-        "OLAS_MECH_MARKETPLACE_OLD": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
+        # Marketplace v1 (VERSION 1.0.0) - older MM contracts (e.g., "Expert 17 MM v1")
+        # Uses different request signature than v2. trader_ant uses this.
+        "OLAS_MECH_MARKETPLACE_V1": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
     },
     "ethereum": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"),
@@ -75,7 +76,7 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
     "base": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x3841C312061daB948332A78F042Ec61Ad09fc3D8"),
         "OLAS_SERVICE_MANAGER": EthereumAddress("0xF36183B106692DeD8b6e3B2B7347C9665f8a09B1"),
-        "OLAS_MECH_MARKETPLACE": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
+        "OLAS_MECH_MARKETPLACE_V1": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
     },
 }
 
@@ -108,16 +109,16 @@ OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "Expert 12 (10k OLAS)": EthereumAddress("0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"),
         "Expert 15 (10k OLAS)": EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
         "Expert 16 (10k OLAS)": EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),
-        "Expert 17 (10k OLAS)": EthereumAddress("0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf"),
+        "Expert 17 MM v1 (10k OLAS)": EthereumAddress("0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf"),
         "Expert 18 (10k OLAS)": EthereumAddress("0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454"),
-        "Expert 3 MM (1k OLAS)": EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
-        "Expert 4 MM (2k OLAS)": EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),
-        "Expert 5 MM (10k OLAS)": EthereumAddress("0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d"),
-        "Expert 6 MM (10k OLAS)": EthereumAddress("0x22d6cd3d587d8391c3aae83a783f26c67ab54a85"),
-        "Expert 7 MM (10k OLAS)": EthereumAddress("0xaaecdf4d0cbd6ca0622892ac6044472f3912a5f3"),
-        "Expert 8 MM (10k OLAS)": EthereumAddress("0x168aed532a0cd8868c22fc77937af78b363652b1"),
-        "Expert 9 MM (10k OLAS)": EthereumAddress("0xdda9cd214f12e7c2d58e871404a0a3b1177065c8"),
-        "Expert 10 MM (10k OLAS)": EthereumAddress("0x53a38655b4e659ef4c7f88a26fbf5c67932c7156"),
+        "Expert 3 MM v2 (1k OLAS)": EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
+        "Expert 4 MM v2 (2k OLAS)": EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),
+        "Expert 5 MM v2 (10k OLAS)": EthereumAddress("0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d"),
+        "Expert 6 MM v2 (10k OLAS)": EthereumAddress("0x22d6cd3d587d8391c3aae83a783f26c67ab54a85"),
+        "Expert 7 MM v2 (10k OLAS)": EthereumAddress("0xaaecdf4d0cbd6ca0622892ac6044472f3912a5f3"),
+        "Expert 8 MM v2 (10k OLAS)": EthereumAddress("0x168aed532a0cd8868c22fc77937af78b363652b1"),
+        "Expert 9 MM v2 (10k OLAS)": EthereumAddress("0xdda9cd214f12e7c2d58e871404a0a3b1177065c8"),
+        "Expert 10 MM v2 (10k OLAS)": EthereumAddress("0x53a38655b4e659ef4c7f88a26fbf5c67932c7156"),
     },
     "ethereum": {},
     "base": {},

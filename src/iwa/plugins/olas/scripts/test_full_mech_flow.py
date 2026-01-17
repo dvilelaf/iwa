@@ -173,7 +173,7 @@ def main():  # noqa: C901
     # Get contract addresses
     protocol_contracts = OLAS_CONTRACTS.get("gnosis", {})
     legacy_mech_address = protocol_contracts.get("OLAS_MECH")
-    marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE")
+    marketplace_address = protocol_contracts.get("OLAS_MECH_MARKETPLACE_V2")
 
     # Step 3: Send Legacy Mech Request
     print_step("Step 3: Send Legacy Mech Request", "3️⃣")
