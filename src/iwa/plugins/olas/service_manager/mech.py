@@ -102,7 +102,7 @@ class MechManagerMixin:
                 priority_mech_info = DEFAULT_PRIORITY_MECH.get(marketplace_addr)
 
                 if priority_mech_info:
-                    priority_mech, _ = priority_mech_info
+                    priority_mech = priority_mech_info[0]  # First element is mech address
                 else:
                     # Fallback to constants if marketplace not in mapping
                     protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})

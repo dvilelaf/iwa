@@ -98,6 +98,9 @@ def main():
     multisig = manager.service.multisig_address
     print(f"  OK: Staked! Multisig: {multisig}")
 
+    # Set staking contract address so get_marketplace_config can detect marketplace
+    manager.service.staking_contract_address = TRADER_ANT_STAKING
+
     # 6. Get initial mech request count from activity checker
     print("\n[6] Checking initial mech request count...")
     try:
@@ -115,10 +118,37 @@ def main():
     print(f"  marketplace_address: {detected_mp}")
     print(f"  priority_mech: {detected_mech}")
 
-    if detected_mp.lower() != expected_mp.lower():
+    if not detected_mp or detected_mp.lower() != expected_mp.lower():
         print(f"  FAIL: get_marketplace_config returned wrong marketplace!")
+        print(f"       Expected: {expected_mp}")
+        print(f"       Got: {detected_mp}")
         return False
     print("  OK: get_marketplace_config returns correct OLD marketplace")
+
+    # 7.5 Fund the Safe with xDAI for mech request
+    print("\n[7.5] Funding Safe with xDAI for mech request...")
+    from iwa.core.chain.interface import ChainInterface
+    chain = ChainInterface("gnosis")
+    balance = chain.web3.eth.get_balance(multisig)
+    print(f"  Current Safe balance: {balance / 1e18:.4f} xDAI")
+
+    if balance < 100_000_000_000_000_000:  # 0.1 xDAI
+        # Fund from master account via wallet
+        print("  Transferring 0.1 xDAI from master to Safe...")
+        try:
+            success, tx_hash = wallet.send_native_transfer(
+                from_address=master,
+                to_address=multisig,
+                value_wei=100_000_000_000_000_000,  # 0.1 xDAI
+                chain_name="gnosis",
+            )
+            if success:
+                new_balance = chain.web3.eth.get_balance(multisig)
+                print(f"  Funded Safe! New balance: {new_balance / 1e18:.4f} xDAI")
+            else:
+                print("  WARN: Transfer failed")
+        except Exception as e:
+            print(f"  WARN: Could not fund Safe: {e}")
 
     # 8. Send mech request
     print("\n[8] Sending mech request...")
