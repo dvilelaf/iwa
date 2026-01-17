@@ -406,8 +406,18 @@ class MechManagerMixin:
         """Send a marketplace mech request with validation.
 
         Args:
+            data: Request data payload (bytes).
+            value: Native currency value to send with request (wei).
+            priority_mech: Priority mech address for request processing.
             marketplace_address: The marketplace contract address from activity checker.
-                                 If None, falls back to OLAS_MECH_MARKETPLACE constant.
+                                 If None, falls back to OLAS_MECH_MARKETPLACE_V2 constant.
+            max_delivery_rate: Maximum delivery rate for the mech.
+            payment_type: Payment type bytes32 (defaults to PAYMENT_TYPE_NATIVE).
+            payment_data: Additional payment data.
+            response_timeout: Timeout for response in seconds.
+
+        Returns:
+            Transaction hash if successful, None otherwise.
 
         """
         if not self.service:
