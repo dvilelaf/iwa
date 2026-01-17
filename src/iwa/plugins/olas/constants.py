@@ -82,35 +82,36 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
 
 # TRADER-compatible staking contracts categorized by chain
 # See https://govern.olas.network/contracts
-# NOTE: All TRADER staking contracts use the LEGACY MECH for activity tracking.
-# The activity checker calls agentMech.getRequestsCount(multisig), where agentMech
-# is hardcoded to the legacy mech (0x77af31De935740567Cf4fF1986D04B2c964A786a).
 #
-# This means:
-#   - Legacy mech requests (use_marketplace=False) -> COUNT for liveness rewards
-#   - Marketplace mech requests (use_marketplace=True) -> DO NOT COUNT
+# Categories (verified on-chain via activity checker's mechMarketplace):
+#   - Legacy: No marketplace, uses legacy mech (0x77af31De...). agentMech.getRequestsCount()
+#   - MM v1: Old marketplace (0x4554fE75...). mechMarketplace.mapRequestCounts()
+#   - MM v2: New marketplace (0x735FAAb1...). mechMarketplace.mapRequestCounts()
 #
-# For staking rewards, services MUST use legacy mech requests.
+# IMPORTANT: Services MUST use the correct mech request type for their staking contract!
 OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
     "gnosis": {
-        "Hobbyist 1 (100 OLAS)": EthereumAddress("0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"),
-        "Hobbyist 2 (500 OLAS)": EthereumAddress("0x238EB6993b90A978ec6AAD7530D6429c949C08DA"),
-        "Expert (1k OLAS)": EthereumAddress("0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e"),
-        "Expert 2 (1k OLAS)": EthereumAddress("0xb964e44c126410df341ae04B13aB10A985fE3513"),
-        "Expert 3 (2k OLAS)": EthereumAddress("0x80faD33Cadb5F53f9D29F02Db97D682E8B101618"),
-        "Expert 4 (10k OLAS)": EthereumAddress("0xaD9d891134443B443D7F30013c7e14Fe27F2E029"),
-        "Expert 5 (10k OLAS)": EthereumAddress("0xE56dF1E563De1B10715cB313D514af350D207212"),
-        "Expert 6 (1k OLAS)": EthereumAddress("0x2546214aEE7eEa4bEE7689C81231017CA231Dc93"),
-        "Expert 7 (10k OLAS)": EthereumAddress("0xD7A3C8b975f71030135f1a66E9e23164d54fF455"),
-        "Expert 8 (2k OLAS)": EthereumAddress("0x356C108D49C5eebd21c84c04E9162de41933030c"),
-        "Expert 9 (10k OLAS)": EthereumAddress("0x17dBAe44BC5618Cc254055B386A29576b4F87015"),
-        "Expert 10 (10k OLAS)": EthereumAddress("0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"),
-        "Expert 11 (10k OLAS)": EthereumAddress("0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"),
-        "Expert 12 (10k OLAS)": EthereumAddress("0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"),
-        "Expert 15 (10k OLAS)": EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
-        "Expert 16 (10k OLAS)": EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),
+        # === LEGACY (no marketplace) ===
+        "Hobbyist 1 Legacy (100 OLAS)": EthereumAddress("0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"),
+        "Hobbyist 2 Legacy (500 OLAS)": EthereumAddress("0x238EB6993b90A978ec6AAD7530D6429c949C08DA"),
+        "Expert Legacy (1k OLAS)": EthereumAddress("0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e"),
+        "Expert 2 Legacy (1k OLAS)": EthereumAddress("0xb964e44c126410df341ae04B13aB10A985fE3513"),
+        "Expert 3 Legacy (2k OLAS)": EthereumAddress("0x80faD33Cadb5F53f9D29F02Db97D682E8B101618"),
+        "Expert 4 Legacy (10k OLAS)": EthereumAddress("0xaD9d891134443B443D7F30013c7e14Fe27F2E029"),
+        "Expert 5 Legacy (10k OLAS)": EthereumAddress("0xE56dF1E563De1B10715cB313D514af350D207212"),
+        "Expert 6 Legacy (1k OLAS)": EthereumAddress("0x2546214aEE7eEa4bEE7689C81231017CA231Dc93"),
+        "Expert 7 Legacy (10k OLAS)": EthereumAddress("0xD7A3C8b975f71030135f1a66E9e23164d54fF455"),
+        "Expert 8 Legacy (2k OLAS)": EthereumAddress("0x356C108D49C5eebd21c84c04E9162de41933030c"),
+        "Expert 9 Legacy (10k OLAS)": EthereumAddress("0x17dBAe44BC5618Cc254055B386A29576b4F87015"),
+        "Expert 10 Legacy (10k OLAS)": EthereumAddress("0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"),
+        "Expert 11 Legacy (10k OLAS)": EthereumAddress("0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"),
+        "Expert 12 Legacy (10k OLAS)": EthereumAddress("0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"),
+        # === MM v1 (old marketplace 0x4554fE75...) ===
+        "Expert 15 MM v1 (10k OLAS)": EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
+        "Expert 16 MM v1 (10k OLAS)": EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),
         "Expert 17 MM v1 (10k OLAS)": EthereumAddress("0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf"),
-        "Expert 18 (10k OLAS)": EthereumAddress("0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454"),
+        "Expert 18 MM v1 (10k OLAS)": EthereumAddress("0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454"),
+        # === MM v2 (new marketplace 0x735FAAb1...) ===
         "Expert 3 MM v2 (1k OLAS)": EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
         "Expert 4 MM v2 (2k OLAS)": EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),
         "Expert 5 MM v2 (10k OLAS)": EthereumAddress("0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d"),
