@@ -42,7 +42,7 @@ Flow Selection Logic:
 │              No payment types - simpler but different parameter set         │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-IMPORTANT:
+Important:
     If a service is staked in an MM contract but sends requests to the wrong
     marketplace (or uses legacy flow), those requests will NOT be counted by
     the activity checker, and the service will not receive staking rewards.
@@ -51,6 +51,7 @@ The dispatch logic:
     1. _send_marketplace_mech_request() checks if marketplace ∈ V1_MARKETPLACES
     2. If v1 → dispatches to _send_v1_marketplace_request()
     3. If v2 → continues with MechMarketplaceContract (v2 ABI)
+
 """
 
 from typing import Optional
@@ -284,13 +285,19 @@ class MechManagerMixin:
                 return False
             logger.debug(f"Priority mech {priority_mech} -> multisig {mech_multisig}")
         except Exception as e:
-            # v1 marketplaces don't have checkMech - skip validation
-            logger.warning(
-                f"Could not validate priority mech (marketplace may be v1): {e}. "
-                "Proceeding without validation."
-            )
-            # Return True to proceed - v1 marketplaces don't require registration
-            return True
+            # Check if this is a revert (v1 doesn't have checkMech) vs a network error
+            error_str = str(e).lower()
+            if "reverted" in error_str or "execution reverted" in error_str:
+                # v1 marketplaces don't have checkMech - skip validation
+                logger.warning(
+                    f"Could not validate priority mech (marketplace may be v1): {e}. "
+                    "Proceeding without validation."
+                )
+                return True
+            else:
+                # Real error (network, timeout, etc.) - fail validation
+                logger.error(f"Failed to validate priority mech (network error?): {e}")
+                return False
 
         # Log mech factory info (optional validation)
         try:
@@ -333,19 +340,27 @@ class MechManagerMixin:
         try:
             balance_tracker = marketplace.call("mapPaymentTypeBalanceTrackers", payment_type)
             if balance_tracker == ZERO_ADDRESS:
-                logger.warning(
+                # This is a validation failure for v2 - return False
+                logger.error(
                     f"No balance tracker for payment type 0x{payment_type.hex()}. "
-                    "This may be expected for v1 marketplaces."
+                    "This is required for v2 marketplace requests."
                 )
-                # Don't return False - v1 doesn't have balance trackers
+                return False
             else:
                 logger.debug(f"Payment type balance tracker: {balance_tracker}")
         except Exception as e:
-            # v1 marketplaces don't have mapPaymentTypeBalanceTrackers
-            logger.warning(
-                f"Could not validate payment type (marketplace may be v1): {e}. "
-                "Proceeding without validation."
-            )
+            # Check if this is a revert (v1 doesn't have this function) vs a network error
+            error_str = str(e).lower()
+            if "reverted" in error_str or "execution reverted" in error_str:
+                # v1 marketplaces don't have mapPaymentTypeBalanceTrackers - skip
+                logger.warning(
+                    f"Could not validate payment type (marketplace may be v1): {e}. "
+                    "Proceeding without validation."
+                )
+            else:
+                # Real error - fail validation
+                logger.error(f"Failed to validate payment type (network error?): {e}")
+                return False
 
         return True
 
