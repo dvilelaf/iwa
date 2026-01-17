@@ -38,6 +38,19 @@ from iwa.plugins.olas.constants import (
 from iwa.plugins.olas.contracts.mech import MechContract
 from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
 
+# Maps marketplace address to (priority_mech_address, priority_mech_service_id)
+# Source: olas-operate-middleware profiles.py
+DEFAULT_PRIORITY_MECH = {
+    "0x4554fE75c1f5576c1d7F765B2A036c199Adae329": (
+        "0x552cEA7Bc33CbBEb9f1D90c1D11D2C6daefFd053",
+        975,
+    ),
+    "0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB": (
+        "0xC05e7412439bD7e91730a6880E18d5D5873F632C",
+        2182,
+    ),
+}
+
 
 class MechManagerMixin:
     """Mixin for Mech interactions."""
@@ -72,17 +85,26 @@ class MechManagerMixin:
             checker = staking.activity_checker
 
             if checker.mech_marketplace and checker.mech_marketplace != ZERO_ADDRESS:
-                # Use the default marketplace priority mech from constants
-                from iwa.plugins.olas.constants import OLAS_CONTRACTS
+                # Get priority mech from mapping based on marketplace address
+                marketplace_addr = Web3.to_checksum_address(checker.mech_marketplace)
+                priority_mech_info = DEFAULT_PRIORITY_MECH.get(marketplace_addr)
 
-                protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})
-                priority_mech = protocol_contracts.get("OLAS_MECH_MARKETPLACE_PRIORITY")
+                if priority_mech_info:
+                    priority_mech, _ = priority_mech_info
+                else:
+                    # Fallback to constants if marketplace not in mapping
+                    protocol_contracts = OLAS_CONTRACTS.get(self.chain_name, {})
+                    priority_mech = protocol_contracts.get("OLAS_MECH_MARKETPLACE_PRIORITY")
+                    logger.warning(
+                        f"[MECH] Marketplace {marketplace_addr} not in DEFAULT_PRIORITY_MECH, "
+                        f"using fallback priority_mech: {priority_mech}"
+                    )
 
                 logger.info(
                     f"[MECH] Service {self.service.service_id} requires marketplace requests "
-                    f"(marketplace={checker.mech_marketplace}, priority_mech={priority_mech})"
+                    f"(marketplace={marketplace_addr}, priority_mech={priority_mech})"
                 )
-                return (True, checker.mech_marketplace, priority_mech)
+                return (True, marketplace_addr, priority_mech)
 
             return (False, None, None)
 
@@ -134,6 +156,7 @@ class MechManagerMixin:
             return None
 
         # Auto-detect marketplace requirement if not explicitly specified
+        detected_marketplace = None
         if use_marketplace is None:
             use_marketplace, detected_marketplace, detected_priority_mech = (
                 self.get_marketplace_config()
@@ -143,10 +166,12 @@ class MechManagerMixin:
                 mech_address = mech_address or detected_marketplace
 
         if use_marketplace:
+            # Use detected marketplace if available, otherwise _send_marketplace_mech_request
+            # will fall back to constant
             return self._send_marketplace_mech_request(
                 data=data,
                 value=value,
-                marketplace_address=mech_address,
+                marketplace_address=detected_marketplace,
                 priority_mech=priority_mech,
                 max_delivery_rate=max_delivery_rate,
                 payment_type=payment_type,
@@ -294,14 +319,19 @@ class MechManagerMixin:
         self,
         data: bytes,
         value: Optional[int] = None,
-        marketplace_address: Optional[str] = None,
         priority_mech: Optional[str] = None,
+        marketplace_address: Optional[str] = None,
         max_delivery_rate: Optional[int] = None,
         payment_type: Optional[bytes] = None,
         payment_data: bytes = b"",
         response_timeout: int = 300,
     ) -> Optional[str]:
-        """Send a marketplace mech request with validation."""
+        """Send a marketplace mech request with validation.
+
+        Args:
+            marketplace_address: The marketplace contract address from activity checker.
+                                 If None, falls back to OLAS_MECH_MARKETPLACE constant.
+        """
         if not self.service:
             logger.error("No active service")
             return None
