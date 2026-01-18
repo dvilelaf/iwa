@@ -1,9 +1,14 @@
-import requests
-from typing import List, Dict, Any, Optional
+"""Module for fetching and parsing RPCs from Chainlist.org."""
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import requests
+
 
 @dataclass
 class RPCNode:
+    """Represents a single RPC node with its properties."""
+
     url: str
     is_working: bool
     privacy: Optional[str] = None
@@ -15,9 +20,12 @@ class RPCNode:
         return self.privacy == "privacy" or self.tracking in ("limited", "yes")
 
 class ChainlistRPC:
+    """Fetcher and parser for Chainlist RPC data."""
+
     URL = "https://chainlist.org/rpcs.json"
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the ChainlistRPC instance."""
         self._data: List[Dict[str, Any]] = []
 
     def fetch_data(self) -> None:

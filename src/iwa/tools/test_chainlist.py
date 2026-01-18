@@ -1,6 +1,9 @@
+"""Script to verify ChainlistRPC functionality."""
 from iwa.core.chainlist import ChainlistRPC
 
-def main():
+
+def main() -> None:
+    """Run the verification script."""
     print("Initializing ChainlistRPC...")
     chainlist = ChainlistRPC()
 
