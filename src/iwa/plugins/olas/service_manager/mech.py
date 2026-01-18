@@ -612,6 +612,15 @@ class MechManagerMixin:
 
             if event_found:
                 logger.info(f"Event '{expected_event}' verified successfully")
+
+                # Log transfer events from receipt
+                from iwa.core.services.transaction import TransferLogger
+
+                transfer_logger = TransferLogger(
+                    self.wallet.account_service, self.registry.chain_interface
+                )
+                transfer_logger.log_transfers(receipt)
+
                 return tx_hash
             else:
                 logger.error(f"Event '{expected_event}' NOT found in transaction logs")
