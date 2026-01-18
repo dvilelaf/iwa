@@ -759,7 +759,7 @@ class LifecycleManagerMixin:
         logger.info("[REGISTER] Success - service is now FINISHED_REGISTRATION")
         return True
 
-    def deploy(self) -> Optional[str]:  # noqa: C901
+    def deploy(self, fund_multisig: bool = False) -> Optional[str]:  # noqa: C901
         """Deploy the service."""
         logger.info(f"[DEPLOY] Starting deployment for service {self.service.service_id}")
 
@@ -840,6 +840,25 @@ class LifecycleManagerMixin:
             logger.debug("[DEPLOY] Registered multisig in wallet")
         except Exception as e:
             logger.warning(f"[DEPLOY] Failed to register multisig in wallet: {e}")
+
+        # Fund the multisig with 1 xDAI from master if requested (for staking)
+        if fund_multisig:
+            try:
+                funding_amount = Web3.to_wei(1, "ether")
+                logger.info(f"[DEPLOY] Funding multisig {multisig_address} with 1 xDAI from master")
+                tx_hash = self.wallet.send(
+                    from_address_or_tag=self.wallet.master_account.address,
+                    to_address_or_tag=multisig_address,
+                    token_address_or_name="native",
+                    amount_wei=funding_amount,
+                    chain_name=self.chain_name,
+                )
+                if tx_hash:
+                    logger.info(f"[DEPLOY] Funded multisig: {tx_hash}")
+                else:
+                    logger.error("[DEPLOY] Failed to fund multisig")
+            except Exception as e:
+                logger.error(f"[DEPLOY] Failed to fund multisig: {e}")
 
         logger.info("[DEPLOY] Success - service is now DEPLOYED")
         return multisig_address
@@ -976,7 +995,10 @@ class LifecycleManagerMixin:
             previous_state = current_state
             logger.info(f"[SPIN-UP] Step {step}: Processing {current_state.name}...")
 
-            if not self._process_spin_up_state(current_state, agent_address, bond_amount_wei):
+            should_fund = staking_contract is not None
+            if not self._process_spin_up_state(
+                current_state, agent_address, bond_amount_wei, fund_multisig=should_fund
+            ):
                 logger.error(f"[SPIN-UP] Step {step} FAILED at state {current_state.name}")
                 return False
 
@@ -1012,6 +1034,7 @@ class LifecycleManagerMixin:
         current_state: ServiceState,
         agent_address: Optional[str],
         bond_amount_wei: Optional[Wei],
+        fund_multisig: bool = False,
     ) -> bool:
         """Process a single state transition for spin up."""
         if current_state == ServiceState.PRE_REGISTRATION:
@@ -1025,8 +1048,8 @@ class LifecycleManagerMixin:
             ):
                 return False
         elif current_state == ServiceState.FINISHED_REGISTRATION:
-            logger.info("[SPIN-UP] Action: deploy()")
-            if not self.deploy():
+            logger.info(f"[SPIN-UP] Action: deploy(fund_multisig={fund_multisig})")
+            if not self.deploy(fund_multisig=fund_multisig):
                 return False
         else:
             logger.error(f"[SPIN-UP] Invalid state: {current_state.name}")
