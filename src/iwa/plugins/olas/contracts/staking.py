@@ -193,10 +193,16 @@ class StakingContract(ContractInstance):
         remaining_seconds = (epoch_end - datetime.now(timezone.utc)).total_seconds()
 
         # Check liveness ratio using activity checker
+        # logic: use the latest of (service_start_time, global_checkpoint_time)
+        # If service started AFTER global checkpoint, use service_start_time.
+        # If service was already running, use global_checkpoint_time.
+        global_ts_checkpoint = self.ts_checkpoint()
+        effective_ts_start = max(ts_start, global_ts_checkpoint)
+
         liveness_passed = self.is_liveness_ratio_passed(
             current_nonces=current_nonces,
             last_nonces=(last_safe_nonce, last_mech_requests),
-            ts_start=ts_start,
+            ts_start=effective_ts_start,
         )
 
         return {
