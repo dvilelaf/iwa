@@ -120,7 +120,6 @@ class ActivityCheckerContract(ContractInstance):
             True if liveness requirements are met.
 
         """
-
         # Optimized implementation to avoid RPC call
         current_safe, current_requests = current_nonces
         last_safe, last_requests = last_nonces

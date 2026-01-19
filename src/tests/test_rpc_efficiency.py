@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from iwa.plugins.olas.contracts.staking import StakingContract
+
+import pytest
+
 from iwa.core.contracts.cache import ContractCache
+from iwa.plugins.olas.contracts.staking import StakingContract
+
 
 @pytest.fixture
 def mock_chain_interface():
