@@ -45,10 +45,12 @@ def mock_config():
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
 def test_create_service_success(
-    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test successful service creation."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     # Setup Config with new OlasConfig structure
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
@@ -84,10 +86,12 @@ def test_create_service_success(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
 def test_create_service_failures(
-    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test service creation failure modes."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_olas_config.get_service.return_value = None
@@ -139,10 +143,12 @@ def test_create_service_failures(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
 def test_create_service_with_approval(
-    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test service creation with token approval."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_olas_config.get_service.return_value = None
@@ -170,10 +176,12 @@ def test_create_service_with_approval(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
 def test_activate_registration(
-    mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
 ):
     """Test service registration activation."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_service = MagicMock()
@@ -228,8 +236,10 @@ def test_activate_registration(
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
+def test_register_agent(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test agent registration flow."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     mock_config_inst = mock_config_cls.return_value
     mock_olas_config = MagicMock()
     mock_service = MagicMock()
@@ -277,8 +287,10 @@ def test_register_agent(mock_sm_contract, mock_registry_contract, mock_config_cl
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
+def test_deploy(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service deployment."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     # Setup mock service
     mock_service = MagicMock()
     mock_service.service_id = 123
@@ -341,8 +353,10 @@ def test_deploy(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_
 @patch("iwa.plugins.olas.service_manager.base.Config")
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
-def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
+def test_terminate(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service termination."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     # Setup mock service
     mock_service = MagicMock()
     mock_service.service_id = 123
@@ -401,8 +415,10 @@ def test_terminate(mock_sm_contract, mock_registry_contract, mock_config_cls, mo
 @patch(
     "iwa.plugins.olas.service_manager.base.ServiceManagerContract"
 )  # MUST mock specifically here
-def test_stake(mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+@patch("iwa.plugins.olas.service_manager.base.ContractCache")
+def test_stake(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
     """Test service staking."""
+    mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     # Setup mock service
     mock_service = MagicMock()
     mock_service.service_id = 123

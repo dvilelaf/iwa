@@ -309,7 +309,10 @@ def test_importer_import_service_config_duplicate(mock_wallet):
 
 def test_sm_create_token_utility_missing(mock_wallet):
     """Cover create() with missing token utility (lines 204-206)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
 
         with patch.dict("iwa.plugins.olas.service_manager.base.OLAS_CONTRACTS", {"unknown": {}}):
@@ -320,7 +323,10 @@ def test_sm_create_token_utility_missing(mock_wallet):
 
 def test_sm_get_staking_status_staked_info_fail(mock_wallet):
     """Cover get_staking_status with STAKED but get_service_info fails (lines 843-854)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = Service(
             service_name="t", chain_name="gnosis", service_id=1, staking_contract_address=VALID_ADDR
@@ -341,7 +347,10 @@ def test_sm_get_staking_status_staked_info_fail(mock_wallet):
 
 def test_sm_call_checkpoint_prepare_fail(mock_wallet):
     """Cover call_checkpoint prepare failure (lines 1100-1102)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = Service(
             service_name="t", chain_name="gnosis", service_id=1, staking_contract_address=VALID_ADDR
@@ -360,7 +369,10 @@ def test_sm_call_checkpoint_prepare_fail(mock_wallet):
 
 def test_sm_spin_up_no_service(mock_wallet):
     """Cover spin_up with no service (lines 1167-1170)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = None
 
@@ -370,7 +382,10 @@ def test_sm_spin_up_no_service(mock_wallet):
 
 def test_sm_spin_up_activation_fail(mock_wallet):
     """Cover spin_up activation failure (lines 1181-1183)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = Service(service_name="t", chain_name="gnosis", service_id=1)
 
@@ -387,7 +402,10 @@ def test_sm_spin_up_activation_fail(mock_wallet):
 
 def test_sm_wind_down_no_service(mock_wallet):
     """Cover wind_down with no service (lines 1264-1266)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = None
 
@@ -397,7 +415,10 @@ def test_sm_wind_down_no_service(mock_wallet):
 
 def test_sm_wind_down_nonexistent(mock_wallet):
     """Cover wind_down with non-existent service (lines 1274-1276)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = Service(service_name="t", chain_name="gnosis", service_id=1)
 
@@ -411,7 +432,10 @@ def test_sm_wind_down_nonexistent(mock_wallet):
 
 def test_sm_mech_request_no_service(mock_wallet):
     """Cover _send_legacy_mech_request with no service (lines 1502-1504)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = None
 
@@ -421,7 +445,10 @@ def test_sm_mech_request_no_service(mock_wallet):
 
 def test_sm_mech_request_no_address(mock_wallet):
     """Cover _send_legacy_mech_request missing mech address (lines 1510-1512)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
         sm = ServiceManager(mock_wallet)
         sm.service = Service(service_name="t", chain_name="unknown", service_id=1)
 
@@ -431,7 +458,8 @@ def test_sm_mech_request_no_address(mock_wallet):
 
 def test_sm_marketplace_mech_no_service(mock_wallet):
     """Cover _send_marketplace_mech_request with no service (lines 1549-1551)."""
-    with patch("iwa.core.models.Config"):
+    with patch("iwa.core.models.Config"), \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache"):
         sm = ServiceManager(mock_wallet)
         sm.service = None
 

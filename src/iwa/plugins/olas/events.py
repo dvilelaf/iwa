@@ -96,9 +96,8 @@ class OlasEventInvalidator:
         # We can construct a filter for all staking addresses
 
         try:
-            # We use a raw log fetch to be efficient
-            # But getting the topic hash is cleaner via web3 contract
-            dummy_contract = self.contract_cache.get_contract(
+            # Ensure contract is cached for later use
+            self.contract_cache.get_contract(
                 StakingContract, self.staking_addresses[0], self.chain_name
             )
 

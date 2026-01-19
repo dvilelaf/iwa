@@ -114,10 +114,15 @@ def service_manager(
     mock_service,
 ):
     """ServiceManager fixture with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.base.Config") as local_mock_config:
+    with patch("iwa.plugins.olas.service_manager.base.Config") as local_mock_config, \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache:
         instance = local_mock_config.return_value
         instance.plugins = {"olas": mock_olas_config}
         instance.save_config = MagicMock()
+
+        # Mock ContractCache to return MagicMock contracts
+        mock_cache_instance = mock_cache.return_value
+        mock_cache_instance.get_contract.return_value = MagicMock()
 
         sm = ServiceManager(mock_wallet)
         # Ensure service is properly set
@@ -125,6 +130,7 @@ def service_manager(
         sm.olas_config = mock_olas_config
         sm.global_config = instance
         yield sm
+
 
 
 def test_init(service_manager):

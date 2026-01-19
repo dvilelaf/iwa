@@ -23,12 +23,19 @@ def mock_wallet():
     return wallet
 
 
-def setup_manager(mock_wallet):
+@pytest.fixture
+def mock_manager(mock_wallet):
     """Setup a ServiceManager with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls:
+    with patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls, \
+         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
+         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
+
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
+
         mock_cfg = mock_cfg_cls.return_value
         mock_cfg.plugins = {"olas": MagicMock()}
         mock_cfg.plugins["olas"].get_service.return_value = None
+
         with patch(
             "iwa.plugins.olas.service_manager.OLAS_CONTRACTS",
             {
@@ -43,18 +50,22 @@ def setup_manager(mock_wallet):
                 mock_if = mock_if_cls.return_value
                 mock_if.get.return_value.chain.name.lower.return_value = "gnosis"
                 mock_if.get.return_value.get_contract_address.return_value = VALID_ADDR
+
                 manager = ServiceManager(mock_wallet)
                 manager.registry = MagicMock()
                 manager.manager_contract = MagicMock()
                 manager.olas_config = mock_cfg.plugins["olas"]
                 manager.chain_name = "gnosis"
+                # Fix recursive mock issue by setting explicit return value
+                manager.registry.chain_interface = MagicMock()
                 manager.registry.chain_interface.get_contract_address.return_value = VALID_ADDR
-                return manager
+
+                yield manager
 
 
-def test_service_manager_mech_requests_failures(mock_wallet):
+def test_service_manager_mech_requests_failures(mock_manager):
     """Test failure paths in mech requests."""
-    manager = setup_manager(mock_wallet)
+    manager = mock_manager
 
     # Service missing
     manager.service = None
@@ -99,9 +110,9 @@ def test_service_manager_mech_requests_failures(mock_wallet):
         assert manager.send_mech_request(b"data", use_marketplace=False) is None
 
 
-def test_service_manager_lifecycle_failures(mock_wallet):
+def test_service_manager_lifecycle_failures(mock_manager, mock_wallet):
     """Test failure paths in lifecycle methods."""
-    manager = setup_manager(mock_wallet)
+    manager = mock_manager
     manager.service = Service(service_name="t", chain_name="gnosis", service_id=1, agent_ids=[1])
 
     # register_agent failures
@@ -147,9 +158,9 @@ def test_service_manager_lifecycle_failures(mock_wallet):
     assert manager.wind_down() is True
 
 
-def test_service_manager_staking_status_failures(mock_wallet):
+def test_service_manager_staking_status_failures(mock_manager):
     """Test failure paths in get_staking_status."""
-    manager = setup_manager(mock_wallet)
+    manager = mock_manager
 
     # Service missing
     manager.service = None
@@ -178,9 +189,9 @@ def test_service_manager_staking_status_failures(mock_wallet):
         assert status.mech_requests_this_epoch == 0
 
 
-def test_service_manager_verify_event_exception(mock_wallet):
+def test_service_manager_verify_event_exception(mock_manager):
     """Test exception path in _execute_mech_tx."""
-    manager = setup_manager(mock_wallet)
+    manager = mock_manager
     manager.service = Service(
         service_name="t",
         chain_name="gnosis",

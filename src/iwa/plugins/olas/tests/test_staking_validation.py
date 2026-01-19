@@ -25,19 +25,12 @@ def mock_staking():
 def test_staking_get_service_info_nested_tuple(mock_staking):
     """Test get_service_info with nested tuple result from web3."""
     nested_result = (("0xMultisig", "0xOwner", (1, 2), 1000, 500, 0),)
-    mock_staking.call.side_effect = [
-        "0x1",  # activityChecker
-        100,  # availableRewards
-        200,  # balance
-        3600,  # livenessPeriod
-        10,  # rewardsPerSecond
-        10,  # maxNumServices
-        50,  # minStakingDeposit
-        7200,  # minStakingDuration
-        "0xToken",  # stakingToken
-        nested_result,  # getServiceInfo
-        2000,  # getNextRewardCheckpointTimestamp
-    ]
+    mock_staking.call.side_effect = (
+        ["0x1"]  # activityChecker
+        + [nested_result]  # getServiceInfo
+        + [2000] * 5  # getNextRewardCheckpointTimestamp and any others
+    )
+
     # Re-init to trigger calls
     with (
         patch("iwa.plugins.olas.contracts.staking.ActivityCheckerContract"),
@@ -45,7 +38,8 @@ def test_staking_get_service_info_nested_tuple(mock_staking):
     ):
         mock_ci.get_instance.return_value.web3.eth.contract.return_value = MagicMock()
         staking = StakingContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
-        staking.call = MagicMock(side_effect=[nested_result, 2000])
+        # Update call on the new instance
+        staking.call = MagicMock(side_effect=mock_staking.call.side_effect)
         staking.activity_checker.get_multisig_nonces.return_value = (1, 3)
         staking.get_required_requests = MagicMock(return_value=5)
 
