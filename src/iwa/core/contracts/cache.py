@@ -72,7 +72,36 @@ class ContractCache:
             instance = contract_cls(address, chain_name=chain_name)
             self._contracts[key] = instance
             self._creation_times[key] = now
+            self._creation_times[key] = now
             return instance
+
+    def get_if_cached(
+        self,
+        contract_cls: Type[T],
+        address: str,
+        chain_name: str,
+    ) -> Optional[T]:
+        """Get a cached contract instance if it exists and is valid.
+
+        Does NOT create a new instance if not found.
+        """
+        if not address:
+            return None
+
+        key = self._make_key(contract_cls, address, chain_name)
+        now = time.time()
+
+        with self._lock:
+            if key in self._contracts:
+                # Check TTL
+                created_at = self._creation_times.get(key, 0)
+                if now - created_at < self.ttl:
+                    return self._contracts[key]
+                else:
+                    # Expired, clean up
+                    del self._contracts[key]
+                    del self._creation_times[key]
+        return None
 
     def _make_key(self, contract_cls: Type, address: str, chain_name: str) -> str:
         """Create a unique cache key."""

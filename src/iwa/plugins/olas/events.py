@@ -3,7 +3,7 @@
 from typing import List
 
 from loguru import logger
-from web3.contract import Contract
+from loguru import logger
 
 from iwa.core.contracts.cache import ContractCache
 from iwa.core.monitor import EventMonitor
@@ -134,15 +134,13 @@ class OlasEventInvalidator:
                 # Option A: Just invalidate the instance
                 # self.contract_cache.invalidate(StakingContract, addr, self.chain_name)
 
-                # Option B: Get instance and clear specific cache (better for preserving other static data)
-                # But get_contract might instantiate if not there.
-                # Accessing private dict of cache is risky but efficient.
-                key = self.contract_cache._make_key(StakingContract, addr, self.chain_name)
-                with self.contract_cache._lock:
-                    instance = self.contract_cache._contracts.get(key)
-                    if instance:
-                        instance.clear_epoch_cache()
-                        logger.debug(f"Cleared epoch cache for {addr}")
+                # Option B: Get instance and clear specific cache (safe public access)
+                instance = self.contract_cache.get_if_cached(
+                    StakingContract, addr, self.chain_name
+                )
+                if instance:
+                    instance.clear_epoch_cache()
+                    logger.debug(f"Cleared epoch cache for {addr}")
 
         except Exception as e:
-            logger.warning(f"Failed to check logs in validatior: {e}")
+            logger.warning(f"Failed to check logs in invalidator: {e}")

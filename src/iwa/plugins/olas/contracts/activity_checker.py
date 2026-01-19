@@ -129,7 +129,8 @@ class ActivityCheckerContract(ContractInstance):
         diff_requests = current_requests - last_requests
 
         # 1. Check if requests exceed transactions (impossible in valid operation)
-        if diff_requests > diff_safe:
+        # Also check for negative diffs (data corruption/stale data edge case)
+        if diff_requests > diff_safe or diff_requests < 0 or diff_safe < 0:
             return False
 
         # 2. Check time difference validity
