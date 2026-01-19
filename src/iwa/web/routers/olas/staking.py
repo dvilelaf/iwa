@@ -105,16 +105,21 @@ def _check_availability(name, address, interface):
     """Check availability of a single staking contract."""
     # Import at module level would cause circular import, but we can cache it
     # The import is cached by Python after first call so this is efficient
+    from iwa.core.contracts.cache import ContractCache
     from iwa.plugins.olas.contracts.staking import StakingContract
 
     try:
-        contract = StakingContract(address, chain_name=interface.chain.name)
+        # Use ContractCache to benefit from shared instances and property caching
+        contract = ContractCache().get_contract(
+            StakingContract, address, chain_name=interface.chain.name
+        )
 
         # StakingContract uses .call() which handles with_retry and rotation
+        # Use properties instead of .call() to leverage caching
         service_ids = contract.call("getServiceIds")
-        max_services = contract.call("maxNumServices")
-        min_deposit = contract.call("minStakingDeposit")
-        staking_token = contract.call("stakingToken")
+        max_services = contract.max_num_services
+        min_deposit = contract.min_staking_deposit
+        staking_token = contract.staking_token_address
         used = len(service_ids)
 
         return {
