@@ -58,6 +58,7 @@ Token Utility Contract:
 """
 
 from typing import List, Optional, Union
+from iwa.core.contracts.cache import ContractCache
 
 from loguru import logger
 from web3 import Web3
@@ -485,7 +486,8 @@ class LifecycleManagerMixin:
             agent_id = agent_ids[0]
 
             # Use the ServiceRegistryTokenUtilityContract with official ABI
-            token_utility = ServiceRegistryTokenUtilityContract(
+            token_utility = ContractCache().get_contract(
+                ServiceRegistryTokenUtilityContract,
                 address=str(utility_address),
                 chain_name=self.chain_name,
             )

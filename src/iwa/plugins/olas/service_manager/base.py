@@ -5,6 +5,7 @@ from typing import Dict, Optional
 from loguru import logger
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.contracts.cache import ContractCache
 from iwa.core.models import Config
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import OLAS_CONTRACTS
@@ -65,8 +66,12 @@ class ServiceManagerBase:
         if not registry_address or not manager_address:
             raise ValueError(f"OLAS contracts not found for chain: {chain_name}")
 
-        self.registry = ServiceRegistryContract(registry_address, chain_name=chain_name)
-        self.manager = ServiceManagerContract(manager_address, chain_name=chain_name)
+        self.registry = ContractCache().get_contract(
+            ServiceRegistryContract, registry_address, chain_name=chain_name
+        )
+        self.manager = ContractCache().get_contract(
+            ServiceManagerContract, manager_address, chain_name=chain_name
+        )
         logger.debug(f"[SM-INIT] ServiceManager initialized. Chain: {chain_name}")
         logger.debug(f"[SM-INIT] Registry Address: {self.registry.address}")
         logger.debug(f"[SM-INIT] Manager Address: {self.manager.address}")

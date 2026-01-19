@@ -50,6 +50,7 @@ from typing import Optional
 from loguru import logger
 from web3 import Web3
 
+from iwa.core.contracts.cache import ContractCache
 from iwa.core.types import EthereumAddress
 from iwa.core.utils import get_tx_hash
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
@@ -96,7 +97,9 @@ class StakingManagerMixin:
 
         # Load the staking contract
         try:
-            staking = StakingContract(str(staking_address), chain_name=self.chain_name)
+            staking = ContractCache().get_contract(
+                StakingContract, str(staking_address), chain_name=self.chain_name
+            )
         except Exception as e:
             logger.error(f"Failed to load staking contract: {e}")
             return StakingStatus(
@@ -613,7 +616,8 @@ class StakingManagerMixin:
         # Load staking contract if not provided
         if not staking_contract:
             try:
-                staking_contract = StakingContract(
+                staking_contract = ContractCache().get_contract(
+                    StakingContract,
                     str(self.service.staking_contract_address),
                     chain_name=self.service.chain_name,
                 )
