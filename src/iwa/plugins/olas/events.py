@@ -1,11 +1,9 @@
 """Event-based cache invalidation for Olas contracts."""
 
-from typing import List
 
 from loguru import logger
 
 from iwa.core.contracts.cache import ContractCache
-from iwa.core.monitor import EventMonitor
 from iwa.plugins.olas.contracts.staking import StakingContract
 
 
@@ -46,7 +44,6 @@ class OlasEventInvalidator:
 
     def start(self):
         """Start the event monitoring loop."""
-        import time
         import threading
 
         self.running = True
@@ -104,7 +101,7 @@ class OlasEventInvalidator:
             dummy_contract = self.contract_cache.get_contract(
                 StakingContract, self.staking_addresses[0], self.chain_name
             )
-            checkpoint_event_abi = dummy_contract.contract.events.Checkpoint
+
 
             logs = self.web3.eth.get_logs({
                 "fromBlock": from_block,
