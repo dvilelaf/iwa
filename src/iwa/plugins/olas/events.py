@@ -3,7 +3,6 @@
 from typing import List
 
 from loguru import logger
-from loguru import logger
 
 from iwa.core.contracts.cache import ContractCache
 from iwa.core.monitor import EventMonitor

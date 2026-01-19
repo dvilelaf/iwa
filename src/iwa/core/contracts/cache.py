@@ -72,7 +72,6 @@ class ContractCache:
             instance = contract_cls(address, chain_name=chain_name)
             self._contracts[key] = instance
             self._creation_times[key] = now
-            self._creation_times[key] = now
             return instance
 
     def get_if_cached(
