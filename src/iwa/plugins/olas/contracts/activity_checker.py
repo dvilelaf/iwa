@@ -8,7 +8,7 @@ The liveness check (isRatioPass) verifies that the service is making enough mech
 requests relative to the time elapsed since the last checkpoint.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 from iwa.core.constants import DEFAULT_MECH_CONTRACT_ADDRESS
 from iwa.core.types import EthereumAddress
@@ -43,27 +43,11 @@ class ActivityCheckerContract(ContractInstance):
         """
         super().__init__(address, chain_name=chain_name)
 
-        # Check for marketplace-aware checker
-        try:
-            mech_mp_function = getattr(self.contract.functions, "mechMarketplace", None)
-            self.mech_marketplace = mech_mp_function().call() if mech_mp_function else None
-        except Exception:
-            self.mech_marketplace = None
+        # Cache for lazy loading
+        self._mech_marketplace: Optional[EthereumAddress] = None
+        self._agent_mech: Optional[EthereumAddress] = None
+        self._liveness_ratio: Optional[int] = None
 
-        # Get the mech address this checker tracks (legacy or priority mech)
-        try:
-            agent_mech_function = getattr(self.contract.functions, "agentMech", None)
-            self.agent_mech = (
-                agent_mech_function().call() if agent_mech_function else DEFAULT_MECH_CONTRACT_ADDRESS
-            )
-        except Exception:
-            self.agent_mech = DEFAULT_MECH_CONTRACT_ADDRESS
-
-        # Get liveness ratio (requests per second * 1e18)
-        try:
-            self.liveness_ratio = self.contract.functions.livenessRatio().call()
-        except Exception:
-            self.liveness_ratio = 0
 
     def get_multisig_nonces(self, multisig: EthereumAddress) -> Tuple[int, int]:
         """Get the nonces for a multisig address.
@@ -79,6 +63,41 @@ class ActivityCheckerContract(ContractInstance):
         """
         nonces = self.contract.functions.getMultisigNonces(multisig).call()
         return (nonces[0], nonces[1])
+
+
+    @property
+    def mech_marketplace(self) -> Optional[EthereumAddress]:
+        """Get the mech marketplace address."""
+        if self._mech_marketplace is None:
+            try:
+                mech_mp_function = getattr(self.contract.functions, "mechMarketplace", None)
+                self._mech_marketplace = mech_mp_function().call() if mech_mp_function else None
+            except Exception:
+                self._mech_marketplace = None
+        return self._mech_marketplace
+
+    @property
+    def agent_mech(self) -> EthereumAddress:
+        """Get the agent mech address."""
+        if self._agent_mech is None:
+            try:
+                agent_mech_function = getattr(self.contract.functions, "agentMech", None)
+                self._agent_mech = (
+                    agent_mech_function().call() if agent_mech_function else DEFAULT_MECH_CONTRACT_ADDRESS
+                )
+            except Exception:
+                self._agent_mech = DEFAULT_MECH_CONTRACT_ADDRESS
+        return self._agent_mech
+
+    @property
+    def liveness_ratio(self) -> int:
+        """Get the liveness ratio."""
+        if self._liveness_ratio is None:
+            try:
+                self._liveness_ratio = self.contract.functions.livenessRatio().call()
+            except Exception:
+                self._liveness_ratio = 0
+        return self._liveness_ratio
 
     def is_ratio_pass(
         self,
@@ -101,6 +120,25 @@ class ActivityCheckerContract(ContractInstance):
             True if liveness requirements are met.
 
         """
-        return self.contract.functions.isRatioPass(
-            list(current_nonces), list(last_nonces), ts_diff
-        ).call()
+
+        # Optimized implementation to avoid RPC call
+        current_safe, current_requests = current_nonces
+        last_safe, last_requests = last_nonces
+
+        diff_safe = current_safe - last_safe
+        diff_requests = current_requests - last_requests
+
+        # 1. Check if requests exceed transactions (impossible in valid operation)
+        if diff_requests > diff_safe:
+            return False
+
+        # 2. Check time difference validity
+        if ts_diff == 0:
+            return False
+
+        # 3. Check ratio
+        # ratio = (diffRequests * 1e18) / ts_diff >= livenessRatio
+        # We use integer arithmetic as per Solidity
+        ratio = (diff_requests * 10**18) // ts_diff
+
+        return ratio >= self.liveness_ratio

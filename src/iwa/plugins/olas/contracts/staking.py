@@ -79,22 +79,9 @@ class StakingContract(ContractInstance):
         self.chain_name = chain_name
         self._contract_params_cache: Dict[str, int] = {}
 
-        # Get activity checker from the staking contract
-        activity_checker_address = self.call("activityChecker")
-        self.activity_checker = ActivityCheckerContract(
-            activity_checker_address, chain_name=chain_name
-        )
-        self.activity_checker_address = activity_checker_address
+        self._activity_checker: Optional[ActivityCheckerContract] = None
+        self._activity_checker_address: Optional[EthereumAddress] = None
 
-        # Cache contract parameters
-        self.available_rewards = self.call("availableRewards")
-        self.balance = self.call("balance")
-        self.liveness_period = self.call("livenessPeriod")
-        self.rewards_per_second = self.call("rewardsPerSecond")
-        self.max_num_services = self.call("maxNumServices")
-        self.min_staking_deposit = self.call("minStakingDeposit")
-        self.min_staking_duration_hours = self.call("minStakingDuration") / 3600
-        self.staking_token_address = self.call("stakingToken")
 
     def get_requirements(self) -> Dict[str, Union[str, int]]:
         """Get the contract requirements for token and deposits.
@@ -229,8 +216,36 @@ class StakingContract(ContractInstance):
         return StakingState(self.call("getStakingState", service_id))
 
     def ts_checkpoint(self) -> int:
-        """Get the timestamp of the last checkpoint."""
-        return self.call("tsCheckpoint")
+        """Get the timestamp of the last checkpoint.
+
+        Cached until the estimated end of the current epoch (ts_checkpoint + liveness_period).
+        """
+        now = time.time()
+        cache_key = "ts_checkpoint"
+
+        # Check if we have a valid cached value
+        if cache_key in self._contract_params_cache:
+            ts = self._contract_params_cache[cache_key]
+            # Use liveness period to determine if we should re-check
+            if now < ts + self.liveness_period:
+                return ts
+
+            # If past expected epoch end, check at most once per minute
+            last_checked = self._contract_params_cache.get(f"{cache_key}_last_checked", 0)
+            if now - last_checked < 60:
+                return ts
+
+        # Fetch new value
+        ts = self.call("tsCheckpoint")
+        self._contract_params_cache[cache_key] = ts
+        self._contract_params_cache[f"{cache_key}_last_checked"] = now
+        return ts
+
+    def clear_epoch_cache(self) -> None:
+        """Clear cache for epoch-dependent properties."""
+        self._contract_params_cache.pop("ts_checkpoint", None)
+        self._contract_params_cache.pop("ts_checkpoint_last_checked", None)
+        logger.debug(f"Cleared epoch cache for StakingContract {self.address}")
 
     def get_required_requests(self, use_liveness_period: bool = True) -> int:
         """Calculate the required requests for the current epoch.
@@ -251,6 +266,81 @@ class StakingContract(ContractInstance):
         return math.ceil(
             (time_diff * self.activity_checker.liveness_ratio) / 1e18 + requests_safety_margin
         )
+
+    @property
+    def activity_checker_address_value(self) -> EthereumAddress:
+        """Get the activity checker address."""
+        if self._activity_checker_address is None:
+            self._activity_checker_address = self.call("activityChecker")
+        return self._activity_checker_address
+
+    @property
+    def activity_checker_address(self) -> EthereumAddress:
+        """Backwards compatibility for activity_checker_address."""
+        return self.activity_checker_address_value
+
+    @property
+    def activity_checker(self) -> ActivityCheckerContract:
+        """Get the activity checker contract."""
+        if self._activity_checker is None:
+            self._activity_checker = ActivityCheckerContract(
+                self.activity_checker_address_value, chain_name=self.chain_name
+            )
+        return self._activity_checker
+
+    @property
+    def available_rewards(self) -> int:
+        """Get available rewards."""
+        if "availableRewards" not in self._contract_params_cache:
+            self._contract_params_cache["availableRewards"] = self.call("availableRewards")
+        return self._contract_params_cache["availableRewards"]
+
+    @property
+    def balance(self) -> int:
+        """Get contract balance."""
+        if "balance" not in self._contract_params_cache:
+            self._contract_params_cache["balance"] = self.call("balance")
+        return self._contract_params_cache["balance"]
+
+    @property
+    def liveness_period(self) -> int:
+        """Get liveness period."""
+        if "livenessPeriod" not in self._contract_params_cache:
+            self._contract_params_cache["livenessPeriod"] = self.call("livenessPeriod")
+        return self._contract_params_cache["livenessPeriod"]
+
+    @property
+    def rewards_per_second(self) -> int:
+        """Get rewards per second."""
+        if "rewardsPerSecond" not in self._contract_params_cache:
+            self._contract_params_cache["rewardsPerSecond"] = self.call("rewardsPerSecond")
+        return self._contract_params_cache["rewardsPerSecond"]
+
+    @property
+    def max_num_services(self) -> int:
+        """Get max number of services."""
+        if "maxNumServices" not in self._contract_params_cache:
+            self._contract_params_cache["maxNumServices"] = self.call("maxNumServices")
+        return self._contract_params_cache["maxNumServices"]
+
+    @property
+    def min_staking_deposit(self) -> int:
+        """Get min staking deposit."""
+        if "minStakingDeposit" not in self._contract_params_cache:
+            self._contract_params_cache["minStakingDeposit"] = self.call("minStakingDeposit")
+        return self._contract_params_cache["minStakingDeposit"]
+
+    @property
+    def min_staking_duration_hours(self) -> float:
+        """Get min staking duration in hours."""
+        return self.min_staking_duration / 3600
+
+    @property
+    def staking_token_address(self) -> EthereumAddress:
+        """Get staking token address."""
+        if "stakingToken" not in self._contract_params_cache:
+            self._contract_params_cache["stakingToken"] = self.call("stakingToken")
+        return self._contract_params_cache["stakingToken"]
 
     def is_liveness_ratio_passed(
         self,
