@@ -11,6 +11,7 @@ from web3.contract import Contract
 from web3.exceptions import ContractCustomError
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.rpc_monitor import RPCMonitor
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()
@@ -221,6 +222,8 @@ class ContractInstance:
                 # Re-evaluate self.contract on each retry to get current provider
                 # This is critical for RPC rotation to work correctly
                 method = getattr(self.contract.functions, method_name)
+                # Count the RPC call
+                RPCMonitor().increment(f"{self.name}.{method_name}")
                 return method(*args).call()
 
             return self.chain_interface.with_retry(
@@ -277,6 +280,10 @@ class ContractInstance:
 
         try:
             tx_params = self.chain_interface.calculate_transaction_params(built_method, tx_params)
+
+            # Count the estimateGas/buildTransaction RPC calls
+            RPCMonitor().increment(f"{self.name}.{method_name}.estimate_gas")
+
             transaction = built_method.build_transaction(tx_params)
             return transaction
 
