@@ -30,7 +30,7 @@ class SafeMultisig:
         from iwa.core.chain import ChainInterfaces
 
         chain_interface = ChainInterfaces().get(chain_name.lower())
-        ethereum_client = EthereumClient(chain_interface.chain.rpc)
+        ethereum_client = EthereumClient(chain_interface.current_rpc)
         self.multisig = Safe(safe_account.address, ethereum_client)
         self.ethereum_client = ethereum_client
 

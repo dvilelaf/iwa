@@ -102,7 +102,7 @@ class SafeService:
 
         # Use ChainInterface which has proper RPC rotation and parsing
         chain_interface = ChainInterfaces().get(chain_name)
-        return EthereumClient(chain_interface.chain.rpc)
+        return EthereumClient(chain_interface.current_rpc)
 
     def _deploy_safe_contract(
         self,
@@ -254,7 +254,7 @@ class SafeService:
 
                 # Use ChainInterface which has proper RPC rotation and parsing
                 chain_interface = ChainInterfaces().get(chain)
-                ethereum_client = EthereumClient(chain_interface.chain.rpc)
+                ethereum_client = EthereumClient(chain_interface.current_rpc)
 
                 code = ethereum_client.w3.eth.get_code(account.address)
 

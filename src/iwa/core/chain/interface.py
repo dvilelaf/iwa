@@ -49,9 +49,16 @@ class ChainInterface:
         self._init_web3()
 
     @property
+    def current_rpc(self) -> str:
+        """Get the current active RPC URL."""
+        if not self.chain.rpcs:
+            return ""
+        return self.chain.rpcs[self._current_rpc_index]
+
+    @property
     def is_tenderly(self) -> bool:
         """Check if connected to Tenderly vNet."""
-        rpc = self.chain.rpc or ""
+        rpc = self.current_rpc or ""
         return "tenderly" in rpc.lower() or "virtual" in rpc.lower()
 
     def init_block_tracking(self):

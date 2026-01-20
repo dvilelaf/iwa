@@ -38,7 +38,7 @@ class RPCView(Static):
                 results.append((chain_name, "N/A", "Not Configured", "-"))
                 continue
 
-            rpc_url = interface.chain.rpc
+            rpc_url = interface.current_rpc
             if not rpc_url:
                 results.append((chain_name, "None", "Missing URL", "-"))
                 continue

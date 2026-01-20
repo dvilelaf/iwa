@@ -78,7 +78,7 @@ class OlasPlugin(Plugin):
             except ValueError:
                 return None, None  # Chain not supported/configured
 
-            ethereum_client = EthereumClient(chain_interface.chain.rpc)
+            ethereum_client = EthereumClient(chain_interface.current_rpc)
             safe = Safe(safe_address, ethereum_client)
             owners = safe.retrieve_owners()
             return owners, True
