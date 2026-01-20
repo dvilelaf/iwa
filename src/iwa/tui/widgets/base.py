@@ -39,7 +39,7 @@ class ChainSelector(Horizontal):
 
         for name in chain_names:
             interface = ChainInterfaces().get(name)
-            if interface.chain.rpc:
+            if interface.current_rpc:
                 label = name.title()
                 chain_options.append((label, name))
             else:

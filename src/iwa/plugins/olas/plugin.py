@@ -73,7 +73,7 @@ class OlasPlugin(Plugin):
 
             try:
                 chain_interface = ChainInterfaces().get(chain_name)
-                if not chain_interface.chain.rpcs:
+                if not chain_interface.current_rpc:
                     return None, None
             except ValueError:
                 return None, None  # Chain not supported/configured

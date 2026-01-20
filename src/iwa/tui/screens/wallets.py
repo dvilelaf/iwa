@@ -381,7 +381,7 @@ class WalletsScreen(VerticalScroll):
         self.stop_monitor()
         addresses = [acc.address for acc in self.wallet.key_storage.accounts.values()]
         for chain_name, interface in ChainInterfaces().items():
-            if interface.chain.rpc:
+            if interface.current_rpc:
                 monitor = EventMonitor(addresses, self.monitor_callback, chain_name)
 
                 # Worker wrapper
@@ -497,7 +497,7 @@ class WalletsScreen(VerticalScroll):
         """Handle blockchain selection changes."""
         if event.value and event.value != self.active_chain:
             interface = ChainInterfaces().get(event.value)
-            if not interface or not interface.chain.rpc:
+            if not interface or not interface.current_rpc:
                 self.notify(f"No RPC for {event.value}", severity="warning")
                 event.control.value = self.active_chain
                 return

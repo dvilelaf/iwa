@@ -71,7 +71,7 @@ def test_check_rpcs_success(rpc_view, mock_chain_interfaces):
     """Test check_rpcs with successful connections."""
     # Setup mock chain interfaces
     mock_gnosis = MagicMock()
-    mock_gnosis.chain.rpc = "http://gnosis"
+    mock_gnosis.current_rpc = "http://gnosis"
     mock_gnosis.web3.is_connected.return_value = True
 
     mock_chain_interfaces.get.side_effect = lambda name: mock_gnosis if name == "gnosis" else None
@@ -99,7 +99,7 @@ def test_check_rpcs_success(rpc_view, mock_chain_interfaces):
 def test_check_rpcs_error(rpc_view, mock_chain_interfaces):
     """Test check_rpcs with connection error."""
     mock_eth = MagicMock()
-    mock_eth.chain.rpc = "http://eth"
+    mock_eth.current_rpc = "http://eth"
     mock_eth.web3.is_connected.side_effect = Exception("Connection fail")
 
     mock_chain_interfaces.get.side_effect = lambda name: mock_eth if name == "ethereum" else None

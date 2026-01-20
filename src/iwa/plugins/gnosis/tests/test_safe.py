@@ -42,7 +42,7 @@ def test_init(safe_account, mock_settings, mock_safe_eth):
     """Test initialization."""
     with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
         mock_ci = mock_ci_cls.return_value
-        mock_ci.get.return_value.chain.rpc = "http://rpc"
+        mock_ci.get.return_value.current_rpc = "http://rpc"
         ms = SafeMultisig(safe_account, "gnosis")
         assert ms.multisig is not None
         mock_safe_eth[0].assert_called_with("http://rpc")  # EthereumClient init

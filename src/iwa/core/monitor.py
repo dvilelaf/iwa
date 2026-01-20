@@ -24,7 +24,7 @@ class EventMonitor:
         self.chain_interface = ChainInterfaces().get(chain_name)
         self.web3 = self.chain_interface.web3
         self.running = False
-        if self.chain_interface.chain.rpc:
+        if self.chain_interface.current_rpc:
             try:
                 self.last_checked_block = self.web3.eth.block_number
             except Exception:
@@ -39,7 +39,7 @@ class EventMonitor:
             f"Starting EventMonitor for {len(self.addresses)} addresses on {self.chain_interface.chain.name}"
         )
 
-        if not self.chain_interface.chain.rpc:
+        if not self.chain_interface.current_rpc:
             logger.error(
                 f"Cannot start EventMonitor: No RPC URL found for chain {self.chain_interface.chain.name}"
             )
