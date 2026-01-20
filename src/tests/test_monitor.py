@@ -12,7 +12,7 @@ def mock_chain_interfaces():
         instance = mock.return_value
         gnosis_interface = MagicMock()
         gnosis_interface.chain.name = "Gnosis"
-        gnosis_interface.chain.rpc = "https://rpc"
+        gnosis_interface.current_rpc = "https://rpc"
         gnosis_interface.web3 = MagicMock()
         instance.get.return_value = gnosis_interface
         yield instance
@@ -46,7 +46,7 @@ def test_monitor_init_rpc_fail(mock_chain_interfaces, mock_callback):
 
 def test_monitor_init_no_rpc(mock_chain_interfaces, mock_callback):
     chain_interface = mock_chain_interfaces.get.return_value
-    chain_interface.chain.rpc = ""
+    chain_interface.current_rpc = ""
 
     monitor = EventMonitor(["0x1234567890123456789012345678901234567890"], mock_callback)
     assert monitor.last_checked_block == 0
@@ -54,7 +54,7 @@ def test_monitor_init_no_rpc(mock_chain_interfaces, mock_callback):
 
 def test_start_no_rpc(mock_chain_interfaces, mock_callback):
     chain_interface = mock_chain_interfaces.get.return_value
-    chain_interface.chain.rpc = ""
+    chain_interface.current_rpc = ""
 
     monitor = EventMonitor(["0x1234567890123456789012345678901234567890"], mock_callback)
 

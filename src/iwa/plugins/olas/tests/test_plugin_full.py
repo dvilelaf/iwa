@@ -105,7 +105,7 @@ def test_get_safe_signers_edge_cases(plugin):
     # 1. No RPC configured
     with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
         mock_ci = mock_ci_cls.return_value
-        mock_ci.get.return_value.chain.rpcs = []
+        mock_ci.get.return_value.current_rpc = ""
         signers, exists = plugin._get_safe_signers("0x1", "gnosis")
         assert signers is None
         assert exists is None
@@ -113,8 +113,7 @@ def test_get_safe_signers_edge_cases(plugin):
     # 2. Safe doesn't exist (raises exception)
     with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
         mock_ci = mock_ci_cls.return_value
-        mock_ci.get.return_value.chain.rpcs = ["http://rpc"]
-        mock_ci.get.return_value.chain.rpc = "http://rpc"
+        mock_ci.get.return_value.current_rpc = "http://rpc"
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
             mock_safe.retrieve_owners.side_effect = Exception("Generic error")
@@ -126,8 +125,7 @@ def test_get_safe_signers_edge_cases(plugin):
     # 3. Success path
     with patch("iwa.core.chain.ChainInterfaces") as mock_ci_cls:
         mock_ci = mock_ci_cls.return_value
-        mock_ci.get.return_value.chain.rpcs = ["http://rpc"]
-        mock_ci.get.return_value.chain.rpc = "http://rpc"
+        mock_ci.get.return_value.current_rpc = "http://rpc"
         with patch("safe_eth.eth.EthereumClient"), patch("safe_eth.safe.Safe") as mock_safe_cls:
             mock_safe = mock_safe_cls.return_value
             mock_safe.retrieve_owners.return_value = ["0xAgent"]
