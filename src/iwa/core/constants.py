@@ -8,6 +8,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 # Data directory for runtime files
 DATA_DIR = Path("data")
+CACHE_DIR = DATA_DIR / "cache"
 
 # secrets.env is at project root (NOT in data/)
 SECRETS_PATH = Path("secrets.env")

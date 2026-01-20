@@ -1,5 +1,6 @@
 """Contract instance cache to reduce RPC calls during instantiation."""
 
+import os
 import time
 from threading import Lock
 from typing import Any, Dict, Optional, Type, TypeVar
@@ -26,8 +27,15 @@ class ContractCache:
                 cls._instance = super(ContractCache, cls).__new__(cls)
                 cls._instance._contracts: Dict[str, Any] = {}
                 cls._instance._creation_times: Dict[str, float] = {}
-                # Default TTL: 1 hour (can be configurable later)
-                cls._instance.ttl = 3600
+
+                # Default TTL: 1 hour, configurable via env var
+                env_ttl = os.environ.get("IWA_CONTRACT_CACHE_TTL")
+                try:
+                    cls._instance.ttl = int(env_ttl) if env_ttl else 3600
+                except ValueError:
+                    cls._instance.ttl = 3600
+                    logger.warning(f"Invalid IWA_CONTRACT_CACHE_TTL value: {env_ttl}. Using 3600.")
+
         return cls._instance
 
     def get_contract(
