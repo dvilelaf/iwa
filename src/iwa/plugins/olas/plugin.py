@@ -141,6 +141,20 @@ class OlasPlugin(Plugin):
             safe_text = service.safe_address
             if safe_exists:
                 safe_text += " [green]✓[/green]"
+
+                # Check if Agent is a signer
+                agent_key = next((k for k in service.keys if k.role == "agent"), None)
+                if agent_key and on_chain_signers:
+                    key_addr = agent_key.address.lower()
+                    if not key_addr.startswith("0x"):
+                        key_addr = "0x" + key_addr
+
+                    is_signer = key_addr in [s.lower() for s in on_chain_signers]
+                    if not is_signer:
+                        safe_text += f"\n[bold red]⚠ Agent {agent_key.address} - NOT A SIGNER![/bold red]"
+                    else:
+                        safe_text += f" (Signer: {agent_key.address[:6]}...)"
+
             elif safe_exists is False:
                 safe_text = (
                     f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]"
@@ -165,24 +179,61 @@ class OlasPlugin(Plugin):
 
     def _add_owner_info(self, table, service) -> None:
         """Add owner information to the display table."""
+        # 1. Display Signer/EOA Owner
         owner_key = next((k for k in service.keys if k.role == "owner"), None)
-        owner_addr = service.service_owner_address
-        if not owner_addr and owner_key:
-            owner_addr = owner_key.address
+        if owner_key:
+             val = owner_key.address
+             if not val.startswith("0x"):
+                 val = "0x" + val
 
-        if owner_addr:
-            val = owner_addr
-            if owner_key:
-                if owner_key.signature_verified:
-                    val = f"[green]{owner_addr}[/green]"
-                elif not owner_key.is_encrypted:
-                    val = f"[red]{owner_addr}[/red]"
-                status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
-                table.add_row("Owner", f"{val} {status}")
-            else:
-                table.add_row("Owner", val)
+             if owner_key.signature_verified:
+                 val = f"[green]{val}[/green]"
+             elif not owner_key.is_encrypted:
+                 val = f"[red]{val}[/red]"
+             status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
+             table.add_row("Owner (EOA)", f"{val} {status}")
+        elif service.service_owner_address and service.service_owner_address != service.service_owner_safe:
+             # Fallback if we have an address but no key object, and it's not the safe
+             table.add_row("Owner (EOA)", service.service_owner_address)
         else:
-            table.add_row("Owner", "[red]Not detected[/red]")
+             table.add_row("Owner (EOA)", "[yellow]N/A[/yellow]")
+
+        # 2. Display Safe Owner
+        if service.service_owner_safe:
+            # Check on-chain existence if possible (using same helper as agent safe)
+            on_chain_signers, safe_exists = self._get_safe_signers(
+                service.service_owner_safe, service.chain_name
+            )
+            val = service.service_owner_safe
+            if safe_exists:
+                val += " [green]✓[/green]"
+
+                # Check if EOA owner is a signer
+                if owner_key and on_chain_signers:
+                    key_addr = owner_key.address.lower()
+                    if not key_addr.startswith("0x"):
+                        key_addr = "0x" + key_addr
+
+                    is_signer = key_addr in [s.lower() for s in on_chain_signers]
+                    if not is_signer:
+                        # Ensure display has 0x
+                        disp_addr = owner_key.address
+                        if not disp_addr.startswith("0x"):
+                            disp_addr = "0x" + disp_addr
+                        val += f"\n[bold red]⚠ {disp_addr} - NOT A SIGNER![/bold red]"
+                    else:
+                        # Ensure display has 0x
+                        disp_addr = owner_key.address
+                        if not disp_addr.startswith("0x"):
+                            disp_addr = "0x" + disp_addr
+                        val += f" (Signer: {disp_addr[:6]}...)"
+
+            elif safe_exists is False:
+                val += " [bold red]⚠ DOES NOT EXIST![/bold red]"
+
+            table.add_row("Owner (Safe)", val)
+        else:
+            table.add_row("Owner (Safe)", "[yellow]N/A[/yellow]")
 
     def _add_agent_info(self, table, service, on_chain_signers, safe_exists) -> None:
         """Add agent information to the display table."""
