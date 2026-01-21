@@ -120,15 +120,14 @@ class OlasPlugin(Plugin):
             on_chain_signers, safe_exists = self._get_safe_signers(
                 service.safe_address, service.chain_name
             )
-            if safe_exists is None:
-                table.add_row("Multisig", service.safe_address)
-            elif safe_exists:
-                table.add_row("Multisig", f"{service.safe_address} [green]✓[/green]")
-            else:
-                table.add_row(
-                    "Multisig",
-                    f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]",
-                )
+            safe_color = "green" if safe_exists else "white"
+            safe_text = service.safe_address
+            if safe_exists:
+                safe_text += " [green]✓[/green]"
+            elif safe_exists is False:
+                safe_text = f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]"
+
+            table.add_row("Multisig", safe_text)
         else:
             table.add_row("Multisig", "[red]Not detected[/red]")
 
@@ -154,11 +153,15 @@ class OlasPlugin(Plugin):
             owner_addr = owner_key.address
 
         if owner_addr:
-            if owner_key and owner_key.address.lower() == owner_addr.lower():
+            val = owner_addr
+            if owner_key and owner_key.signature_verified:
+                val = f"[green]{owner_addr}[/green]"
+
+            if owner_key:
                 status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
-                table.add_row("Owner", f"{owner_addr} {status}")
+                table.add_row("Owner", f"{val} {status}")
             else:
-                table.add_row("Owner", owner_addr)
+                table.add_row("Owner", val)
         else:
             table.add_row("Owner", "[red]Not detected[/red]")
 
@@ -167,9 +170,13 @@ class OlasPlugin(Plugin):
 
         if agent_key:
             status = "🔒 encrypted" if agent_key.is_encrypted else "🔓 plaintext"
-            key_info = f"{agent_key.address} {status}"
+            addr_val = agent_key.address
+            if agent_key.signature_verified:
+                addr_val = f"[green]{agent_key.address}[/green]"
+
+            key_info = f"{addr_val} {status}"
             if service.safe_address:
-                if not safe_exists:
+                if safe_exists is False:
                     key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
                 elif on_chain_signers is not None:
                     is_signer = agent_key.address.lower() in [s.lower() for s in on_chain_signers]
@@ -245,7 +252,25 @@ class OlasPlugin(Plugin):
 
         # Scan directory
         console.print(f"\n[bold]Scanning[/bold] {path}...")
-        importer = OlasServiceImporter()
+
+        # Ask for password if some keys are likely encrypted
+        # For simplicity, we can ask once if we want to support signature verification in dry-run
+        if dry_run and not password:
+            # Check if there are .trader_runner or .operate folders that might have encrypted keys
+            if any(Path(path).rglob(".trader_runner")) or any(Path(path).rglob("*.json")):
+                from iwa.core.secrets import secrets
+
+                password = secrets.wallet_password.get_secret_value() if secrets.wallet_password else None
+                if not password:
+                    password = typer.prompt(
+                        "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
+                        hide_input=True,
+                        default="",
+                    )
+                if not password:
+                    password = None
+
+        importer = OlasServiceImporter(password=password)
         discovered = importer.scan_directory(Path(path))
 
         if not discovered:

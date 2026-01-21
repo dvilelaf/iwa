@@ -28,6 +28,7 @@ class DiscoveredKey:
     source_file: Path = field(default_factory=Path)
     role: str = "unknown"  # "agent", "owner"
     is_encrypted: bool = False
+    signature_verified: bool = False
 
     @property
     def is_decrypted(self) -> bool:
@@ -92,15 +93,17 @@ class ImportResult:
 class OlasServiceImporter:
     """Discover and import Olas services from external directories."""
 
-    def __init__(self, key_storage: Optional[KeyStorage] = None):
+    def __init__(self, key_storage: Optional[KeyStorage] = None, password: Optional[str] = None):
         """Initialize the importer.
 
         Args:
             key_storage: KeyStorage instance. If None, will create one.
+            password: Optional password to decrypt discovered keystores.
 
         """
         self.key_storage = key_storage or KeyStorage()
         self.config = Config()
+        self.password = password
 
     def scan_directory(self, path: Path) -> List[DiscoveredService]:
         """Recursively scan a directory for Olas services.
@@ -239,6 +242,7 @@ class OlasServiceImporter:
             key = self._parse_keystore_file(operator_file, role="owner")
             if key:
                 keys.append(key)
+                self._verify_key_signature(key)
 
         # Also check keys.json (array of keystores)
         keys_file = folder / "keys.json"
@@ -402,15 +406,15 @@ class OlasServiceImporter:
                     # Remove 0x prefix if present
                     if private_key.startswith("0x"):
                         private_key = private_key[2:]
-                    keys.append(
-                        DiscoveredKey(
-                            address=key_data["address"],
-                            private_key=private_key,
-                            role="agent",
-                            source_file=config_file,
-                            is_encrypted=False,
-                        )
+                    key = DiscoveredKey(
+                        address=key_data["address"],
+                        private_key=private_key,
+                        role="agent",
+                        source_file=config_file,
+                        is_encrypted=False,
                     )
+                    self._verify_key_signature(key)
+                    keys.append(key)
         return keys
 
     def _enrich_service_with_chain_info(self, service: DiscoveredService, data: dict) -> None:
@@ -535,13 +539,21 @@ class OlasServiceImporter:
             if not address.startswith("0x"):
                 address = "0x" + address
 
-            return DiscoveredKey(
+            key = DiscoveredKey(
                 address=address,
                 encrypted_keystore=keystore,
                 role=role,
                 source_file=file_path,
                 is_encrypted=True,
             )
+
+            # Attempt decryption if password provided
+            if self.password:
+                self._attempt_decryption(key)
+                if key.private_key:
+                    self._verify_key_signature(key)
+
+            return key
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to parse keystore {file_path}: {e}")
             return None
@@ -559,15 +571,19 @@ class OlasServiceImporter:
                     address = keystore.get("address", "")
                     if not address.startswith("0x"):
                         address = "0x" + address
-                    keys.append(
-                        DiscoveredKey(
-                            address=address,
-                            encrypted_keystore=keystore,
-                            role="agent",
-                            source_file=file_path,
-                            is_encrypted=True,
-                        )
+                    key = DiscoveredKey(
+                        address=address,
+                        encrypted_keystore=keystore,
+                        role="agent",
+                        source_file=file_path,
+                        is_encrypted=True,
                     )
+                    # Attempt decryption if password provided
+                    if self.password:
+                        self._attempt_decryption(key)
+                        if key.private_key:
+                            self._verify_key_signature(key)
+                    keys.append(key)
             return keys
         except (json.JSONDecodeError, IOError):
             return []
@@ -583,13 +599,15 @@ class OlasServiceImporter:
             try:
                 data = json.loads(content)
                 if isinstance(data, dict) and "private_key" in data and "address" in data:
-                    return DiscoveredKey(
+                    key = DiscoveredKey(
                         address=data["address"],
                         private_key=data["private_key"],
                         role=role,
                         source_file=file_path,
                         is_encrypted=False,
                     )
+                    self._verify_key_signature(key)
+                    return key
             except json.JSONDecodeError:
                 pass
 
@@ -597,13 +615,15 @@ class OlasServiceImporter:
             if len(content) == 64 or (len(content) == 66 and content.startswith("0x")):
                 private_key = content[2:] if content.startswith("0x") else content
                 account = Account.from_key(bytes.fromhex(private_key))
-                return DiscoveredKey(
+                key = DiscoveredKey(
                     address=account.address,
                     private_key=private_key,
                     role=role,
                     source_file=file_path,
                     is_encrypted=False,
                 )
+                self._verify_key_signature(key)
+                return key
 
             return None
         except Exception as e:
@@ -875,3 +895,48 @@ class OlasServiceImporter:
             return False, "Olas plugin not available"
         except Exception as e:
             return False, str(e)
+
+    def _attempt_decryption(self, key: DiscoveredKey) -> None:
+        """Attempt to decrypt an encrypted keystore using the provided password."""
+        if not self.password or not key.encrypted_keystore:
+            return
+
+        try:
+            # Use Account.decrypt to handle standard web3 keystores
+            private_key_bytes = Account.decrypt(key.encrypted_keystore, self.password)
+            key.private_key = private_key_bytes.hex()
+            # If we successfully decrypted, it's no longer "encrypted" for verification purposes
+            # but we keep the encrypted_keystore in case we need it for storage
+            logger.debug(f"Successfully decrypted key for {key.address}")
+        except ValueError:
+            # Password incorrect
+            pass
+        except Exception as e:
+            logger.warning(f"Error decrypting key {key.address}: {e}")
+
+    def _verify_key_signature(self, key: DiscoveredKey) -> None:
+        """Verify that the plaintext private key can sign a message and recover the address."""
+        if not key.private_key or not key.address:
+            return
+
+        try:
+            from eth_account.messages import encode_defunct
+
+            message = "Hello, world!"
+            encoded_message = encode_defunct(text=message)
+            signed_message = Account.sign_message(encoded_message, private_key=key.private_key)
+            recovered_address = Account.recover_message(
+                encoded_message, signature=signed_message.signature
+            )
+
+            if recovered_address.lower() == key.address.lower():
+                key.signature_verified = True
+                logger.debug(f"Signature verified for key {key.address}")
+            else:
+                logger.warning(
+                    f"Signature verification FAILED for key {key.address}. "
+                    f"Recovered: {recovered_address}"
+                )
+        except Exception as e:
+            logger.warning(f"Error verifying signature for key {key.address}: {e}")
+
