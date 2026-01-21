@@ -234,6 +234,9 @@ class OlasServiceImporter:
         # Extract staking program from .env
         self._extract_staking_from_env(service, folder)
 
+        # Infer owner address from keys if not already set
+        self._infer_owner_address(service)
+
         if not service.keys and not service.service_id:
             logger.debug(f"No valid data found in {folder}")
             return None
@@ -423,6 +426,9 @@ class OlasServiceImporter:
         # 5. Extract owner address from wallets folder
         self._extract_owner_address(service, operate_folder)
 
+        # 6. Infer owner address from keys if not already set
+        self._infer_owner_address(service)
+
         return service
 
     def _extract_keys_from_operate_config(
@@ -533,6 +539,17 @@ class OlasServiceImporter:
             if key.address.lower() not in existing_addrs:
                 service.keys.append(key)
                 existing_addrs.add(key.address.lower())
+
+    def _infer_owner_address(self, service: DiscoveredService) -> None:
+        """Infer service_owner_address from keys with role='owner' if not already set."""
+        if service.service_owner_address:
+            return  # Already set
+
+        for key in service.keys:
+            if key.role == "owner" and key.address:
+                service.service_owner_address = key.address
+                logger.debug(f"Inferred owner address from key: {key.address}")
+                return
 
     def _parse_keystore_file(
         self, file_path: Path, role: str = "unknown"
