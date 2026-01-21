@@ -68,30 +68,54 @@ def get_staking_contracts(
 
 
 def _get_service_filter_info(service_key: Optional[str]) -> tuple[Optional[int], Optional[str]]:
-    """Retrieve service bond and token if service_key is provided."""
+    """Retrieve service bond and token if service_key is provided.
+
+    Uses ServiceRegistryTokenUtilityContract.get_service_token_deposit() which returns
+    the persistent bond value, even for terminated services. This is the correct source
+    because bonds are stored separately from service state.
+    """
     service_bond = None
     service_token = None
 
     if service_key:
         try:
+            from iwa.core.contracts.cache import ContractCache
+            from iwa.plugins.olas.constants import OLAS_CONTRACTS
+            from iwa.plugins.olas.contracts.service import ServiceRegistryTokenUtilityContract
             from iwa.plugins.olas.service_manager import ServiceManager
 
             # Initialize wallet dependencies for ServiceManager
             manager = ServiceManager(wallet, service_key)
             if manager.service:
-                # Get service requirements
-                service_token = (manager.service.token_address or "").lower()
                 service_id_int = manager.service.service_id
+                chain_name = manager.service.chain_name
 
-                # Get security deposit from registry - this is the actual bond value
+                # Get token and deposit from TokenUtility contract (persists after terminate)
                 try:
-                    service_info = manager.registry.get_service(service_id_int)
-                    service_bond = service_info.get("security_deposit", 0)
-                    logger.info(
-                        f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}"
-                    )
+                    protocol_contracts = OLAS_CONTRACTS.get(chain_name.lower(), {})
+                    utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
+
+                    if utility_address:
+                        token_utility = ContractCache().get_contract(
+                            ServiceRegistryTokenUtilityContract,
+                            address=str(utility_address),
+                            chain_name=chain_name,
+                        )
+                        token_addr, security_deposit = token_utility.get_service_token_deposit(
+                            service_id_int
+                        )
+                        service_bond = security_deposit
+                        service_token = token_addr.lower() if token_addr else ""
+                        logger.info(
+                            f"Filtering for service {service_key}: security_deposit={service_bond}, token={service_token}"
+                        )
+                    else:
+                        logger.warning(f"Token utility address not found for chain {chain_name}")
+                        service_token = (manager.service.token_address or "").lower()
                 except Exception as e:
-                    logger.warning(f"Failed to get service info for filtering: {e}")
+                    logger.warning(f"Failed to get token deposit for filtering: {e}")
+                    # Fallback to configured token_address
+                    service_token = (manager.service.token_address or "").lower()
 
         except Exception as e:
             logger.warning(f"Could not fetch service details for filtering: {e}")

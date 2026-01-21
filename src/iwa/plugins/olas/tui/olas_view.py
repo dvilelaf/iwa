@@ -508,14 +508,33 @@ class OlasView(Static):
         self._show_stake_contracts_modal(filtered_contracts, service_key)
 
     def _get_service_bond(self, service_key: str) -> Optional[int]:
-        """Fetch the security deposit (bond) for a service."""
+        """Fetch the security deposit (bond) for a service.
+
+        Uses ServiceRegistryTokenUtilityContract.get_service_token_deposit() which returns
+        the persistent bond value even for terminated services.
+        """
+        from iwa.core.contracts.cache import ContractCache
+        from iwa.plugins.olas.constants import OLAS_CONTRACTS
+        from iwa.plugins.olas.contracts.service import ServiceRegistryTokenUtilityContract
         from iwa.plugins.olas.service_manager import ServiceManager
 
         try:
             manager = ServiceManager(self._wallet, service_key=service_key)
             if manager.service:
-                service_info = manager.registry.get_service(manager.service.service_id)
-                return service_info.get("security_deposit", 0)
+                service_id = manager.service.service_id
+                chain_name = manager.service.chain_name
+
+                protocol_contracts = OLAS_CONTRACTS.get(chain_name.lower(), {})
+                utility_address = protocol_contracts.get("OLAS_SERVICE_REGISTRY_TOKEN_UTILITY")
+
+                if utility_address:
+                    token_utility = ContractCache().get_contract(
+                        ServiceRegistryTokenUtilityContract,
+                        address=str(utility_address),
+                        chain_name=chain_name,
+                    )
+                    _, security_deposit = token_utility.get_service_token_deposit(service_id)
+                    return security_deposit
         except Exception as e:
             self.notify(f"Warning: Could not fetch service bond: {e}", severity="warning")
         return None
