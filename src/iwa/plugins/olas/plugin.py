@@ -1,10 +1,11 @@
 """Olas plugin."""
 
 from pathlib import Path
-from typing import Dict, Optional, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 import typer
 from pydantic import BaseModel
+from rich.console import Console
 
 from iwa.core.plugins import Plugin
 from iwa.core.wallet import Wallet
@@ -97,11 +98,9 @@ class OlasPlugin(Plugin):
                 return name
         return None
 
-    def _display_service_table(self, console, service, index: int) -> None:
+    def _display_service_table(self, console: Console, service, index: int) -> None:
         """Display a single discovered service as a Rich table."""
         from rich.table import Table
-
-        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 
         table = Table(
             title=f"Service {index}: {service.service_name or 'Unknown'}", show_header=False
@@ -111,42 +110,61 @@ class OlasPlugin(Plugin):
 
         table.add_row("Format", service.format)
         table.add_row("Source", str(service.source_folder))
-        table.add_row("Service ID", str(service.service_id) if service.service_id else "[red]Not detected[/red]")
+        table.add_row(
+            "Service ID",
+            str(service.service_id) if service.service_id else "[red]Not detected[/red]",
+        )
         table.add_row("Chain", service.chain_name)
 
         # Verify Safe and display
+        on_chain_signers, safe_exists = self._add_safe_info(table, service)
+
+        # Display staking contract info
+        self._add_staking_info(table, service)
+
+        # Display owner
+        self._add_owner_info(table, service)
+
+        # Display agent key
+        self._add_agent_info(table, service, on_chain_signers, safe_exists)
+
+        console.print(table)
+        console.print()
+
+    def _add_safe_info(self, table, service) -> Tuple[Optional[List[str]], Optional[bool]]:
+        """Add Safe information to the display table."""
         on_chain_signers, safe_exists = None, None
         if service.safe_address:
             on_chain_signers, safe_exists = self._get_safe_signers(
                 service.safe_address, service.chain_name
             )
-            safe_color = "green" if safe_exists else "white"
             safe_text = service.safe_address
             if safe_exists:
                 safe_text += " [green]✓[/green]"
             elif safe_exists is False:
-                safe_text = f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]"
-
+                safe_text = (
+                    f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]"
+                )
             table.add_row("Multisig", safe_text)
         else:
             table.add_row("Multisig", "[red]Not detected[/red]")
+        return on_chain_signers, safe_exists
 
-        # Display staking contract info (always show)
+    def _add_staking_info(self, table, service) -> None:
+        """Add staking information to the display table."""
         if service.staking_contract_address:
             staking_name = self._resolve_staking_name(
                 service.staking_contract_address, service.chain_name
             )
-            if staking_name:
-                table.add_row("Staking", f"{staking_name}")
-                table.add_row("Staking Addr", service.staking_contract_address)
-            else:
-                table.add_row("Staking", "[red]Unknown[/red]")
-                table.add_row("Staking Addr", service.staking_contract_address)
+            val = staking_name if staking_name else "[red]Unknown[/red]"
+            table.add_row("Staking", val)
+            table.add_row("Staking Addr", service.staking_contract_address)
         else:
             table.add_row("Staking", "[red]Not detected[/red]")
             table.add_row("Staking Addr", "[red]Not detected[/red]")
 
-        # Display owner (address + encryption status if key available)
+    def _add_owner_info(self, table, service) -> None:
+        """Add owner information to the display table."""
         owner_key = next((k for k in service.keys if k.role == "owner"), None)
         owner_addr = service.service_owner_address
         if not owner_addr and owner_key:
@@ -158,10 +176,7 @@ class OlasPlugin(Plugin):
                 if owner_key.signature_verified:
                     val = f"[green]{owner_addr}[/green]"
                 elif not owner_key.is_encrypted:
-                    # Plaintext key that wasn't verified = failed
                     val = f"[red]{owner_addr}[/red]"
-                # Encrypted keys stay white (can't verify without password)
-
                 status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
                 table.add_row("Owner", f"{val} {status}")
             else:
@@ -169,33 +184,28 @@ class OlasPlugin(Plugin):
         else:
             table.add_row("Owner", "[red]Not detected[/red]")
 
-        # Display agent key
+    def _add_agent_info(self, table, service, on_chain_signers, safe_exists) -> None:
+        """Add agent information to the display table."""
         agent_key = next((k for k in service.keys if k.role == "agent"), None)
-
         if agent_key:
             status = "🔒 encrypted" if agent_key.is_encrypted else "🔓 plaintext"
             addr_val = agent_key.address
             if agent_key.signature_verified:
                 addr_val = f"[green]{agent_key.address}[/green]"
             elif not agent_key.is_encrypted:
-                # Plaintext key that wasn't verified = failed
                 addr_val = f"[red]{agent_key.address}[/red]"
-            # Encrypted keys stay white (can't verify without password)
 
             key_info = f"{addr_val} {status}"
             if service.safe_address:
                 if safe_exists is False:
-                    key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                    key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER![/bold red]"
                 elif on_chain_signers is not None:
                     is_signer = agent_key.address.lower() in [s.lower() for s in on_chain_signers]
                     if not is_signer:
-                        key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                        key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER![/bold red]"
             table.add_row("Agent", key_info)
         else:
             table.add_row("Agent", "[red]Not detected[/red]")
-
-        console.print(table)
-        console.print()
 
     def _import_and_print_results(self, console, importer, discovered, password) -> tuple:
         """Import all discovered services and print results."""
@@ -252,8 +262,6 @@ class OlasPlugin(Plugin):
         ),
     ):
         """Import Olas services and keys from external directories."""
-        from rich.console import Console
-
         from iwa.plugins.olas.importer import OlasServiceImporter
 
         console = Console()
@@ -263,13 +271,7 @@ class OlasPlugin(Plugin):
 
         # Ask for password in dry-run to allow signature verification of encrypted keys
         if dry_run and not password:
-            password = typer.prompt(
-                "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
-                hide_input=True,
-                default="",
-            )
-            if not password:
-                password = None
+            password = self._prompt_dry_run_password()
 
         importer = OlasServiceImporter(password=password)
         discovered = importer.scan_directory(Path(path))
@@ -288,11 +290,9 @@ class OlasPlugin(Plugin):
             raise typer.Exit(code=0)
 
         # Confirm import
-        if not yes:
-            confirm = typer.confirm("Import these services?")
-            if not confirm:
-                console.print("[yellow]Aborted.[/yellow]")
-                raise typer.Exit(code=0)
+        if not yes and not typer.confirm("Import these services?"):
+            console.print("[yellow]Aborted.[/yellow]")
+            raise typer.Exit(code=0)
 
         # Check if we need a password for encrypted keys
         needs_password = any(key.is_encrypted for service in discovered for key in service.keys)
@@ -303,11 +303,28 @@ class OlasPlugin(Plugin):
             password = typer.prompt("Password", hide_input=True)
 
         # Import services
-        total_keys, total_safes, total_services, all_skipped, all_errors = (
-            self._import_and_print_results(console, importer, discovered, password)
-        )
+        results = self._import_and_print_results(console, importer, discovered, password)
+        self._print_import_summary(console, *results)
 
-        # Summary
+    def _prompt_dry_run_password(self) -> Optional[str]:
+        """Prompt for password during dry-run."""
+        pwd = typer.prompt(
+            "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
+            hide_input=True,
+            default="",
+        )
+        return pwd if pwd else None
+
+    def _print_import_summary(
+        self,
+        console: Console,
+        total_keys: int,
+        total_safes: int,
+        total_services: int,
+        all_skipped: List[str],
+        all_errors: List[str],
+    ) -> None:
+        """Print import summary."""
         console.print("\n[bold]Summary:[/bold]")
         console.print(f"  Keys imported: {total_keys}")
         console.print(f"  Safes imported: {total_safes}")

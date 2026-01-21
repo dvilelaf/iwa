@@ -17,6 +17,28 @@ from loguru import logger
 from iwa.core.keys import EncryptedAccount, KeyStorage
 from iwa.core.models import Config, StoredSafeAccount
 
+# Known mappings from olas-operate-middleware staking programs
+# See: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
+STAKING_PROGRAM_MAP = {
+    # Pearl staking programs (gnosis) - operate format
+    "pearl_alpha": "0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e",  # Expert Legacy
+    "pearl_beta": "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C",  # Hobbyist 1 Legacy
+    "pearl_beta_2": "0xE56dF1E563De1B10715cB313D514af350D207212",  # Expert 5 Legacy
+    "pearl_beta_3": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
+    "pearl_beta_4": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
+    "pearl_beta_5": "0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f",  # Expert 10 Legacy
+    "pearl_beta_mm_v2_1": "0x75eeca6207be98cac3fde8a20ecd7b01e50b3472",  # Expert 3 MM v2
+    "pearl_beta_mm_v2_2": "0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f",  # Expert 4 MM v2
+    "pearl_beta_mm_v2_3": "0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d",  # Expert 5 MM v2
+    # Quickstart staking programs (gnosis) - quickstart format
+    "quickstart_beta_expert_4": "0xaD9d891134443B443D7F30013c7e14Fe27F2E029",  # Expert 4 Legacy
+    "quickstart_beta_expert_7": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
+    "quickstart_beta_expert_9": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
+    "quickstart_beta_expert_11": "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7",  # Expert 11 Legacy
+    "quickstart_beta_expert_16_mech_marketplace": "0x6c65430515c70a3f5E62107CC301685B7D46f991",  # Expert 16 MM v1
+    "quickstart_beta_expert_18_mech_marketplace": "0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454",  # Expert 18 MM v1
+}
+
 
 @dataclass
 class DiscoveredKey:
@@ -70,10 +92,15 @@ class DiscoveredService:
         return None
 
     @property
+    def operator_key(self) -> Optional[DiscoveredKey]:
+        """Get the operator (owner) key. Alias for compatibility."""
+        return self.owner_key
+
+    @property
     def owner_key(self) -> Optional[DiscoveredKey]:
-        """Get the owner key if present."""
+        """Get the owner key if present (matches 'owner' or 'operator' roles)."""
         for key in self.keys:
-            if key.role == "owner":
+            if key.role in ["owner", "operator"]:
                 return key
         return None
 
@@ -136,11 +163,14 @@ class OlasServiceImporter:
                 services = self._parse_operate_format(operate)
                 discovered.extend(services)
 
-        # Deduplicate by chain:service_id (keep first occurrence)
+        return self._deduplicate_services(discovered)
+
+    def _deduplicate_services(self, services: List[DiscoveredService]) -> List[DiscoveredService]:
+        """Deduplicate discovered services by chain:service_id."""
         seen_keys: set = set()
         unique_services = []
         duplicates = 0
-        for service in discovered:
+        for service in services:
             if service.service_id:
                 key = f"{service.chain_name}:{service.service_id}"
                 if key in seen_keys:
@@ -443,32 +473,7 @@ class OlasServiceImporter:
     def _resolve_staking_contract(
         self, staking_program_id: str, chain_name: str
     ) -> Optional[str]:
-        """Resolve a staking program ID to a contract address.
-
-        Maps operate-style program IDs (e.g., 'pearl_beta_2') to actual
-        staking contract addresses using known mappings.
-        """
-        # Known mappings from olas-operate-middleware staking programs
-        # See: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
-        STAKING_PROGRAM_MAP = {
-            # Pearl staking programs (gnosis) - operate format
-            "pearl_alpha": "0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e",  # Expert Legacy
-            "pearl_beta": "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C",  # Hobbyist 1 Legacy
-            "pearl_beta_2": "0xE56dF1E563De1B10715cB313D514af350D207212",  # Expert 5 Legacy
-            "pearl_beta_3": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
-            "pearl_beta_4": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
-            "pearl_beta_5": "0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f",  # Expert 10 Legacy
-            "pearl_beta_mm_v2_1": "0x75eeca6207be98cac3fde8a20ecd7b01e50b3472",  # Expert 3 MM v2
-            "pearl_beta_mm_v2_2": "0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f",  # Expert 4 MM v2
-            "pearl_beta_mm_v2_3": "0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d",  # Expert 5 MM v2
-            # Quickstart staking programs (gnosis) - quickstart format
-            "quickstart_beta_expert_4": "0xaD9d891134443B443D7F30013c7e14Fe27F2E029",  # Expert 4 Legacy
-            "quickstart_beta_expert_7": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
-            "quickstart_beta_expert_9": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
-            "quickstart_beta_expert_11": "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7",  # Expert 11 Legacy
-            "quickstart_beta_expert_16_mech_marketplace": "0x6c65430515c70a3f5E62107CC301685B7D46f991",  # Expert 16 MM v1
-            "quickstart_beta_expert_18_mech_marketplace": "0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454",  # Expert 18 MM v1
-        }
+        """Resolve a staking program ID to a contract address."""
         address = STAKING_PROGRAM_MAP.get(staking_program_id)
         if address:
             logger.debug(f"Resolved staking program '{staking_program_id}' -> {address}")

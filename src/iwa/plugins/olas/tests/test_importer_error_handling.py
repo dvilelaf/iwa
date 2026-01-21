@@ -161,7 +161,7 @@ def test_parse_trader_runner_keys(importer, tmp_path):
     assert service.safe_address == "0xSafeAddress"
     assert len(service.keys) == 2
     assert any(k.role == "agent" for k in service.keys)
-    assert any(k.role == "operator" for k in service.keys)
+    assert any(k.role == "owner" for k in service.keys)
 
 
 def test_parse_trader_runner_invalid_id(importer, tmp_path):

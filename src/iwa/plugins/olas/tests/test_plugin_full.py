@@ -68,7 +68,7 @@ def test_import_services_cli_scan_only(plugin, runner):
         ]
 
         # Test dry-run
-        result = runner.invoke(app, ["/tmp/test", "--dry-run"])
+        result = runner.invoke(app, ["/tmp/test", "--dry-run"], input="\n")
         assert result.exit_code == 0
         assert "Found 1 service(s)" in result.output
         assert "Dry run mode" in result.output
@@ -185,15 +185,15 @@ def test_import_services_cli_complex_display(plugin, runner):
         # Mock Safe exists with Agent as signer
         mock_get_signers.return_value = (["0xAgent"], True)
 
-        result = runner.invoke(app, ["/tmp/test", "--dry-run"])
+        result = runner.invoke(app, ["/tmp/test", "--dry-run"], input="\n")
         assert "0xSafe" in result.output
         assert "✓" in result.output
         assert "0xAgent 🔓 plaintext" in result.output  # Not a warning
 
         # 2. Service where agent is NOT a signer
         mock_get_signers.return_value = (["0xOther"], True)
-        result = runner.invoke(app, ["/tmp/test", "--dry-run"])
-        assert "NOT A SIGNER OF THE SAFE" in result.output
+        result = runner.invoke(app, ["/tmp/test", "--dry-run"], input="\n")
+        assert "NOT A SIGNER!" in result.output
 
 
 def test_import_services_cli_password_prompt(plugin, runner):
