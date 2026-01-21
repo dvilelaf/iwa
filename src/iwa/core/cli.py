@@ -7,11 +7,11 @@ from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
+from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.core.keys import KeyStorage
 from iwa.core.services import PluginService
 from iwa.core.tables import list_accounts
 from iwa.core.wallet import Wallet
-from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.tui.app import IwaApp
 
 iwa_cli = typer.Typer(help="iwa command line interface")
@@ -220,7 +220,7 @@ def decode_hex(
         return
 
     typer.echo(f"\nDecoding results for {hex_data[:10]}:")
-    for name, msg, source in results:
+    for _name, msg, source in results:
         typer.echo(f"  [{source}] {msg}")
 
 

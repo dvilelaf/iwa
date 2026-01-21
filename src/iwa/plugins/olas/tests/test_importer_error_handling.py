@@ -272,15 +272,11 @@ def test_generate_tag_collisions(importer):
 
 def test_import_safe_duplicate(importer):
     """Test importing a Safe that already exists."""
-    from iwa.plugins.olas.importer import DiscoveredService
-
-    service = DiscoveredService(
-        service_id=1, chain_name="gnosis", safe_address="0xSafe", source_folder=Path("/tmp")
-    )
+    safe_address = "0xSafe"
 
     importer.key_storage.find_stored_account.return_value = MagicMock()
 
-    success, msg = importer._import_safe(service)
+    success, msg = importer._import_safe(safe_address)
     assert success is False
     assert msg == "duplicate"
 
@@ -310,22 +306,14 @@ def test_import_key_success(importer):
 
 def test_import_safe_success(importer):
     """Test successful Safe import with tag generation."""
-    from iwa.plugins.olas.importer import DiscoveredService
-
-    service = DiscoveredService(
-        service_id=1,
-        chain_name="gnosis",
-        safe_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
-        source_folder=Path("/tmp"),
-        service_name="my_service",
-    )
+    safe_address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
     importer.key_storage.find_stored_account.return_value = None
     importer.key_storage.accounts = {}
 
-    success, msg = importer._import_safe(service)
+    success, msg = importer._import_safe(safe_address, service_name="my_service")
     assert success is True
     assert msg == "ok"
-    assert "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB" in importer.key_storage.accounts
+    assert safe_address in importer.key_storage.accounts
 
 
 def test_import_service_config_success(importer):

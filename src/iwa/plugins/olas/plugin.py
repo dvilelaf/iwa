@@ -177,7 +177,7 @@ class OlasPlugin(Plugin):
             table.add_row("Staking", "[red]Not detected[/red]")
             table.add_row("Staking Addr", "[red]Not detected[/red]")
 
-    def _add_owner_info(self, table, service) -> None:
+    def _add_owner_info(self, table, service) -> None:  # noqa: C901
         """Add owner information to the display table."""
         # 1. Display Signer/EOA Owner
         owner_key = next((k for k in service.keys if k.role == "owner"), None)

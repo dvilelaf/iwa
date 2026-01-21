@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from eth_abi import decode
 from loguru import logger
@@ -101,11 +101,12 @@ class ErrorDecoder:
                 if decoding not in self._selectors[selector]:
                     self._selectors[selector].append(decoding)
 
-    def decode(self, error_data: str) -> List[Tuple[str, str, str]]:
+    def decode(self, error_data: str) -> List[Tuple[str, str, str]]:  # noqa: C901
         """Decode hex error data.
 
         Returns:
             List of (error_name, formatted_message, source_abi)
+
         """
         if not error_data:
             return []
@@ -144,7 +145,7 @@ class ErrorDecoder:
             for d in self._selectors[selector]:
                 try:
                     decoded = decode(d["types"], bytes.fromhex(encoded_args))
-                    args_str = ", ".join(f"{n}={v}" for n, v in zip(d["arg_names"], decoded))
+                    args_str = ", ".join(f"{n}={v}" for n, v in zip(d["arg_names"], decoded, strict=False))
                     results.append((d["name"], f"{d['name']}({args_str})", d["source"]))
                 except Exception:
                     # Try next possible decoding for this selector

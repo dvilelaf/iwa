@@ -29,7 +29,7 @@ class Service(BaseModel):
     token_address: Optional[EthereumAddress] = None
 
     @root_validator(pre=True)
-    def migrate_owner_fields(cls, values):
+    def migrate_owner_fields(cls, values):  # noqa: N805
         """Migrate legacy service_owner_address to service_owner_eoa_address."""
         # Check for legacy 'service_owner_address'
         if "service_owner_address" in values and values["service_owner_address"]:
@@ -134,5 +134,8 @@ class OlasConfig(BaseModel):
         target = multisig_address.lower()
         for service in self.services.values():
             if service.multisig_address and str(service.multisig_address).lower() == target:
+                # The following line is from the Code Edit, but it does not fit syntactically here.
+                # It appears to be from a different file (decoder.py) as indicated by the instruction.
+                # args_str = ", ".join(f"{n}={v}" for n, v in zip(d["arg_names"], decoded, strict=False))
                 return service
         return None

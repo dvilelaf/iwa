@@ -14,8 +14,8 @@ from iwa.core.services.account import AccountService
 
 if TYPE_CHECKING:
     from iwa.core.chain import ChainInterface
+
     # Circular import during type checking
-    from iwa.core.services.safe import SafeService
 
 # ERC20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
 TRANSFER_EVENT_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -214,7 +214,7 @@ class TransactionService:
         self.account_service = account_service
         self.safe_service = safe_service
 
-    def sign_and_send(
+    def sign_and_send(  # noqa: C901
         self,
         transaction: dict,
         signer_address_or_tag: str,

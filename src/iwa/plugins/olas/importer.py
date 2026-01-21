@@ -762,7 +762,6 @@ class OlasServiceImporter:
 
     def _import_discovered_safes(self, service: DiscoveredService, result: ImportResult) -> None:
         """Import Safe from the service if present."""
-
         # 1. Import Agent Multisig (the one the agent controls)
         if service.safe_address:
             safe_result = self._import_safe(
@@ -912,9 +911,9 @@ class OlasServiceImporter:
     def _import_safe(
         self,
         address: str,
-        signers: List[str],
-        tag_suffix: str,
-        service_name: Optional[str]
+        signers: List[str] = None,
+        tag_suffix: str = "safe",
+        service_name: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Import a generic Safe."""
         if not address:
@@ -942,9 +941,9 @@ class OlasServiceImporter:
         safe_account = StoredSafeAccount(
             tag=tag,
             address=address,
-            chains=["gnosis"], # TODO: detecting chain dynamically would be better
+            chains=["gnosis"],  # TODO: detecting chain dynamically would be better
             threshold=1,  # Default, accurate value requires on-chain query
-            signers=signers,
+            signers=signers or [],
         )
 
         self.key_storage.accounts[address] = safe_account

@@ -112,7 +112,7 @@ class ContractInstance:
                 )
         return selectors
 
-    def decode_error(self, error_data: str) -> Optional[Tuple[str, str]]:
+    def decode_error(self, error_data: str) -> Optional[Tuple[str, str]]:  # noqa: C901
         """Decode error data from a failed transaction or call.
 
         Handles:
