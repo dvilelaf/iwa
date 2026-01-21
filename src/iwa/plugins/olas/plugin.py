@@ -154,12 +154,14 @@ class OlasPlugin(Plugin):
 
         if owner_addr:
             val = owner_addr
-            if owner_key and owner_key.signature_verified:
-                val = f"[green]{owner_addr}[/green]"
-            elif owner_key and owner_key.signature_failed:
-                val = f"[red]{owner_addr}[/red]"
-
             if owner_key:
+                if owner_key.signature_verified:
+                    val = f"[green]{owner_addr}[/green]"
+                elif not owner_key.is_encrypted:
+                    # Plaintext key that wasn't verified = failed
+                    val = f"[red]{owner_addr}[/red]"
+                # Encrypted keys stay white (can't verify without password)
+
                 status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
                 table.add_row("Owner", f"{val} {status}")
             else:
@@ -175,8 +177,10 @@ class OlasPlugin(Plugin):
             addr_val = agent_key.address
             if agent_key.signature_verified:
                 addr_val = f"[green]{agent_key.address}[/green]"
-            elif agent_key.signature_failed:
+            elif not agent_key.is_encrypted:
+                # Plaintext key that wasn't verified = failed
                 addr_val = f"[red]{agent_key.address}[/red]"
+            # Encrypted keys stay white (can't verify without password)
 
             key_info = f"{addr_val} {status}"
             if service.safe_address:
