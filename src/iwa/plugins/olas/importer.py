@@ -930,7 +930,13 @@ class OlasServiceImporter:
                 encoded_message, signature=signed_message.signature
             )
 
-            if recovered_address.lower() == key.address.lower():
+            # Normalize address to lowercase with 0x prefix
+            key_addr = key.address.lower()
+            if not key_addr.startswith("0x"):
+                key_addr = "0x" + key_addr
+            recovered_addr = recovered_address.lower()
+
+            if recovered_addr == key_addr:
                 key.signature_verified = True
                 logger.debug(f"Signature verified for key {key.address}")
             else:
