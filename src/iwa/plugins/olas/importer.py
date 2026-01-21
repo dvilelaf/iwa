@@ -797,7 +797,10 @@ class OlasServiceImporter:
         signers = []
         for key in service.keys:
             if key.role == "agent":
-                signers.append(key.address)
+                addr = key.address
+                if not addr.startswith("0x"):
+                    addr = "0x" + addr
+                signers.append(addr)
         return signers
 
     def _get_owner_signers(self, service: DiscoveredService) -> List[str]:
@@ -806,7 +809,10 @@ class OlasServiceImporter:
         for key in service.keys:
             # We look for keys marked as owner/operator
             if key.role in ["owner", "operator"]:
-                signers.append(key.address)
+                addr = key.address
+                if not addr.startswith("0x"):
+                    addr = "0x" + addr
+                signers.append(addr)
         return signers
 
     def _import_discovered_service_config(
@@ -882,8 +888,10 @@ class OlasServiceImporter:
     def _generate_tag(self, key: DiscoveredKey, service_name: Optional[str]) -> str:
         """Generate a unique tag for an imported key.
 
-        Tags follow the pattern: {service_name}_{role}
-        Example: trader_alpha_agent, trader_alpha_operator
+        Tags follow the pattern: {service_name}_{role}[_eoa]
+        Examples:
+          - trader_alpha_agent
+          - trader_alpha_owner_eoa (EOA keys for owner role)
         """
         # Use service name as prefix, or 'imported' as fallback
         prefix = service_name or "imported"
@@ -892,7 +900,11 @@ class OlasServiceImporter:
         prefix = re.sub(r"[^a-z0-9]+", "_", prefix.lower()).strip("_")
         role = re.sub(r"[^a-z0-9]+", "_", key.role.lower()).strip("_")
 
-        base_tag = f"{prefix}_{role}"
+        # Add _eoa suffix for owner/operator keys to distinguish from owner_safe
+        if role in ["owner", "operator"]:
+            base_tag = f"{prefix}_{role}_eoa"
+        else:
+            base_tag = f"{prefix}_{role}"
 
         # Check if tag already exists
         existing_tags = {
