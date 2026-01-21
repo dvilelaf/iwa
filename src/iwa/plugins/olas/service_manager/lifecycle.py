@@ -522,9 +522,14 @@ class LifecycleManagerMixin:
             f"activation_value={activation_value} wei"
         )
 
-        logger.debug(f"[ACTIVATE] Preparing tx: service_id={service_id}, value={activation_value}")
+        # Use service owner which holds the NFT (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
+        logger.debug(
+            f"[ACTIVATE] Preparing tx from {owner_address}: service_id={service_id}, value={activation_value}"
+        )
         activate_tx = self.manager.prepare_activate_registration_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=owner_address,
             service_id=service_id,
             value=activation_value,
         )
@@ -532,7 +537,7 @@ class LifecycleManagerMixin:
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=activate_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
         )
 
@@ -720,13 +725,16 @@ class LifecycleManagerMixin:
             f"total_value={total_value} wei"
         )
 
+        # Use service owner which holds the NFT (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
         logger.debug(
-            f"[REGISTER] Preparing tx: agent={agent_account_address}, "
+            f"[REGISTER] Preparing tx from {owner_address}: agent={agent_account_address}, "
             f"agent_ids={self.service.agent_ids}, value={total_value}"
         )
 
         register_tx = self.manager.prepare_register_agents_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=owner_address,
             service_id=service_id,
             agent_instances=[agent_account_address],
             agent_ids=self.service.agent_ids,
@@ -736,7 +744,7 @@ class LifecycleManagerMixin:
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=register_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
             tags=["olas_register_agent"],
         )

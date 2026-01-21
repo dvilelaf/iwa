@@ -408,17 +408,20 @@ class StakingManagerMixin:
             True if approval succeeded, False otherwise.
 
         """
+        # Use service owner which holds the NFT (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
         # Approve service NFT - this is an ERC-721 approval, not ERC-20
-        logger.debug("[STAKE] Approving service NFT for staking contract...")
+        logger.debug(f"[STAKE] Approving service NFT for staking contract from {owner_address}...")
         approve_tx = self.registry.prepare_approve_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=owner_address,
             spender=staking_contract.address,
             id_=self.service.service_id,
         )
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=approve_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
             tags=["olas_approve_service_nft"],
         )
@@ -452,16 +455,19 @@ class StakingManagerMixin:
             True if stake succeeded and ServiceStaked event was found.
 
         """
-        logger.debug("[STAKE] Preparing stake transaction...")
+        # Use service owner which holds the NFT (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
+        logger.debug(f"[STAKE] Preparing stake transaction from {owner_address}...")
         stake_tx = staking_contract.prepare_stake_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=owner_address,
             service_id=self.service.service_id,
         )
         logger.debug(f"[STAKE] TX prepared: to={stake_tx.get('to')}")
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=stake_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
             tags=["olas_stake_service"],
         )
@@ -541,11 +547,16 @@ class StakingManagerMixin:
         except Exception as e:
             logger.warning(f"Could not verify staking duration: {e}. Proceeding with caution.")
 
+        # Use service owner which holds the NFT (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
         # Unstake the service
         try:
-            logger.info(f"Preparing unstake transaction for service {self.service.service_id}")
+            logger.info(
+                f"Preparing unstake transaction for service {self.service.service_id} from {owner_address}"
+            )
             unstake_tx = staking_contract.prepare_unstake_tx(
-                from_address=self.wallet.master_account.address,
+                from_address=owner_address,
                 service_id=self.service.service_id,
             )
             logger.info("Unstake transaction prepared successfully")
@@ -556,7 +567,7 @@ class StakingManagerMixin:
 
         success, receipt = self.wallet.sign_and_send_transaction(
             transaction=unstake_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
             tags=["olas_unstake_service"],
         )

@@ -59,9 +59,12 @@ class DrainManagerMixin:
 
         logger.info(f"Claiming {accrued_rewards / 1e18:.4f} OLAS rewards for service {service_id}")
 
+        # Use service owner which holds the reward rights (not necessarily master)
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
+
         # Prepare and send claim transaction
         claim_tx = staking_contract.prepare_claim_tx(
-            from_address=self.wallet.master_account.address,
+            from_address=owner_address,
             service_id=service_id,
         )
 
@@ -71,7 +74,7 @@ class DrainManagerMixin:
 
         success, receipt = self.wallet.sign_and_send_transaction(
             claim_tx,
-            signer_address_or_tag=self.wallet.master_account.address,
+            signer_address_or_tag=owner_address,
             chain_name=self.chain_name,
             tags=["olas_claim_rewards"],
         )
