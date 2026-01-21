@@ -1133,8 +1133,13 @@ class LifecycleManagerMixin:
 
     def _process_wind_down_state(self, current_state: ServiceState) -> bool:
         """Process a single state transition for wind down."""
-        if current_state == ServiceState.DEPLOYED:
-            logger.info("Terminating service...")
+        # Allow termination from any active state > PRE_REGISTRATION
+        if current_state in [
+            ServiceState.DEPLOYED,
+            ServiceState.ACTIVE_REGISTRATION,
+            ServiceState.FINISHED_REGISTRATION,
+        ]:
+            logger.info(f"Terminating service from state {current_state.name}...")
             if not self.terminate():
                 logger.error("Failed to terminate service")
                 return False
@@ -1146,7 +1151,7 @@ class LifecycleManagerMixin:
         else:
             # Should not happen if logic is correct map of transitions
             logger.error(
-                f"State {current_state.name} is not a valid start for wind_down (expected DEPLOYED or TERMINATED_BONDED)"
+                f"State {current_state.name} is not a valid start for wind_down (expected active state or TERMINATED_BONDED)"
             )
             return False
         return True
