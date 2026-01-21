@@ -29,6 +29,7 @@ class DiscoveredKey:
     role: str = "unknown"  # "agent", "owner"
     is_encrypted: bool = False
     signature_verified: bool = False
+    signature_failed: bool = False
 
     @property
     def is_decrypted(self) -> bool:
@@ -933,10 +934,12 @@ class OlasServiceImporter:
                 key.signature_verified = True
                 logger.debug(f"Signature verified for key {key.address}")
             else:
+                key.signature_failed = True
                 logger.warning(
                     f"Signature verification FAILED for key {key.address}. "
                     f"Recovered: {recovered_address}"
                 )
         except Exception as e:
+            key.signature_failed = True
             logger.warning(f"Error verifying signature for key {key.address}: {e}")
 

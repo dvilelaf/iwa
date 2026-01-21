@@ -156,6 +156,8 @@ class OlasPlugin(Plugin):
             val = owner_addr
             if owner_key and owner_key.signature_verified:
                 val = f"[green]{owner_addr}[/green]"
+            elif owner_key and owner_key.signature_failed:
+                val = f"[red]{owner_addr}[/red]"
 
             if owner_key:
                 status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
@@ -173,6 +175,8 @@ class OlasPlugin(Plugin):
             addr_val = agent_key.address
             if agent_key.signature_verified:
                 addr_val = f"[green]{agent_key.address}[/green]"
+            elif agent_key.signature_failed:
+                addr_val = f"[red]{agent_key.address}[/red]"
 
             key_info = f"{addr_val} {status}"
             if service.safe_address:
@@ -253,17 +257,13 @@ class OlasPlugin(Plugin):
         # Scan directory
         console.print(f"\n[bold]Scanning[/bold] {path}...")
 
-        # Ask for password if not provided and in dry-run (to allow signature verification)
+        # Ask for password in dry-run to allow signature verification of encrypted keys
         if dry_run and not password:
-            from iwa.core.secrets import secrets
-
-            password = secrets.wallet_password.get_secret_value() if secrets.wallet_password else None
-            if not password:
-                password = typer.prompt(
-                    "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
-                    hide_input=True,
-                    default="",
-                )
+            password = typer.prompt(
+                "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
+                hide_input=True,
+                default="",
+            )
             if not password:
                 password = None
 
