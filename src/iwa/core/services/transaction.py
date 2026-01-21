@@ -9,10 +9,13 @@ from web3 import exceptions as web3_exceptions
 from iwa.core.chain import ChainInterfaces
 from iwa.core.db import log_transaction
 from iwa.core.keys import KeyStorage
+from iwa.core.models import StoredSafeAccount
 from iwa.core.services.account import AccountService
 
 if TYPE_CHECKING:
     from iwa.core.chain import ChainInterface
+    # Circular import during type checking
+    from iwa.core.services.safe import SafeService
 
 # ERC20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
 TRANSFER_EVENT_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -205,10 +208,11 @@ class TransferLogger:
 class TransactionService:
     """Manages transaction lifecycle: signing, sending, retrying."""
 
-    def __init__(self, key_storage: KeyStorage, account_service: AccountService):
+    def __init__(self, key_storage: KeyStorage, account_service: AccountService, safe_service=None):
         """Initialize TransactionService."""
         self.key_storage = key_storage
         self.account_service = account_service
+        self.safe_service = safe_service
 
     def sign_and_send(
         self,
@@ -227,6 +231,14 @@ class TransactionService:
 
         if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
             return False, {}
+
+        # CHECK FOR SAFE TRANSACTION
+        signer_account = self.account_service.resolve_account(signer_address_or_tag)
+        if isinstance(signer_account, StoredSafeAccount):
+            if not self.safe_service:
+                logger.error("Attempted Safe transaction but SafeService is not initialized.")
+                return False, {}
+            return self._execute_via_safe(tx, signer_account, chain_interface, chain_name, tags)
 
         # Mutable state for retry attempts
         state = {"gas_retries": 0, "max_gas_retries": 5}
@@ -366,6 +378,55 @@ class TransactionService:
             final_tags.append("olas")
 
         return list(set(final_tags))
+
+    def _execute_via_safe(
+        self,
+        tx: dict,
+        signer_account: StoredSafeAccount,
+        chain_interface,
+        chain_name: str,
+        tags: List[str] = None
+    ) -> Tuple[bool, Dict]:
+        """Execute transaction via SafeService."""
+        logger.info(f"Routing transaction via Safe {signer_account.address}...")
+
+        try:
+            # Extract basic params
+            to_addr = tx.get("to")
+            value = tx.get("value", 0)
+            data = tx.get("data", "")
+            if isinstance(data, bytes):
+                data = "0x" + data.hex()
+
+            # Execute
+            tx_hash = self.safe_service.execute_safe_transaction(
+                safe_address_or_tag=signer_account.address,
+                to=to_addr,
+                value=value,
+                chain_name=chain_name,
+                data=data
+            )
+
+            # Wait for receipt
+            receipt = chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+            status = getattr(receipt, "status", None)
+            if status is None and isinstance(receipt, dict):
+                status = receipt.get("status")
+
+            if receipt and status == 1:
+                logger.info(f"Safe transaction executed successfully. Tx Hash: {tx_hash}")
+                self._log_successful_transaction(
+                    receipt, tx, signer_account, chain_name, bytes.fromhex(tx_hash.replace("0x", "")), tags, chain_interface
+                )
+                return True, receipt
+            else:
+                logger.error("Safe transaction failed (status 0).")
+                return False, {}
+
+        except Exception as e:
+            logger.exception(f"Safe transaction failed: {e}")
+            return False, {}
 
     def _is_gas_too_low_error(self, err_text: str) -> bool:
         """Check if error is due to low gas."""

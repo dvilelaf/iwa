@@ -37,7 +37,7 @@ class Wallet:
         self.balance_service = BalanceService(self.key_storage, self.account_service)
         self.safe_service = SafeService(self.key_storage, self.account_service)
         # self.transaction_manager = TransactionManager(self.key_storage, self.account_service)
-        self.transaction_service = TransactionService(self.key_storage, self.account_service)
+        self.transaction_service = TransactionService(self.key_storage, self.account_service, self.safe_service)
 
         self.transfer_service = TransferService(
             self.key_storage,
