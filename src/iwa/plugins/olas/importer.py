@@ -83,6 +83,7 @@ class DiscoveredService:
     # New fields for full service import
     staking_contract_address: Optional[str] = None
     service_owner_address: Optional[str] = None
+    service_owner_safe: Optional[str] = None  # To store the Safe Owner address if it exists
 
     @property
     def agent_key(self) -> Optional[DiscoveredKey]:
@@ -517,7 +518,12 @@ class OlasServiceImporter:
         return keys
 
     def _extract_owner_address(self, service: DiscoveredService, operate_folder: Path) -> None:
-        """Extract owner address from wallets/ethereum.json."""
+        """Extract owner address from wallets/ethereum.json.
+
+        Handles two cases:
+        1. EOA is the owner (legacy).
+        2. Safe is the owner, and EOA is a signer (new staking programs).
+        """
         wallets_folder = operate_folder / "wallets"
         if not wallets_folder.exists():
             return
@@ -526,9 +532,35 @@ class OlasServiceImporter:
         if eth_json.exists():
             try:
                 data = json.loads(eth_json.read_text())
-                if "address" in data:
-                    service.service_owner_address = data["address"]
-                    logger.debug(f"Extracted owner address: {service.service_owner_address}")
+
+                # Check for "safes" entry which indicates the owner is a Safe
+                # Structure: "safes": { "gnosis": "0x..." }
+                if "safes" in data and FLAGS_OWNER_SAFE in data["safes"]: # Need to detect chain dynamically or iterate
+                     pass
+
+                # Logic update:
+                # 1. Capture EOA address always (it's the signer)
+                eoa_address = data.get("address")
+
+                # 2. Check for Safe Owner for the current service chain
+                safe_owner_address = None
+                if "safes" in data and isinstance(data["safes"], dict):
+                    # We try to match with service.chain_name if available, usually "gnosis"
+                    chain = service.chain_name or "gnosis"
+                    safe_owner_address = data["safes"].get(chain)
+
+                if safe_owner_address:
+                    # CASE: Owner is Safe
+                    service.service_owner_address = safe_owner_address # The Safe is the official owner
+                    service.service_owner_safe = safe_owner_address
+                    # We also need to ensure the EOA is imported. 'check_wallet' usually handles the EOA.
+                    # But we need to link them.
+                    logger.debug(f"Extracted Safe owner address: {safe_owner_address} (Signer: {eoa_address})")
+                elif eoa_address:
+                    # CASE: Owner is EOA
+                    service.service_owner_address = eoa_address
+                    logger.debug(f"Extracted EOA owner address: {eoa_address}")
+
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Failed to parse {eth_json}: {e}")
 
@@ -725,14 +757,53 @@ class OlasServiceImporter:
 
     def _import_discovered_safes(self, service: DiscoveredService, result: ImportResult) -> None:
         """Import Safe from the service if present."""
+
+        # 1. Import Agent Multisig (the one the agent controls)
         if service.safe_address:
-            safe_result = self._import_safe(service)
+            safe_result = self._import_safe(
+                address=service.safe_address,
+                signers=self._get_agent_signers(service),
+                tag_suffix="safe", # e.g. trader_zeta_safe
+                service_name=service.service_name
+            )
             if safe_result[0]:
                 result.imported_safes.append(service.safe_address)
             elif safe_result[1] == "duplicate":
                 result.skipped.append(f"Safe {service.safe_address} (already exists)")
             else:
                 result.errors.append(f"Safe {service.safe_address}: {safe_result[1]}")
+
+        # 2. Import Owner Safe (if it exists and is different)
+        if service.service_owner_safe and service.service_owner_safe != service.safe_address:
+             # Signer for Owner Safe is the EOA owner key
+            owner_signers = self._get_owner_signers(service)
+
+            safe_result = self._import_safe(
+                address=service.service_owner_safe,
+                signers=owner_signers,
+                tag_suffix="owner_safe", # e.g. trader_zeta_owner_safe
+                service_name=service.service_name
+            )
+            if safe_result[0]:
+                 result.imported_safes.append(service.service_owner_safe)
+                 logger.info(f"Imported Owner Safe {service.service_owner_safe}")
+
+    def _get_agent_signers(self, service: DiscoveredService) -> List[str]:
+        """Get list of signers for the agent safe."""
+        signers = []
+        for key in service.keys:
+            if key.role == "agent":
+                signers.append(key.address)
+        return signers
+
+    def _get_owner_signers(self, service: DiscoveredService) -> List[str]:
+        """Get list of signers for the owner safe."""
+        signers = []
+        for key in service.keys:
+            # We look for keys marked as owner/operator
+            if key.role in ["owner", "operator"]:
+                signers.append(key.address)
+        return signers
 
     def _import_discovered_service_config(
         self, service: DiscoveredService, result: ImportResult
@@ -833,27 +904,26 @@ class OlasServiceImporter:
             i += 1
         return f"{base_tag}_{i}"
 
-    def _import_safe(self, service: DiscoveredService) -> Tuple[bool, str]:
-        """Import a Safe from a discovered service."""
-        if not service.safe_address:
+    def _import_safe(
+        self,
+        address: str,
+        signers: List[str],
+        tag_suffix: str,
+        service_name: Optional[str]
+    ) -> Tuple[bool, str]:
+        """Import a generic Safe."""
+        if not address:
             return False, "no safe address"
 
         # Check for duplicate
-        existing = self.key_storage.find_stored_account(service.safe_address)
+        existing = self.key_storage.find_stored_account(address)
         if existing:
             return False, "duplicate"
 
-        # Get signers from agent keys
-        signers = []
-        for key in service.keys:
-            if key.role == "agent":
-                signers.append(key.address)
-
         # Generate tag
-
-        prefix = service.service_name or "imported"
+        prefix = service_name or "imported"
         prefix = re.sub(r"[^a-z0-9]+", "_", prefix.lower()).strip("_")
-        base_tag = f"{prefix}_safe"
+        base_tag = f"{prefix}_{tag_suffix}"
 
         existing_tags = {
             acc.tag for acc in self.key_storage.accounts.values() if hasattr(acc, "tag")
@@ -866,15 +936,15 @@ class OlasServiceImporter:
 
         safe_account = StoredSafeAccount(
             tag=tag,
-            address=service.safe_address,
-            chains=[service.chain_name],
+            address=address,
+            chains=["gnosis"], # TODO: detecting chain dynamically would be better
             threshold=1,  # Default, accurate value requires on-chain query
             signers=signers,
         )
 
-        self.key_storage.accounts[service.safe_address] = safe_account
+        self.key_storage.accounts[address] = safe_account
         self.key_storage.save()
-        logger.info(f"Imported Safe {service.safe_address} as '{tag}'")
+        logger.info(f"Imported Safe {address} as '{tag}'")
         return True, "ok"
 
     def _import_service_config(self, service: DiscoveredService) -> Tuple[bool, str]:
@@ -975,3 +1045,4 @@ class OlasServiceImporter:
             key.signature_failed = True
             logger.warning(f"Error verifying signature for key {key.address}: {e}")
 
+FLAGS_OWNER_SAFE="deprecated"
