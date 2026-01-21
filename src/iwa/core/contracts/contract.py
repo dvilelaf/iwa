@@ -11,6 +11,7 @@ from web3.contract import Contract
 from web3.exceptions import ContractCustomError
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.core.rpc_monitor import RPCMonitor
 from iwa.core.utils import configure_logger
 
@@ -171,6 +172,16 @@ class ContractInstance:
             except Exception as e:
                 logger.debug(f"Failed to decode Panic(uint256): {e}")
                 return ("Panic", "Failed to decode panic code")
+
+        # 4. Global Fallback Decoder
+        try:
+            global_results = ErrorDecoder().decode(error_data)
+            if global_results:
+                # Use the first match
+                error_name, error_msg, _ = global_results[0]
+                return (error_name, error_msg)
+        except Exception as e:
+            logger.debug(f"Global decoder failed: {e}")
 
         return None
 

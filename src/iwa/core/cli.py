@@ -11,6 +11,7 @@ from iwa.core.keys import KeyStorage
 from iwa.core.services import PluginService
 from iwa.core.tables import list_accounts
 from iwa.core.wallet import Wallet
+from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.tui.app import IwaApp
 
 iwa_cli = typer.Typer(help="iwa command line interface")
@@ -204,6 +205,23 @@ def web_server(
     server_port = port or Config().core.web_port
     typer.echo(f"Starting web server on http://{host}:{server_port}")
     run_server(host=host, port=server_port)
+
+
+@iwa_cli.command("decode")
+def decode_hex(
+    hex_data: str = typer.Argument(..., help="The hex-encoded error data (e.g., 0xa43d6ada...)"),
+):
+    """Decode a hex error identifier into a human-readable message."""
+    decoder = ErrorDecoder()
+    results = decoder.decode(hex_data)
+
+    if not results:
+        typer.echo(f"Could not decode error data: {hex_data}")
+        return
+
+    typer.echo(f"\nDecoding results for {hex_data[:10]}:")
+    for name, msg, source in results:
+        typer.echo(f"  [{source}] {msg}")
 
 
 @wallet_cli.command("drain")
