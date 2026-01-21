@@ -425,7 +425,32 @@ class TransactionService:
                 return False, {}
 
         except Exception as e:
-            logger.exception(f"Safe transaction failed: {e}")
+            # Try to decode detailed revert reason
+            error_text = str(e)
+            decoded_msg = None
+
+            # Extract hex data from common error patterns
+            # Pattern 1: ('execution reverted', '0x...')
+            import re
+            hex_match = re.search(r"0x[0-9a-fA-F]{8,}", error_text)
+
+            if hex_match:
+                try:
+                    from iwa.core.contracts.decoder import ErrorDecoder
+                    data = hex_match.group(0)
+                    decoded = ErrorDecoder().decode(data)
+                    if decoded:
+                        # Use the first successful decoding
+                        name, msg, source = decoded[0]
+                        decoded_msg = f"{msg} (from {source})"
+                except Exception:
+                    pass
+
+            if decoded_msg:
+                logger.error(f"Safe transaction failed: {decoded_msg}")
+            else:
+                logger.exception(f"Safe transaction failed: {e}")
+
             return False, {}
 
     def _is_gas_too_low_error(self, err_text: str) -> bool:

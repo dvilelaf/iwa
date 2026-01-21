@@ -60,6 +60,14 @@ class ServiceRegistryContract(ContractInstance):
             "agent_ids": agent_ids,
         }
 
+    def get_owner(self, service_id: int) -> str:
+        """Get the on-chain owner address of a service.
+
+        This queries ownerOf(serviceId) on the registry contract to get
+        the actual owner registered on-chain, which may differ from config.
+        """
+        return self.call("ownerOf", service_id)
+
     def get_token(self, service_id: int) -> str:
         """Get the token address for a service."""
         return self.call("token", service_id)
