@@ -895,7 +895,7 @@ class OlasServiceImporter:
                 olas_service.agent_address = agent_key.address
 
             olas_config.add_service(olas_service)
-            self.config.save()
+            self.config.save_config()
             logger.info(f"Imported service {key}")
             return True, "ok"
 
