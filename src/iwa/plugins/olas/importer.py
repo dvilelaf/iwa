@@ -905,8 +905,8 @@ class OlasServiceImporter:
             # Use Account.decrypt to handle standard web3 keystores
             private_key_bytes = Account.decrypt(key.encrypted_keystore, self.password)
             key.private_key = private_key_bytes.hex()
+            key.is_encrypted = False
             # If we successfully decrypted, it's no longer "encrypted" for verification purposes
-            # but we keep the encrypted_keystore in case we need it for storage
             logger.debug(f"Successfully decrypted key for {key.address}")
         except ValueError:
             # Password incorrect

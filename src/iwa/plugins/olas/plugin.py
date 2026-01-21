@@ -253,22 +253,19 @@ class OlasPlugin(Plugin):
         # Scan directory
         console.print(f"\n[bold]Scanning[/bold] {path}...")
 
-        # Ask for password if some keys are likely encrypted
-        # For simplicity, we can ask once if we want to support signature verification in dry-run
+        # Ask for password if not provided and in dry-run (to allow signature verification)
         if dry_run and not password:
-            # Check if there are .trader_runner or .operate folders that might have encrypted keys
-            if any(Path(path).rglob(".trader_runner")) or any(Path(path).rglob("*.json")):
-                from iwa.core.secrets import secrets
+            from iwa.core.secrets import secrets
 
-                password = secrets.wallet_password.get_secret_value() if secrets.wallet_password else None
-                if not password:
-                    password = typer.prompt(
-                        "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
-                        hide_input=True,
-                        default="",
-                    )
-                if not password:
-                    password = None
+            password = secrets.wallet_password.get_secret_value() if secrets.wallet_password else None
+            if not password:
+                password = typer.prompt(
+                    "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
+                    hide_input=True,
+                    default="",
+                )
+            if not password:
+                password = None
 
         importer = OlasServiceImporter(password=password)
         discovered = importer.scan_directory(Path(path))
