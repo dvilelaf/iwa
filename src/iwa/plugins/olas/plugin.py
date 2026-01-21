@@ -192,19 +192,19 @@ class OlasPlugin(Plugin):
                  val = f"[red]{val}[/red]"
              status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
              table.add_row("Owner (EOA)", f"{val} {status}")
-        elif service.service_owner_address and service.service_owner_address != service.service_owner_safe:
-             # Fallback if we have an address but no key object, and it's not the safe
-             table.add_row("Owner (EOA)", service.service_owner_address)
+        elif service.service_owner_eoa_address:
+             # Fallback if we have an address but no key object
+             table.add_row("Owner (EOA)", service.service_owner_eoa_address)
         else:
              table.add_row("Owner (EOA)", "[yellow]N/A[/yellow]")
 
         # 2. Display Safe Owner
-        if service.service_owner_safe:
+        if service.service_owner_multisig_address:
             # Check on-chain existence if possible (using same helper as agent safe)
             on_chain_signers, safe_exists = self._get_safe_signers(
-                service.service_owner_safe, service.chain_name
+                service.service_owner_multisig_address, service.chain_name
             )
-            val = service.service_owner_safe
+            val = service.service_owner_multisig_address
             if safe_exists:
                 val += " [green]✓[/green]"
 

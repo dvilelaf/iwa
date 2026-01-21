@@ -82,8 +82,13 @@ class DiscoveredService:
     service_name: Optional[str] = None
     # New fields for full service import
     staking_contract_address: Optional[str] = None
-    service_owner_address: Optional[str] = None
-    service_owner_safe: Optional[str] = None  # To store the Safe Owner address if it exists
+    service_owner_eoa_address: Optional[str] = None
+    service_owner_multisig_address: Optional[str] = None
+
+    @property
+    def service_owner_address(self) -> Optional[str]:
+        """Backward compatibility: effective owner address."""
+        return self.service_owner_multisig_address or self.service_owner_eoa_address
 
     @property
     def agent_key(self) -> Optional[DiscoveredKey]:
@@ -551,14 +556,14 @@ class OlasServiceImporter:
 
                 if safe_owner_address:
                     # CASE: Owner is Safe
-                    service.service_owner_address = safe_owner_address # The Safe is the official owner
-                    service.service_owner_safe = safe_owner_address
-                    # We also need to ensure the EOA is imported. 'check_wallet' usually handles the EOA.
-                    # But we need to link them.
+                    service.service_owner_multisig_address = safe_owner_address
+                    service.service_owner_eoa_address = eoa_address # The EOA is the signer/controller
+
                     logger.debug(f"Extracted Safe owner address: {safe_owner_address} (Signer: {eoa_address})")
                 elif eoa_address:
                     # CASE: Owner is EOA
-                    service.service_owner_address = eoa_address
+                    service.service_owner_eoa_address = eoa_address
+                    service.service_owner_multisig_address = None
                     logger.debug(f"Extracted EOA owner address: {eoa_address}")
 
             except (json.JSONDecodeError, IOError) as e:
@@ -573,14 +578,14 @@ class OlasServiceImporter:
                 existing_addrs.add(key.address.lower())
 
     def _infer_owner_address(self, service: DiscoveredService) -> None:
-        """Infer service_owner_address from keys with role='owner' if not already set."""
-        if service.service_owner_address:
+        """Infer service_owner_eoa_address from keys with role='owner' if not already set."""
+        if service.service_owner_eoa_address:
             return  # Already set
 
         for key in service.keys:
             if key.role == "owner" and key.address:
-                service.service_owner_address = key.address
-                logger.debug(f"Inferred owner address from key: {key.address}")
+                service.service_owner_eoa_address = key.address
+                logger.debug(f"Inferred owner EOA address from key: {key.address}")
                 return
 
     def _parse_keystore_file(
@@ -774,19 +779,19 @@ class OlasServiceImporter:
                 result.errors.append(f"Safe {service.safe_address}: {safe_result[1]}")
 
         # 2. Import Owner Safe (if it exists and is different)
-        if service.service_owner_safe and service.service_owner_safe != service.safe_address:
+        if service.service_owner_multisig_address and service.service_owner_multisig_address != service.safe_address:
              # Signer for Owner Safe is the EOA owner key
             owner_signers = self._get_owner_signers(service)
 
             safe_result = self._import_safe(
-                address=service.service_owner_safe,
+                address=service.service_owner_multisig_address,
                 signers=owner_signers,
                 tag_suffix="owner_safe", # e.g. trader_zeta_owner_safe
                 service_name=service.service_name
             )
             if safe_result[0]:
-                 result.imported_safes.append(service.service_owner_safe)
-                 logger.info(f"Imported Owner Safe {service.service_owner_safe}")
+                 result.imported_safes.append(service.service_owner_multisig_address)
+                 logger.info(f"Imported Owner Safe {service.service_owner_multisig_address}")
 
     def _get_agent_signers(self, service: DiscoveredService) -> List[str]:
         """Get list of signers for the agent safe."""
@@ -971,7 +976,8 @@ class OlasServiceImporter:
                 service_id=service.service_id,
                 agent_ids=[25],  # Trader agents always use agent ID 25
                 multisig_address=service.safe_address,
-                service_owner_address=service.service_owner_address,
+                service_owner_eoa_address=service.service_owner_eoa_address,
+                service_owner_multisig_address=service.service_owner_multisig_address,
                 staking_contract_address=service.staking_contract_address,
                 token_address=str(OLAS_TOKEN_ADDRESS_GNOSIS),
             )

@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 
 from iwa.core.models import EthereumAddress
 
@@ -14,11 +14,39 @@ class Service(BaseModel):
     chain_name: str
     service_id: int  # Unique per chain
     agent_ids: List[int] = Field(default_factory=list)  # List of agent type IDs
-    service_owner_address: Optional[EthereumAddress] = None
+
+    # New explicit owner fields
+    service_owner_eoa_address: Optional[EthereumAddress] = None
+    service_owner_multisig_address: Optional[EthereumAddress] = None
+
+    # Deprecated fields (kept for migration, removed from physical model via aliasing/validation)
+    # Actually, we keep it optional but not used, or use migration logic.
+    # Let's remove it from fields and rely on before validator to map it to eoa.
+
     agent_address: Optional[EthereumAddress] = None
     multisig_address: Optional[EthereumAddress] = None
     staking_contract_address: Optional[EthereumAddress] = None
     token_address: Optional[EthereumAddress] = None
+
+    @root_validator(pre=True)
+    def migrate_owner_fields(cls, values):
+        """Migrate legacy service_owner_address to service_owner_eoa_address."""
+        # Check for legacy 'service_owner_address'
+        if "service_owner_address" in values and values["service_owner_address"]:
+            legacy_addr = values["service_owner_address"]
+
+            # If service_owner_eoa_address is missing, use legacy
+            if "service_owner_eoa_address" not in values or not values["service_owner_eoa_address"]:
+                values["service_owner_eoa_address"] = legacy_addr
+
+            # Remove legacy field from values so it doesn't cause extra field errors if we removed it from model
+            # Or if strict.
+        return values
+
+    @property
+    def service_owner_address(self) -> Optional[EthereumAddress]:
+        """Backward compatibility property: Returns effective owner (Safe if present, else EOA)."""
+        return self.service_owner_multisig_address or self.service_owner_eoa_address
 
     @property
     def key(self) -> str:
