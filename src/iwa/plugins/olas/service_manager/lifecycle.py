@@ -99,24 +99,6 @@ class LifecycleManagerMixin:
         manager.spin_up(bond_amount_wei=5000e18, staking_contract=staking)
     """
 
-    def _get_on_chain_owner(self, service_id: Optional[int] = None) -> str:
-        """Get the actual on-chain owner of the service.
-
-        The on-chain owner (from ServiceRegistry.ownerOf()) may differ from
-        the configured service_owner_address. This is critical for lifecycle
-        operations as the registry only accepts calls from the actual owner.
-
-        Falls back to config value if on-chain query fails.
-        """
-        service_id = service_id or self.service.service_id
-        try:
-            on_chain_owner = self.registry.get_owner(service_id)
-            logger.debug(f"On-chain owner for service {service_id}: {on_chain_owner}")
-            return on_chain_owner
-        except Exception as e:
-            logger.warning(f"Failed to get on-chain owner, using config: {e}")
-            return self.service.service_owner_address or self.wallet.master_account.address
-
     def create(
         self,
         chain_name: str = "gnosis",
@@ -541,7 +523,7 @@ class LifecycleManagerMixin:
         )
 
         # Use service owner which holds the NFT (not necessarily master)
-        owner_address = self._get_on_chain_owner()
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         logger.debug(
             f"[ACTIVATE] Preparing tx from {owner_address}: service_id={service_id}, value={activation_value}"
@@ -744,7 +726,7 @@ class LifecycleManagerMixin:
         )
 
         # Use service owner which holds the NFT (not necessarily master)
-        owner_address = self._get_on_chain_owner()
+        owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         logger.debug(
             f"[REGISTER] Preparing tx from {owner_address}: agent={agent_account_address}, "
