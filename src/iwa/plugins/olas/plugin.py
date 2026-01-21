@@ -269,9 +269,9 @@ class OlasPlugin(Plugin):
         # Scan directory
         console.print(f"\n[bold]Scanning[/bold] {path}...")
 
-        # Ask for password in dry-run to allow signature verification of encrypted keys
-        if dry_run and not password:
-            password = self._prompt_dry_run_password()
+        # Ask for password before scan to allow signature verification of encrypted keys
+        if not password:
+            password = self._prompt_password_for_verification()
 
         importer = OlasServiceImporter(password=password)
         discovered = importer.scan_directory(Path(path))
@@ -306,8 +306,8 @@ class OlasPlugin(Plugin):
         results = self._import_and_print_results(console, importer, discovered, password)
         self._print_import_summary(console, *results)
 
-    def _prompt_dry_run_password(self) -> Optional[str]:
-        """Prompt for password during dry-run."""
+    def _prompt_password_for_verification(self) -> Optional[str]:
+        """Prompt for password to verify encrypted keys during scan."""
         pwd = typer.prompt(
             "Enter wallet password to verify encrypted keys (optional, press Enter to skip)",
             hide_input=True,

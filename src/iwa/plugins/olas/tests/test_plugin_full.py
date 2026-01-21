@@ -146,8 +146,8 @@ def test_import_services_cli_abort(plugin, runner):
             DiscoveredService(service_id=1, service_name="Test", chain_name="gnosis")
         ]
 
-        # Simulate 'n' to confirmation prompt
-        result = runner.invoke(app, ["/tmp/test"], input="n\n")
+        # input: first Enter to skip password prompt, then 'n' to abort confirmation
+        result = runner.invoke(app, ["/tmp/test"], input="\nn\n")
         assert result.exit_code == 0
         assert "Aborted" in result.output
         mock_importer.import_service.assert_not_called()
@@ -162,7 +162,8 @@ def test_import_services_cli_no_services(plugin, runner):
         mock_importer = mock_importer_cls.return_value
         mock_importer.scan_directory.return_value = []
 
-        result = runner.invoke(app, ["/tmp/test"])
+        # input: Enter to skip password prompt
+        result = runner.invoke(app, ["/tmp/test"], input="\n")
         assert result.exit_code == 0
         assert "No Olas services found" in result.output
 
@@ -208,8 +209,9 @@ def test_import_services_cli_password_prompt(plugin, runner):
         mock_importer.scan_directory.return_value = [service]
         mock_importer.import_service.return_value = ImportResult(success=True, message="OK")
 
-        # input="y\nsecret\n" -> 'y' for confirm import, 'secret' for password prompt
-        result = runner.invoke(app, ["/tmp/test"], input="y\nsecret\n")
+        # input: 'secret' for password before scan, 'y' for confirm import
+        # Note: password is now prompted BEFORE scan for signature verification
+        result = runner.invoke(app, ["/tmp/test"], input="secret\ny\n")
         assert result.exit_code == 0
         assert "password" in result.output.lower()
         mock_importer.import_service.assert_called_with(service, "secret")
