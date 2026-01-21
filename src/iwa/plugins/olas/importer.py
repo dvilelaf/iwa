@@ -7,6 +7,7 @@ Supports two formats:
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -273,7 +274,6 @@ class OlasServiceImporter:
             key = self._parse_keystore_file(operator_file, role="owner")
             if key:
                 keys.append(key)
-                self._verify_key_signature(key)
 
         # Also check keys.json (array of keystores)
         keys_file = folder / "keys.json"
@@ -793,8 +793,6 @@ class OlasServiceImporter:
         Tags follow the pattern: {service_name}_{role}
         Example: trader_alpha_agent, trader_alpha_operator
         """
-        import re
-
         # Use service name as prefix, or 'imported' as fallback
         prefix = service_name or "imported"
 
@@ -835,7 +833,6 @@ class OlasServiceImporter:
                 signers.append(key.address)
 
         # Generate tag
-        import re
 
         prefix = service.service_name or "imported"
         prefix = re.sub(r"[^a-z0-9]+", "_", prefix.lower()).strip("_")
@@ -924,7 +921,6 @@ class OlasServiceImporter:
         except ValueError as e:
             # Password incorrect
             logger.warning(f"Decryption failed (ValueError) for {key.address}: {e}")
-            pass
         except Exception as e:
             logger.warning(f"Error decrypting key {key.address}: {type(e).__name__} - {e}")
 
