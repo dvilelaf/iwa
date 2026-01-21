@@ -877,8 +877,14 @@ class LifecycleManagerMixin:
         """Terminate the service."""
         # Check that the service is deployed
         service_state = self.registry.get_service(self.service.service_id)["state"]
-        if service_state != ServiceState.DEPLOYED:
-            logger.error("Service is not deployed, cannot terminate")
+        if service_state not in [
+            ServiceState.DEPLOYED,
+            ServiceState.ACTIVE_REGISTRATION,
+            ServiceState.FINISHED_REGISTRATION,
+        ]:
+            logger.error(
+                f"Service is in {service_state.name}, cannot terminate (must be active or deployed)"
+            )
             return False
 
         # Check that the service is not staked
