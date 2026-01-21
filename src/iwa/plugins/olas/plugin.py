@@ -86,9 +86,22 @@ class OlasPlugin(Plugin):
             # Query failed - Safe likely doesn't exist
             return [], False
 
+    def _resolve_staking_name(self, address: str, chain_name: str) -> str | None:
+        """Resolve staking contract address to human-readable name."""
+        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
+        chain_contracts = OLAS_TRADER_STAKING_CONTRACTS.get(chain_name, {})
+        addr_lower = address.lower()
+        for name, contract_addr in chain_contracts.items():
+            if str(contract_addr).lower() == addr_lower:
+                return name
+        return None
+
     def _display_service_table(self, console, service, index: int) -> None:
         """Display a single discovered service as a Rich table."""
         from rich.table import Table
+
+        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
 
         table = Table(
             title=f"Service {index}: {service.service_name or 'Unknown'}", show_header=False
@@ -98,7 +111,7 @@ class OlasPlugin(Plugin):
 
         table.add_row("Format", service.format)
         table.add_row("Source", str(service.source_folder))
-        table.add_row("Service ID", str(service.service_id) if service.service_id else "N/A")
+        table.add_row("Service ID", str(service.service_id) if service.service_id else "[red]Not detected[/red]")
         table.add_row("Chain", service.chain_name)
 
         # Verify Safe and display
@@ -108,33 +121,63 @@ class OlasPlugin(Plugin):
                 service.safe_address, service.chain_name
             )
             if safe_exists is None:
-                table.add_row("Safe", service.safe_address)
+                table.add_row("Multisig", service.safe_address)
             elif safe_exists:
-                table.add_row("Safe", f"{service.safe_address} [green]✓[/green]")
+                table.add_row("Multisig", f"{service.safe_address} [green]✓[/green]")
             else:
                 table.add_row(
-                    "Safe",
+                    "Multisig",
                     f"[bold red]⚠ {service.safe_address} - DOES NOT EXIST ON-CHAIN![/bold red]",
                 )
         else:
-            table.add_row("Safe", "N/A")
+            table.add_row("Multisig", "[red]Not detected[/red]")
 
-        # Display keys with signer verification
-        for key in service.keys:
-            status = "🔒 encrypted" if key.is_encrypted else "🔓 plaintext"
-            key_info = f"{key.address} {status}"
+        # Display staking contract info (always show)
+        if service.staking_contract_address:
+            staking_name = self._resolve_staking_name(
+                service.staking_contract_address, service.chain_name
+            )
+            if staking_name:
+                table.add_row("Staking", f"{staking_name}")
+                table.add_row("Staking Addr", service.staking_contract_address)
+            else:
+                table.add_row("Staking", "[red]Unknown[/red]")
+                table.add_row("Staking Addr", service.staking_contract_address)
+        else:
+            table.add_row("Staking", "[red]Not detected[/red]")
+            table.add_row("Staking Addr", "[red]Not detected[/red]")
 
-            if key.role == "agent" and service.safe_address:
+        # Display owner (address + encryption status if key available)
+        owner_key = next((k for k in service.keys if k.role == "owner"), None)
+        owner_addr = service.service_owner_address
+        if not owner_addr and owner_key:
+            owner_addr = owner_key.address
+
+        if owner_addr:
+            if owner_key and owner_key.address.lower() == owner_addr.lower():
+                status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
+                table.add_row("Owner", f"{owner_addr} {status}")
+            else:
+                table.add_row("Owner", owner_addr)
+        else:
+            table.add_row("Owner", "[red]Not detected[/red]")
+
+        # Display agent key
+        agent_key = next((k for k in service.keys if k.role == "agent"), None)
+
+        if agent_key:
+            status = "🔒 encrypted" if agent_key.is_encrypted else "🔓 plaintext"
+            key_info = f"{agent_key.address} {status}"
+            if service.safe_address:
                 if not safe_exists:
-                    key_info = f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+                    key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
                 elif on_chain_signers is not None:
-                    is_signer = key.address.lower() in [s.lower() for s in on_chain_signers]
+                    is_signer = agent_key.address.lower() in [s.lower() for s in on_chain_signers]
                     if not is_signer:
-                        key_info = (
-                            f"[bold red]⚠ {key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
-                        )
-
-            table.add_row(f"Key ({key.role})", key_info)
+                        key_info = f"[bold red]⚠ {agent_key.address} - NOT A SIGNER OF THE SAFE![/bold red]"
+            table.add_row("Agent", key_info)
+        else:
+            table.add_row("Agent", "[red]Not detected[/red]")
 
         console.print(table)
         console.print()

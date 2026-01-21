@@ -26,7 +26,7 @@ class DiscoveredKey:
     private_key: Optional[str] = None  # Plaintext hex (None if still encrypted)
     encrypted_keystore: Optional[dict] = None  # Web3 v3 keystore format
     source_file: Path = field(default_factory=Path)
-    role: str = "unknown"  # "agent", "operator", "owner"
+    role: str = "unknown"  # "agent", "owner"
     is_encrypted: bool = False
 
     @property
@@ -55,6 +55,9 @@ class DiscoveredService:
     source_folder: Path = field(default_factory=Path)
     format: str = "unknown"  # "trader_runner" or "operate"
     service_name: Optional[str] = None
+    # New fields for full service import
+    staking_contract_address: Optional[str] = None
+    service_owner_address: Optional[str] = None
 
     @property
     def agent_key(self) -> Optional[DiscoveredKey]:
@@ -65,10 +68,10 @@ class DiscoveredService:
         return None
 
     @property
-    def operator_key(self) -> Optional[DiscoveredKey]:
-        """Get the operator key if present."""
+    def owner_key(self) -> Optional[DiscoveredKey]:
+        """Get the owner key if present."""
         for key in self.keys:
-            if key.role in ("operator", "owner"):
+            if key.role == "owner":
                 return key
         return None
 
@@ -106,7 +109,7 @@ class OlasServiceImporter:
             path: Directory to scan.
 
         Returns:
-            List of discovered services.
+            List of discovered services (deduplicated by chain:service_id).
 
         """
         path = Path(path)
@@ -129,8 +132,48 @@ class OlasServiceImporter:
                 services = self._parse_operate_format(operate)
                 discovered.extend(services)
 
-        logger.info(f"Discovered {len(discovered)} Olas service(s)")
-        return discovered
+        # Deduplicate by chain:service_id (keep first occurrence)
+        seen_keys: set = set()
+        unique_services = []
+        duplicates = 0
+        for service in discovered:
+            if service.service_id:
+                key = f"{service.chain_name}:{service.service_id}"
+                if key in seen_keys:
+                    logger.debug(
+                        f"Skipping duplicate service {key} from {service.source_folder}"
+                    )
+                    duplicates += 1
+                    continue
+                seen_keys.add(key)
+            unique_services.append(service)
+
+        if duplicates:
+            logger.info(f"Skipped {duplicates} duplicate service(s)")
+        logger.info(f"Discovered {len(unique_services)} unique Olas service(s)")
+        return unique_services
+
+    def _find_trader_name(self, folder: Path) -> str:
+        """Find the trader name by traversing up the directory tree.
+
+        Handles quickstart format where the .operate folder is nested inside
+        a quickstart folder, e.g.: trader_altair/quickstart/.operate/
+
+        Returns the first folder name starting with 'trader_' or the
+        immediate folder name if none found.
+        """
+        current = folder
+        fallback = folder.name
+
+        # Traverse up looking for trader_* folder
+        for _ in range(5):  # Max 5 levels up
+            if current.name.startswith("trader_"):
+                return current.name
+            current = current.parent
+            if current == current.parent:  # Reached root
+                break
+
+        return fallback
 
     def _parse_trader_runner_format(self, folder: Path) -> Optional[DiscoveredService]:
         """Parse a .trader_runner folder.
@@ -152,6 +195,9 @@ class OlasServiceImporter:
         service.service_id = self._extract_service_id(folder)
         service.safe_address = self._extract_safe_address(folder)
         service.keys = self._extract_trader_keys(folder)
+
+        # Extract staking program from .env
+        self._extract_staking_from_env(service, folder)
 
         if not service.keys and not service.service_id:
             logger.debug(f"No valid data found in {folder}")
@@ -187,10 +233,10 @@ class OlasServiceImporter:
             if key:
                 keys.append(key)
 
-        # Parse operator_pkey.txt
+        # Parse operator_pkey.txt (contains owner key)
         operator_file = folder / "operator_pkey.txt"
         if operator_file.exists():
-            key = self._parse_keystore_file(operator_file, role="operator")
+            key = self._parse_keystore_file(operator_file, role="owner")
             if key:
                 keys.append(key)
 
@@ -204,6 +250,31 @@ class OlasServiceImporter:
                 if key.address.lower() not in existing_addrs:
                     keys.append(key)
         return keys
+
+    def _extract_staking_from_env(self, service: DiscoveredService, folder: Path) -> None:
+        """Extract STAKING_PROGRAM from .env file in trader_runner folder."""
+        # Check parent folder for .env (usually alongside .trader_runner)
+        env_file = folder.parent / ".env"
+        if not env_file.exists():
+            # Also check inside the folder itself
+            env_file = folder / ".env"
+        if not env_file.exists():
+            return
+
+        try:
+            content = env_file.read_text()
+            for line in content.splitlines():
+                line = line.strip()
+                if line.startswith("STAKING_PROGRAM="):
+                    program_id = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if program_id:
+                        service.staking_contract_address = self._resolve_staking_contract(
+                            program_id, service.chain_name
+                        )
+                        logger.debug(f"Found STAKING_PROGRAM={program_id} in {env_file}")
+                    break
+        except IOError as e:
+            logger.warning(f"Failed to read {env_file}: {e}")
 
     def _parse_operate_format(self, folder: Path) -> List[DiscoveredService]:
         """Parse a .operate folder.
@@ -288,12 +359,15 @@ class OlasServiceImporter:
 
         # Use the folder name containing .operate (e.g., "trader_xi")
         operate_folder = config_file.parent.parent.parent  # services/<uuid> -> .operate
-        parent_folder = operate_folder.parent  # .operate -> trader_xi
+        parent_folder = operate_folder.parent  # .operate -> trader_xi or quickstart
+
+        # Handle quickstart format: traverse up to find trader_* folder
+        service_name = self._find_trader_name(parent_folder)
 
         service = DiscoveredService(
             source_folder=config_file.parent,
             format="operate",
-            service_name=parent_folder.name,
+            service_name=service_name,
         )
 
         # 1. Extract keys from config
@@ -310,6 +384,9 @@ class OlasServiceImporter:
         # 4. Check for encrypted keys in keys folder
         external_keys = self._extract_external_keys_folder(operate_folder)
         self._merge_unique_keys(service, external_keys)
+
+        # 5. Extract owner address from wallets folder
+        self._extract_owner_address(service, operate_folder)
 
         return service
 
@@ -337,7 +414,7 @@ class OlasServiceImporter:
         return keys
 
     def _enrich_service_with_chain_info(self, service: DiscoveredService, data: dict) -> None:
-        """Extract service ID and Safe address from chain configs."""
+        """Extract service ID, Safe address, and staking contract from chain configs."""
         chain_configs = data.get("chain_configs", {})
         for chain_name, chain_config in chain_configs.items():
             chain_data = chain_config.get("chain_data", {})
@@ -349,6 +426,50 @@ class OlasServiceImporter:
 
             if "multisig" in chain_data:
                 service.safe_address = chain_data["multisig"]
+
+            # Extract staking contract from user_params
+            user_params = chain_data.get("user_params", {})
+            staking_program_id = user_params.get("staking_program_id")
+            if staking_program_id:
+                service.staking_contract_address = self._resolve_staking_contract(
+                    staking_program_id, chain_name
+                )
+
+    def _resolve_staking_contract(
+        self, staking_program_id: str, chain_name: str
+    ) -> Optional[str]:
+        """Resolve a staking program ID to a contract address.
+
+        Maps operate-style program IDs (e.g., 'pearl_beta_2') to actual
+        staking contract addresses using known mappings.
+        """
+        # Known mappings from olas-operate-middleware staking programs
+        # See: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
+        STAKING_PROGRAM_MAP = {
+            # Pearl staking programs (gnosis) - operate format
+            "pearl_alpha": "0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e",  # Expert Legacy
+            "pearl_beta": "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C",  # Hobbyist 1 Legacy
+            "pearl_beta_2": "0xE56dF1E563De1B10715cB313D514af350D207212",  # Expert 5 Legacy
+            "pearl_beta_3": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
+            "pearl_beta_4": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
+            "pearl_beta_5": "0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f",  # Expert 10 Legacy
+            "pearl_beta_mm_v2_1": "0x75eeca6207be98cac3fde8a20ecd7b01e50b3472",  # Expert 3 MM v2
+            "pearl_beta_mm_v2_2": "0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f",  # Expert 4 MM v2
+            "pearl_beta_mm_v2_3": "0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d",  # Expert 5 MM v2
+            # Quickstart staking programs (gnosis) - quickstart format
+            "quickstart_beta_expert_4": "0xaD9d891134443B443D7F30013c7e14Fe27F2E029",  # Expert 4 Legacy
+            "quickstart_beta_expert_7": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
+            "quickstart_beta_expert_9": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
+            "quickstart_beta_expert_11": "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7",  # Expert 11 Legacy
+            "quickstart_beta_expert_16_mech_marketplace": "0x6c65430515c70a3f5E62107CC301685B7D46f991",  # Expert 16 MM v1
+            "quickstart_beta_expert_18_mech_marketplace": "0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454",  # Expert 18 MM v1
+        }
+        address = STAKING_PROGRAM_MAP.get(staking_program_id)
+        if address:
+            logger.debug(f"Resolved staking program '{staking_program_id}' -> {address}")
+        else:
+            logger.warning(f"Unknown staking program ID: {staking_program_id}")
+        return address
 
     def _extract_parent_wallet_keys(self, operate_folder: Path) -> List[DiscoveredKey]:
         """Extract owner keys from parent wallets folder."""
@@ -373,6 +494,22 @@ class OlasServiceImporter:
                     if key:
                         keys.append(key)
         return keys
+
+    def _extract_owner_address(self, service: DiscoveredService, operate_folder: Path) -> None:
+        """Extract owner address from wallets/ethereum.json."""
+        wallets_folder = operate_folder / "wallets"
+        if not wallets_folder.exists():
+            return
+
+        eth_json = wallets_folder / "ethereum.json"
+        if eth_json.exists():
+            try:
+                data = json.loads(eth_json.read_text())
+                if "address" in data:
+                    service.service_owner_address = data["address"]
+                    logger.debug(f"Extracted owner address: {service.service_owner_address}")
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to parse {eth_json}: {e}")
 
     def _merge_unique_keys(self, service: DiscoveredService, new_keys: List[DiscoveredKey]):
         """Merge new keys into service avoiding duplicates by address."""
@@ -698,6 +835,7 @@ class OlasServiceImporter:
     def _import_service_config(self, service: DiscoveredService) -> Tuple[bool, str]:
         """Import service config to OlasConfig."""
         try:
+            from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS
             from iwa.plugins.olas.models import OlasConfig, Service
 
             # Get or create OlasConfig
@@ -711,13 +849,16 @@ class OlasServiceImporter:
             if key in olas_config.services:
                 return False, "duplicate"
 
-            # Create service model
+            # Create service model with all fields
             olas_service = Service(
                 service_name=service.service_name or f"service_{service.service_id}",
                 chain_name=service.chain_name,
                 service_id=service.service_id,
-                agent_ids=[],  # Would need on-chain query
+                agent_ids=[25],  # Trader agents always use agent ID 25
                 multisig_address=service.safe_address,
+                service_owner_address=service.service_owner_address,
+                staking_contract_address=service.staking_contract_address,
+                token_address=str(OLAS_TOKEN_ADDRESS_GNOSIS),
             )
 
             # Set agent address if we have one
