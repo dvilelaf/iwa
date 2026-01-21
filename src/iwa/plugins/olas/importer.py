@@ -483,7 +483,12 @@ class OlasServiceImporter:
         if wallets_folder.exists():
             eth_txt = wallets_folder / "ethereum.txt"
             if eth_txt.exists():
+                # Try plaintext first
                 key = self._parse_plaintext_key_file(eth_txt, role="owner")
+                if not key:
+                    # Fallback to keystore
+                    key = self._parse_keystore_file(eth_txt, role="owner")
+
                 if key:
                     keys.append(key)
         return keys
@@ -903,17 +908,20 @@ class OlasServiceImporter:
             return
 
         try:
+            logger.debug(f"Attempting decryption for {key.address}")
+
             # Use Account.decrypt to handle standard web3 keystores
             private_key_bytes = Account.decrypt(key.encrypted_keystore, self.password)
             key.private_key = private_key_bytes.hex()
             key.is_encrypted = False
             # If we successfully decrypted, it's no longer "encrypted" for verification purposes
             logger.debug(f"Successfully decrypted key for {key.address}")
-        except ValueError:
+        except ValueError as e:
             # Password incorrect
+            logger.warning(f"Decryption failed (ValueError) for {key.address}: {e}")
             pass
         except Exception as e:
-            logger.warning(f"Error decrypting key {key.address}: {e}")
+            logger.warning(f"Error decrypting key {key.address}: {type(e).__name__} - {e}")
 
     def _verify_key_signature(self, key: DiscoveredKey) -> None:
         """Verify that the plaintext private key can sign a message and recover the address."""
