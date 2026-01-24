@@ -20,7 +20,7 @@ class AccountService:
         self.key_storage = key_storage
 
     @property
-    def master_account(self) -> Optional[StoredSafeAccount]:
+    def master_account(self) -> Optional[Union["EncryptedAccount", StoredSafeAccount]]:
         """Get master account."""
         return self.key_storage.master_account
 

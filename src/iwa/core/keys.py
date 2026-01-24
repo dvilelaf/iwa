@@ -135,7 +135,7 @@ class KeyStorage(BaseModel):
                 logger.error(f"Failed to create master account: {e}")
 
     @property
-    def master_account(self) -> EncryptedAccount:
+    def master_account(self) -> Optional[Union[EncryptedAccount, StoredSafeAccount]]:
         """Get the master account"""
         master_account = self.get_account("master")
 
