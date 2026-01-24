@@ -43,7 +43,7 @@ iwa/
 ├── core/               # Core wallet functionality
 │   ├── keys.py         # KeyStorage - Encrypted key management
 │   ├── wallet.py       # Wallet - High-level interface
-│   ├── chain.py        # ChainInterface - Blockchain interaction with rate limiting
+│   ├── chain/          # Blockchain interface with rate limiting
 │   ├── services/       # Service layer (accounts, balances, transactions)
 │   └── contracts/      # Contract abstractions (ERC20, Safe)
 ├── plugins/            # Protocol integrations
@@ -95,6 +95,9 @@ GNOSIS_RPC=https://rpc.gnosis.io,https://gnosis.drpc.org
 ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
 BASE_RPC=https://mainnet.base.org
 
+# Testing mode (default: true uses Tenderly test RPCs)
+TESTING=false
+
 # Optional
 GNOSISSCAN_API_KEY=your_api_key
 COINGECKO_API_KEY=your_api_key
@@ -111,7 +114,6 @@ just web
 
 # Use CLI
 iwa wallet list --chain gnosis
-iwa wallet balance <address> --chain gnosis
 ```
 
 ### Running Tests
