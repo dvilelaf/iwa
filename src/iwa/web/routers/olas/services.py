@@ -230,6 +230,74 @@ def deploy_service(
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
+
+def _resolve_service_accounts(service) -> dict:
+    """Resolve basic accounts info including owner_signer if applicable."""
+    accounts = {}
+    for role, addr in [
+        ("agent", service.agent_address),
+        ("safe", str(service.multisig_address) if service.multisig_address else None),
+        ("owner", service.service_owner_address),
+    ]:
+        if addr:
+            stored = wallet.key_storage.find_stored_account(addr)
+            # If this role is 'owner' and it's a Safe, add owner_signer role
+            if role == "owner" and stored and hasattr(stored, "signers") and stored.signers:
+                signer_addr = stored.signers[0]
+                signer_stored = wallet.key_storage.find_stored_account(signer_addr)
+                accounts["owner_signer"] = {
+                    "address": signer_addr,
+                    "tag": signer_stored.tag if signer_stored else None,
+                    "native": None,
+                    "olas": None,
+                }
+
+            accounts[role] = {
+                "address": addr,
+                "tag": stored.tag if stored else None,
+                "native": None,
+                "olas": None,
+            }
+    return accounts
+
+
+def _resolve_service_balances(service, chain: str) -> dict:
+    """Resolve detailed balances including owner_signer."""
+    balances = {}
+    for role, addr in [
+        ("agent", service.agent_address),
+        ("safe", str(service.multisig_address) if service.multisig_address else None),
+        ("owner", service.service_owner_address),
+    ]:
+        if addr:
+            native_bal = wallet.get_native_balance_eth(addr, chain)
+            olas_bal = wallet.balance_service.get_erc20_balance_wei(addr, "OLAS", chain)
+            olas_bal_eth = float(olas_bal) / 1e18 if olas_bal else 0
+            stored = wallet.key_storage.find_stored_account(addr)
+
+            # If this role is 'owner' and it's a Safe, resolve owner_signer
+            if role == "owner" and stored and hasattr(stored, "signers") and stored.signers:
+                signer_addr = stored.signers[0]
+                s_native = wallet.get_native_balance_eth(signer_addr, chain)
+                s_olas_wei = wallet.balance_service.get_erc20_balance_wei(signer_addr, "OLAS", chain)
+                s_olas = float(s_olas_wei) / 1e18 if s_olas_wei else 0
+                s_stored = wallet.key_storage.find_stored_account(signer_addr)
+                balances["owner_signer"] = {
+                    "address": signer_addr,
+                    "tag": s_stored.tag if s_stored else None,
+                    "native": f"{s_native:.2f}" if s_native else "0.00",
+                    "olas": f"{s_olas:.2f}",
+                }
+
+            balances[role] = {
+                "address": addr,
+                "tag": stored.tag if stored else None,
+                "native": f"{native_bal:.2f}" if native_bal else "0.00",
+                "olas": f"{olas_bal_eth:.2f}",
+            }
+    return balances
+
+
 @router.get(
     "/services/basic",
     summary="Get Basic Services",
@@ -264,20 +332,7 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
                 logger.warning(f"Could not get state for {service_key}: {e}")
 
             # Get tags from wallet storage (fast, local lookup)
-            accounts = {}
-            for role, addr in [
-                ("agent", service.agent_address),
-                ("safe", str(service.multisig_address) if service.multisig_address else None),
-                ("owner", service.service_owner_address),
-            ]:
-                if addr:
-                    stored = wallet.key_storage.find_stored_account(addr)
-                    accounts[role] = {
-                        "address": addr,
-                        "tag": stored.tag if stored else None,
-                        "native": None,  # Will be filled by details endpoint
-                        "olas": None,
-                    }
+            accounts = _resolve_service_accounts(service)
 
             result.append(
                 {
@@ -329,23 +384,7 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
         service_state = manager.get_service_state()
 
         # Get balances
-        balances = {}
-        for role, addr in [
-            ("agent", service.agent_address),
-            ("safe", str(service.multisig_address) if service.multisig_address else None),
-            ("owner", service.service_owner_address),
-        ]:
-            if addr:
-                native_bal = wallet.get_native_balance_eth(addr, chain)
-                olas_bal = wallet.balance_service.get_erc20_balance_wei(addr, "OLAS", chain)
-                olas_bal_eth = float(olas_bal) / 1e18 if olas_bal else 0
-                stored = wallet.key_storage.find_stored_account(addr)
-                balances[role] = {
-                    "address": addr,
-                    "tag": stored.tag if stored else None,
-                    "native": f"{native_bal:.2f}" if native_bal else "0.00",
-                    "olas": f"{olas_bal_eth:.2f}",
-                }
+        balances = _resolve_service_balances(service, chain)
 
         staking = None
         if staking_status:

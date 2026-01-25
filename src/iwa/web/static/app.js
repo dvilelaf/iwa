@@ -1966,25 +1966,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Build accounts table
-    const roles = ["agent", "safe", "owner"];
+    const roles = ["agent", "safe", "owner", "owner_signer"];
     const accountsHtml = roles
       .map((role) => {
         const acc = service.accounts[role];
         if (!acc || !acc.address) {
           if (role === "owner") return "";
+          // For Owner Signer (EOA owner case) or other missing roles
+          const label =
+            role === "owner_signer"
+              ? "Owner Signer"
+              : role.charAt(0).toUpperCase() + role.slice(1);
+          const addrText = role === "owner_signer" ? "-" : "Not deployed";
           return `
                     <tr>
-                        <td>${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))}</td>
-                        <td class="address-cell text-muted">Not deployed</td>
+                        <td>${escapeHtml(label)}</td>
+                        <td class="address-cell text-muted">${escapeHtml(addrText)}</td>
                         <td class="val">-</td>
                         <td class="val">-</td>
                     </tr>
                 `;
         }
 
-        // Requirement: addresses for 'agent' and 'safe', but only 'tag' for 'owner'
-        const displayText =
-          role === "owner" && acc.tag ? acc.tag : shortenAddr(acc.address);
+        // Requirement: Prefer TAG if available, otherwise shorten address
+        const displayText = acc.tag ? acc.tag : shortenAddr(acc.address);
         const explorerUrl = getExplorerUrl(acc.address, service.chain);
 
         // Show spinner if loading, otherwise show balance
@@ -1997,9 +2002,13 @@ document.addEventListener("DOMContentLoaded", () => {
             ? '<span class="cell-spinner"></span>'
             : escapeHtml(formatBalance(acc.olas));
 
+        const label =
+          role === "owner_signer"
+            ? "Owner Signer"
+            : role.charAt(0).toUpperCase() + role.slice(1);
         return `
                 <tr>
-                    <td>${escapeHtml(role.charAt(0).toUpperCase() + role.slice(1))}</td>
+                    <td>${escapeHtml(label)}</td>
                     <td class="address-cell">
                         <a href="${explorerUrl}" target="_blank" class="explorer-link" title="${escapeHtml(acc.address)}">
                             ${escapeHtml(displayText)}
