@@ -41,7 +41,8 @@ def _determine_bond_amount(req: CreateServiceRequest) -> int:
 
     if req.token_address and req.staking_contract:
         # If a contract is specified, we MUST use its requirements
-        logger.info(f"Fetching requirements from {req.staking_contract}...")
+        staking_name = wallet.account_service.get_tag_by_address(req.staking_contract) or req.staking_contract
+        logger.info(f"Fetching requirements from {staking_name}...")
         staking_contract = StakingContract(req.staking_contract, req.chain)
         reqs = staking_contract.get_requirements()
         bond_amount = reqs["required_agent_bond"]
@@ -195,7 +196,8 @@ def deploy_service(
         if staking_contract:
             try:
                 staking_obj = StakingContract(staking_contract, service.chain_name)
-                logger.info(f"Will stake in {staking_contract} after deployment")
+                staking_name = wallet.account_service.get_tag_by_address(staking_contract) or staking_contract
+                logger.info(f"Will stake in {staking_name} after deployment")
             except Exception as e:
                 logger.warning(f"Could not set up staking contract: {e}")
 

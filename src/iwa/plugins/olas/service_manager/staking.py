@@ -74,6 +74,31 @@ class StakingManagerMixin:
         - Service token must match staking contract's required token
     """
 
+    def _get_label(self, address: str) -> str:
+        """Resolve address to a human-readable label."""
+        if not address:
+            return "None"
+
+        # Try account service tags first (wallets, safes)
+        try:
+            tag = self.wallet.account_service.get_tag_by_address(address)
+            if tag:
+                return tag
+        except AttributeError:
+            pass
+
+        # Try token/contract names
+        try:
+            from iwa.core.chain import ChainInterfaces
+            chain_interface = ChainInterfaces().get(self.chain_name)
+            token_name = chain_interface.chain.get_token_name(address)
+            if token_name:
+                return token_name
+        except Exception:
+            pass
+
+        return address
+
     def get_staking_status(self) -> Optional[StakingStatus]:
         """Get comprehensive staking status for the active service.
 
@@ -246,7 +271,7 @@ class StakingManagerMixin:
         """
         logger.info("=" * 50)
         logger.info(f"[STAKE] Starting staking for service {self.service.service_id}")
-        logger.info(f"[STAKE] Contract: {staking_contract.address}")
+        logger.info(f"[STAKE] Contract: {self._get_label(staking_contract.address)}")
         logger.info("=" * 50)
 
         # 1. Validation
@@ -412,7 +437,7 @@ class StakingManagerMixin:
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         # Approve service NFT - this is an ERC-721 approval, not ERC-20
-        logger.debug(f"[STAKE] Approving service NFT for staking contract from {owner_address}...")
+        logger.debug(f"[STAKE] Approving service NFT for staking contract from {self._get_label(owner_address)}...")
         approve_tx = self.registry.prepare_approve_tx(
             from_address=owner_address,
             spender=staking_contract.address,
@@ -458,7 +483,7 @@ class StakingManagerMixin:
         # Use service owner which holds the NFT (not necessarily master)
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
-        logger.debug(f"[STAKE] Preparing stake transaction from {owner_address}...")
+        logger.debug(f"[STAKE] Preparing stake transaction from {self._get_label(owner_address)}...")
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=owner_address,
             service_id=self.service.service_id,
@@ -512,7 +537,7 @@ class StakingManagerMixin:
             return False
 
         logger.info(
-            f"Preparing to unstake service {self.service.service_id} from {staking_contract.address}"
+            f"Preparing to unstake service {self.service.service_id} from {self._get_label(staking_contract.address)}"
         )
 
         # Check that the service is staked
@@ -553,7 +578,7 @@ class StakingManagerMixin:
         # Unstake the service
         try:
             logger.info(
-                f"Preparing unstake transaction for service {self.service.service_id} from {owner_address}"
+                f"Preparing unstake transaction for service {self.service.service_id} from {self._get_label(owner_address)}"
             )
             unstake_tx = staking_contract.prepare_unstake_tx(
                 from_address=owner_address,

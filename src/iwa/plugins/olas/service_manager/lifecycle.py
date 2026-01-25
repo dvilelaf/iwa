@@ -99,6 +99,24 @@ class LifecycleManagerMixin:
         manager.spin_up(bond_amount_wei=5000e18, staking_contract=staking)
     """
 
+    def _get_label(self, address: str) -> str:
+        """Resolve address to a human-readable label."""
+        if not address:
+            return "None"
+
+        # Try account service tags first (wallets, safes)
+        tag = self.wallet.account_service.get_tag_by_address(address)
+        if tag:
+            return tag
+
+        # Try token names
+        chain_interface = ChainInterfaces().get(self.chain_name)
+        token_name = chain_interface.chain.get_token_name(address)
+        if token_name:
+            return token_name
+
+        return address
+
     def create(
         self,
         chain_name: str = "gnosis",
@@ -141,8 +159,8 @@ class LifecycleManagerMixin:
         agent_params = self._prepare_agent_params(agent_id_values, bond_amount_wei)
 
         logger.info(
-            f"Preparing create tx: owner={service_owner_account.address}, "
-            f"token={token_address}, agent_ids={agent_id_values}, agent_params={agent_params}"
+            f"Preparing create tx: owner={self._get_label(service_owner_account.address)}, "
+            f"token={self._get_label(token_address)}, agent_ids={agent_id_values}, agent_params={agent_params}"
         )
 
         receipt = self._send_create_transaction(
@@ -339,7 +357,7 @@ class LifecycleManagerMixin:
             return False
 
         token_address = self._get_service_token(service_id)
-        logger.debug(f"[ACTIVATE] Token address: {token_address}")
+        logger.debug(f"[ACTIVATE] Token address: {self._get_label(token_address)}")
 
         service_info = self.registry.get_service(service_id)
         security_deposit = service_info["security_deposit"]
@@ -518,7 +536,7 @@ class LifecycleManagerMixin:
         # The OLAS token approval was done in _ensure_token_approval_for_activation
         activation_value = security_deposit if is_native else 1
         logger.info(
-            f"[ACTIVATE] Token={token_address}, is_native={is_native}, "
+            f"[ACTIVATE] Token={self._get_label(token_address)}, is_native={is_native}, "
             f"activation_value={activation_value} wei"
         )
 
@@ -526,7 +544,7 @@ class LifecycleManagerMixin:
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         logger.debug(
-            f"[ACTIVATE] Preparing tx from {owner_address}: service_id={service_id}, value={activation_value}"
+            f"[ACTIVATE] Preparing tx from {self._get_label(owner_address)}: service_id={service_id}, value={activation_value}"
         )
         activate_tx = self.manager.prepare_activate_registration_tx(
             from_address=owner_address,
@@ -583,7 +601,7 @@ class LifecycleManagerMixin:
         if not agent_account_address:
             logger.error("[REGISTER] Failed to get/create agent account")
             return False
-        logger.info(f"[REGISTER] Agent address: {agent_account_address}")
+        logger.info(f"[REGISTER] Agent address: {self._get_label(agent_account_address)}")
 
         if not self._ensure_agent_token_approval(agent_account_address, bond_amount_wei):
             logger.error("[REGISTER] Token approval failed")
@@ -721,7 +739,7 @@ class LifecycleManagerMixin:
             total_value = 1 * len(self.service.agent_ids)
 
         logger.info(
-            f"[REGISTER] Token={token_address}, is_native={is_native}, "
+            f"[REGISTER] Token={self._get_label(token_address)}, is_native={is_native}, "
             f"total_value={total_value} wei"
         )
 
@@ -729,7 +747,7 @@ class LifecycleManagerMixin:
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         logger.debug(
-            f"[REGISTER] Preparing tx from {owner_address}: agent={agent_account_address}, "
+            f"[REGISTER] Preparing tx from {self._get_label(owner_address)}: agent={self._get_label(agent_account_address)}, "
             f"agent_ids={self.service.agent_ids}, value={total_value}"
         )
 
@@ -782,7 +800,7 @@ class LifecycleManagerMixin:
             )
             return False
 
-        logger.debug(f"[DEPLOY] Preparing deploy tx for owner {self.service.service_owner_address}")
+        logger.debug(f"[DEPLOY] Preparing deploy tx for owner {self._get_label(self.service.service_owner_address)}")
         deploy_tx = self.manager.prepare_deploy_tx(
             from_address=self.service.service_owner_address,
             service_id=self.service.service_id,

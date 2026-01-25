@@ -214,6 +214,24 @@ class TransactionService:
         self.account_service = account_service
         self.safe_service = safe_service
 
+    def _resolve_label(self, address: str, chain_name: str = "gnosis") -> str:
+        """Resolve address to human-readable label."""
+        if not address:
+            return "None"
+        # Try account/safe tags
+        tag = self.account_service.get_tag_by_address(address)
+        if tag:
+            return tag
+        # Try token/contract names
+        try:
+            chain_interface = ChainInterfaces().get(chain_name)
+            name = chain_interface.chain.get_token_name(address)
+            if name:
+                return name
+        except Exception:
+            pass
+        return address
+
     def sign_and_send(  # noqa: C901
         self,
         transaction: dict,
@@ -388,7 +406,7 @@ class TransactionService:
         tags: List[str] = None
     ) -> Tuple[bool, Dict]:
         """Execute transaction via SafeService."""
-        logger.info(f"Routing transaction via Safe {signer_account.address}...")
+        logger.info(f"Routing transaction via Safe {self._resolve_label(signer_account.address, chain_name)}...")
 
         try:
             # Extract basic params

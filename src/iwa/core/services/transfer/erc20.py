@@ -14,8 +14,27 @@ if TYPE_CHECKING:
     from iwa.core.services.transfer import TransferService
 
 
+
 class ERC20TransferMixin:
     """Mixin for ERC20 token transfers and approvals."""
+
+    def _resolve_label(self, address: str, chain_name: str = "gnosis") -> str:
+        """Resolve address to human-readable label."""
+        if not address:
+            return "None"
+        try:
+            # Try account/safe tags
+            tag = self.account_service.get_tag_by_address(address)
+            if tag:
+                return tag
+            # Try token/contract names
+            chain_interface = ChainInterfaces().get(chain_name)
+            name = chain_interface.chain.get_token_name(address)
+            if name:
+                return name
+        except Exception:
+            pass
+        return address
 
     def _send_erc20_via_safe(
         self: "TransferService",
@@ -181,9 +200,11 @@ class ERC20TransferMixin:
         is_safe = getattr(owner_account, "threshold", None) is not None
         amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
 
-        logger.info(
-            f"Approving {spender_address} to spend {amount_eth:.4f} {token_address_or_name} from {owner_address_or_tag}"
-        )
+        if is_safe:
+            logger.info(
+                f"Approving {self._resolve_label(spender_address, chain_name)} to spend {amount_eth:.4f} "
+                f"{self._resolve_label(token_address, chain_name)} from {self._resolve_label(owner_account.address, chain_name)}"
+            )
 
         if is_safe:
             tx_limit = self.safe_service.execute_safe_transaction(
