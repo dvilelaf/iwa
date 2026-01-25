@@ -855,9 +855,21 @@ class LifecycleManagerMixin:
             _, agent_instances = self.registry.call("getAgentInstances", self.service.service_id)
             service_info = self.registry.get_service(self.service.service_id)
             threshold = service_info["threshold"]
+           # Store the multisig in the wallet with tag
+            multisig_tag = f"{self.service.service_name}_multisig"
+
+            # ARCHIVING LOGIC: If tag is already taken by a different address, rename the old one
+            existing = self.wallet.key_storage.find_stored_account(multisig_tag)
+            if existing and existing.address != multisig_address:
+                archive_tag = f"{multisig_tag}_old_{existing.address[:6]}"
+                logger.info(f"[DEPLOY] Archiving old multisig: {multisig_tag} -> {archive_tag}")
+                try:
+                    self.wallet.key_storage.rename_account(existing.address, archive_tag)
+                except Exception as ex:
+                    logger.warning(f"[DEPLOY] Failed to rename old multisig (collision?): {ex}")
 
             safe_account = StoredSafeAccount(
-                tag=f"{self.service.service_name}_multisig",
+                tag=multisig_tag,
                 address=multisig_address,
                 chains=[self.chain_name],
                 threshold=threshold,

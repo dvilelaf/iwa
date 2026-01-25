@@ -431,6 +431,20 @@ class KeyStorage(BaseModel):
         del self.accounts[account.address]
         self.save()
 
+    def rename_account(self, address_or_tag: str, new_tag: str):
+        """Rename an account's tag with uniqueness check."""
+        account = self.find_stored_account(address_or_tag)
+        if not account:
+            raise ValueError(f"Account '{address_or_tag}' not found.")
+
+        # Check if new tag is already used by a DIFFERENT account
+        for existing in self.accounts.values():
+            if existing.tag == new_tag and existing.address != account.address:
+                raise ValueError(f"Tag '{new_tag}' is already used by address {existing.address}")
+
+        account.tag = new_tag
+        self.save()
+
     def _get_private_key(self, address: str) -> Optional[str]:
         """Get private key (Internal)"""
         account = self.accounts.get(EthereumAddress(address))

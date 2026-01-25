@@ -36,3 +36,5 @@ iwa.code-workspace
 
 node_modules/
 site/
+
+backup/
