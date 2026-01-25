@@ -878,8 +878,7 @@ class OlasServiceImporter:
                 self.key_storage._password,
                 tag,
             )
-            self.key_storage.accounts[encrypted.address] = encrypted
-            self.key_storage.save()
+            self.key_storage.add_account(encrypted)
             logger.info(f"Imported key {key.address} as '{tag}'")
             return True, "ok"
         except Exception as e:
@@ -960,8 +959,7 @@ class OlasServiceImporter:
             signers=signers or [],
         )
 
-        self.key_storage.accounts[address] = safe_account
-        self.key_storage.save()
+        self.key_storage.add_account(safe_account)
         logger.info(f"Imported Safe {address} as '{tag}'")
         return True, "ok"
 

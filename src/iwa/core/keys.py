@@ -328,21 +328,20 @@ class KeyStorage(BaseModel):
         encrypted_acct = EncryptedAccount.encrypt_private_key(
             private_key_hex, self._password, "master"
         )
-        self.accounts[encrypted_acct.address] = encrypted_acct
-        self.save()
-
+        self.add_account(encrypted_acct)
         return encrypted_acct, mnemonic_str
 
     def create_account(self, tag: str) -> EncryptedAccount:
         """Create account. Master is derived from mnemonic, others are random."""
+        # Note: add_account(tag) check is inside, but we handle 'master' logic here
         tags = [acct.tag for acct in self.accounts.values()]
         if not tags:
             tag = "master"  # First account is always master
-        if tag in tags:
-            raise ValueError(f"Tag '{tag}' already exists in wallet.")
 
         # Master account: derive from mnemonic
         if tag == "master":
+            if "master" in tags:
+                raise ValueError("Master account already exists in wallet.")
             encrypted_acct, mnemonic = self._create_master_from_mnemonic()
             self._pending_mnemonic = mnemonic  # Store temporarily for display
             return encrypted_acct
@@ -350,9 +349,22 @@ class KeyStorage(BaseModel):
         # Non-master: random key as before
         acct = Account.create()
         encrypted = EncryptedAccount.encrypt_private_key(acct.key.hex(), self._password, tag)
-        self.accounts[acct.address] = encrypted
-        self.save()
+        self.add_account(encrypted)
         return encrypted
+
+    def add_account(self, account: Union[EncryptedAccount, StoredSafeAccount]):
+        """Add an account to the storage with strict tag uniqueness checks."""
+        if not account.tag:
+            # Allow untagged accounts (rare but possible)
+            pass
+        else:
+            # Check for duplicate tags
+            for existing in self.accounts.values():
+                if existing.tag == account.tag and existing.address != account.address:
+                    raise ValueError(f"Tag '{account.tag}' is already used by address {existing.address}")
+
+        self.accounts[account.address] = account
+        self.save()
 
     def get_pending_mnemonic(self) -> Optional[str]:
         """Get and clear the pending mnemonic (for one-time display).
