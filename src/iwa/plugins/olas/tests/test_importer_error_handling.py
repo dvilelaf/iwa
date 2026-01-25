@@ -326,6 +326,7 @@ def test_import_safe_success(importer):
     assert success is True
     assert msg == "ok"
     assert safe_address in importer.key_storage.accounts
+    assert importer.key_storage.accounts[safe_address].tag == "my_service_multisig"
 
 
 def test_import_service_config_success(importer):
