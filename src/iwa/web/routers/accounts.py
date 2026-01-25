@@ -68,7 +68,7 @@ def get_accounts(
 def create_eoa(request: Request, req: AccountCreateRequest, auth: bool = Depends(verify_auth)):
     """Create a new EOA account with the given tag."""
     try:
-        wallet.key_storage.create_account(req.tag)
+        wallet.key_storage.generate_new_account(req.tag)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from None

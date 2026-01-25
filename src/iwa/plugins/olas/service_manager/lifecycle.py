@@ -632,7 +632,7 @@ class LifecycleManagerMixin:
         # Use service_name for consistency with Safe naming
         agent_tag = f"{self.service.service_name}_agent"
         try:
-            agent_account = self.wallet.key_storage.create_account(agent_tag)
+            agent_account = self.wallet.key_storage.generate_new_account(agent_tag)
             agent_account_address = agent_account.address
             logger.info(f"Created new agent account: {agent_account_address}")
 
@@ -863,7 +863,7 @@ class LifecycleManagerMixin:
                 threshold=threshold,
                 signers=agent_instances,
             )
-            self.wallet.key_storage.add_account(safe_account)
+            self.wallet.key_storage.register_account(safe_account)
             logger.debug("[DEPLOY] Registered multisig in wallet")
         except Exception as e:
             logger.warning(f"[DEPLOY] Failed to register multisig in wallet: {e}")

@@ -210,14 +210,14 @@ class KeyStorage(BaseModel):
         if not self.get_address_by_tag("master"):
             logger.info("Master account not found. Creating new 'master' account...")
             try:
-                self.create_account("master")
+                self.generate_new_account("master")
             except Exception as e:
                 logger.error(f"Failed to create master account: {e}")
 
     @property
     def master_account(self) -> EncryptedAccount:
         """Get the master account"""
-        master_account = self.get_account("master")
+        master_account = self.find_stored_account("master")
 
         if not master_account:
             return list(self.accounts.values())[0]
@@ -328,12 +328,12 @@ class KeyStorage(BaseModel):
         encrypted_acct = EncryptedAccount.encrypt_private_key(
             private_key_hex, self._password, "master"
         )
-        self.add_account(encrypted_acct)
+        self.register_account(encrypted_acct)
         return encrypted_acct, mnemonic_str
 
-    def create_account(self, tag: str) -> EncryptedAccount:
-        """Create account. Master is derived from mnemonic, others are random."""
-        # Note: add_account(tag) check is inside, but we handle 'master' logic here
+    def generate_new_account(self, tag: str) -> EncryptedAccount:
+        """Generate a brand new EOA account and register it with the given tag."""
+        # Note: register_account(tag) check is inside, but we handle 'master' logic here
         tags = [acct.tag for acct in self.accounts.values()]
         if not tags:
             tag = "master"  # First account is always master
@@ -349,11 +349,11 @@ class KeyStorage(BaseModel):
         # Non-master: random key as before
         acct = Account.create()
         encrypted = EncryptedAccount.encrypt_private_key(acct.key.hex(), self._password, tag)
-        self.add_account(encrypted)
+        self.register_account(encrypted)
         return encrypted
 
-    def add_account(self, account: Union[EncryptedAccount, StoredSafeAccount]):
-        """Add an account to the storage with strict tag uniqueness checks."""
+    def register_account(self, account: Union[EncryptedAccount, StoredSafeAccount]):
+        """Register an account (EOA or Safe) in the storage with strict tag uniqueness checks."""
         if not account.tag:
             # Allow untagged accounts (rare but possible)
             pass
