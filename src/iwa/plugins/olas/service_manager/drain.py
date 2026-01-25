@@ -107,12 +107,18 @@ class DrainManagerMixin:
             logger.error("Service has no multisig address")
             return False, 0
 
-        if not self.olas_config.withdrawal_address:
-            logger.error("No withdrawal address configured in OlasConfig")
-            return False, 0
-
+        withdrawal_address = (
+            str(self.olas_config.withdrawal_address)
+            if self.olas_config.withdrawal_address
+            else str(self.wallet.master_account.address)
+        )
         multisig_address = str(self.service.multisig_address)
-        withdrawal_address = str(self.olas_config.withdrawal_address)
+
+        if not self.olas_config.withdrawal_address:
+            logger.warning(
+                "No withdrawal address configured. Defaulting to master account: "
+                f"{withdrawal_address}"
+            )
 
         # Get OLAS balance of the Safe
         olas_token = ERC20Contract(

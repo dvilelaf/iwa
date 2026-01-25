@@ -211,14 +211,14 @@ class StakingManagerMixin:
         # Helper to safely get min_staking_duration
         try:
             min_duration = staking.min_staking_duration
-            logger.info(f"min_staking_duration: {min_duration}")
+            logger.debug(f"min_staking_duration: {min_duration}")
         except Exception as e:
             logger.error(f"Failed to get min_staking_duration: {e}")
             min_duration = 0
 
         unstake_at = None
         ts_start = info.get("ts_start", 0)
-        logger.info(f"ts_start: {ts_start}")
+        logger.debug(f"ts_start: {ts_start}")
 
         if ts_start > 0:
             try:
@@ -227,12 +227,12 @@ class StakingManagerMixin:
                     unstake_ts,
                     tz=timezone.utc,
                 ).isoformat()
-                logger.info(f"unstake_available_at: {unstake_at} (ts={unstake_ts})")
+                logger.debug(f"unstake_available_at: {unstake_at} (ts={unstake_ts})")
             except Exception as e:
                 logger.error(f"calc error: {e}")
                 pass
         else:
-            logger.warning("ts_start is 0, cannot calculate unstake time")
+            logger.debug("ts_start is 0, cannot calculate unstake time")
 
         return unstake_at, ts_start, min_duration
 
