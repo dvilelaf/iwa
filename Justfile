@@ -8,13 +8,14 @@ install:
 dev:
     PYTHONPATH=src uv run python -m iwa
 
-# Reset tenderly
-reset-tenderly profile="1":
-    PYTHONPATH=src uv run src/iwa/tools/reset_tenderly.py --profile {{profile}}
+
 
 # Reset everything (tenderly, config, wallet)
 reset-all:
     PYTHONPATH=src uv run src/iwa/tools/reset_env.py
+
+reset-tenderly:
+    PYTHONPATH=src uv run src/iwa/tools/reset_env.py --keep-data
 
 # Check active tenderly profile
 check-tenderly-profile:

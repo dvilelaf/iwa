@@ -17,11 +17,18 @@ from iwa.core.models import Config
 
 
 def _reset_tenderly(profile: int) -> None:
-    """Reset Tenderly networks using just command."""
-    cmd = ["just", "reset-tenderly", str(profile)]
+    """Reset Tenderly networks using reset_tenderly.py script."""
+    cmd = ["uv", "run", "src/iwa/tools/reset_tenderly.py", "--profile", str(profile)]
     print(f"Running: {' '.join(cmd)}")
     try:
-        subprocess.check_call(cmd)  # nosec B603
+        # Ensure PYTHONPATH is set to include src
+        env = {"PYTHONPATH": "src"}
+        # Merge with current env to keep PATH etc.
+        import os
+        full_env = os.environ.copy()
+        full_env.update(env)
+
+        subprocess.check_call(cmd, env=full_env)  # nosec B603
     except subprocess.CalledProcessError as e:
         print(f"Error running reset-tenderly: {e}")
         sys.exit(1)
@@ -97,12 +104,26 @@ def _clean_wallet_accounts() -> None:
 
 def main():
     """Reset the environment by clearing networks, services, and accounts."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Reset environment.")
+    parser.add_argument(
+        "--keep-data",
+        action="store_true",
+        help="Reset only Tenderly, keeping config.yaml and wallet.json intact."
+    )
+    args = parser.parse_args()
+
     profile = Config().core.tenderly_profile
     print(f"Detected Tenderly profile: {profile}")
 
     _reset_tenderly(profile)
-    _clean_olas_services()
-    _clean_wallet_accounts()
+
+    if args.keep_data:
+        print("Skipping Olas services and wallet cleanup (--keep-data used).")
+    else:
+        _clean_olas_services()
+        _clean_wallet_accounts()
 
     print("Environment reset complete.")
 
