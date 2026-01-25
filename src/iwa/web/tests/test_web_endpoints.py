@@ -284,7 +284,7 @@ def test_safe_create_request_validation(client):
 
 def test_create_eoa_success(client):
     """Cover create_eoa success (lines 308-315)."""
-    wallet.key_storage.create_account = MagicMock()
+    wallet.key_storage.generate_new_account = MagicMock()
 
     response = client.post("/api/accounts/eoa", json={"tag": "my_wallet"})
     assert response.status_code == 200
@@ -293,7 +293,7 @@ def test_create_eoa_success(client):
 
 def test_create_eoa_error(client):
     """Cover create_eoa error (lines 314-315)."""
-    wallet.key_storage.create_account = MagicMock(side_effect=Exception("Tag exists"))
+    wallet.key_storage.generate_new_account = MagicMock(side_effect=Exception("Tag exists"))
 
     response = client.post("/api/accounts/eoa", json={"tag": "existing"})
     assert response.status_code == 400

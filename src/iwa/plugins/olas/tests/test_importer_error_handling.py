@@ -296,6 +296,12 @@ def test_import_key_success(importer):
     importer.key_storage.find_stored_account.return_value = None
     importer.key_storage.accounts = {}
 
+    # Define side effect to update accounts dict when register_account is called
+    def mock_register(acc):
+        importer.key_storage.accounts[acc.address] = acc
+
+    importer.key_storage.register_account.side_effect = mock_register
+
     with patch("iwa.core.keys.EncryptedAccount.encrypt_private_key") as mock_enc:
         mock_enc.return_value = MagicMock(address=addr)
         success, msg = importer._import_key(key, "my_service")
@@ -310,10 +316,17 @@ def test_import_safe_success(importer):
     importer.key_storage.find_stored_account.return_value = None
     importer.key_storage.accounts = {}
 
+    # Define side effect to update accounts dict when register_account is called
+    def mock_register(acc):
+        importer.key_storage.accounts[acc.address] = acc
+
+    importer.key_storage.register_account.side_effect = mock_register
+
     success, msg = importer._import_safe(safe_address, service_name="my_service")
     assert success is True
     assert msg == "ok"
     assert safe_address in importer.key_storage.accounts
+    assert importer.key_storage.accounts[safe_address].tag == "my_service_multisig"
 
 
 def test_import_service_config_success(importer):

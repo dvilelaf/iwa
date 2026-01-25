@@ -767,7 +767,7 @@ class OlasServiceImporter:
             safe_result = self._import_safe(
                 address=service.safe_address,
                 signers=self._get_agent_signers(service),
-                tag_suffix="safe", # e.g. trader_zeta_safe
+                tag_suffix="multisig", # e.g. trader_zeta_safe
                 service_name=service.service_name
             )
             if safe_result[0]:
@@ -785,7 +785,7 @@ class OlasServiceImporter:
             safe_result = self._import_safe(
                 address=service.service_owner_multisig_address,
                 signers=owner_signers,
-                tag_suffix="owner_safe", # e.g. trader_zeta_owner_safe
+                tag_suffix="owner_multisig", # e.g. trader_zeta_owner_safe
                 service_name=service.service_name
             )
             if safe_result[0]:
@@ -925,7 +925,7 @@ class OlasServiceImporter:
         self,
         address: str,
         signers: List[str] = None,
-        tag_suffix: str = "safe",
+        tag_suffix: str = "multisig",
         service_name: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Import a generic Safe."""
