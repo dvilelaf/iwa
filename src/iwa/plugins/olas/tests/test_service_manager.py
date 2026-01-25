@@ -69,6 +69,10 @@ def mock_wallet():
     new_acc = MagicMock()
     new_acc.address = "0x0987654321098765432109876543210987654321"
     wallet.key_storage.create_account.return_value = new_acc
+    wallet.key_storage.create_account.return_value = new_acc
+    # Mock account_service
+    wallet.account_service = MagicMock()
+    wallet.account_service.get_tag_by_address.return_value = "mock_tag"
     # Mock transfer_service
     wallet.transfer_service = MagicMock()
     wallet.transfer_service.approve_erc20.return_value = True
