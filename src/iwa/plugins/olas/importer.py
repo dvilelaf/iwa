@@ -889,9 +889,11 @@ class OlasServiceImporter:
         """Generate a unique tag for an imported key.
 
         Tags follow the pattern: {service_name}_{role}[_eoa]
+
         Examples:
           - trader_alpha_agent
           - trader_alpha_owner_eoa (EOA keys for owner role)
+
         """
         # Use service name as prefix, or 'imported' as fallback
         prefix = service_name or "imported"
