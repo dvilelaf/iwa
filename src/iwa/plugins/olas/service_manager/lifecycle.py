@@ -856,8 +856,19 @@ class LifecycleManagerMixin:
             service_info = self.registry.get_service(self.service.service_id)
             threshold = service_info["threshold"]
 
+            services_multisig_tag = f"{self.service.service_name}_multisig"
+
+            # Check if tag already exists and archive it
+            existing_addr = self.wallet.key_storage.get_address_by_tag(services_multisig_tag)
+            if existing_addr:
+                import time
+                old_account = self.wallet.key_storage.accounts[existing_addr]
+                timestamp = int(time.time())
+                old_account.tag = f"{services_multisig_tag}_archived_{timestamp}"
+                logger.info(f"[DEPLOY] Archived existing Safe tag to: {old_account.tag}")
+
             safe_account = StoredSafeAccount(
-                tag=f"{self.service.service_name}_multisig",
+                tag=services_multisig_tag,
                 address=multisig_address,
                 chains=[self.chain_name],
                 threshold=threshold,
