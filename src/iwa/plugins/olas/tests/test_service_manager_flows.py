@@ -17,7 +17,7 @@ def mock_wallet():
     wallet.key_storage.get_account.return_value.address = (
         "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     )
-    wallet.key_storage.create_account.return_value.address = (
+    wallet.key_storage.generate_new_account.return_value.address = (
         "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
     )
     wallet.sign_and_send_transaction.return_value = (True, {"status": 1})

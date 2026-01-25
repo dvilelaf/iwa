@@ -40,7 +40,7 @@ def account_create(
     """Create a new wallet account"""
     key_storage = KeyStorage()
     try:
-        key_storage.create_account(tag)
+        key_storage.generate_new_account(tag)
     except ValueError as e:
         typer.echo(f"Error: {e}")
         raise typer.Exit(code=1) from e

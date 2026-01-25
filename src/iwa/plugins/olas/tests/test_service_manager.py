@@ -65,11 +65,11 @@ def mock_wallet():
     wallet.master_account.address = "0x1234567890123456789012345678901234567890"
     wallet.key_storage = MagicMock()
     wallet.key_storage.get_account.return_value = None  # Default
-    # Mock create_account which returns a StoredAccount or similar
+    # Mock generate_new_account which returns a StoredAccount or similar
     new_acc = MagicMock()
     new_acc.address = "0x0987654321098765432109876543210987654321"
-    wallet.key_storage.create_account.return_value = new_acc
-    wallet.key_storage.create_account.return_value = new_acc
+    wallet.key_storage.generate_new_account.return_value = new_acc
+    wallet.key_storage.generate_new_account.return_value = new_acc
     # Mock account_service
     wallet.account_service = MagicMock()
     wallet.account_service.get_tag_by_address.return_value = "mock_tag"
@@ -219,7 +219,7 @@ def test_register_agent_success(service_manager, mock_wallet):
         "security_deposit": 50000000000000000000,
     }
 
-    # create_account is already mocked
+    # generate_new_account is already mocked
     mock_wallet.send.return_value = "0xMockTxHash"  # wallet.send returns tx_hash
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = [{"name": "RegisterInstance"}]
@@ -331,7 +331,7 @@ def test_register_agent_with_existing_address(service_manager, mock_wallet):
     assert service_manager.register_agent(agent_address=existing_agent) is True
     assert service_manager.service.agent_address == TEST_EXISTING_AGENT_ADDR
     # Should NOT create a new account
-    mock_wallet.key_storage.create_account.assert_not_called()
+    mock_wallet.key_storage.generate_new_account.assert_not_called()
     # Should NOT fund the agent (only for new accounts)
     mock_wallet.send.assert_not_called()
 
@@ -349,7 +349,7 @@ def test_register_agent_creates_new_if_none(service_manager, mock_wallet):
 
     assert service_manager.register_agent() is True
     # Should create a new account
-    mock_wallet.key_storage.create_account.assert_called()
+    mock_wallet.key_storage.generate_new_account.assert_called()
     # Should fund the new agent
     mock_wallet.send.assert_called()
 
@@ -661,7 +661,7 @@ def test_spin_up_with_existing_agent(service_manager, mock_wallet):
     existing_agent = TEST_EXISTING_AGENT_ADDR
     assert service_manager.spin_up(agent_address=existing_agent) is True
     # Verify agent address was not newly created
-    mock_wallet.key_storage.create_account.assert_not_called()
+    mock_wallet.key_storage.generate_new_account.assert_not_called()
 
 
 # --- Tests for wind_down ---

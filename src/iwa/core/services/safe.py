@@ -222,25 +222,25 @@ class SafeService:
         threshold: int,
         tag: Optional[str],
     ) -> StoredSafeAccount:
-        # Check if already exists
-        accounts = self.key_storage.accounts
-        if contract_address in accounts and isinstance(
-            accounts[contract_address], StoredSafeAccount
-        ):
-            safe_account = accounts[contract_address]
-            if chain_name not in safe_account.chains:
-                safe_account.chains.append(chain_name)
-        else:
-            safe_account = StoredSafeAccount(
-                tag=tag or f"Safe {contract_address[:6]}",
-                address=contract_address,
-                chains=[chain_name],
-                threshold=threshold,
-                signers=owner_addresses,
-            )
-            accounts[contract_address] = safe_account
+        # Check if already exists (by address)
+        existing = self.key_storage.find_stored_account(contract_address)
+        if existing and isinstance(existing, StoredSafeAccount):
+            if chain_name not in existing.chains:
+                existing.chains.append(chain_name)
+            self.key_storage.save()
+            return existing
 
-        self.key_storage.save()
+        # Create new Safe account object
+        safe_account = StoredSafeAccount(
+            tag=tag or f"Safe {contract_address[:6]}",
+            address=contract_address,
+            chains=[chain_name],
+            threshold=threshold,
+            signers=owner_addresses,
+        )
+
+        # Register via centralized method (enforces tag uniqueness)
+        self.key_storage.register_account(safe_account)
         return safe_account
 
     def redeploy_safes(self):

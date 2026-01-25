@@ -18,7 +18,7 @@ def mock_wallet():
     wallet.master_account.address = VALID_ADDR
     wallet.chain_interface.chain_name = "gnosis"
     wallet.sign_and_send_transaction.return_value = (True, {"transactionHash": b"\x00" * 32})
-    wallet.key_storage.create_account.return_value.address = VALID_ADDR
+    wallet.key_storage.generate_new_account.return_value.address = VALID_ADDR
     wallet.key_storage.get_account.return_value.address = VALID_ADDR
     return wallet
 

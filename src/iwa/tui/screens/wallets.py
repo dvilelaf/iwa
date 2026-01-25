@@ -442,7 +442,7 @@ class WalletsScreen(VerticalScroll):
             def handler(tag):
                 if tag is not None:
                     tag = tag or f"Account {len(self.wallet.key_storage.accounts) + 1}"
-                    self.wallet.key_storage.create_account(tag)
+                    self.wallet.key_storage.generate_new_account(tag)
                     self.notify(f"Created new EOA: {escape(tag)}")
                     self.refresh_accounts()
 
