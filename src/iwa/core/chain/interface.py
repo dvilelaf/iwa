@@ -34,7 +34,8 @@ class ChainInterface:
             chain: SupportedChain = getattr(SupportedChains(), chain.lower())
 
         self.chain = chain
-        self._rate_limiter = get_rate_limiter(chain.name)
+        # Enforce strict 1.0 RPS limit to prevent synchronization issues
+        self._rate_limiter = get_rate_limiter(chain.name, rate=1.0, burst=1)
         self._current_rpc_index = 0
         self._rpc_failure_counts: Dict[int, int] = {}
 
