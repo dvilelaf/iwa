@@ -151,5 +151,9 @@ async def test_swap_full_balance(transfer_service, mock_chain_interfaces, mock_c
 
     # Verify correct amount passed to swap
     cow_instance.swap.assert_called_with(
-        amount_wei=500, sell_token_name="WETH", buy_token_name="USDC", order_type=OrderType.SELL
+        amount_wei=500,
+        sell_token_name="WETH",
+        buy_token_name="USDC",
+        order_type=OrderType.SELL,
+        wait_for_execution=True,
     )
