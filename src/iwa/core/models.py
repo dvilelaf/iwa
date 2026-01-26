@@ -6,12 +6,13 @@ from typing import Dict, List, Optional, Type, TypeVar
 
 import tomli
 import tomli_w
-from ruamel.yaml import YAML
 from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_core import core_schema
+from ruamel.yaml import YAML
 
 from iwa.core.types import EthereumAddress  # noqa: F401 - re-exported for backwards compatibility
 from iwa.core.utils import singleton
+
 
 def _update_yaml_recursive(target: Dict, source: Dict) -> None:
     """Recursively update a ruamel.yaml CommentedMap with data from a dict.
