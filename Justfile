@@ -113,7 +113,18 @@ release-check:
 # Create a new release (tag and push) based on pyproject.toml version
 release: release-check
     #!/usr/bin/env bash
-    # Check for uncommitted changes (including untracked files)
+
+    # Ensure lockfile is up to date
+    uv lock
+
+    # Commit uv.lock if it changed
+    if git status --porcelain | grep -q "uv.lock"; then
+        echo "🔄 Updating uv.lock..."
+        git add uv.lock
+        git commit -m "build: Update lockfile"
+    fi
+
+    # Check for other uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "❌ Error: Uncommitted changes found! Please commit or stash them before releasing."
         git status --short
