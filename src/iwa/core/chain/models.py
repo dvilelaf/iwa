@@ -35,9 +35,18 @@ class SupportedChain(BaseModel):
             return address
 
         if address is None:
-            return self.tokens.get(token_address_or_name, None)
+            # Try direct lookup
+            token_addr = self.tokens.get(token_address_or_name, None)
+            if token_addr:
+                return token_addr
 
-        return None
+            # Try case-insensitive lookup
+            target_lower = token_address_or_name.lower()
+            for name, addr in self.tokens.items():
+                if name.lower() == target_lower:
+                    return addr
+
+            return None
 
     def get_token_name(self, token_address: str) -> Optional[str]:
         """Get token name from address."""
