@@ -113,6 +113,13 @@ release-check:
 # Create a new release (tag and push) based on pyproject.toml version
 release: release-check
     #!/usr/bin/env bash
+    # Check for uncommitted changes (including untracked files)
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "❌ Error: Uncommitted changes found! Please commit or stash them before releasing."
+        git status --short
+        exit 1
+    fi
+
     VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
     echo "🚀 Releasing version v$VERSION..."
 
