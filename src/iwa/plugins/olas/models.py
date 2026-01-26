@@ -134,8 +134,5 @@ class OlasConfig(BaseModel):
         target = multisig_address.lower()
         for service in self.services.values():
             if service.multisig_address and str(service.multisig_address).lower() == target:
-                # The following line is from the Code Edit, but it does not fit syntactically here.
-                # It appears to be from a different file (decoder.py) as indicated by the instruction.
-                # args_str = ", ".join(f"{n}={v}" for n, v in zip(d["arg_names"], decoded, strict=False))
                 return service
         return None

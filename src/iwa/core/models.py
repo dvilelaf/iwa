@@ -129,7 +129,7 @@ class StorableModel(BaseModel):
         ryaml.preserve_quotes = True
         ryaml.indent(mapping=2, sequence=4, offset=2)
 
-        data = self.model_dump()
+        data = self.model_dump(mode="json")
 
         if path.exists():
             with path.open("r", encoding="utf-8") as f:
@@ -303,12 +303,12 @@ class Config(StorableModel):
         data = {}
 
         if self.core:
-            data["core"] = self.core.model_dump()
+            data["core"] = self.core.model_dump(mode="json")
 
         data["plugins"] = {}
         for plugin_name, plugin_config in self.plugins.items():
             if isinstance(plugin_config, BaseModel):
-                data["plugins"][plugin_name] = plugin_config.model_dump()
+                data["plugins"][plugin_name] = plugin_config.model_dump(mode="json")
             elif isinstance(plugin_config, dict):
                 data["plugins"][plugin_name] = plugin_config
 
