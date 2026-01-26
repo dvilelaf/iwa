@@ -132,8 +132,11 @@ class DrainManagerMixin:
             return False, 0
 
         olas_amount = olas_balance / 1e18
+        withdrawal_tag = self.wallet.get_tag_by_address(withdrawal_address) or withdrawal_address
+        multisig_tag = self.wallet.get_tag_by_address(multisig_address) or multisig_address
+
         logger.info(
-            f"Withdrawing {olas_amount:.4f} OLAS from {multisig_address} to {withdrawal_address}"
+            f"Withdrawing {olas_amount:.4f} OLAS from {multisig_tag} to {withdrawal_tag}"
         )
 
         # Transfer from Safe to withdrawal address
@@ -149,7 +152,7 @@ class DrainManagerMixin:
             logger.error("Failed to transfer OLAS")
             return False, 0
 
-        logger.info(f"Withdrew {olas_amount:.4f} OLAS to {withdrawal_address}")
+        logger.info(f"Withdrew {olas_amount:.4f} OLAS to {withdrawal_tag}")
         return True, olas_amount
 
     def drain_service(

@@ -57,11 +57,23 @@ class ERC20TransferMixin:
             chain_name=chain_name,
             data=transaction["data"],
         )
-        # Get receipt for gas calculation
+        # Get receipt for gas calculation with retry
         receipt = None
         try:
             interface = ChainInterfaces().get(chain_name)
-            receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+            import time
+
+            for i in range(5):
+                try:
+                    receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
+                    if receipt:
+                        break
+                except Exception:
+                    pass
+                time.sleep(2)
+
+            if not receipt:
+                logger.warning(f"Could not get receipt for Safe tx {tx_hash} after retries")
         except Exception as e:
             logger.warning(f"Could not get receipt for Safe tx {tx_hash}: {e}")
 
