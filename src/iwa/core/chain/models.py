@@ -26,6 +26,9 @@ class SupportedChain(BaseModel):
 
     def get_token_address(self, token_address_or_name: str) -> Optional[EthereumAddress]:
         """Get token address"""
+        if not token_address_or_name:
+            return None
+
         try:
             address = EthereumAddress(token_address_or_name)
         except Exception:
