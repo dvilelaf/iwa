@@ -17,6 +17,7 @@ dependencies = [
     "typer>=0.19.2",
     "web3>=7.13.0",
     "pyyaml (>=6.0.3,<7.0.0)",
+    "ruamel.yaml>=0.18.0",
     "safe-eth-py>=7.14.0",
     "twine>=6.2.0",
     "cowdao-cowpy>=1.0.1",

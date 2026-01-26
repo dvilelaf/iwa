@@ -6,12 +6,23 @@ from typing import Dict, List, Optional, Type, TypeVar
 
 import tomli
 import tomli_w
-import yaml
+from ruamel.yaml import YAML
 from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_core import core_schema
 
 from iwa.core.types import EthereumAddress  # noqa: F401 - re-exported for backwards compatibility
 from iwa.core.utils import singleton
+
+def _update_yaml_recursive(target: Dict, source: Dict) -> None:
+    """Recursively update a ruamel.yaml CommentedMap with data from a dict.
+
+    This preserves comments and structure in the target map.
+    """
+    for key, value in source.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            _update_yaml_recursive(target[key], value)
+        else:
+            target[key] = value
 
 
 class EncryptedData(BaseModel):
@@ -106,16 +117,31 @@ class StorableModel(BaseModel):
         self._path = path
 
     def save_yaml(self, path: Optional[Path] = None) -> None:
-        """Save to YAML file"""
+        """Save to YAML file preserving comments if file exists."""
         if path is None:
             if getattr(self, "_path", None) is None:
                 raise ValueError("Save path not specified and no previous path stored.")
             path = self._path
 
         path = path.with_suffix(".yaml")
+        ryaml = YAML()
+        ryaml.preserve_quotes = True
+        ryaml.indent(mapping=2, sequence=4, offset=2)
+
+        data = self.model_dump()
+
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                try:
+                    target = ryaml.load(f) or {}
+                    _update_yaml_recursive(target, data)
+                    data = target
+                except Exception:
+                    # Fallback to overwrite if load fails
+                    pass
 
         with path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(self.model_dump(), f, sort_keys=False, allow_unicode=True)
+            ryaml.dump(data, f)
         self._storage_format = "yaml"
         self._path = path
 
@@ -171,8 +197,9 @@ class StorableModel(BaseModel):
     def load_yaml(cls: Type[T], path: str | Path) -> T:
         """Load from YAML file"""
         path = Path(path)
+        ryaml = YAML()
         with path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+            data = ryaml.load(f)
         obj = cls(**data)
         obj._storage_format = "yaml"
         obj._path = path
@@ -223,10 +250,9 @@ class Config(StorableModel):
             return
 
         try:
-            import yaml
-
+            ryaml = YAML()
             with CONFIG_PATH.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+                data = ryaml.load(f) or {}
 
             # Load core config
             if "core" in data:
@@ -270,9 +296,7 @@ class Config(StorableModel):
             self.save_config()
 
     def save_config(self) -> None:
-        """Persist current config to config.yaml."""
-        import yaml
-
+        """Persist current config to config.yaml preserving comments."""
         from iwa.core.constants import CONFIG_PATH
 
         data = {}
@@ -287,8 +311,22 @@ class Config(StorableModel):
             elif isinstance(plugin_config, dict):
                 data["plugins"][plugin_name] = plugin_config
 
+        ryaml = YAML()
+        ryaml.preserve_quotes = True
+        ryaml.indent(mapping=2, sequence=4, offset=2)
+
+        if CONFIG_PATH.exists():
+            with CONFIG_PATH.open("r", encoding="utf-8") as f:
+                try:
+                    target = ryaml.load(f) or {}
+                    _update_yaml_recursive(target, data)
+                    data = target
+                except Exception:
+                    # Fallback to overwrite if load fails
+                    pass
+
         with CONFIG_PATH.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True, default_flow_style=False)
+            ryaml.dump(data, f)
 
         self._path = CONFIG_PATH
         self._storage_format = "yaml"
