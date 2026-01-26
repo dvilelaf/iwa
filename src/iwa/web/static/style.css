@@ -1101,6 +1101,10 @@ textarea:focus {
   color: var(--warning);
 }
 
+.staking-row .value.evicted {
+  color: var(--error);
+}
+
 .staking-row .value.countdown {
   color: var(--accent-color);
 }
