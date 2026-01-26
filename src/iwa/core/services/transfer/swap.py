@@ -104,6 +104,7 @@ class SwapMixin:
             sell_token_name=sell_token_name,
             buy_token_name=buy_token_name,
             order_type=order_type,
+            wait_for_execution=True,
         )
 
         if result:
