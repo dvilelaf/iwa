@@ -213,15 +213,24 @@ async def test_check_cowswap_order_expired(cowswap):
 
 @pytest.mark.asyncio
 async def test_check_cowswap_order_timeout(cowswap):
-    """Test check_cowswap_order timeout."""
+    """Test check_cowswap_order timeout after exceeding valid_to."""
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
 
     with patch("requests.get") as mock_get:
         mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"status": "open", "executedSellAmount": "0"}
+        # Order is always open
+        mock_get.return_value.json.return_value = {
+            "status": "open",
+            "executedSellAmount": "0",
+            "validTo": 1000,
+        }
 
-        # Speed up retry sleep (asyncio.sleep)
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            result = await cowswap.check_cowswap_order(mock_order)
-            assert result is None
+        # Mock time to start at 900 and then jump to 1100 to trigger timeout
+        with patch("time.time") as mock_time:
+            mock_time.side_effect = [900, 1100]
+            # Speed up retry sleep (asyncio.sleep)
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await cowswap.check_cowswap_order(mock_order)
+                assert result is None
+                assert mock_time.call_count >= 2
