@@ -63,7 +63,7 @@ class ERC20TransferMixin:
             interface = ChainInterfaces().get(chain_name)
             import time
 
-            for i in range(5):
+            for _ in range(5):
                 try:
                     receipt = interface.web3.eth.get_transaction_receipt(tx_hash)
                     if receipt:
