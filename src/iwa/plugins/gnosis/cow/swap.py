@@ -96,13 +96,9 @@ class CowSwap:
 
         logger.info(f"Checking order status for UID: {order.uid}")
 
-        max_retries = 6
-        sleep_between_retries = 25
-        retries = 0
+        sleep_between_retries = 15
 
-        while retries < max_retries:
-            retries += 1
-
+        while True:
             try:
                 # Use a thread executor for blocking requests.get
                 loop = asyncio.get_event_loop()
@@ -116,46 +112,36 @@ class CowSwap:
 
             if response.status_code != HTTP_OK:
                 logger.debug(
-                    f"Order status check {retries}/{max_retries}: HTTP {response.status_code}. Retry in {sleep_between_retries}s"
+                    f"Order status check: HTTP {response.status_code}. Retry in {sleep_between_retries}s"
                 )
                 await asyncio.sleep(sleep_between_retries)
                 continue
 
             order_data = response.json()
-
             status = order_data.get("status", "unknown")
             valid_to = int(order_data.get("validTo", 0))
             current_time = int(time.time())
 
-            if status == "expired" or (valid_to > 0 and current_time > valid_to):
-                logger.error(
-                    f"Order expired without execution (Status: {status}, ValidTo: {valid_to}, Now: {current_time})."
-                )
-                return None
-
+            # Log current status
             executed_sell = int(order_data.get("executedSellAmount", "0"))
             executed_buy = int(order_data.get("executedBuyAmount", "0"))
 
-            if executed_sell > 0 or executed_buy > 0:
+            if executed_sell > 0 or executed_buy > 0 or status == "fulfilled":
                 logger.info("Order executed successfully.")
-                sell_price = order_data.get("quote", {}).get("sellTokenPrice", None)
-                buy_price = order_data.get("quote", {}).get("buyTokenPrice", None)
-
-                if sell_price is not None:
-                    logger.debug(f"Sell price: ${float(sell_price):.2f}")
-
-                if buy_price is not None:
-                    logger.debug(f"Buy price: ${float(buy_price):.2f}")
-
                 return order_data
 
-            logger.info(
-                f"Order pending... ({retries}/{max_retries}). Retry in {sleep_between_retries}s"
-            )
-            await asyncio.sleep(sleep_between_retries)
+            if status in ["expired", "cancelled"]:
+                logger.error(f"Order {status} without execution.")
+                return None
 
-        logger.warning("Max retries reached. Order status unknown.")
-        return None
+            if valid_to > 0 and current_time > valid_to + 60:
+                logger.error(
+                    f"Order timeout: current time {current_time} exceeded valid_to {valid_to} by >60s."
+                )
+                return None
+
+            logger.info(f"Order status: {status}. Waiting {sleep_between_retries}s...")
+            await asyncio.sleep(sleep_between_retries)
 
     async def swap(
         self,
@@ -304,7 +290,7 @@ class CowSwap:
         app_data: str | None = None,
         valid_to: int | None = None,
         env: "Envs" = "prod",
-        slippage_tolerance: float = 0.005,
+        slippage_tolerance: float = 0.01,
         partially_fillable: bool = False,
     ) -> "CompletedOrder":
         """Execute a 'Buy' order (Exact Output) on CoW Protocol."""
