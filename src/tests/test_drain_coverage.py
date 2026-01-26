@@ -94,14 +94,20 @@ def test_claim_rewards_success_no_event(mock_drain_manager):
         assert amount == 1000000000000000000
 
 
-def test_withdraw_rewards_no_withdrawal_address(mock_drain_manager):
-    """Test withdraw_rewards with no withdrawal address configured."""
-    mock_drain_manager.service.multisig_address = "0xSafe"
+def test_withdraw_rewards_fallback_to_master(mock_drain_manager):
+    """Test withdraw_rewards falls back to master account when not configured."""
+    mock_drain_manager.service.multisig_address = "0x1111111111111111111111111111111111111111"
     mock_drain_manager.olas_config.withdrawal_address = None
+    mock_drain_manager.wallet.master_account.address = "0x2222222222222222222222222222222222222222"
 
-    success, amount = mock_drain_manager.withdraw_rewards()
-    assert not success
-    assert amount == 0
+    with patch("iwa.plugins.olas.service_manager.drain.ERC20Contract") as mock_erc20_cls:
+        mock_erc20 = mock_erc20_cls.return_value
+        mock_erc20.balance_of_wei.return_value = 0
+
+        success, amount = mock_drain_manager.withdraw_rewards()
+        # If balance is 0, it logs info and returns (False, 0) in drain.py
+        assert not success
+        assert amount == 0
 
 
 def test_drain_service_no_service(mock_drain_manager):

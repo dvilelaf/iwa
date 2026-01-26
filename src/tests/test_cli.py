@@ -61,11 +61,11 @@ def mock_wallet():
 def test_account_create(cli, mock_key_storage):
     result = runner.invoke(cli, ["wallet", "create", "--tag", "test"])
     assert result.exit_code == 0
-    mock_key_storage.create_account.assert_called_with("test")
+    mock_key_storage.generate_new_account.assert_called_with("test")
 
 
 def test_account_create_error(cli, mock_key_storage):
-    mock_key_storage.create_account.side_effect = ValueError("Error creating account")
+    mock_key_storage.generate_new_account.side_effect = ValueError("Error creating account")
     result = runner.invoke(cli, ["wallet", "create", "--tag", "test"])
     assert result.exit_code == 1
     assert "Error: Error creating account" in result.stdout

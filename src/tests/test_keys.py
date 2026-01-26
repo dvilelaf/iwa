@@ -52,7 +52,7 @@ def mock_account():
 
         def create_side_effect():
             # Skip the first address if it's reserved for the master account
-            # (to avoid overwriting master if create_account is called immediately)
+            # (to avoid overwriting master if generate_new_account is called immediately)
             addr = next(addresses)
             if addr == "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4":
                 addr = next(addresses)
@@ -207,7 +207,7 @@ def test_keystorage_save(
     assert "accounts" in data
 
 
-def test_keystorage_create_account(
+def test_keystorage_generate_new_account(
     tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
 ):
     """Test creating additional accounts."""
@@ -215,21 +215,21 @@ def test_keystorage_create_account(
     storage = KeyStorage(wallet_path, password="test_password")
 
     # Master created in init
-    enc_account = storage.create_account("tag")
+    enc_account = storage.generate_new_account("tag")
     assert enc_account.tag == "tag"
     assert len(storage.accounts) == 2  # master + tag
 
 
-def test_keystorage_create_account_duplicate_tag(
+def test_keystorage_generate_new_account_duplicate_tag(
     tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
 ):
     """Test creating account with duplicate tag raises error."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    storage.create_account("tag")
+    storage.generate_new_account("tag")
 
-    with pytest.raises(ValueError, match="already exists"):
-        storage.create_account("tag")
+    with pytest.raises(ValueError, match="already used"):
+        storage.generate_new_account("tag")
 
 
 def test_keystorage_get_private_key(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt):
@@ -246,7 +246,7 @@ def test_keystorage_sign_message(tmp_path, mock_secrets, mock_account, mock_aesg
     """Test message signing."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    storage.create_account("tag")
+    storage.generate_new_account("tag")
 
     mock_signed_msg = MagicMock()
     mock_signed_msg.signature = b"signature"
@@ -262,7 +262,7 @@ def test_keystorage_sign_transaction(
     """Test transaction signing."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    storage.create_account("tag")
+    storage.generate_new_account("tag")
 
     tx = {
         "to": "0x0000000000000000000000000000000000000000",
@@ -295,7 +295,7 @@ def test_keystorage_get_account(tmp_path, mock_secrets, mock_account, mock_aesgc
     """Test getting account by address or tag."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    acc1 = storage.create_account("tag")
+    acc1 = storage.generate_new_account("tag")
 
     # Get by address
     acct = storage.get_account(acc1.address)
@@ -312,7 +312,7 @@ def test_keystorage_get_tag_by_address(
     """Test getting tag by address."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    acc = storage.create_account("tag")
+    acc = storage.generate_new_account("tag")
 
     assert storage.get_tag_by_address(acc.address) == "tag"
     master = storage.get_account("master")
@@ -326,7 +326,7 @@ def test_keystorage_get_address_by_tag(
     """Test getting address by tag."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    acc = storage.create_account("tag")
+    acc = storage.generate_new_account("tag")
 
     assert storage.get_address_by_tag("tag") == acc.address
     assert storage.get_address_by_tag("unknown") is None
@@ -348,10 +348,10 @@ def test_keystorage_master_account_fallback(tmp_path, mock_secrets):
     data = {"accounts": {enc_account.address: enc_account.model_dump()}}
     wallet_path.write_text(json.dumps(data))
 
-    # Patch create_account to prevent auto-creation of master
-    with patch.object(KeyStorage, "create_account"):
+    # Patch generate_new_account to prevent auto-creation of master
+    with patch.object(KeyStorage, "generate_new_account"):
         storage = KeyStorage(wallet_path, password="test_password")
-        # Manually add the account since create_account is mocked
+        # Manually add the account since generate_new_account is mocked
         storage.accounts[enc_account.address] = enc_account
 
         # Should return the first account if master not found
@@ -369,14 +369,14 @@ def test_keystorage_master_account_success(
     assert storage.master_account.address is not None
 
 
-def test_keystorage_create_account_default_tag(
+def test_keystorage_generate_new_account_default_tag(
     tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
 ):
     """Test creating account with custom tag."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
 
-    acc = storage.create_account("foo")
+    acc = storage.generate_new_account("foo")
     assert acc.tag == "foo"
     assert len(storage.accounts) == 2
 
@@ -418,8 +418,8 @@ def test_keystorage_get_account_none(tmp_path, mock_secrets):
     data = {"accounts": {}}
     wallet_path.write_text(json.dumps(data))
 
-    # Patch create_account to prevent auto-creation
-    with patch.object(KeyStorage, "create_account"):
+    # Patch generate_new_account to prevent auto-creation
+    with patch.object(KeyStorage, "generate_new_account"):
         storage = KeyStorage(wallet_path, password="test_password")
         assert storage.get_account("0x5B38Da6a701c568545dCfcB03FcB875f56beddC4") is None
         assert storage.get_account("tag") is None
@@ -429,7 +429,7 @@ def test_get_account_info(tmp_path, mock_secrets, mock_account, mock_aesgcm, moc
     """Test get_account_info alias."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    storage.create_account("tag1")
+    storage.generate_new_account("tag1")
 
     info = storage.get_account_info("tag1")
     assert info.address == storage.find_stored_account("tag1").address
@@ -441,7 +441,7 @@ def test_get_signer(tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scry
     """Test get_signer method."""
     wallet_path = tmp_path / "wallet.json"
     storage = KeyStorage(wallet_path, password="test_password")
-    storage.create_account("tag")
+    storage.generate_new_account("tag")
 
     # Test valid signer retrieval
     signer = storage.get_signer("tag")
@@ -469,7 +469,7 @@ def test_keystorage_edge_cases_with_real_storage(tmp_path):
     storage = KeyStorage(wallet_path, password="password")
 
     # Create account
-    encrypted_acc = storage.create_account("acc1")
+    encrypted_acc = storage.generate_new_account("acc1")
     assert encrypted_acc is not None
 
     # Get by address
@@ -484,7 +484,7 @@ def test_keystorage_edge_cases_with_real_storage(tmp_path):
     assert storage.get_account("acc1") is None
 
     # Get private key via internal method
-    encrypted_acc2 = storage.create_account("acc2")
+    encrypted_acc2 = storage.generate_new_account("acc2")
     pk = storage._get_private_key(encrypted_acc2.address)
     assert pk is not None
 

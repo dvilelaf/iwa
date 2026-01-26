@@ -126,7 +126,7 @@ def test_create_safe_standard(mock_key_storage, mock_account_service, mock_depen
     assert tx_hash == "0xTxHash"
 
     mock_dependencies["safe"].create.assert_called_once()
-    mock_key_storage.save.assert_called_once()
+    mock_key_storage.register_account.assert_called_once()
 
 
 def test_create_safe_with_salt(mock_key_storage, mock_account_service, mock_dependencies):
