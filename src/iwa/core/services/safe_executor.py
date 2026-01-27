@@ -114,24 +114,27 @@ class SafeTransactionExecutor:
         # 1. (Re)Create Safe client
         safe = self._recreate_safe_client(safe_address)
 
-        # 2. Re-estimate gas if needed
-        if attempt > 0 or current_gas == 0:
-            current_gas = self._estimate_safe_tx_gas(safe, safe_tx, base_estimate)
-            safe_tx.safe_tx_gas = current_gas
-            SAFE_TX_STATS["gas_retries"] += 1
+        # NOTE: We do NOT modify safe_tx_gas here because the transaction is already signed.
+        # The Safe tx hash includes safe_tx_gas, so changing it would invalidate all signatures.
+        # Gas estimation must happen BEFORE signing in SafeService.
 
-        # 3. Simulate locally
+        # 2. Simulate locally
         try:
             safe_tx.call()
         except Exception as e:
             classification = self._classify_error(e)
+            # Signature errors (GS026) are not recoverable - fail immediately
+            if classification["is_signature_error"]:
+                reason = self._decode_revert_reason(e)
+                logger.error(f"[{operation_name}] Signature error (not retryable): {reason or e}")
+                raise e
             if classification["is_revert"] and not classification["is_nonce_error"]:
                 reason = self._decode_revert_reason(e)
                 logger.error(f"[{operation_name}] Simulation reverted: {reason or e}")
                 raise e
             raise
 
-        # 4. Execute
+        # 3. Execute
         tx_hash_bytes = safe_tx.execute(signer_keys[0])
         return f"0x{tx_hash_bytes.hex()}"
 
@@ -200,9 +203,15 @@ class SafeTransactionExecutor:
     def _is_nonce_error(self, error: Exception) -> bool:
         """Check if error is due to Safe nonce conflict."""
         error_text = str(error).lower()
+        # GS025 = Invalid nonce (NOT GS026 which is invalid signatures)
         return any(x in error_text for x in [
-            "nonce", "gs026", "already executed", "duplicate"
+            "nonce", "gs025", "already executed", "duplicate"
         ])
+
+    def _is_signature_error(self, error: Exception) -> bool:
+        """Check if error is due to invalid Safe signatures (GS026)."""
+        error_text = str(error).lower()
+        return "gs026" in error_text or "invalid signatures" in error_text
 
     def _refresh_nonce(self, safe: Safe, safe_tx: SafeTx) -> SafeTx:
         """Re-fetch nonce and rebuild transaction."""
@@ -232,6 +241,7 @@ class SafeTransactionExecutor:
             "is_nonce_error": self._is_nonce_error(error),
             "is_rpc_error": is_rpc,
             "is_revert": "revert" in err_text or "execution reverted" in err_text,
+            "is_signature_error": self._is_signature_error(error),
         }
 
     def _decode_revert_reason(self, error: Exception) -> Optional[str]:

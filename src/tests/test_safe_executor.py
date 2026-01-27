@@ -60,43 +60,44 @@ def test_execute_success_first_try(executor, mock_chain_interface, mock_safe_tx,
         assert tx_hash == "0x" + b"tx_hash".hex()
         assert mock_safe_tx.execute.call_count == 1
 
-def test_execute_retry_on_gas_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+def test_execute_retry_on_transient_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that transient errors (non-gas, non-nonce) trigger retries without modifying tx."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        # First execution fails with gas error
+        # First execution fails with transient error, second succeeds
         mock_safe_tx.execute.side_effect = [
-            ValueError("gas too low"),
+            ConnectionError("Network timeout"),
             b"success_hash"
         ]
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        mock_chain_interface._is_connection_error.return_value = True
 
         with patch("time.sleep"):  # Avoid delays
             success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert success is True
         assert mock_safe_tx.execute.call_count == 2
-        # Verify gas was re-estimated (buffer applied)
-        assert mock_safe_tx.safe_tx_gas == int(100000 * 1.5)
+        # Gas should NOT have changed (we don't modify after signing)
+        assert mock_safe_tx.safe_tx_gas == 100000
 
-def test_execute_gas_x10_cap(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    mock_safe_tx.safe_tx_gas = 1000
-    # Simulate a huge gas estimate
-    mock_safe.estimate_tx_gas.return_value = 50000
-
+def test_execute_signature_error_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that GS026 (invalid signatures) fails immediately without retrying."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        mock_safe_tx.execute.side_effect = [ValueError("gas too low"), b"hash"]
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        # Simulate GS026 signature error
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS026")
 
         with patch("time.sleep"):
-            executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+            success, error, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
-    # Max cap is 1000 * 10 = 10000
-    assert mock_safe_tx.safe_tx_gas == 10000
+        assert success is False
+        # Should fail on first attempt without retrying (signature errors are not recoverable)
+        assert mock_safe_tx.execute.call_count == 0  # Never got to execute
+        assert "GS026" in error
 
 def test_execute_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        # Set up nonce error
+        # Set up nonce error (GS025 = invalid nonce, NOT GS026 which is invalid signatures)
         mock_safe_tx.execute.side_effect = [
-            ValueError("GS026: nonce already executed"),
+            ValueError("GS025: invalid nonce"),
             b"success_hash"
         ]
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
