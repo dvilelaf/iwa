@@ -1,11 +1,9 @@
 """Regression tests for recent fixes."""
 
-import json
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from iwa.core.chain.interface import ChainInterface
 from iwa.core.keys import KeyStorage
 from iwa.core.models import EthereumAddress
 from iwa.core.services.transaction import TransactionService
@@ -61,6 +59,7 @@ class TestRegressionFixes(unittest.TestCase):
     def test_key_storage_mode_json_serialization(self):
         """Test that KeyStorage uses mode='json' to serialize EthereumAddress correctly."""
         import tempfile
+
         from iwa.core.models import StoredAccount
 
         with tempfile.TemporaryDirectory() as tmp_dir:
