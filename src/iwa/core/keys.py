@@ -231,11 +231,17 @@ class KeyStorage(BaseModel):
             # Use backup directory relative to wallet path (supports tests with tmp_path)
             backup_dir = self._path.parent / "backup"
             backup_dir.mkdir(parents=True, exist_ok=True)
-            os.chmod(backup_dir, 0o700)
+            try:
+                os.chmod(backup_dir, 0o700)
+            except OSError as e:
+                logger.debug(f"Could not chmod backup dir (expected in some Docker setups): {e}")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = backup_dir / f"wallet.json.{timestamp}.bkp"
             shutil.copy2(self._path, backup_path)
-            os.chmod(backup_path, 0o600)
+            try:
+                os.chmod(backup_path, 0o600)
+            except OSError as e:
+                logger.debug(f"Could not chmod backup file: {e}")
             logger.debug(f"Backed up wallet to {backup_path}")
 
         # Ensure directory exists
@@ -244,9 +250,15 @@ class KeyStorage(BaseModel):
         with open(self._path, "w", encoding="utf-8") as f:
             # Use mode='json' to ensure all types (EthereumAddress) are correctly serialized
             json.dump(self.model_dump(mode='json'), f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())  # Force write to disk (critical for Docker volumes)
 
-        # Enforce read/write only for the owner
-        os.chmod(self._path, 0o600)
+        try:
+            os.chmod(self._path, 0o600)
+        except OSError as e:
+            logger.debug(f"Could not chmod wallet file: {e}")
+
+        logger.info(f"[KeyStorage] Wallet saved to {self._path} ({len(self.accounts)} accounts)")
 
     @staticmethod
     def _encrypt_mnemonic(mnemonic: str, password: str) -> dict:
@@ -367,6 +379,7 @@ class KeyStorage(BaseModel):
                     raise ValueError(f"Tag '{account.tag}' is already used by address {existing.address}")
 
         self.accounts[account.address] = account
+        logger.info(f"[KeyStorage] Registering account: tag='{account.tag}', address={account.address}")
         self.save()
 
     def get_pending_mnemonic(self) -> Optional[str]:
@@ -445,7 +458,9 @@ class KeyStorage(BaseModel):
             if existing.tag == new_tag and existing.address != account.address:
                 raise ValueError(f"Tag '{new_tag}' is already used by address {existing.address}")
 
+        old_tag = account.tag
         account.tag = new_tag
+        logger.info(f"[KeyStorage] Renaming account: '{old_tag}' -> '{new_tag}' (address={account.address})")
         self.save()
 
     def _get_private_key(self, address: str) -> Optional[str]:
