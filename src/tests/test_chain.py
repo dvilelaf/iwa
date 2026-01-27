@@ -124,9 +124,7 @@ def test_get_native_balance(mock_web3):
     assert ci.get_native_balance_eth("0xAddress") == 1.0
 
 
-# NOTE: Tests for sign_and_send_transaction were removed because the method was removed
-# from ChainInterface for security reasons. Transaction signing is now handled exclusively
-# through TransactionService.sign_and_send() which uses KeyStorage internally.
+# NOTE: sign_and_send_transaction tests are in test_wallet.py - method moved to Wallet class
 
 
 def test_estimate_gas(mock_web3):

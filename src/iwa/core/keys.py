@@ -215,7 +215,7 @@ class KeyStorage(BaseModel):
                 logger.error(f"Failed to create master account: {e}")
 
     @property
-    def master_account(self) -> EncryptedAccount:
+    def master_account(self) -> Optional[Union[EncryptedAccount, StoredSafeAccount]]:
         """Get the master account"""
         master_account = self.find_stored_account("master")
 
@@ -231,9 +231,11 @@ class KeyStorage(BaseModel):
             # Use backup directory relative to wallet path (supports tests with tmp_path)
             backup_dir = self._path.parent / "backup"
             backup_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(backup_dir, 0o700)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = backup_dir / f"wallet.json.{timestamp}.bkp"
             shutil.copy2(self._path, backup_path)
+            os.chmod(backup_path, 0o600)
             logger.debug(f"Backed up wallet to {backup_path}")
 
         # Ensure directory exists

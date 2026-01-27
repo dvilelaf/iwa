@@ -1,13 +1,13 @@
 """Wallet module."""
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from web3.types import Wei
 
 from iwa.core.chain import SupportedChain
 from iwa.core.db import init_db
-from iwa.core.keys import KeyStorage
+from iwa.core.keys import EncryptedAccount, KeyStorage
 from iwa.core.models import EthereumAddress, StoredSafeAccount
 from iwa.core.services import (
     AccountService,
@@ -51,7 +51,7 @@ class Wallet:
         init_db()
 
     @property
-    def master_account(self) -> Optional[StoredSafeAccount]:
+    def master_account(self) -> Optional[Union[EncryptedAccount, StoredSafeAccount]]:
         """Get master account"""
         return self.account_service.master_account
 

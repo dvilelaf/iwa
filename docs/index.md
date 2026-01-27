@@ -27,48 +27,8 @@ Create a `secrets.env` file in the `data/` directory or root:
 WALLET_PASSWORD=your_secure_password
 GNOSIS_RPC=https://rpc.gnosis.io
 ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
-# ... see full config in Core Modules
-```
-
-### Running
-
-```bash
-# Launch the Web UI
-just web
-
-# Launch the Terminal User Interface
-just tui
-```
-
-## Documentation Structure
-
-- **[Core Modules](core.md)**: Deep dive into Wallet, KeyStorage, and Chain architecture.
-- **[Plugins](plugins/gnosis.md)**: Guides for Gnosis (CowSwap) and Olas integrations.
-- **[Interfaces](interfaces/web.md)**: User manuals for Web and CLI.
-- **[Development](dev/release.md)**: Contributing guidelines, testing, and release process.
-
-## Quick Start
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/dvilelaf/iwa.git
-cd iwa
-
-# Install dependencies
-just install
-```
-
-### Configuration
-
-Create a `secrets.env` file with your settings:
-
-```bash
-WALLET_PASSWORD=your_secure_password
-GNOSIS_RPC=https://rpc.gnosis.io
-ETHEREUM_RPC=https://mainnet.infura.io/v3/YOUR_KEY
 BASE_RPC=https://mainnet.base.org
+# ... see full config in Core Modules
 ```
 
 ### Running
@@ -83,6 +43,13 @@ just web
 # Run tests
 just test
 ```
+
+## Documentation Structure
+
+- **[Core Modules](core.md)**: Deep dive into Wallet, KeyStorage, and Chain architecture.
+- **[Plugins](plugins/gnosis.md)**: Guides for Gnosis (CowSwap) and Olas integrations.
+- **[Interfaces](interfaces/web.md)**: User manuals for Web and CLI.
+- **[Development](dev/release.md)**: Contributing guidelines, testing, and release process.
 
 ## Key Concepts
 
