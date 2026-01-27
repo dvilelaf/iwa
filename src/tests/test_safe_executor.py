@@ -1,9 +1,11 @@
 """Tests for SafeTransactionExecutor."""
 
-import pytest
 from unittest.mock import MagicMock, patch
-from iwa.core.services.safe_executor import SafeTransactionExecutor, SAFE_TX_STATS
+
+import pytest
 from safe_eth.safe.safe_tx import SafeTx
+
+from iwa.core.services.safe_executor import SAFE_TX_STATS, SafeTransactionExecutor
 
 
 @pytest.fixture(autouse=True)

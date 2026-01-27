@@ -1,14 +1,12 @@
 """Safe transaction executor with retry logic and gas handling."""
 
-import os
 import time
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
 from safe_eth.eth import EthereumClient
 from safe_eth.safe import Safe
 from safe_eth.safe.safe_tx import SafeTx
-from web3 import exceptions as web3_exceptions
 
 from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.core.models import Config
@@ -68,6 +66,7 @@ class SafeTransactionExecutor:
 
         Returns:
             Tuple of (success, tx_hash_or_error, receipt)
+
         """
         last_error = None
         current_gas = safe_tx.safe_tx_gas
@@ -76,78 +75,103 @@ class SafeTransactionExecutor:
         for attempt in range(self.max_retries + 1):
             SAFE_TX_STATS["total_attempts"] += 1
             try:
-                # 1. (Re)Create Safe client with current (possibly rotated) RPC
-                safe = self._recreate_safe_client(safe_address)
+                # Prepare and execute attempt
+                tx_hash = self._execute_attempt(
+                    safe_address, safe_tx, signer_keys, operation_name, attempt, current_gas, base_estimate
+                )
 
-                # 2. Re-estimate gas if this is a retry or first run if not set
-                if attempt > 0 or current_gas == 0:
-                    current_gas = self._estimate_safe_tx_gas(safe, safe_tx, base_estimate)
-                    safe_tx.safe_tx_gas = current_gas
-                    SAFE_TX_STATS["gas_retries"] += 1
-
-                # 3. Simulate locally before sending
-                try:
-                    safe_tx.call()
-                except Exception as e:
-                    classification = self._classify_error(e)
-                    if classification["is_revert"]:
-                        reason = self._decode_revert_reason(e)
-                        logger.error(f"[{operation_name}] Simulation reverted: {reason or e}")
-                        # If it's a logic revert, retrying probably won't help unless it's a nonce issue
-                        if not classification["is_nonce_error"]:
-                            return False, f"Reverted: {reason or e}", None
-                    raise
-
-                # 4. Execute
-                # Always use the first signer for execution as per existing pattern
-                tx_hash_bytes = safe_tx.execute(signer_keys[0])
-                tx_hash = f"0x{tx_hash_bytes.hex()}"
-
-                # 5. Wait for receipt
+                # Check receipt
                 receipt = self.chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
-
-                status = getattr(receipt, "status", None)
-                if status is None and isinstance(receipt, dict):
-                    status = receipt.get("status")
-
-                if receipt and status == 1:
+                if self._check_receipt_status(receipt):
                     SAFE_TX_STATS["final_successes"] += 1
                     logger.info(f"[{operation_name}] Success on attempt {attempt + 1}. Tx Hash: {tx_hash}")
                     return True, tx_hash, receipt
-                else:
-                    logger.error(f"[{operation_name}] Mined but failed (status 0) on attempt {attempt + 1}.")
-                    raise ValueError("Transaction reverted on-chain")
+
+                logger.error(f"[{operation_name}] Mined but failed (status 0) on attempt {attempt + 1}.")
+                raise ValueError("Transaction reverted on-chain")
 
             except Exception as e:
+                updated_tx, should_retry = self._handle_execution_failure(
+                    e, safe_address, safe_tx, attempt, operation_name
+                )
                 last_error = e
-                classification = self._classify_error(e)
-
-                if attempt >= self.max_retries:
-                    SAFE_TX_STATS["final_failures"] += 1
-                    logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {e}")
+                if not should_retry:
                     break
 
-                strategy = "retry"
-                if classification["is_nonce_error"]:
-                    strategy = "nonce refresh"
-                    SAFE_TX_STATS["nonce_retries"] += 1
-                    safe_tx = self._refresh_nonce(safe, safe_tx)
-                elif classification["is_rpc_error"]:
-                    strategy = "RPC rotation"
-                    SAFE_TX_STATS["rpc_rotations"] += 1
-                    result = self.chain_interface._handle_rpc_error(e)
-                    if not result["should_retry"]:
-                        break
-                elif classification["is_gas_error"]:
-                    strategy = "gas increase"
-                    # Gas increase happens in the next loop iteration via _estimate_safe_tx_gas
-
-                self._log_retry(attempt + 1, e, strategy)
+                # Update gas/nonce for next loop if needed
+                safe_tx = updated_tx
+                # If gas error, gas is recalculated in next _execute_attempt via fresh estimation
 
                 delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
                 time.sleep(delay)
 
         return False, str(last_error), None
+
+    def _execute_attempt(
+        self, safe_address, safe_tx, signer_keys, operation_name, attempt, current_gas, base_estimate
+    ) -> str:
+        """Prepare client, estimate gas, simulate, and execute."""
+        # 1. (Re)Create Safe client
+        safe = self._recreate_safe_client(safe_address)
+
+        # 2. Re-estimate gas if needed
+        if attempt > 0 or current_gas == 0:
+            current_gas = self._estimate_safe_tx_gas(safe, safe_tx, base_estimate)
+            safe_tx.safe_tx_gas = current_gas
+            SAFE_TX_STATS["gas_retries"] += 1
+
+        # 3. Simulate locally
+        try:
+            safe_tx.call()
+        except Exception as e:
+            classification = self._classify_error(e)
+            if classification["is_revert"] and not classification["is_nonce_error"]:
+                reason = self._decode_revert_reason(e)
+                logger.error(f"[{operation_name}] Simulation reverted: {reason or e}")
+                raise e
+            raise
+
+        # 4. Execute
+        tx_hash_bytes = safe_tx.execute(signer_keys[0])
+        return f"0x{tx_hash_bytes.hex()}"
+
+    def _check_receipt_status(self, receipt) -> bool:
+        """Check if receipt has successful status."""
+        status = getattr(receipt, "status", None)
+        if status is None and isinstance(receipt, dict):
+            status = receipt.get("status")
+        return status == 1
+
+    def _handle_execution_failure(
+        self, error: Exception, safe_address: str, safe_tx: SafeTx, attempt: int, operation_name: str
+    ) -> Tuple[SafeTx, bool]:
+        """Handle execution failure and determine next steps."""
+        classification = self._classify_error(error)
+
+        if attempt >= self.max_retries:
+            SAFE_TX_STATS["final_failures"] += 1
+            logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {error}")
+            return safe_tx, False
+
+        strategy = "retry"
+        safe = self._recreate_safe_client(safe_address)
+
+        if classification["is_nonce_error"]:
+            strategy = "nonce refresh"
+            SAFE_TX_STATS["nonce_retries"] += 1
+            safe_tx = self._refresh_nonce(safe, safe_tx)
+        elif classification["is_rpc_error"]:
+            strategy = "RPC rotation"
+            SAFE_TX_STATS["rpc_rotations"] += 1
+            result = self.chain_interface._handle_rpc_error(error)
+            if not result["should_retry"]:
+                return safe_tx, False
+        elif classification["is_gas_error"]:
+            strategy = "gas increase"
+            # Gas increase handled in next attempt loop
+
+        self._log_retry(attempt + 1, error, strategy)
+        return safe_tx, True
 
     def _estimate_safe_tx_gas(self, safe: Safe, safe_tx: SafeTx, base_estimate: int = 0) -> int:
         """Estimate gas for a Safe transaction with buffer and hard cap."""
