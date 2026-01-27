@@ -425,7 +425,8 @@ class TransactionService:
                 data=data
             )
 
-            # Wait for receipt
+            # Receipt is already waited for inside execute_safe_transaction/executor
+            # but we can fetch it again here to be safe and continue with Olas logging
             receipt = chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
 
             status = getattr(receipt, "status", None)
