@@ -11,6 +11,7 @@ from safe_eth.safe.safe_tx import SafeTx
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.contracts.decoder import ErrorDecoder
+from iwa.core.models import Config
 
 if TYPE_CHECKING:
     from iwa.core.chain import ChainInterface
@@ -43,8 +44,16 @@ class SafeTransactionExecutor:
     ):
         """Initialize the executor."""
         self.chain_interface = chain_interface
-        self.max_retries = max_retries or int(os.getenv("SAFE_TX_MAX_RETRIES", str(self.DEFAULT_MAX_RETRIES)))
-        self.gas_buffer = gas_buffer or float(os.getenv("SAFE_TX_GAS_BUFFER", str(self.GAS_BUFFER_PERCENTAGE)))
+
+        # Use centralized config with fallbacks
+        config = Config().core
+        self.max_retries = max_retries or config.safe_tx_max_retries
+        self.gas_buffer = gas_buffer or config.safe_tx_gas_buffer
+
+        # We also check for ETHEREUM_RPC_RETRY_COUNT for library compliance
+        # but our higher level retry uses max_retries
+        if os.getenv("ETHEREUM_RPC_RETRY_COUNT") is None:
+            os.environ["ETHEREUM_RPC_RETRY_COUNT"] = str(self.max_retries)
 
     def execute_with_retry(
         self,
