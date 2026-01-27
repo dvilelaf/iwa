@@ -89,8 +89,8 @@ def test_init(cowswap, mock_chain):
 async def test_get_max_sell_amount_wei(cowswap, mock_cowpy_modules):
     """Test get_max_sell_amount_wei."""
     amount = await cowswap.get_max_sell_amount_wei(100, "0xSell", "0xBuy")
-    # mocked sellAmount root is "100", slippage is 0.005 default -> 100 * 1.005 = 100
-    assert amount == 100
+    # mocked sellAmount root is "100", slippage is 0.015 default -> 100 * 1.015 = 101.5 -> int 101
+    assert amount == 101
     mock_cowpy_modules["get_order_quote"].assert_called_once()
 
 
@@ -98,8 +98,8 @@ async def test_get_max_sell_amount_wei(cowswap, mock_cowpy_modules):
 async def test_get_max_buy_amount_wei(cowswap, mock_cowpy_modules):
     """Test get_max_buy_amount_wei."""
     amount = await cowswap.get_max_buy_amount_wei(100, "0xSell", "0xBuy")
-    # mocked buyAmount root is "90", slippage 0.005 -> 90 * 0.995 = 89.55 -> int 89
-    assert amount == 89
+    # mocked buyAmount root is "90", slippage 0.015 -> 90 * 0.985 = 88.65 -> int 88
+    assert amount == 88
     mock_cowpy_modules["get_order_quote"].assert_called_once()
 
 

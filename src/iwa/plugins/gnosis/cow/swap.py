@@ -241,7 +241,7 @@ class CowSwap:
         safe_address: ChecksumAddress | None = None,
         app_data: str | None = None,
         env: "Envs" = "prod",
-        slippage_tolerance: float = 0.005,
+        slippage_tolerance: float = 0.015,
     ) -> int:
         """Calculate the estimated sell amount needed to buy a fixed amount of tokens."""
         return await get_max_sell_amount_wei(
@@ -264,7 +264,7 @@ class CowSwap:
         safe_address: ChecksumAddress | None = None,
         app_data: str | None = None,
         env: "Envs" = "prod",
-        slippage_tolerance: float = 0.005,
+        slippage_tolerance: float = 0.015,
     ) -> int:
         """Calculate the maximum buy amount for a given sell amount."""
         return await get_max_buy_amount_wei(
@@ -290,7 +290,7 @@ class CowSwap:
         app_data: str | None = None,
         valid_to: int | None = None,
         env: "Envs" = "prod",
-        slippage_tolerance: float = 0.01,
+        slippage_tolerance: float = 0.015,
         partially_fillable: bool = False,
     ) -> "CompletedOrder":
         """Execute a 'Buy' order (Exact Output) on CoW Protocol."""

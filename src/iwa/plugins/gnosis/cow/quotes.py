@@ -33,7 +33,7 @@ async def get_max_sell_amount_wei(
     safe_address: ChecksumAddress | None = None,
     app_data: str | None = None,
     env: "Envs" = "prod",
-    slippage_tolerance: float = 0.005,
+    slippage_tolerance: float = 0.015,
 ) -> int:
     """Calculate the estimated sell amount needed to buy a fixed amount of tokens."""
     if app_data is None:
@@ -95,7 +95,7 @@ async def get_max_buy_amount_wei(
     safe_address: ChecksumAddress | None = None,
     app_data: str | None = None,
     env: "Envs" = "prod",
-    slippage_tolerance: float = 0.005,
+    slippage_tolerance: float = 0.015,
 ) -> int:
     """Calculate the maximum buy amount for a given sell amount."""
     if app_data is None:
