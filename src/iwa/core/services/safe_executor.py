@@ -148,27 +148,34 @@ class SafeTransactionExecutor:
             raise
 
         # 4. Execute
-        # If we have signatures, don't pass the key to execute() to avoid re-signing risks.
-        # Just broadcast the fully signed transaction.
-        client_key = signer_keys[0] if sig_len == 0 else None
-        if client_key is None:
-            logger.info(f"[{operation_name}] Broadcasting already signed transaction...")
+        # IMPORTANT: safe-eth-py's execute() method CLEARS signatures after execution.
+        # We must backup and restore them to support retries if something goes wrong (e.g. timeout after broadcast).
+        signatures_backup = safe_tx.signatures
 
-        result = safe_tx.execute(client_key)
+        try:
+            # Always pass the first signer key as the executor (gas payer).
+            # Note: This method does NOT re-sign the Safe hash if signatures are already present.
+            result = safe_tx.execute(signer_keys[0])
 
-        # Handle both tuple return (tx_hash, tx) and bytes return
-        if isinstance(result, tuple):
-            tx_hash_bytes = result[0]
-        else:
-            tx_hash_bytes = result
+            # Handle both tuple return (tx_hash, tx) and bytes return
+            if isinstance(result, tuple):
+                tx_hash_bytes = result[0]
+            else:
+                tx_hash_bytes = result
 
-        # Handle both bytes and hex string returns
-        if isinstance(tx_hash_bytes, bytes):
-            return f"0x{tx_hash_bytes.hex()}"
-        elif isinstance(tx_hash_bytes, str):
-            return tx_hash_bytes if tx_hash_bytes.startswith("0x") else f"0x{tx_hash_bytes}"
-        else:
-            return str(tx_hash_bytes)
+            # Handle both bytes and hex string returns
+            if isinstance(tx_hash_bytes, bytes):
+                return f"0x{tx_hash_bytes.hex()}"
+            elif isinstance(tx_hash_bytes, str):
+                return tx_hash_bytes if tx_hash_bytes.startswith("0x") else f"0x{tx_hash_bytes}"
+            else:
+                return str(tx_hash_bytes)
+
+        finally:
+            # Restore signatures for next attempt if needed
+            # (execute() clears them on lines 407-409 of safe_eth/safe/safe_tx.py)
+            if safe_tx.signatures != signatures_backup:
+                safe_tx.signatures = signatures_backup
 
     def _check_receipt_status(self, receipt) -> bool:
         """Check if receipt has successful status."""

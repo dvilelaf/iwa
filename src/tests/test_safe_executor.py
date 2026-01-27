@@ -208,33 +208,6 @@ def test_error_classification(executor, error_code, is_signature_error):
 # Test: Retry behavior
 # =============================================================================
 
-def test_execute_calls_with_none_key_if_signed(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Regression Test: Verify we call execute(None) if signatures exist (prevents corruption)."""
-    # mock_safe_tx has 65 bytes signature by default in fixture
-    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
-        mock_safe_tx.execute.return_value = b"tx_hash"
-
-        success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
-
-        assert success is True
-        # Verify executed with None (broadcast only)
-        mock_safe_tx.execute.assert_called_with(None)
-
-
-def test_execute_calls_with_key_if_unsigned(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Verify we call execute(key) if transaction is not fully signed but has min sigs?
-       Actually, our code throws if < 65 bytes. But let's say we modify logic to support signing.
-       Our current logic raises ValueError if sig_len < 65.
-       SO we can't test "unsigned" execution going through unless we change that validation.
-
-       However, we can test that if we theoretically allowed it (mocked validation?), key is passed.
-       But better: Ensure that execute(None) is ALWAYS used when we pass validation.
-    """
-    pass
-
-# =============================================================================
-
 def test_retry_on_transient_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
     """Test that transient errors trigger retries without modifying tx."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
@@ -308,20 +281,43 @@ def test_fail_after_max_retries(executor, mock_chain_interface, mock_safe_tx, mo
 # Test: State preservation during retries
 # =============================================================================
 
-def test_retry_preserves_signatures(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Verify that retries don't corrupt/lose signatures."""
+def test_retry_preserves_signatures_despite_clearing(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify that retries don't corrupt/lose signatures even if library clears them."""
     original_signatures = mock_safe_tx.signatures
 
+    # Define a side effect that clears signatures on success (mimicking safe-eth-py)
+    def execute_side_effect(key):
+        # Simulate library behavior: clears signatures after "executing"
+        mock_safe_tx.signatures = b""
+        return b"hash"
+
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        mock_safe_tx.execute.side_effect = [ConnectionError("timeout"), b"hash"]
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
-        mock_chain_interface._is_connection_error.return_value = True
+        # Scenario:
+        # 1. Execute success (sigs cleared) but Receipt not found (triggering retry)
+        # 2. Retry: Execute called again (must have restored sigs) -> Success -> Receipt found
+
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.side_effect = [
+            ValueError("Transaction not found"),
+            MagicMock(status=1)
+        ]
+
+        mock_safe_tx.execute.side_effect = execute_side_effect
+        mock_chain_interface._is_connection_error.return_value = False
 
         with patch("time.sleep"):
-            executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+            success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
-        # Signatures should be unchanged after retry
+        assert success is True
+        # Signatures should be restored after the loop (or at least valid during 2nd call)
+        # We assert they match original at the end because the finally block restores if changed?
+        # Wait, finally restores IF signatures != backup.
+        # If call 2 succeeds, execute() sets signatures to b"" AGAIN at the end of call 2.
+        # So at the end of execution, signatures ARE empty locally if we updated them?
+        # NO, the finally block runs AFTER safe_tx.execute returns.
+        # So after call 2 returns (sigs=b""), finally restores them (sigs=original).
+        # So they should be original.
         assert mock_safe_tx.signatures == original_signatures
+        assert mock_safe_tx.execute.call_count == 2
 
 
 def test_retry_preserves_gas(executor, mock_chain_interface, mock_safe_tx, mock_safe):
