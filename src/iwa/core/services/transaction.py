@@ -320,6 +320,15 @@ class TransactionService:
 
         if "chainId" not in tx:
             tx["chainId"] = chain_interface.chain.chain_id
+
+        # Safety net: Ensure fees are set if missing (prevents FeeTooLow on Gnosis)
+        if "gasPrice" not in tx and "maxFeePerGas" not in tx:
+            try:
+                fees = chain_interface.get_suggested_fees()
+                tx.update(fees)
+            except Exception as e:
+                logger.debug(f"Failed to auto-fill fees in _prepare_transaction: {e}")
+
         return True
 
     def _handle_gas_retry(self, e: Exception, tx: dict, state: dict) -> None:

@@ -85,24 +85,14 @@ class NativeTransferMixin:
     ) -> Optional[str]:
         """Send native currency via EOA using unified TransactionService."""
         # Build transaction dict
-        try:
-            gas_price = chain_interface.web3.eth.gas_price
-            gas_estimate = chain_interface.web3.eth.estimate_gas({
+        tx = chain_interface.calculate_transaction_params(
+            built_method=None,
+            tx_params={
                 "from": from_account.address,
                 "to": to_address,
                 "value": amount_wei,
-            })
-        except Exception as e:
-            logger.error(f"Failed to estimate gas for native transfer: {e}")
-            return None
-
-        tx = {
-            "from": from_account.address,
-            "to": to_address,
-            "value": amount_wei,
-            "gas": gas_estimate,
-            "gasPrice": gas_price,
-        }
+            }
+        )
 
         # Use unified TransactionService
         success, receipt = self.transaction_service.sign_and_send(
@@ -189,17 +179,13 @@ class NativeTransferMixin:
         logger.info(f"Wrapping {amount_eth:.4f} xDAI → WXDAI...")
 
         try:
-            tx = contract.functions.deposit().build_transaction(
-                {
-                    "from": account.address,
-                    "value": amount_wei,
-                    "gas": 100000,
-                    "gasPrice": chain_interface.web3._web3.eth.gas_price,
-                    "nonce": chain_interface.web3._web3.eth.get_transaction_count(account.address),
-                }
+            tx_params = chain_interface.calculate_transaction_params(
+                built_method=contract.functions.deposit(),
+                tx_params={"from": account.address, "value": amount_wei},
             )
+            transaction = contract.functions.deposit().build_transaction(tx_params)
 
-            signed = self.key_storage.sign_transaction(tx, account.address)
+            signed = self.key_storage.sign_transaction(transaction, account.address)
             tx_hash = chain_interface.web3._web3.eth.send_raw_transaction(signed.raw_transaction)
             receipt = chain_interface.web3._web3.eth.wait_for_transaction_receipt(
                 tx_hash, timeout=60
@@ -270,14 +256,11 @@ class NativeTransferMixin:
         logger.info(f"Unwrapping {amount_eth:.4f} WXDAI → xDAI...")
 
         try:
-            tx = contract.functions.withdraw(amount_wei).build_transaction(
-                {
-                    "from": account.address,
-                    "gas": 100000,
-                    "gasPrice": chain_interface.web3._web3.eth.gas_price,
-                    "nonce": chain_interface.web3._web3.eth.get_transaction_count(account.address),
-                }
+            tx_params = chain_interface.calculate_transaction_params(
+                built_method=contract.functions.withdraw(amount_wei),
+                tx_params={"from": account.address},
             )
+            tx = contract.functions.withdraw(amount_wei).build_transaction(tx_params)
 
             signed = self.key_storage.sign_transaction(tx, account.address)
             tx_hash = chain_interface.web3._web3.eth.send_raw_transaction(signed.raw_transaction)

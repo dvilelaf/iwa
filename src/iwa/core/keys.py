@@ -242,7 +242,8 @@ class KeyStorage(BaseModel):
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(self._path, "w", encoding="utf-8") as f:
-            json.dump(self.model_dump(), f, indent=4)
+            # Use mode='json' to ensure all types (EthereumAddress) are correctly serialized
+            json.dump(self.model_dump(mode='json'), f, indent=4)
 
         # Enforce read/write only for the owner
         os.chmod(self._path, 0o600)

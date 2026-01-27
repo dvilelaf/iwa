@@ -424,46 +424,51 @@ class ChainInterface:
             return 500_000
 
     def calculate_transaction_params(
-        self, built_method: Callable, tx_params: Dict[str, Union[str, int]]
+        self, built_method: Optional[Callable], tx_params: Dict[str, Union[str, int]]
     ) -> Dict[str, Union[str, int]]:
-        """Calculate transaction parameters for a contract function call."""
+        """Calculate transaction parameters for a contract function call or native transfer."""
         params = {
             "from": tx_params["from"],
             "value": tx_params.get("value", 0),
             "nonce": self.web3.eth.get_transaction_count(tx_params["from"]),
-            "gas": self.estimate_gas(built_method, tx_params),
+            "gas": self.estimate_gas(built_method, tx_params) if built_method else tx_params.get("gas", 21_000),
         }
 
-        # Check for EIP-1559 support
+        params.update(self.get_suggested_fees())
+        return params
+
+    def get_suggested_fees(self) -> Dict[str, int]:
+        """Calculate suggested fees for a transaction (EIP-1559 or legacy)."""
         try:
+            # Check for EIP-1559 support
             latest_block = self.web3.eth.get_block("latest")
             base_fee = latest_block.get("baseFeePerGas")
 
             if base_fee is not None:
                 # EIP-1559 logic
-                max_priority_fee = self.web3.eth.max_priority_fee
+                max_priority_fee = int(self.web3.eth.max_priority_fee)
 
-                # Gnosis specific: ensure min priority fee
-                if self.chain.name.lower() == "gnosis" and max_priority_fee < 1:
-                    max_priority_fee = 1  # Minimum 1 wei fallback
+                # Gnosis specific: ensure min priority fee (critical for validation)
+                if self.chain.name.lower() == "gnosis":
+                    if max_priority_fee < 1:
+                        max_priority_fee = 1  # Network minimum is 1 wei
 
+                # Global minimum for EIP-1559
                 if max_priority_fee < 1:
                     max_priority_fee = 1
 
-                # Buffer max_fee
+                # Buffer max_fee to handle base fee expansion
                 max_fee = int(base_fee * 1.5) + max_priority_fee
 
-                params["maxFeePerGas"] = max_fee
-                params["maxPriorityFeePerGas"] = max_priority_fee
-                # Do NOT set gasPrice for EIP-1559
-            else:
-                # Legacy
-                params["gasPrice"] = self.web3.eth.gas_price
+                return {
+                    "maxFeePerGas": max_fee,
+                    "maxPriorityFeePerGas": max_priority_fee
+                }
         except Exception as e:
             logger.debug(f"Failed to calculate EIP-1559 fees: {e}, falling back to legacy")
-            params["gasPrice"] = self.web3.eth.gas_price
 
-        return params
+        # Legacy fallback
+        return {"gasPrice": self.web3.eth.gas_price}
 
     def wait_for_no_pending_tx(
         self, from_address: EthereumAddress, max_wait_seconds: int = 60, poll_interval: float = 2.0
