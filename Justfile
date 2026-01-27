@@ -58,6 +58,11 @@ build:
 
 # Publish to Pypi
 publish: build
+    @if [ -n "$$(git status --porcelain)" ]; then \
+        echo "❌ Error: Uncommitted changes found! Please commit or stash them before publishing."; \
+        git status --short; \
+        exit 1; \
+    fi
     uv run twine upload dist/*
 
 # Docker build
