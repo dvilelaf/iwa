@@ -214,12 +214,24 @@ class ChainInterface:
         ]
         return any(signal in err_text for signal in server_error_signals)
 
+    def _is_gas_error(self, error: Exception) -> bool:
+        """Check if error is related to gas limits or fees."""
+        err_text = str(error).lower()
+        gas_signals = [
+            "intrinsic gas too low",
+            "feetoolow",
+            "gas limit",
+            "underpriced",
+        ]
+        return any(signal in err_text for signal in gas_signals)
+
     def _handle_rpc_error(self, error: Exception) -> Dict[str, Union[bool, int]]:
         """Handle RPC errors with smart rotation and retry logic."""
         result: Dict[str, Union[bool, int]] = {
             "is_rate_limit": self._is_rate_limit_error(error),
             "is_connection_error": self._is_connection_error(error),
             "is_server_error": self._is_server_error(error),
+            "is_gas_error": self._is_gas_error(error),
             "is_tenderly_quota": self._is_tenderly_quota_exceeded(error),
             "rotated": False,
             "should_retry": False,
@@ -260,6 +272,10 @@ class ChainInterface:
 
         elif result["is_server_error"]:
             logger.warning(f"Server error on {self.chain.name}: {error}")
+            result["should_retry"] = True
+
+        elif result["is_gas_error"]:
+            logger.warning(f"Gas/Fee error detected: {error}. Allowing retry for adjustment.")
             result["should_retry"] = True
 
         return result
@@ -427,13 +443,43 @@ class ChainInterface:
         self, built_method: Optional[Callable], tx_params: Dict[str, Union[str, int]]
     ) -> Dict[str, Union[str, int]]:
         """Calculate transaction parameters for a contract function call or native transfer."""
+        # Baseline parameters
         params = {
             "from": tx_params["from"],
+            "to": tx_params.get("to"),
             "value": tx_params.get("value", 0),
             "nonce": self.web3.eth.get_transaction_count(tx_params["from"]),
-            "gas": self.estimate_gas(built_method, tx_params) if built_method else tx_params.get("gas", 21_000),
         }
 
+        # Determine gas
+        if built_method:
+            # Contract function call
+            params["gas"] = self.estimate_gas(built_method, tx_params)
+        elif "gas" in tx_params:
+            # Manual gas override
+            params["gas"] = tx_params["gas"]
+        else:
+            # Native transfer - dynamic estimation
+            try:
+                # web3.eth.estimate_gas returns gas for the dict it receives
+                est_params = {
+                    "from": params["from"],
+                    "to": params["to"],
+                    "value": params["value"]
+                }
+                # Remove None 'to' for contract creation simulation if needed, but usually send() has to
+                if not est_params["to"]:
+                    est_params.pop("to")
+
+                estimated = self.web3.eth.estimate_gas(est_params)
+                # Apply 10% buffer for safety
+                params["gas"] = int(estimated * 1.1)
+                logger.debug(f"[GAS] Estimated native transfer gas: {params['gas']} (raw: {estimated})")
+            except Exception as e:
+                logger.debug(f"[GAS] Native estimation failed, fallback to 21000: {e}")
+                params["gas"] = 21_000
+
+        # Add EIP-1559 or Legacy fees
         params.update(self.get_suggested_fees())
         return params
 
