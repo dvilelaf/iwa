@@ -101,6 +101,7 @@ def print_table(console, contract_data, chain_name, sort_criterion):
     table.add_column("Available Rewards", justify="right", style="yellow")
     table.add_column("Contract Balance", justify="right", style="blue")
     table.add_column("Epoch End (UTC)", justify="right", style="white")
+    table.add_column("Epoch End (Local)", justify="right", style="white")
 
     for item in contract_data:
         if item.get("error"):
@@ -113,6 +114,7 @@ def print_table(console, contract_data, chain_name, sort_criterion):
                 f"{item['rewards_olas']:,.2f} OLAS",
                 f"{item['balance_olas']:,.2f} OLAS",
                 item["epoch_end"].strftime("%Y-%m-%d %H:%M:%S"),
+                item["epoch_end"].astimezone().strftime("%Y-%m-%d %H:%M:%S"),
             )
     console.print(table)
 
