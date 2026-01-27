@@ -2,7 +2,7 @@
 
 import os
 import time
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING, Callable
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from loguru import logger
 from safe_eth.eth import EthereumClient
@@ -35,6 +35,7 @@ class SafeTransactionExecutor:
     DEFAULT_RETRY_DELAY = 1.0
     GAS_BUFFER_PERCENTAGE = 1.5  # 50% buffer
     MAX_GAS_MULTIPLIER = 10  # Hard cap: never exceed 10x original estimate
+    DEFAULT_FALLBACK_GAS = 500_000  # Fallback when estimation fails
 
     def __init__(
         self,
@@ -49,11 +50,6 @@ class SafeTransactionExecutor:
         config = Config().core
         self.max_retries = max_retries or config.safe_tx_max_retries
         self.gas_buffer = gas_buffer or config.safe_tx_gas_buffer
-
-        # We also check for ETHEREUM_RPC_RETRY_COUNT for library compliance
-        # but our higher level retry uses max_retries
-        if os.getenv("ETHEREUM_RPC_RETRY_COUNT") is None:
-            os.environ["ETHEREUM_RPC_RETRY_COUNT"] = str(self.max_retries)
 
     def execute_with_retry(
         self,
@@ -170,7 +166,7 @@ class SafeTransactionExecutor:
             return with_buffer
         except Exception as e:
             logger.warning(f"Gas estimation failed, using fallback: {e}")
-            return 500_000  # Fallback
+            return self.DEFAULT_FALLBACK_GAS
 
     def _recreate_safe_client(self, safe_address: str) -> Safe:
         """Recreate Safe with current (possibly rotated) RPC."""
@@ -198,7 +194,7 @@ class SafeTransactionExecutor:
             gas_price=safe_tx.gas_price,
             gas_token=safe_tx.gas_token,
             refund_receiver=safe_tx.refund_receiver,
-            signatures=safe_tx.signatures,
+            # Note: signatures are NOT copied - tx hash changes with new nonce
             safe_nonce=current_nonce,
         )
 

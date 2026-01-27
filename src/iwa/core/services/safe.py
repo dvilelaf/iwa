@@ -379,21 +379,14 @@ class SafeService:
 
         # Get signer keys, execute, and immediately clear
         signer_keys = self._get_signer_keys(safe_account)
-        try:
-            tx_hash = self._sign_and_execute_safe_tx(
-                safe_tx=safe_tx,
-                signer_keys=signer_keys,
-                chain_name=chain_name,
-                safe_address=safe_account.address,
-            )
-            logger.info(f"Safe transaction executed. Tx Hash: {tx_hash}")
-            return tx_hash
-        finally:
-            # Clear keys from memory (best effort)
-            for i in range(len(signer_keys)):
-                signer_keys[i] = None
-            if 'signer_keys' in locals():
-                del signer_keys
+        tx_hash = self._sign_and_execute_safe_tx(
+            safe_tx=safe_tx,
+            signer_keys=signer_keys,
+            chain_name=chain_name,
+            safe_address=safe_account.address,
+        )
+        logger.info(f"Safe transaction executed. Tx Hash: {tx_hash}")
+        return tx_hash
 
     def get_sign_and_execute_callback(self, safe_address_or_tag: str, chain_name: str):
         """Get a callback function that signs and executes a SafeTx.
@@ -415,17 +408,11 @@ class SafeService:
 
         def _sign_and_execute(safe_tx: SafeTx) -> str:
             signer_keys = self._get_signer_keys(safe_account)
-            try:
-                return self._sign_and_execute_safe_tx(
-                    safe_tx=safe_tx,
-                    signer_keys=signer_keys,
-                    chain_name=chain_name,
-                    safe_address=safe_account.address,
-                )
-            finally:
-                for i in range(len(signer_keys)):
-                    signer_keys[i] = None
-                if 'signer_keys' in locals():
-                    del signer_keys
+            return self._sign_and_execute_safe_tx(
+                safe_tx=safe_tx,
+                signer_keys=signer_keys,
+                chain_name=chain_name,
+                safe_address=safe_account.address,
+            )
 
         return _sign_and_execute

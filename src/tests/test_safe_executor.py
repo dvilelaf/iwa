@@ -1,9 +1,17 @@
 """Tests for SafeTransactionExecutor."""
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 from iwa.core.services.safe_executor import SafeTransactionExecutor, SAFE_TX_STATS
 from safe_eth.safe.safe_tx import SafeTx
+
+
+@pytest.fixture(autouse=True)
+def reset_stats():
+    """Reset SAFE_TX_STATS before each test to prevent state leakage."""
+    for key in SAFE_TX_STATS:
+        SAFE_TX_STATS[key] = 0
+    yield
 
 @pytest.fixture
 def mock_chain_interface():
