@@ -1,17 +1,22 @@
 
+"""Tool to drain specific accounts to a master address."""
 import argparse
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Ensure src is in pythonpath
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from iwa.core.constants import SECRETS_PATH
-from iwa.core.wallet import Wallet
 from loguru import logger
 
-def main():
+from iwa.core.constants import SECRETS_PATH
+from iwa.core.wallet import Wallet
+
+
+def main() -> None:
+    """Run the account draining tool."""
     parser = argparse.ArgumentParser(description="Drain specific accounts to master.")
     parser.add_argument(
         "tags",

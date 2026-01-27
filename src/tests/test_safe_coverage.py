@@ -29,15 +29,13 @@ def safe_service(mock_deps):
 def test_execute_safe_transaction_success(safe_service, mock_deps):
     """Test execute_safe_transaction success."""
     # Mock inputs
-    safe_address = "0xSafe"
-    to_address = "0xTo"
-    value = 1000
-    chain_name = "gnosis"
+    # Valid checksum addresses
+    safe_address = "0xbEC49fa140ACaa83533f900357DCD37866d50618"
 
     # Mock Safe Account
     mock_account = MagicMock(spec=StoredSafeAccount)
     mock_account.address = safe_address
-    mock_account.signers = ["0xSigner1", "0xSigner2"]
+    mock_account.signers = ["0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"]
     mock_account.threshold = 1
     mock_deps["key_storage"].find_stored_account.return_value = mock_account
 
@@ -55,16 +53,26 @@ def test_execute_safe_transaction_success(safe_service, mock_deps):
 
         mock_safe_instance = mock_safe_multisig_cls.return_value
         mock_safe_tx = MagicMock()
+        # IMPORTANT: safe_tx_gas must be int for comparisons
+        mock_safe_tx.safe_tx_gas = 0
+        mock_safe_tx.base_gas = 0
         mock_safe_instance.build_tx.return_value = mock_safe_tx
         mock_safe_tx.tx_hash.hex.return_value = "TxHash"
 
-        # Execute
-        tx_hash = safe_service.execute_safe_transaction(safe_address, to_address, value, chain_name)
+        # Mock SafeTransactionExecutor to avoid sleeps and network calls
+        with patch("iwa.core.services.safe_executor.SafeTransactionExecutor") as mock_executor_cls:
+            mock_executor = mock_executor_cls.return_value
+            # Return (success, tx_hash, receipt)
+            mock_executor.execute_with_retry.return_value = (True, "0xTxHash", {})
 
-        # Verify
-        assert tx_hash == "0xTxHash"
-        mock_safe_tx.sign.assert_called()
-        mock_safe_tx.execute.assert_called()
+            # Execute
+            tx_hash = safe_service.execute_safe_transaction(
+                "safe_tag", "to_addr", 100, "gnosis", data="0x", operation=0
+            )
+
+            # Verify
+            assert tx_hash == "0xTxHash"
+            mock_executor.execute_with_retry.assert_called()
 
 
 def test_execute_safe_transaction_account_not_found(safe_service, mock_deps):
@@ -77,33 +85,39 @@ def test_execute_safe_transaction_account_not_found(safe_service, mock_deps):
 
 def test_get_sign_and_execute_callback(safe_service, mock_deps):
     """Test get_sign_and_execute_callback returns working callback."""
-    safe_address = "0xSafe"
+    safe_address = "0xbEC49fa140ACaa83533f900357DCD37866d50618"
     mock_account = MagicMock(spec=StoredSafeAccount)
     mock_account.address = safe_address
-    mock_account.signers = ["0xSigner1"]
+    mock_account.signers = ["0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"]
     mock_account.threshold = 1
     mock_deps["key_storage"].find_stored_account.return_value = mock_account
     mock_deps["key_storage"]._get_private_key.return_value = "0xPrivKey"
 
-    callback = safe_service.get_sign_and_execute_callback(safe_address)
-    assert callable(callback)
+    with patch("iwa.plugins.gnosis.safe.SafeMultisig") as mock_safe_multisig:
+        mock_safe_multisig.return_value.send_tx.return_value = "0xhash"
 
-    # Test executing callback
-    mock_safe_tx = MagicMock()
-    mock_safe_tx.tx_hash.hex.return_value = "TxHash"
+        callback = safe_service.get_sign_and_execute_callback("safe_tag", "gnosis")
+        assert callable(callback)
 
-    result = callback(mock_safe_tx)
+        # Test executing callback
+        mock_safe_tx = MagicMock()
+        mock_safe_tx.safe_tx_gas = 0
+        mock_safe_tx.base_gas = 0
+        mock_safe_tx.tx_hash.hex.return_value = "TxHash"
 
-    assert result == "0xTxHash"
-    mock_safe_tx.sign.assert_called()
-    mock_safe_tx.execute.assert_called()
+        with patch("iwa.core.services.safe_executor.SafeTransactionExecutor") as mock_executor_cls:
+            mock_executor_cls.return_value.execute_with_retry.return_value = (True, "0xTxHash", {})
+
+            result = callback(mock_safe_tx)
+
+            assert result == "0xTxHash"
 
 
 def test_get_sign_and_execute_callback_fail(safe_service, mock_deps):
     """Test callback generation fails if account missing."""
     mock_deps["key_storage"].find_stored_account.return_value = None
     with pytest.raises(ValueError):
-        safe_service.get_sign_and_execute_callback("0xSafe")
+        safe_service.get_sign_and_execute_callback("unknown_tag", "gnosis")
 
 
 def test_redeploy_safes(safe_service, mock_deps):

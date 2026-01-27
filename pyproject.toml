@@ -1,6 +1,6 @@
 [project]
 name = "iwa"
-version = "0.0.41"
+version = "0.0.42"
 description = "A secure, modular, and plugin-based framework for crypto agents and ops"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
