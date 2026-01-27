@@ -446,10 +446,16 @@ class ChainInterface:
         # Baseline parameters
         params = {
             "from": tx_params["from"],
-            "to": tx_params.get("to"),
             "value": tx_params.get("value", 0),
             "nonce": self.web3.eth.get_transaction_count(tx_params["from"]),
         }
+
+        # Add 'to' only for native transfers (built_method is None)
+        # Contract calls already have the target address in the contract object
+        if not built_method and "to" in tx_params:
+            params["to"] = tx_params["to"]
+        elif not built_method and "to" in params: # Fallback if added to params earlier (though not here yet)
+             pass
 
         # Determine gas
         if built_method:
