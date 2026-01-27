@@ -432,8 +432,37 @@ class ChainInterface:
             "value": tx_params.get("value", 0),
             "nonce": self.web3.eth.get_transaction_count(tx_params["from"]),
             "gas": self.estimate_gas(built_method, tx_params),
-            "gasPrice": self.web3.eth.gas_price,
         }
+
+        # Check for EIP-1559 support
+        try:
+            latest_block = self.web3.eth.get_block("latest")
+            base_fee = latest_block.get("baseFeePerGas")
+
+            if base_fee is not None:
+                # EIP-1559 logic
+                max_priority_fee = self.web3.eth.max_priority_fee
+
+                # Gnosis specific: ensure min priority fee
+                if self.chain.name.lower() == "gnosis" and max_priority_fee < 1:
+                    max_priority_fee = 1  # Minimum 1 wei fallback
+
+                if max_priority_fee < 1:
+                    max_priority_fee = 1
+
+                # Buffer max_fee
+                max_fee = int(base_fee * 1.5) + max_priority_fee
+
+                params["maxFeePerGas"] = max_fee
+                params["maxPriorityFeePerGas"] = max_priority_fee
+                # Do NOT set gasPrice for EIP-1559
+            else:
+                # Legacy
+                params["gasPrice"] = self.web3.eth.gas_price
+        except Exception as e:
+            logger.debug(f"Failed to calculate EIP-1559 fees: {e}, falling back to legacy")
+            params["gasPrice"] = self.web3.eth.gas_price
+
         return params
 
     def wait_for_no_pending_tx(

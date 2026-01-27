@@ -4,7 +4,7 @@ import time
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
-from safe_eth.eth import EthereumClient
+from safe_eth.eth import EthereumClient, TxSpeed
 from safe_eth.safe import Safe
 from safe_eth.safe.safe_tx import SafeTx
 
@@ -155,7 +155,8 @@ class SafeTransactionExecutor:
         try:
             # Always pass the first signer key as the executor (gas payer).
             # Note: This method does NOT re-sign the Safe hash if signatures are already present.
-            result = safe_tx.execute(signer_keys[0])
+            # Use EIP-1559 'FAST' to ensure adequate priority fee (fixes Gnosis FeeTooLow)
+            result = safe_tx.execute(signer_keys[0], eip1559_speed=TxSpeed.FAST)
 
             # Handle both tuple return (tx_hash, tx) and bytes return
             if isinstance(result, tuple):
