@@ -2711,7 +2711,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load staking contracts
     contractSelect.style.display = "none";
     spinnerDiv.classList.remove("hidden");
-    spinnerDiv.style.display = "block";  // Ensure display block for visibility
+    spinnerDiv.style.display = "block"; // Ensure display block for visibility
     spinnerDiv.innerHTML =
       '<span class="loading-spinner"></span> Loading contracts...';
     submitBtn.disabled = true;
