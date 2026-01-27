@@ -290,30 +290,51 @@ class SafeService:
 
         return signer_pkeys
 
-    def _sign_and_execute_safe_tx(self, safe_tx: SafeTx, signer_keys: List[str]) -> str:
+    def _sign_and_execute_safe_tx(
+        self,
+        safe_tx: SafeTx,
+        signer_keys: List[str],
+        chain_name: str,
+        safe_address: str,
+    ) -> str:
         """Sign and execute a SafeTx internally (INTERNAL USE ONLY).
 
         This method handles the signing and execution of a Safe transaction,
         keeping private keys internal to SafeService.
 
+        Uses SafeTransactionExecutor for retry logic and gas handling.
+
         SECURITY: Keys are overwritten with zeros and cleared after use.
         """
+        from iwa.core.chain import ChainInterfaces
+        from iwa.core.services.safe_executor import SafeTransactionExecutor
+
         try:
-            # Sign with all available signers
+            # Sign with all available signers (local operation)
             for pk in signer_keys:
-                safe_tx.sign(pk)
+                if pk:
+                    safe_tx.sign(pk)
 
-            # Verify the transaction will succeed
-            safe_tx.call()
+            chain_interface = ChainInterfaces().get(chain_name)
+            executor = SafeTransactionExecutor(chain_interface)
 
-            # Execute using the first signer
-            safe_tx.execute(signer_keys[0])
+            success, tx_hash_or_error, receipt = executor.execute_with_retry(
+                safe_address=safe_address,
+                safe_tx=safe_tx,
+                signer_keys=signer_keys,
+                operation_name=f"safe_tx_{safe_address[:10]}",
+            )
 
-            return f"0x{safe_tx.tx_hash.hex()}"
+            if success:
+                return tx_hash_or_error
+            else:
+                raise ValueError(f"Safe transaction failed: {tx_hash_or_error}")
+
         finally:
             # SECURITY: Overwrite keys with zeros before clearing (best effort)
             for i in range(len(signer_keys)):
-                signer_keys[i] = "0" * len(signer_keys[i]) if signer_keys[i] else ""
+                if signer_keys[i]:
+                    signer_keys[i] = "0" * len(signer_keys[i])
             signer_keys.clear()
 
     def execute_safe_transaction(
@@ -359,16 +380,22 @@ class SafeService:
         # Get signer keys, execute, and immediately clear
         signer_keys = self._get_signer_keys(safe_account)
         try:
-            tx_hash = self._sign_and_execute_safe_tx(safe_tx, signer_keys)
+            tx_hash = self._sign_and_execute_safe_tx(
+                safe_tx=safe_tx,
+                signer_keys=signer_keys,
+                chain_name=chain_name,
+                safe_address=safe_account.address,
+            )
             logger.info(f"Safe transaction executed. Tx Hash: {tx_hash}")
             return tx_hash
         finally:
             # Clear keys from memory (best effort)
             for i in range(len(signer_keys)):
                 signer_keys[i] = None
-            del signer_keys
+            if 'signer_keys' in locals():
+                del signer_keys
 
-    def get_sign_and_execute_callback(self, safe_address_or_tag: str):
+    def get_sign_and_execute_callback(self, safe_address_or_tag: str, chain_name: str):
         """Get a callback function that signs and executes a SafeTx.
 
         This method returns a callback that can be passed to SafeMultisig.send_tx().
@@ -376,6 +403,7 @@ class SafeService:
 
         Args:
             safe_address_or_tag: The Safe account address or tag
+            chain_name: The chain name for context
 
         Returns:
             A callable that takes a SafeTx and returns the transaction hash
@@ -388,10 +416,16 @@ class SafeService:
         def _sign_and_execute(safe_tx: SafeTx) -> str:
             signer_keys = self._get_signer_keys(safe_account)
             try:
-                return self._sign_and_execute_safe_tx(safe_tx, signer_keys)
+                return self._sign_and_execute_safe_tx(
+                    safe_tx=safe_tx,
+                    signer_keys=signer_keys,
+                    chain_name=chain_name,
+                    safe_address=safe_account.address,
+                )
             finally:
                 for i in range(len(signer_keys)):
                     signer_keys[i] = None
-                del signer_keys
+                if 'signer_keys' in locals():
+                    del signer_keys
 
         return _sign_and_execute
