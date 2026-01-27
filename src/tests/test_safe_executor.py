@@ -286,7 +286,7 @@ def test_retry_preserves_signatures_despite_clearing(executor, mock_chain_interf
     original_signatures = mock_safe_tx.signatures
 
     # Define a side effect that clears signatures on success (mimicking safe-eth-py)
-    def execute_side_effect(key):
+    def execute_side_effect(key, **kwargs):
         # Simulate library behavior: clears signatures after "executing"
         mock_safe_tx.signatures = b""
         return b"hash"
