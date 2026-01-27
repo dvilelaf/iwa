@@ -148,7 +148,13 @@ class SafeTransactionExecutor:
             raise
 
         # 4. Execute
-        result = safe_tx.execute(signer_keys[0])
+        # If we have signatures, don't pass the key to execute() to avoid re-signing risks.
+        # Just broadcast the fully signed transaction.
+        client_key = signer_keys[0] if sig_len == 0 else None
+        if client_key is None:
+            logger.info(f"[{operation_name}] Broadcasting already signed transaction...")
+
+        result = safe_tx.execute(client_key)
 
         # Handle both tuple return (tx_hash, tx) and bytes return
         if isinstance(result, tuple):
