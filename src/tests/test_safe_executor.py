@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from safe_eth.safe.safe_tx import SafeTx
 
-from iwa.core.services.safe_executor import SAFE_TX_STATS, SafeTransactionExecutor
+from iwa.core.services.safe_executor import (
+    MIN_SIGNATURE_LENGTH,
+    SAFE_TX_STATS,
+    SafeTransactionExecutor,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +18,7 @@ def reset_stats():
     for key in SAFE_TX_STATS:
         SAFE_TX_STATS[key] = 0
     yield
+
 
 @pytest.fixture
 def mock_chain_interface():
@@ -25,12 +30,15 @@ def mock_chain_interface():
     ci._handle_rpc_error.return_value = {"should_retry": True}
     return ci
 
+
 @pytest.fixture
 def executor(mock_chain_interface):
     return SafeTransactionExecutor(mock_chain_interface)
 
+
 @pytest.fixture
 def mock_safe_tx():
+    """Mock SafeTx with valid 65-byte signature."""
     tx = MagicMock(spec=SafeTx)
     tx.safe_tx_gas = 100000
     tx.base_gas = 0
@@ -39,8 +47,10 @@ def mock_safe_tx():
     tx.value = 0
     tx.data = b""
     tx.operation = 0
-    tx.signatures = b""
+    # Valid signatures must be >= 65 bytes (one ECDSA signature)
+    tx.signatures = b"x" * 65
     return tx
+
 
 @pytest.fixture
 def mock_safe():
@@ -49,7 +59,13 @@ def mock_safe():
     s.retrieve_nonce.return_value = 5
     return s
 
+
+# =============================================================================
+# Test: Basic execution success
+# =============================================================================
+
 def test_execute_success_first_try(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test successful execution on first attempt."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
         mock_safe_tx.execute.return_value = b"tx_hash"
@@ -60,10 +76,141 @@ def test_execute_success_first_try(executor, mock_chain_interface, mock_safe_tx,
         assert tx_hash == "0x" + b"tx_hash".hex()
         assert mock_safe_tx.execute.call_count == 1
 
-def test_execute_retry_on_transient_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Test that transient errors (non-gas, non-nonce) trigger retries without modifying tx."""
+
+# =============================================================================
+# Test: Tuple vs bytes return handling
+# =============================================================================
+
+def test_execute_handles_tuple_return(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that executor handles safe_tx.execute() returning tuple (tx_hash, tx)."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        # First execution fails with transient error, second succeeds
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        # Simulate tuple return: (tx_hash_bytes, tx_data)
+        mock_safe_tx.execute.return_value = (b"tx_hash", {"gas": 21000})
+
+        success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is True
+        assert tx_hash == "0x" + b"tx_hash".hex()
+
+
+def test_execute_handles_bytes_return(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that executor handles safe_tx.execute() returning raw bytes."""
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        mock_safe_tx.execute.return_value = b"raw_hash"
+
+        success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is True
+        assert tx_hash.startswith("0x")
+
+
+def test_execute_handles_string_return(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that executor handles safe_tx.execute() returning hex string."""
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        mock_safe_tx.execute.return_value = "0xabcdef1234567890"
+
+        success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is True
+        assert tx_hash == "0xabcdef1234567890"
+
+
+# =============================================================================
+# Test: Signature validation
+# =============================================================================
+
+def test_execute_fails_on_empty_signatures(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify we fail immediately if no signatures exist."""
+    mock_safe_tx.signatures = b""  # Empty signatures
+
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+    assert success is False
+    assert "No valid signatures" in error
+    assert mock_safe_tx.execute.call_count == 0  # Never tried to execute
+
+
+def test_execute_fails_on_truncated_signatures(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify we detect signatures shorter than 65 bytes."""
+    mock_safe_tx.signatures = b"x" * 30  # Too short (need 65)
+
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+    assert success is False
+    assert "No valid signatures" in error or str(MIN_SIGNATURE_LENGTH) in error
+
+
+def test_execute_fails_on_none_signatures(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify we handle None signatures gracefully."""
+    mock_safe_tx.signatures = None
+
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+    assert success is False
+    assert "No valid signatures" in error
+
+
+# =============================================================================
+# Test: Error classification (GS0xx codes)
+# =============================================================================
+
+def test_gs020_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS020 (signatures too short) should not trigger retries."""
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS020")
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS020" in error
+        assert mock_safe_tx.execute.call_count == 0  # Never got to execute
+
+
+def test_gs026_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS026 (invalid owner) should not trigger retries."""
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS026")
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS026" in error
+
+
+@pytest.mark.parametrize("error_code,is_signature_error", [
+    ("GS020", True),   # Signatures data too short
+    ("GS021", True),   # Invalid signature data pointer
+    ("GS024", True),   # Invalid contract signature
+    ("GS026", True),   # Invalid owner
+    ("GS025", False),  # Invalid nonce (not a signature error)
+    ("GS010", False),  # Not enough gas
+    ("GS013", False),  # Safe transaction failed
+])
+def test_error_classification(executor, error_code, is_signature_error):
+    """Verify correct classification of Safe error codes."""
+    error = ValueError(f"execution reverted: {error_code}")
+    result = executor._is_signature_error(error)
+    assert result == is_signature_error
+
+
+# =============================================================================
+# Test: Retry behavior
+# =============================================================================
+
+def test_retry_on_transient_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that transient errors trigger retries without modifying tx."""
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
         mock_safe_tx.execute.side_effect = [
             ConnectionError("Network timeout"),
             b"success_hash"
@@ -71,7 +218,7 @@ def test_execute_retry_on_transient_error(executor, mock_chain_interface, mock_s
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
         mock_chain_interface._is_connection_error.return_value = True
 
-        with patch("time.sleep"):  # Avoid delays
+        with patch("time.sleep"):
             success, tx_hash, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert success is True
@@ -79,31 +226,18 @@ def test_execute_retry_on_transient_error(executor, mock_chain_interface, mock_s
         # Gas should NOT have changed (we don't modify after signing)
         assert mock_safe_tx.safe_tx_gas == 100000
 
-def test_execute_signature_error_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Test that GS026 (invalid signatures) fails immediately without retrying."""
+
+def test_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test nonce refresh on GS025 error."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        # Simulate GS026 signature error
-        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS026")
-
-        with patch("time.sleep"):
-            success, error, receipt = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
-
-        assert success is False
-        # Should fail on first attempt without retrying (signature errors are not recoverable)
-        assert mock_safe_tx.execute.call_count == 0  # Never got to execute
-        assert "GS026" in error
-
-def test_execute_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
-        # Set up nonce error (GS025 = invalid nonce, NOT GS026 which is invalid signatures)
         mock_safe_tx.execute.side_effect = [
             ValueError("GS025: invalid nonce"),
             b"success_hash"
         ]
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
 
-        # Mock refresh_nonce to return a slightly different tx (simulated)
         new_tx = MagicMock(spec=SafeTx)
+        new_tx.signatures = b"x" * 65
         executor._refresh_nonce = MagicMock(return_value=new_tx)
 
         with patch("time.sleep"):
@@ -112,7 +246,9 @@ def test_execute_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_
         assert executor._refresh_nonce.called
         assert new_tx.execute.called
 
-def test_execute_retry_on_rpc_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+
+def test_retry_on_rpc_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test RPC rotation on rate limit error."""
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
         mock_safe_tx.execute.side_effect = [
             ValueError("Rate limit exceeded"),
@@ -127,7 +263,9 @@ def test_execute_retry_on_rpc_error(executor, mock_chain_interface, mock_safe_tx
         assert mock_chain_interface._handle_rpc_error.called
         assert mock_chain_interface._handle_rpc_error.call_count == 1
 
-def test_execute_fail_after_max_retries(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+
+def test_fail_after_max_retries(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test failure after exhausting all retries."""
     executor.max_retries = 2
     with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
         mock_safe_tx.execute.side_effect = ValueError("Persistent error")
@@ -137,3 +275,38 @@ def test_execute_fail_after_max_retries(executor, mock_chain_interface, mock_saf
 
         assert success is False
         assert mock_safe_tx.execute.call_count == 3  # 1 initial + 2 retries
+
+
+# =============================================================================
+# Test: State preservation during retries
+# =============================================================================
+
+def test_retry_preserves_signatures(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify that retries don't corrupt/lose signatures."""
+    original_signatures = mock_safe_tx.signatures
+
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = [ConnectionError("timeout"), b"hash"]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        mock_chain_interface._is_connection_error.return_value = True
+
+        with patch("time.sleep"):
+            executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        # Signatures should be unchanged after retry
+        assert mock_safe_tx.signatures == original_signatures
+
+
+def test_retry_preserves_gas(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Verify that retries don't modify safe_tx_gas (which would invalidate signatures)."""
+    original_gas = mock_safe_tx.safe_tx_gas
+
+    with patch.object(executor, '_recreate_safe_client', return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = [ConnectionError("timeout"), b"hash"]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(status=1)
+        mock_chain_interface._is_connection_error.return_value = True
+
+        with patch("time.sleep"):
+            executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert mock_safe_tx.safe_tx_gas == original_gas

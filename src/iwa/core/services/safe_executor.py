@@ -23,7 +23,11 @@ SAFE_TX_STATS = {
     "rpc_rotations": 0,
     "final_successes": 0,
     "final_failures": 0,
+    "signature_errors": 0,
 }
+
+# Minimum signature length (65 bytes per signature for ECDSA)
+MIN_SIGNATURE_LENGTH = 65
 
 
 class SafeTransactionExecutor:
@@ -112,19 +116,28 @@ class SafeTransactionExecutor:
     ) -> str:
         """Prepare client, estimate gas, simulate, and execute."""
         # 1. (Re)Create Safe client
-        safe = self._recreate_safe_client(safe_address)
+        self._recreate_safe_client(safe_address)
 
         # NOTE: We do NOT modify safe_tx_gas here because the transaction is already signed.
         # The Safe tx hash includes safe_tx_gas, so changing it would invalidate all signatures.
         # Gas estimation must happen BEFORE signing in SafeService.
 
-        # 2. Simulate locally
+        # 2. Validate signatures exist before any operation
+        sig_len = len(safe_tx.signatures) if safe_tx.signatures else 0
+        if sig_len < MIN_SIGNATURE_LENGTH:
+            SAFE_TX_STATS["signature_errors"] += 1
+            raise ValueError(
+                f"No valid signatures on transaction (have {sig_len} bytes, need >= {MIN_SIGNATURE_LENGTH})"
+            )
+
+        # 3. Simulate locally
         try:
             safe_tx.call()
         except Exception as e:
             classification = self._classify_error(e)
-            # Signature errors (GS026) are not recoverable - fail immediately
+            # Signature errors (GS020, GS026) are not recoverable - fail immediately
             if classification["is_signature_error"]:
+                SAFE_TX_STATS["signature_errors"] += 1
                 reason = self._decode_revert_reason(e)
                 logger.error(f"[{operation_name}] Signature error (not retryable): {reason or e}")
                 raise e
@@ -134,9 +147,22 @@ class SafeTransactionExecutor:
                 raise e
             raise
 
-        # 3. Execute
-        tx_hash_bytes = safe_tx.execute(signer_keys[0])
-        return f"0x{tx_hash_bytes.hex()}"
+        # 4. Execute
+        result = safe_tx.execute(signer_keys[0])
+
+        # Handle both tuple return (tx_hash, tx) and bytes return
+        if isinstance(result, tuple):
+            tx_hash_bytes = result[0]
+        else:
+            tx_hash_bytes = result
+
+        # Handle both bytes and hex string returns
+        if isinstance(tx_hash_bytes, bytes):
+            return f"0x{tx_hash_bytes.hex()}"
+        elif isinstance(tx_hash_bytes, str):
+            return tx_hash_bytes if tx_hash_bytes.startswith("0x") else f"0x{tx_hash_bytes}"
+        else:
+            return str(tx_hash_bytes)
 
     def _check_receipt_status(self, receipt) -> bool:
         """Check if receipt has successful status."""
@@ -209,9 +235,18 @@ class SafeTransactionExecutor:
         ])
 
     def _is_signature_error(self, error: Exception) -> bool:
-        """Check if error is due to invalid Safe signatures (GS026)."""
+        """Check if error is due to invalid Safe signatures.
+
+        GS020 = Signatures data too short
+        GS021 = Invalid signature data pointer
+        GS024 = Invalid contract signature
+        GS026 = Invalid owner (signature from non-owner)
+        """
         error_text = str(error).lower()
-        return "gs026" in error_text or "invalid signatures" in error_text
+        return any(x in error_text for x in [
+            "gs020", "gs021", "gs024", "gs026",
+            "invalid signatures", "signatures data too short"
+        ])
 
     def _refresh_nonce(self, safe: Safe, safe_tx: SafeTx) -> SafeTx:
         """Re-fetch nonce and rebuild transaction."""
