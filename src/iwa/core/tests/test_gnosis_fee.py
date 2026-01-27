@@ -1,12 +1,9 @@
 """Test Gnosis fee calculation fix."""
 
 import unittest
-from unittest.mock import MagicMock, patch
-
-from web3 import Web3
+from unittest.mock import MagicMock
 
 from iwa.core.chain.interface import ChainInterface
-from iwa.core.chain.models import Gnosis
 
 
 class TestGnosisFeeFix(unittest.TestCase):
