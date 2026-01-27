@@ -2649,11 +2649,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Show select, hide spinner
       select.style.display = "";
-      spinnerDiv.style.display = "none";
+      spinnerDiv.classList.add("hidden");
     } catch (err) {
       select.innerHTML = '<option value="">Error loading contracts</option>';
       select.style.display = "";
-      spinnerDiv.style.display = "none";
+      spinnerDiv.classList.add("hidden");
       confirmBtn.disabled = false;
     }
   };
@@ -2710,7 +2710,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Load staking contracts
     contractSelect.style.display = "none";
-    spinnerDiv.style.display = "block";
+    spinnerDiv.classList.remove("hidden");
+    spinnerDiv.style.display = "block";  // Ensure display block for visibility
     spinnerDiv.innerHTML =
       '<span class="loading-spinner"></span> Loading contracts...';
     submitBtn.disabled = true;
