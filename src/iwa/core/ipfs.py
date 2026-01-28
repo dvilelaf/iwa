@@ -7,12 +7,15 @@ direct HTTP API calls, avoiding heavy dependencies like open-aea.
 import hashlib
 import json
 import uuid
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import aiohttp
 from multiformats import CID
 
 from iwa.core.models import Config
+
+if TYPE_CHECKING:
+    import requests
 
 # Global session for sync requests
 _SYNC_SESSION: Optional["requests.Session"] = None
