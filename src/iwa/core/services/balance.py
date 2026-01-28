@@ -1,9 +1,7 @@
 """Balance service module."""
 
-import time
 from typing import TYPE_CHECKING, Optional, Union
 
-from loguru import logger
 from web3.types import Wei
 
 from iwa.core.chain import ChainInterfaces
@@ -91,23 +89,3 @@ class BalanceService:
         contract = ERC20Contract(chain_name=chain_name, address=token_address)
         return contract.balance_of_wei(account.address)
 
-    def get_erc20_balance_with_retry(
-        self,
-        account_address: str,
-        token_address_or_name: str,
-        chain_name: str = "gnosis",
-        retries: int = 3,
-    ) -> Optional[float]:
-        """Fetch balance with retry logic."""
-        for attempt in range(retries):
-            try:
-                return self.get_erc20_balance_eth(
-                    account_address, token_address_or_name, chain_name
-                )
-            except Exception as e:
-                if attempt == retries - 1:
-                    logger.error(
-                        f"Failed to fetch balance for {token_address_or_name} after {retries} attempts: {e}"
-                    )
-                time.sleep(1)
-        return None

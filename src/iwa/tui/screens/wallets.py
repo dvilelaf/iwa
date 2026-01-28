@@ -330,7 +330,7 @@ class WalletsScreen(VerticalScroll):
 
     def _fetch_single_token_balance(self, address: str, token: str, chain_name: str) -> str:
         """Fetch a single token balance using BalanceService."""
-        val_token = self.wallet.balance_service.get_erc20_balance_with_retry(
+        val_token = self.wallet.balance_service.get_erc20_balance_eth(
             address, token, chain_name
         )
         val_token_str = f"{val_token:.4f}" if val_token is not None else "-"

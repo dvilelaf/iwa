@@ -131,47 +131,6 @@ def test_get_erc20_balance_wei_account_not_found(
     assert result is None
 
 
-def test_get_erc20_balance_with_retry_success(
-    balance_service, mock_chain_interfaces, mock_account_service
-):
-    """Test get_erc20_balance_with_retry succeeds on first try."""
-    with patch("iwa.core.services.balance.ERC20Contract") as mock_erc20:
-        mock_erc20.return_value.balance_of_eth.return_value = 50.0
-
-        result = balance_service.get_erc20_balance_with_retry("0xAccount", "DAI", "gnosis")
-
-        assert result == 50.0
-
-
-def test_get_erc20_balance_with_retry_fails_then_succeeds(
-    balance_service, mock_chain_interfaces, mock_account_service
-):
-    """Test get_erc20_balance_with_retry retries on failure."""
-    with patch("iwa.core.services.balance.ERC20Contract") as mock_erc20, patch("time.sleep"):
-        mock_erc20.return_value.balance_of_eth.side_effect = [
-            Exception("Network error"),
-            25.0,
-        ]
-
-        result = balance_service.get_erc20_balance_with_retry(
-            "0xAccount", "DAI", "gnosis", retries=3
-        )
-
-        assert result == 25.0
-
-
-def test_get_erc20_balance_with_retry_all_attempts_fail(
-    balance_service, mock_chain_interfaces, mock_account_service
-):
-    """Test get_erc20_balance_with_retry returns None after all retries fail."""
-    with patch("iwa.core.services.balance.ERC20Contract") as mock_erc20, patch("time.sleep"):
-        mock_erc20.return_value.balance_of_eth.side_effect = Exception("Network error")
-
-        result = balance_service.get_erc20_balance_with_retry(
-            "0xAccount", "DAI", "gnosis", retries=3
-        )
-
-        assert result is None
 
 
 def test_balance_service_with_wallet(mock_account_service):
