@@ -89,6 +89,14 @@ class Secrets(BaseSettings):
                 ):
                     clean_value = raw_value[1:-1]
                     setattr(self, field_name, SecretStr(clean_value))
+            elif isinstance(field_value, str):
+                # Also strip quotes from plain string fields (like health_url)
+                if len(field_value) >= 2 and (
+                    (field_value.startswith('"') and field_value.endswith('"'))
+                    or (field_value.startswith("'") and field_value.endswith("'"))
+                ):
+                    clean_value = field_value[1:-1]
+                    setattr(self, field_name, clean_value)
         return self
 
 
