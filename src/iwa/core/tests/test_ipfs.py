@@ -1,12 +1,11 @@
 """Tests for IPFS module."""
 
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-import requests
 
-from iwa.core.ipfs import push_to_ipfs_sync
 import iwa.core.ipfs as ipfs_module
+from iwa.core.ipfs import push_to_ipfs_sync
 
 
 @pytest.fixture
@@ -34,7 +33,6 @@ def mock_cid_decode():
 
 def test_push_to_ipfs_sync_uses_session(mock_config, mock_cid_decode):
     """Test push_to_ipfs_sync uses persistent session."""
-
     # Reset global session for test
     ipfs_module._SYNC_SESSION = None
 
