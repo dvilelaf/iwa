@@ -108,12 +108,11 @@ def get_rate_limiter(chain_name: str, rate: float = None, burst: int = None) -> 
 class RateLimitedEth:
     """Wrapper around web3.eth that applies rate limiting transparently."""
 
-    RPC_METHODS = {
+    READ_METHODS = {
         "get_balance",
         "get_code",
         "get_transaction_count",
         "estimate_gas",
-        "send_raw_transaction",
         "wait_for_transaction_receipt",
         "get_block",
         "get_transaction",
@@ -121,6 +120,16 @@ class RateLimitedEth:
         "call",
         "get_logs",
     }
+
+    WRITE_METHODS = {
+        "send_raw_transaction",
+    }
+
+    # Helper sets for efficient lookup
+    RPC_METHODS = READ_METHODS | WRITE_METHODS
+
+    DEFAULT_READ_RETRIES = 3
+    DEFAULT_READ_RETRY_DELAY = 0.5
 
     def __init__(self, web3_eth, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
         """Initialize RateLimitedEth wrapper."""
@@ -133,7 +142,7 @@ class RateLimitedEth:
         attr = getattr(self._eth, name)
 
         if name in self.RPC_METHODS and callable(attr):
-            return self._wrap_with_rate_limit(attr, name)
+            return self._wrap_with_retry(attr, name)
 
         return attr
 
@@ -151,22 +160,55 @@ class RateLimitedEth:
         else:
             delattr(self._eth, name)
 
-    def _wrap_with_rate_limit(self, method, method_name):
-        """Wrap a method with rate limiting.
+    @property
+    def block_number(self):
+        """Get block number with retry."""
+        return self._execute_with_retry(lambda: self._eth.block_number, "block_number")
 
-        Note: Error handling (rotation, retry) is NOT done here.
-        It is the responsibility of `ChainInterface.with_retry()` to handle
-        errors and rotate RPCs as needed. This wrapper only ensures
-        rate limiting.
-        """
+    @property
+    def gas_price(self):
+        """Get gas price with retry."""
+        return self._execute_with_retry(lambda: self._eth.gas_price, "gas_price")
+
+    def _wrap_with_retry(self, method, method_name):
+        """Wrap method with rate limiting and retry for reads."""
 
         def wrapper(*args, **kwargs):
             if not self._rate_limiter.acquire(timeout=30.0):
-                raise TimeoutError(f"Rate limit timeout waiting for {method_name}")
+                raise TimeoutError(f"Rate limit timeout for {method_name}")
 
-            return method(*args, **kwargs)
+            # Writes: no auto-retry (handled by caller or not safe)
+            if method_name in self.WRITE_METHODS:
+                return method(*args, **kwargs)
+
+            # Reads: with retry
+            return self._execute_with_retry(method, method_name, *args, **kwargs)
 
         return wrapper
+
+    def _execute_with_retry(self, method, method_name, *args, **kwargs):
+        """Execute read operation with retry logic."""
+        last_error = None
+        for attempt in range(self.DEFAULT_READ_RETRIES + 1):
+            try:
+                return method(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                # Use chain interface to handle error (logging, rotation, etc.)
+                result = self._chain_interface._handle_rpc_error(e)
+
+                if not result["should_retry"] or attempt >= self.DEFAULT_READ_RETRIES:
+                    raise
+
+                delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
+                logger.debug(
+                    f"{method_name} attempt {attempt + 1} failed, retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"{method_name} failed unexpectedly")
 
 
 class RateLimitedWeb3:
