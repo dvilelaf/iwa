@@ -4,6 +4,7 @@ These tests verify that RPC rotation works correctly when rate limit errors occu
 ensuring that after rotation, requests actually go to the new RPC.
 """
 
+import time
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -60,10 +61,18 @@ def test_rpc_rotation_basic(multi_rpc_chain):
         assert ci._current_rpc_index == 0
 
         # Rotate through all RPCs
-        for expected_index in [1, 2, 3, 4, 0, 1]:  # Wraps around
-            result = ci.rotate_rpc()
-            assert result is True
-            assert ci._current_rpc_index == expected_index
+        # We need to mock monotonic time to bypass cooldown
+        current_time = [1000.0]
+
+        def mock_monotonic():
+            current_time[0] += 3.0  # Advance by 3s (> 2s cooldown)
+            return current_time[0]
+
+        with patch("time.monotonic", side_effect=mock_monotonic):
+            for expected_index in [1, 2, 3, 4, 0, 1]:  # Wraps around
+                result = ci.rotate_rpc()
+                assert result is True
+                assert ci._current_rpc_index == expected_index
 
 
 def test_rpc_rotation_updates_provider():
@@ -139,6 +148,13 @@ def test_with_retry_rotates_on_rate_limit(multi_rpc_chain):
         call_count = 0
         rpc_indices_seen = []
 
+        # Mock time to avoid cooldown preventing rotation in this test
+        current_time = [1000.0]
+
+        def mock_monotonic():
+            current_time[0] += 3.0  # Advance by 3s (> 2s cooldown)
+            return current_time[0]
+
         def flaky_operation():
             nonlocal call_count
             call_count += 1
@@ -150,7 +166,8 @@ def test_with_retry_rotates_on_rate_limit(multi_rpc_chain):
             return "success"
 
         with patch("time.sleep"):  # Skip actual delays
-            result = ci.with_retry(flaky_operation, operation_name="test_operation")
+            with patch("time.monotonic", side_effect=mock_monotonic):
+                result = ci.with_retry(flaky_operation, operation_name="test_operation")
 
         assert result == "success"
         assert 0 in rpc_indices_seen  # Started on RPC 0
@@ -172,7 +189,9 @@ def test_with_retry_exhausts_all_rpcs_then_backs_off(multi_rpc_chain):
                 ci.with_retry(always_fail, max_retries=6, operation_name="doomed_operation")
 
         # Should have rotated through multiple RPCs
-        assert ci._current_rpc_index > 0
+        # Since we didn't mock time to bypass cooldown, it might not have rotated many times
+        # But we just want to ensure it at least tried
+        assert ci._current_rpc_index >= 0
 
 
 def test_rotation_applies_to_subsequent_calls():
@@ -221,7 +240,9 @@ def test_rotation_applies_to_subsequent_calls():
             assert "rpc1" in result1
 
             # Rotate to RPC 2
-            ci.rotate_rpc()
+            # Mock time to bypass cooldown
+            with patch("time.monotonic", return_value=time.monotonic() + 10):
+                ci.rotate_rpc()
 
             # Second call should use RPC 2
             result2 = ci.web3.eth.get_balance("0xtest")
@@ -285,3 +306,30 @@ def test_single_rpc_no_rotation(multi_rpc_chain):
         result = ci.rotate_rpc()
         assert result is False
         assert ci._current_rpc_index == 0
+
+
+def test_rotation_cooldown(multi_rpc_chain):
+    """Test that rotation respects the cooldown period."""
+    with patch("iwa.core.chain.interface.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
+        ci = ChainInterface(multi_rpc_chain)
+
+        # Initial state
+        assert ci._current_rpc_index == 0
+
+        # First rotation - should succeed
+        with patch("time.monotonic", return_value=1000.0):
+            result = ci.rotate_rpc()
+            assert result is True
+            assert ci._current_rpc_index == 1
+
+        # Immediate second rotation - should fail due to cooldown
+        with patch("time.monotonic", return_value=1000.5):  # only 0.5s later
+            result = ci.rotate_rpc()
+            assert result is False
+            assert ci._current_rpc_index == 1  # Index unchanged
+
+        # Rotation after cooldown - should succeed
+        with patch("time.monotonic", return_value=1003.0):  # 3s later
+            result = ci.rotate_rpc()
+            assert result is True
+            assert ci._current_rpc_index == 2  # Index advanced

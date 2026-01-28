@@ -38,6 +38,7 @@ class ChainInterface:
         self._rate_limiter = get_rate_limiter(chain.name, rate=1.0, burst=1)
         self._current_rpc_index = 0
         self._rpc_failure_counts: Dict[int, int] = {}
+        self._last_rotation_time = 0.0  # Monotonic timestamp of last rotation
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
             logger.warning(
@@ -255,9 +256,11 @@ class ChainInterface:
 
         if should_rotate:
             error_type = "rate limit" if result["is_rate_limit"] else "connection"
+            # Extract the original URL from the error message for clarity
+            error_msg = str(error)
             logger.warning(
                 f"RPC {error_type} error on {self.chain.name} "
-                f"(RPC #{self._current_rpc_index}): {error}"
+                f"(current RPC #{self._current_rpc_index}): {error_msg}"
             )
 
             if self.rotate_rpc():
@@ -266,9 +269,13 @@ class ChainInterface:
                 logger.info(f"Rotated to RPC #{self._current_rpc_index} for {self.chain.name}")
             else:
                 if result["is_rate_limit"]:
-                    self._rate_limiter.trigger_backoff(seconds=5.0)
+                    # Rotation was skipped (cooldown or single RPC) - still allow retry with current RPC
+                    # We don't trigger backoff here because that would block ALL threads.
+                    # Instead, we let the individual thread retry (which has its own exponential backoff).
                     result["should_retry"] = True
-                    logger.warning("No other RPCs available, triggered backoff")
+                    logger.info(
+                        f"RPC rotation skipped, retrying with current RPC #{self._current_rpc_index}"
+                    )
 
         elif result["is_server_error"]:
             logger.warning(f"Server error on {self.chain.name}: {error}")
@@ -282,8 +289,21 @@ class ChainInterface:
 
     def rotate_rpc(self) -> bool:
         """Rotate to the next available RPC."""
+        # Minimum time between rotations to prevent cascade rotations from parallel requests
+        # failing simultaneously
+        cooldown_seconds = 2.0
+
         with self._rotation_lock:
             if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
+                return False
+
+            # Cooldown: prevent cascade rotations from in-flight requests
+            now = time.monotonic()
+            if now - self._last_rotation_time < cooldown_seconds:
+                logger.debug(
+                    f"RPC rotation skipped for {self.chain.name} (cooldown active, "
+                    f"{cooldown_seconds - (now - self._last_rotation_time):.1f}s remaining)"
+                )
                 return False
 
             # Simple Round Robin rotation
@@ -291,6 +311,7 @@ class ChainInterface:
             # Internal call to _init_web3 already expects to be under lock if called from here,
             # but _init_web3 itself doesn't have a lock. Let's make it consistent.
             self._init_web3_under_lock()
+            self._last_rotation_time = now
 
             logger.info(
                 f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}"
