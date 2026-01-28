@@ -193,7 +193,7 @@ class TestRateLimitRotationInterplay:
             rate_limit_error = Exception("Error 429: Too Many Requests")
             result = ci._handle_rpc_error(rate_limit_error)
 
-            # Should have triggered backoff since can't rotate, but still allow retry
+            # Should have triggered retry but NO backoff (skipped for single RPC)
             assert result["should_retry"] is True
             assert result["rotated"] is False
-            assert ci._rate_limiter.get_status()["in_backoff"] is True
+            assert ci._rate_limiter.get_status()["in_backoff"] is False
