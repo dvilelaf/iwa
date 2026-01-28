@@ -147,21 +147,25 @@ async def test_olas_view_actions(mock_wallet, mock_olas_config):
 
             app = OlasTestApp(mock_wallet)
             async with app.run_test() as pilot:
-                await pilot.pause()
+                # Wait for initial load to finish
+                await pilot.pause(0.5)
 
                 # 1. Test Claim
                 with patch.object(OlasView, "claim_rewards") as mock_claim:
                     await pilot.click("#claim-gnosis_1")
+                    await pilot.pause()
                     mock_claim.assert_called_with("gnosis:1")
 
                 # 2. Test Unstake
                 with patch.object(OlasView, "unstake_service") as mock_unstake:
                     await pilot.click("#unstake-gnosis_1")
+                    await pilot.pause()
                     mock_unstake.assert_called_with("gnosis:1")
 
                 # 3. Test Checkpoint
                 with patch.object(OlasView, "checkpoint_service") as mock_checkpoint:
                     await pilot.click("#checkpoint-gnosis_1")
+                    await pilot.pause()
                     mock_checkpoint.assert_called_with("gnosis:1")
 
 
