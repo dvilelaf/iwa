@@ -1239,7 +1239,7 @@ wheels = [
 
 [[package]]
 name = "iwa"
-version = "0.0.55"
+version = "0.0.56"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
