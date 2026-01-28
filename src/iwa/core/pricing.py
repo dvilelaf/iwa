@@ -28,6 +28,27 @@ class PriceService:
             if self.secrets.coingecko_api_key
             else None
         )
+        self.session = requests.Session()
+        # Configure retry strategy
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+    def close(self):
+        """Close the session."""
+        self.session.close()
+
+    def __del__(self):
+        """Cleanup on deletion."""
+        self.close()
 
     def get_token_price(self, token_id: str, vs_currency: str = "eur") -> Optional[float]:
         """Get token price in specified currency.
@@ -66,7 +87,8 @@ class PriceService:
                 if self.api_key:
                     headers["x-cg-demo-api-key"] = self.api_key
 
-                response = requests.get(url, params=params, headers=headers, timeout=10)
+                # Use session instead of direct requests
+                response = self.session.get(url, params=params, headers=headers, timeout=10)
 
                 if response.status_code == 401 and self.api_key:
                     logger.warning("CoinGecko API key invalid (401). Retrying without key...")
@@ -74,7 +96,7 @@ class PriceService:
                     headers.pop("x-cg-demo-api-key", None)
                     # Re-run with base URL
                     url = f"{self.BASE_URL}/simple/price"
-                    response = requests.get(url, params=params, headers=headers, timeout=10)
+                    response = self.session.get(url, params=params, headers=headers, timeout=10)
 
                 if response.status_code == 429:
                     logger.warning(

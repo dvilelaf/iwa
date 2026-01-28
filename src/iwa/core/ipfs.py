@@ -14,6 +14,10 @@ from multiformats import CID
 
 from iwa.core.models import Config
 
+# Global session for sync requests
+_SYNC_SESSION: Optional["requests.Session"] = None
+
+
 
 def _compute_cid_v1_hex(data: bytes) -> str:
     """Compute CIDv1 hex representation from raw data.
@@ -84,6 +88,21 @@ def push_to_ipfs_sync(
     :return: Tuple of (CIDv1 string, CIDv1 hex representation).
     """
     import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    global _SYNC_SESSION
+
+    if _SYNC_SESSION is None:
+        _SYNC_SESSION = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        _SYNC_SESSION.mount("http://", adapter)
+        _SYNC_SESSION.mount("https://", adapter)
 
     url = api_url or Config().core.ipfs_api_url
     endpoint = f"{url}/api/v0/add"
@@ -92,7 +111,7 @@ def push_to_ipfs_sync(
 
     files = {"file": ("data", data, "application/octet-stream")}
 
-    response = requests.post(endpoint, files=files, params=params, timeout=60)
+    response = _SYNC_SESSION.post(endpoint, files=files, params=params, timeout=60)
     response.raise_for_status()
     result = response.json()
 
