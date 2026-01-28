@@ -1,6 +1,6 @@
 """Safe service module."""
 
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
 from safe_eth.eth import EthereumClient

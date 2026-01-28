@@ -12,14 +12,15 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 import aiohttp
 from multiformats import CID
 
+from iwa.core.http import create_retry_session
 from iwa.core.models import Config
 
 if TYPE_CHECKING:
     import requests
 
-# Global session for sync requests
+# Global persistent sessions (reused across calls to prevent FD leaks)
 _SYNC_SESSION: Optional["requests.Session"] = None
-
+_ASYNC_SESSION: Optional[aiohttp.ClientSession] = None
 
 
 def _compute_cid_v1_hex(data: bytes) -> str:
@@ -63,10 +64,13 @@ async def push_to_ipfs_async(
     form = aiohttp.FormData()
     form.add_field("file", data, filename="data", content_type="application/octet-stream")
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(endpoint, data=form, params=params) as response:
-            response.raise_for_status()
-            result = await response.json()
+    global _ASYNC_SESSION
+    if _ASYNC_SESSION is None or _ASYNC_SESSION.closed:
+        _ASYNC_SESSION = aiohttp.ClientSession()
+
+    async with _ASYNC_SESSION.post(endpoint, data=form, params=params) as response:
+        response.raise_for_status()
+        result = await response.json()
 
     cid_str = result["Hash"]
     cid = CID.decode(cid_str)
@@ -90,22 +94,10 @@ def push_to_ipfs_sync(
     :param pin: Whether to pin the content (default True).
     :return: Tuple of (CIDv1 string, CIDv1 hex representation).
     """
-    import requests
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
-
     global _SYNC_SESSION
 
     if _SYNC_SESSION is None:
-        _SYNC_SESSION = requests.Session()
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        _SYNC_SESSION.mount("http://", adapter)
-        _SYNC_SESSION.mount("https://", adapter)
+        _SYNC_SESSION = create_retry_session()
 
     url = api_url or Config().core.ipfs_api_url
     endpoint = f"{url}/api/v0/add"

@@ -1,10 +1,10 @@
 """ChainInterface class for blockchain interactions."""
 
-import requests
 import threading
 import time
 from typing import Callable, Dict, Optional, TypeVar, Union
 
+import requests
 from web3 import Web3
 
 from iwa.core.chain.errors import TenderlyQuotaExceededError, sanitize_rpc_url
@@ -24,6 +24,7 @@ class ChainInterface:
 
     DEFAULT_MAX_RETRIES = 6  # Allow trying most/all available RPCs on rate limit
     DEFAULT_RETRY_DELAY = 1.0  # Base delay between retries (exponential backoff)
+    ROTATION_COOLDOWN_SECONDS = 2.0  # Minimum time between RPC rotations
 
     chain: SupportedChain
 
@@ -291,20 +292,17 @@ class ChainInterface:
 
     def rotate_rpc(self) -> bool:
         """Rotate to the next available RPC."""
-        # Minimum time between rotations to prevent cascade rotations from parallel requests
-        # failing simultaneously
-        cooldown_seconds = 2.0
-
         with self._rotation_lock:
             if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
                 return False
 
             # Cooldown: prevent cascade rotations from in-flight requests
             now = time.monotonic()
-            if now - self._last_rotation_time < cooldown_seconds:
+            elapsed = now - self._last_rotation_time
+            if elapsed < self.ROTATION_COOLDOWN_SECONDS:
                 logger.debug(
                     f"RPC rotation skipped for {self.chain.name} (cooldown active, "
-                    f"{cooldown_seconds - (now - self._last_rotation_time):.1f}s remaining)"
+                    f"{self.ROTATION_COOLDOWN_SECONDS - elapsed:.1f}s remaining)"
                 )
                 return False
 
@@ -328,7 +326,11 @@ class ChainInterface:
     def _init_web3_under_lock(self):
         """Internal non-thread-safe web3 initialization."""
         rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
-        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}, session=self._session))
+        raw_web3 = Web3(
+            Web3.HTTPProvider(
+                rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}, session=self._session
+            )
+        )
 
         # Use duck typing to check if current web3 is a RateLimitedWeb3 wrapper
         if hasattr(self, "web3") and hasattr(self.web3, "set_backend"):
@@ -411,7 +413,9 @@ class ChainInterface:
         except Exception:
             return address[:6] + "..." + address[-4:]
 
-    def get_token_decimals(self, address: EthereumAddress, fallback_to_18: bool = True) -> Optional[int]:
+    def get_token_decimals(
+        self, address: EthereumAddress, fallback_to_18: bool = True
+    ) -> Optional[int]:
         """Get token decimals for an address.
 
         Args:
@@ -428,7 +432,15 @@ class ChainInterface:
             # Use _web3 directly to ensure current provider after RPC rotation
             contract = self.web3._web3.eth.contract(
                 address=self.web3.to_checksum_address(address),
-                abi=[{"constant": True, "inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "type": "function"}]
+                abi=[
+                    {
+                        "constant": True,
+                        "inputs": [],
+                        "name": "decimals",
+                        "outputs": [{"type": "uint8"}],
+                        "type": "function",
+                    }
+                ],
             )
             return contract.functions.decimals().call()
         except Exception:
@@ -477,8 +489,10 @@ class ChainInterface:
         # Contract calls already have the target address in the contract object
         if not built_method and "to" in tx_params:
             params["to"] = tx_params["to"]
-        elif not built_method and "to" in params: # Fallback if added to params earlier (though not here yet)
-             pass
+        elif (
+            not built_method and "to" in params
+        ):  # Fallback if added to params earlier (though not here yet)
+            pass
 
         # Determine gas
         if built_method:
@@ -491,11 +505,7 @@ class ChainInterface:
             # Native transfer - dynamic estimation
             try:
                 # web3.eth.estimate_gas returns gas for the dict it receives
-                est_params = {
-                    "from": params["from"],
-                    "to": params["to"],
-                    "value": params["value"]
-                }
+                est_params = {"from": params["from"], "to": params["to"], "value": params["value"]}
                 # Remove None 'to' for contract creation simulation if needed, but usually send() has to
                 if not est_params["to"]:
                     est_params.pop("to")
@@ -503,7 +513,9 @@ class ChainInterface:
                 estimated = self.web3.eth.estimate_gas(est_params)
                 # Apply 10% buffer for safety
                 params["gas"] = int(estimated * 1.1)
-                logger.debug(f"[GAS] Estimated native transfer gas: {params['gas']} (raw: {estimated})")
+                logger.debug(
+                    f"[GAS] Estimated native transfer gas: {params['gas']} (raw: {estimated})"
+                )
             except Exception as e:
                 logger.debug(f"[GAS] Native estimation failed, fallback to 21000: {e}")
                 params["gas"] = 21_000
@@ -535,10 +547,7 @@ class ChainInterface:
                 # Buffer max_fee to handle base fee expansion
                 max_fee = int(base_fee * 1.5) + max_priority_fee
 
-                return {
-                    "maxFeePerGas": max_fee,
-                    "maxPriorityFeePerGas": max_priority_fee
-                }
+                return {"maxFeePerGas": max_fee, "maxPriorityFeePerGas": max_priority_fee}
         except Exception as e:
             logger.debug(f"Failed to calculate EIP-1559 fees: {e}, falling back to legacy")
 

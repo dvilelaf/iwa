@@ -188,12 +188,10 @@ class RateLimitedEth:
 
     def _execute_with_retry(self, method, method_name, *args, **kwargs):
         """Execute read operation with retry logic."""
-        last_error = None
         for attempt in range(self.DEFAULT_READ_RETRIES + 1):
             try:
                 return method(*args, **kwargs)
             except Exception as e:
-                last_error = e
                 # Use chain interface to handle error (logging, rotation, etc.)
                 result = self._chain_interface._handle_rpc_error(e)
 
@@ -205,10 +203,6 @@ class RateLimitedEth:
                     f"{method_name} attempt {attempt + 1} failed, retrying in {delay:.1f}s..."
                 )
                 time.sleep(delay)
-
-        if last_error:
-            raise last_error
-        raise RuntimeError(f"{method_name} failed unexpectedly")
 
 
 class RateLimitedWeb3:

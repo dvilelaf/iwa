@@ -4,9 +4,9 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-import requests
 from loguru import logger
 
+from iwa.core.http import create_retry_session
 from iwa.core.secrets import secrets
 
 # Global cache shared across all PriceService instances
@@ -28,27 +28,11 @@ class PriceService:
             if self.secrets.coingecko_api_key
             else None
         )
-        self.session = requests.Session()
-        # Configure retry strategy
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
+        self.session = create_retry_session()
 
     def close(self):
         """Close the session."""
         self.session.close()
-
-    def __del__(self):
-        """Cleanup on deletion."""
-        self.close()
 
     def get_token_price(self, token_id: str, vs_currency: str = "eur") -> Optional[float]:
         """Get token price in specified currency.
@@ -115,9 +99,7 @@ class PriceService:
                     return float(data[token_id][vs_currency])
 
                 # If we got response but price not found, it's likely a wrong ID
-                logger.debug(
-                    f"Price for {token_id} in {vs_currency} not found in response: {data}"
-                )
+                logger.debug(f"Price for {token_id} in {vs_currency} not found in response: {data}")
                 return None
 
             except Exception as e:
