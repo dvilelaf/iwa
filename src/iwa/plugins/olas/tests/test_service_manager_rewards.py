@@ -197,7 +197,11 @@ def test_withdraw_rewards_no_withdrawal_address(mock_wallet):
     )
     manager.olas_config.withdrawal_address = None
 
-    success, amount = manager.withdraw_rewards()
+    with patch("iwa.plugins.olas.service_manager.drain.ERC20Contract") as mock_erc20_cls:
+        mock_erc20 = mock_erc20_cls.return_value
+        mock_erc20.balance_of_wei.return_value = 0
+
+        success, amount = manager.withdraw_rewards()
 
     assert success is False
     assert amount == 0
