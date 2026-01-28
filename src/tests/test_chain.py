@@ -243,10 +243,12 @@ def test_rotate_rpc(mock_web3):
         assert ci._current_rpc_index == 1
 
         # Rotate 2
+        ci._last_rotation_time = 0  # Bypass cooldown
         assert ci.rotate_rpc() is True
         assert ci._current_rpc_index == 2
 
         # Rotate 3 (back to 0)
+        ci._last_rotation_time = 0  # Bypass cooldown
         assert ci.rotate_rpc() is True
         assert ci._current_rpc_index == 0
 
@@ -292,6 +294,7 @@ def test_chain_interface_with_real_chains():
 
         # Mock health check to pass
         with patch.object(interface, "check_rpc_health", return_value=True):
+            interface._last_rotation_time = 0  # Bypass cooldown
             rotated = interface.rotate_rpc()
             assert rotated is True
 
