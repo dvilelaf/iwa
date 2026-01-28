@@ -128,8 +128,21 @@ class RateLimitedEth:
     # Helper sets for efficient lookup
     RPC_METHODS = READ_METHODS | WRITE_METHODS
 
-    DEFAULT_READ_RETRIES = 3
+    DEFAULT_READ_RETRIES = 1  # Keep low; ChainInterface.with_retry handles cross-RPC retries
     DEFAULT_READ_RETRY_DELAY = 0.5
+
+    # Only retry errors that are clearly transient network issues.
+    # Rate-limit / quota / server errors propagate up to with_retry for rotation.
+    TRANSIENT_SIGNALS = (
+        "timeout",
+        "timed out",
+        "connection reset",
+        "connection refused",
+        "connection aborted",
+        "broken pipe",
+        "eof",
+        "remote end closed",
+    )
 
     def __init__(self, web3_eth, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
         """Initialize RateLimitedEth wrapper."""
@@ -187,20 +200,36 @@ class RateLimitedEth:
         return wrapper
 
     def _execute_with_retry(self, method, method_name, *args, **kwargs):
-        """Execute read operation with retry logic."""
+        """Execute a read operation with limited retry for transient errors.
+
+        Only connection-level failures (timeout, reset, broken pipe) are
+        retried here.  Rate-limit, quota, and server errors propagate up
+        to ``ChainInterface.with_retry`` which handles RPC rotation.
+        This avoids the double-retry amplification that previously caused
+        up to 4x7 = 28 RPC requests per logical call.
+        """
         for attempt in range(self.DEFAULT_READ_RETRIES + 1):
             try:
                 return method(*args, **kwargs)
             except Exception as e:
-                # Use chain interface to handle error (logging, rotation, etc.)
-                result = self._chain_interface._handle_rpc_error(e)
-
-                if not result["should_retry"] or attempt >= self.DEFAULT_READ_RETRIES:
+                if attempt >= self.DEFAULT_READ_RETRIES:
                     raise
+
+                # Only retry clearly transient network errors.
+                err_text = str(e).lower()
+                if not any(signal in err_text for signal in self.TRANSIENT_SIGNALS):
+                    raise
+
+                # Re-acquire a rate-limiter token before retrying.
+                if not self._rate_limiter.acquire(timeout=30.0):
+                    raise TimeoutError(
+                        f"Rate limit timeout for retry of {method_name}"
+                    ) from e
 
                 delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
                 logger.debug(
-                    f"{method_name} attempt {attempt + 1} failed, retrying in {delay:.1f}s..."
+                    f"{method_name} attempt {attempt + 1} failed (transient), "
+                    f"retrying in {delay:.1f}s..."
                 )
                 time.sleep(delay)
 

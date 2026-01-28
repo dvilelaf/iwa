@@ -146,7 +146,7 @@ class TestRateLimitRotationInterplay:
     """Test interaction between rate limiting and RPC rotation."""
 
     def test_rate_limit_triggers_rotation_first(self):
-        """Test that rate limit error triggers RPC rotation before backoff."""
+        """Test that rate limit error triggers RPC rotation and global backoff."""
         from unittest.mock import MagicMock, PropertyMock
 
         from iwa.core.chain import ChainInterface, SupportedChain
@@ -171,8 +171,10 @@ class TestRateLimitRotationInterplay:
                 assert result["rotated"] is True
                 assert result["should_retry"] is True
                 assert ci._current_rpc_index != original_index
-                # Backoff should NOT be triggered since rotation succeeded
-                assert ci._rate_limiter.get_status()["in_backoff"] is False
+                # Global backoff IS triggered to slow other threads briefly
+                assert ci._rate_limiter.get_status()["in_backoff"] is True
+                # The old RPC should be marked in per-RPC backoff
+                assert not ci._is_rpc_healthy(original_index)
 
     def test_rate_limit_triggers_backoff_when_no_rotation(self):
         """Test that rate limit triggers backoff when no other RPCs available."""
@@ -193,7 +195,7 @@ class TestRateLimitRotationInterplay:
             rate_limit_error = Exception("Error 429: Too Many Requests")
             result = ci._handle_rpc_error(rate_limit_error)
 
-            # Should have triggered retry but NO backoff (skipped for single RPC)
+            # Should have triggered retry and global backoff
             assert result["should_retry"] is True
             assert result["rotated"] is False
-            assert ci._rate_limiter.get_status()["in_backoff"] is False
+            assert ci._rate_limiter.get_status()["in_backoff"] is True

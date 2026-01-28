@@ -201,10 +201,10 @@ def test_is_tenderly_property():
 
 
 def test_reset_rpc_failure_counts(mock_chain_interface):
-    """Test resetting failure counts."""
+    """Test resetting backoff tracking."""
     interface, _ = mock_chain_interface
-    interface._rpc_failure_counts = {0: 5, 1: 3}
+    interface._rpc_backoff_until = {0: 99999.0, 1: 99999.0}
 
     interface.reset_rpc_failure_counts()
 
-    assert interface._rpc_failure_counts == {}
+    assert interface._rpc_backoff_until == {}

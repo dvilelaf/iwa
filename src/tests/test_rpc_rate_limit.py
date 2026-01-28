@@ -16,7 +16,7 @@ def clean_rate_limiters():
 
 
 def test_chain_interface_initializes_strict_limiter(clean_rate_limiters):
-    """Verify ChainInterface initializes with rate=1.0 and burst=1."""
+    """Verify ChainInterface initializes with rate=5.0 and burst=10."""
     # Create a dummy chain
     chain = MagicMock(spec=SupportedChain)
     chain.name = "TestSlowChain"
@@ -30,5 +30,5 @@ def test_chain_interface_initializes_strict_limiter(clean_rate_limiters):
     limiter = ci._rate_limiter
 
     # Assert correct configuration
-    assert limiter.rate == 1.0, f"Expected rate 1.0, got {limiter.rate}"
-    assert limiter.burst == 1, f"Expected burst 1, got {limiter.burst}"
+    assert limiter.rate == 5.0, f"Expected rate 5.0, got {limiter.rate}"
+    assert limiter.burst == 10, f"Expected burst 10, got {limiter.burst}"

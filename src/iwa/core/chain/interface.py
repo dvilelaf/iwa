@@ -26,6 +26,11 @@ class ChainInterface:
     DEFAULT_RETRY_DELAY = 1.0  # Base delay between retries (exponential backoff)
     ROTATION_COOLDOWN_SECONDS = 2.0  # Minimum time between RPC rotations
 
+    # Per-error-type backoff durations (seconds) applied to the offending RPC.
+    RATE_LIMIT_BACKOFF = 10.0  # 429 Too Many Requests
+    QUOTA_EXCEEDED_BACKOFF = 300.0  # RPC quota exhausted (resets hourly/daily)
+    CONNECTION_ERROR_BACKOFF = 30.0  # Timeout / connection refused / DNS
+
     chain: SupportedChain
 
     def __init__(self, chain: Union[SupportedChain, str] = None):
@@ -36,10 +41,9 @@ class ChainInterface:
             chain: SupportedChain = getattr(SupportedChains(), chain.lower())
 
         self.chain = chain
-        # Enforce strict 1.0 RPS limit to prevent synchronization issues
-        self._rate_limiter = get_rate_limiter(chain.name, rate=1.0, burst=1)
+        self._rate_limiter = get_rate_limiter(chain.name, rate=5.0, burst=10)
         self._current_rpc_index = 0
-        self._rpc_failure_counts: Dict[int, int] = {}
+        self._rpc_backoff_until: Dict[int, float] = {}  # index -> monotonic expiry
         self._last_rotation_time = 0.0  # Monotonic timestamp of last rotation
 
         if self.chain.rpc and self.chain.rpc.startswith("http://"):
@@ -229,6 +233,34 @@ class ChainInterface:
         ]
         return any(signal in err_text for signal in gas_signals)
 
+    def _is_quota_exceeded_error(self, error: Exception) -> bool:
+        """Check if the RPC's usage quota has been exhausted.
+
+        JSON-RPC code -32001 with messages like "Exceeded the quota usage"
+        indicates the provider's daily/hourly quota is spent.  This is NOT
+        a transient 429 rate-limit; the RPC will reject ALL requests until
+        the quota resets, so it must be backed off for a long period.
+        """
+        err_text = str(error).lower()
+        quota_signals = [
+            "exceeded the quota",
+            "exceeded quota",
+            "quota usage",
+            "quota exceeded",
+            "allowance exceeded",
+        ]
+        return any(signal in err_text for signal in quota_signals)
+
+    # -- Per-RPC health tracking ------------------------------------------
+
+    def _mark_rpc_backoff(self, index: int, seconds: float) -> None:
+        """Mark an RPC as temporarily unavailable for *seconds*."""
+        self._rpc_backoff_until[index] = time.monotonic() + seconds
+
+    def _is_rpc_healthy(self, index: int) -> bool:
+        """Return True if the RPC at *index* is not in backoff."""
+        return time.monotonic() >= self._rpc_backoff_until.get(index, 0.0)
+
     def _handle_rpc_error(self, error: Exception) -> Dict[str, Union[bool, int]]:
         """Handle RPC errors with smart rotation and retry logic."""
         result: Dict[str, Union[bool, int]] = {
@@ -237,6 +269,7 @@ class ChainInterface:
             "is_server_error": self._is_server_error(error),
             "is_gas_error": self._is_gas_error(error),
             "is_tenderly_quota": self._is_tenderly_quota_exceeded(error),
+            "is_quota_exceeded": self._is_quota_exceeded_error(error),
             "rotated": False,
             "should_retry": False,
         }
@@ -251,19 +284,33 @@ class ChainInterface:
                 "Run 'uv run -m iwa.tools.reset_tenderly' to reset."
             )
 
-        self._rpc_failure_counts[self._current_rpc_index] = (
-            self._rpc_failure_counts.get(self._current_rpc_index, 0) + 1
+        # Determine if we need to rotate and what backoff to apply.
+        should_rotate = (
+            result["is_rate_limit"]
+            or result["is_connection_error"]
+            or result["is_quota_exceeded"]
         )
 
-        should_rotate = result["is_rate_limit"] or result["is_connection_error"]
-
         if should_rotate:
-            error_type = "rate limit" if result["is_rate_limit"] else "connection"
-            # Extract the original URL from the error message for clarity
-            error_msg = str(error)
+            failed_index = self._current_rpc_index
+
+            # Apply per-RPC backoff so smart rotation skips this RPC.
+            if result["is_quota_exceeded"]:
+                error_type = "quota exceeded"
+                self._mark_rpc_backoff(failed_index, self.QUOTA_EXCEEDED_BACKOFF)
+            elif result["is_rate_limit"]:
+                error_type = "rate limit"
+                self._mark_rpc_backoff(failed_index, self.RATE_LIMIT_BACKOFF)
+                # Brief global backoff so other threads don't immediately flood
+                # the same (now backed-off) RPC before rotation takes effect.
+                self._rate_limiter.trigger_backoff(seconds=2.0)
+            else:
+                error_type = "connection"
+                self._mark_rpc_backoff(failed_index, self.CONNECTION_ERROR_BACKOFF)
+
             logger.warning(
                 f"RPC {error_type} error on {self.chain.name} "
-                f"(current RPC #{self._current_rpc_index}): {error_msg}"
+                f"(RPC #{failed_index}): {error}"
             )
 
             if self.rotate_rpc():
@@ -271,14 +318,11 @@ class ChainInterface:
                 result["should_retry"] = True
                 logger.info(f"Rotated to RPC #{self._current_rpc_index} for {self.chain.name}")
             else:
-                if result["is_rate_limit"]:
-                    # Rotation was skipped (cooldown or single RPC) - still allow retry with current RPC
-                    # We don't trigger backoff here because that would block ALL threads.
-                    # Instead, we let the individual thread retry (which has its own exponential backoff).
-                    result["should_retry"] = True
-                    logger.info(
-                        f"RPC rotation skipped, retrying with current RPC #{self._current_rpc_index}"
-                    )
+                # Rotation skipped (cooldown or single RPC) - still allow retry
+                result["should_retry"] = True
+                logger.info(
+                    f"RPC rotation skipped, retrying with current RPC #{self._current_rpc_index}"
+                )
 
         elif result["is_server_error"]:
             logger.warning(f"Server error on {self.chain.name}: {error}")
@@ -291,30 +335,40 @@ class ChainInterface:
         return result
 
     def rotate_rpc(self) -> bool:
-        """Rotate to the next available RPC."""
+        """Rotate to the next healthy RPC, skipping those in backoff."""
         with self._rotation_lock:
-            if not self.chain.rpcs or len(self.chain.rpcs) <= 1:
+            n = len(self.chain.rpcs) if self.chain.rpcs else 0
+            if n <= 1:
                 return False
 
             # Cooldown: prevent cascade rotations from in-flight requests
             now = time.monotonic()
-            elapsed = now - self._last_rotation_time
-            if elapsed < self.ROTATION_COOLDOWN_SECONDS:
-                logger.debug(
-                    f"RPC rotation skipped for {self.chain.name} (cooldown active, "
-                    f"{self.ROTATION_COOLDOWN_SECONDS - elapsed:.1f}s remaining)"
-                )
+            if now - self._last_rotation_time < self.ROTATION_COOLDOWN_SECONDS:
                 return False
 
-            # Simple Round Robin rotation
-            self._current_rpc_index = (self._current_rpc_index + 1) % len(self.chain.rpcs)
-            # Internal call to _init_web3 already expects to be under lock if called from here,
-            # but _init_web3 itself doesn't have a lock. Let's make it consistent.
+            # Try each other RPC in round-robin order, preferring healthy ones.
+            best: Optional[int] = None
+            for offset in range(1, n):
+                candidate = (self._current_rpc_index + offset) % n
+                if self._is_rpc_healthy(candidate):
+                    best = candidate
+                    break
+
+            if best is None:
+                # All RPCs are in backoff — pick the one whose backoff expires soonest.
+                best = min(
+                    (i for i in range(n) if i != self._current_rpc_index),
+                    key=lambda i: self._rpc_backoff_until.get(i, 0.0),
+                )
+
+            self._current_rpc_index = best
             self._init_web3_under_lock()
             self._last_rotation_time = now
 
+            healthy_tag = "" if self._is_rpc_healthy(best) else " (still in backoff)"
             logger.info(
-                f"Rotated RPC for {self.chain.name} to index {self._current_rpc_index}: {self.chain.rpcs[self._current_rpc_index]}"
+                f"Rotated RPC for {self.chain.name} to index {best}: "
+                f"{self.chain.rpcs[best]}{healthy_tag}"
             )
             return True
 
@@ -583,6 +637,6 @@ class ChainInterface:
         return self.chain.contracts.get(contract_name)
 
     def reset_rpc_failure_counts(self):
-        """Reset RPC failure tracking. Call periodically to allow retrying failed RPCs."""
-        self._rpc_failure_counts.clear()
-        logger.debug("Reset RPC failure counts")
+        """Reset RPC backoff tracking. Call periodically to allow retrying backed-off RPCs."""
+        self._rpc_backoff_until.clear()
+        logger.debug("Reset RPC backoff tracking")
