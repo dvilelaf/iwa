@@ -52,6 +52,7 @@ class SafeTransactionExecutor:
         config = Config().core
         self.max_retries = max_retries or config.safe_tx_max_retries
         self.gas_buffer = gas_buffer or config.safe_tx_gas_buffer
+        self._client_cache: Dict[str, EthereumClient] = {}
 
     def execute_with_retry(
         self,
@@ -237,7 +238,10 @@ class SafeTransactionExecutor:
 
     def _recreate_safe_client(self, safe_address: str) -> Safe:
         """Recreate Safe with current (possibly rotated) RPC."""
-        ethereum_client = EthereumClient(self.chain_interface.current_rpc)
+        rpc_url = self.chain_interface.current_rpc
+        if rpc_url not in self._client_cache:
+            self._client_cache[rpc_url] = EthereumClient(rpc_url)
+        ethereum_client = self._client_cache[rpc_url]
         return Safe(safe_address, ethereum_client)
 
     def _is_nonce_error(self, error: Exception) -> bool:

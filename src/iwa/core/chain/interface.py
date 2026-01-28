@@ -1,5 +1,6 @@
 """ChainInterface class for blockchain interactions."""
 
+import requests
 import threading
 import time
 from typing import Callable, Dict, Optional, TypeVar, Union
@@ -48,6 +49,7 @@ class ChainInterface:
 
         self._initial_block = 0
         self._rotation_lock = threading.Lock()
+        self._session = requests.Session()
         self._init_web3()
 
     @property
@@ -326,7 +328,7 @@ class ChainInterface:
     def _init_web3_under_lock(self):
         """Internal non-thread-safe web3 initialization."""
         rpc_url = self.chain.rpcs[self._current_rpc_index] if self.chain.rpcs else ""
-        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}))
+        raw_web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": DEFAULT_RPC_TIMEOUT}, session=self._session))
 
         # Use duck typing to check if current web3 is a RateLimitedWeb3 wrapper
         if hasattr(self, "web3") and hasattr(self.web3, "set_backend"):

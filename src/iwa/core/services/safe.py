@@ -35,6 +35,7 @@ class SafeService:
         """Initialize SafeService."""
         self.key_storage = key_storage
         self.account_service = account_service
+        self._client_cache: Dict[str, EthereumClient] = {}
 
     def create_safe(
         self,
@@ -102,7 +103,12 @@ class SafeService:
 
         # Use ChainInterface which has proper RPC rotation and parsing
         chain_interface = ChainInterfaces().get(chain_name)
-        return EthereumClient(chain_interface.current_rpc)
+        rpc_url = chain_interface.current_rpc
+
+        if rpc_url not in self._client_cache:
+            self._client_cache[rpc_url] = EthereumClient(rpc_url)
+
+        return self._client_cache[rpc_url]
 
     def _deploy_safe_contract(
         self,
