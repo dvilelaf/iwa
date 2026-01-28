@@ -72,6 +72,25 @@ class Secrets(BaseSettings):
 
         return self
 
+    @model_validator(mode="after")
+    def strip_quotes_from_secrets(self) -> "Secrets":
+        """Strip leading/trailing quotes from SecretStr fields.
+
+        Docker env_file often preserves quotes (e.g. KEY="val" -> "val"),
+        which causes API authentication failures.
+        """
+        for field_name, field_value in self:
+            if isinstance(field_value, SecretStr):
+                raw_value = field_value.get_secret_value()
+                # Check for matching quotes at start and end
+                if len(raw_value) >= 2 and (
+                    (raw_value.startswith('"') and raw_value.endswith('"'))
+                    or (raw_value.startswith("'") and raw_value.endswith("'"))
+                ):
+                    clean_value = raw_value[1:-1]
+                    setattr(self, field_name, SecretStr(clean_value))
+        return self
+
 
 # Global secrets instance
 secrets = Secrets()
