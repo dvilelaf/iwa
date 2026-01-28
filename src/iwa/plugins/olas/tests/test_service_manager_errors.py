@@ -26,10 +26,11 @@ def mock_wallet():
 @pytest.fixture
 def mock_manager(mock_wallet):
     """Setup a ServiceManager with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls, \
-         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache, \
-         patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache):
-
+    with (
+        patch("iwa.plugins.olas.service_manager.base.Config") as mock_cfg_cls,
+        patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache,
+        patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache),
+    ):
         mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
 
         mock_cfg = mock_cfg_cls.return_value

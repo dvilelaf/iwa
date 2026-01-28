@@ -31,6 +31,7 @@ def clear_abi_cache() -> None:
     global _ABI_CACHE
     _ABI_CACHE = {}
 
+
 # Panic codes (from Solidity)
 # ... (rest of PANIC_CODES) ...
 PANIC_CODES = {

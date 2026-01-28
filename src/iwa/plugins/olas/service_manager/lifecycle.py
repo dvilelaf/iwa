@@ -429,9 +429,7 @@ class LifecycleManagerMixin:
             )
 
             if balance < bond_amount:
-                logger.error(
-                    f"[ACTIVATE] FAIL: Owner balance {balance} < required {bond_amount}"
-                )
+                logger.error(f"[ACTIVATE] FAIL: Owner balance {balance} < required {bond_amount}")
                 return False
 
             protocol_contracts = OLAS_CONTRACTS.get(self.chain_name.lower(), {})
@@ -682,7 +680,9 @@ class LifecycleManagerMixin:
                 )
                 return True
 
-        logger.info(f"[REGISTER] Service Owner approving Token Utility for bond: {bond_amount_wei} wei")
+        logger.info(
+            f"[REGISTER] Service Owner approving Token Utility for bond: {bond_amount_wei} wei"
+        )
 
         utility_address = str(
             OLAS_CONTRACTS[self.chain_name]["OLAS_SERVICE_REGISTRY_TOKEN_UTILITY"]
@@ -697,9 +697,7 @@ class LifecycleManagerMixin:
         )
 
         if allowance >= bond_amount_wei:
-            logger.debug(
-                f"[REGISTER] Sufficient allowance ({allowance} >= {bond_amount_wei})"
-            )
+            logger.debug(f"[REGISTER] Sufficient allowance ({allowance} >= {bond_amount_wei})")
             return True
 
         # Use service owner which holds the OLAS tokens (not necessarily master)
@@ -800,7 +798,9 @@ class LifecycleManagerMixin:
             )
             return False
 
-        logger.debug(f"[DEPLOY] Preparing deploy tx for owner {self._get_label(self.service.service_owner_address)}")
+        logger.debug(
+            f"[DEPLOY] Preparing deploy tx for owner {self._get_label(self.service.service_owner_address)}"
+        )
         deploy_tx = self.manager.prepare_deploy_tx(
             from_address=self.service.service_owner_address,
             service_id=self.service.service_id,
@@ -855,7 +855,7 @@ class LifecycleManagerMixin:
             _, agent_instances = self.registry.call("getAgentInstances", self.service.service_id)
             service_info = self.registry.get_service(self.service.service_id)
             threshold = service_info["threshold"]
-           # Store the multisig in the wallet with tag
+            # Store the multisig in the wallet with tag
             multisig_tag = f"{self.service.service_name}_multisig"
 
             # ARCHIVING LOGIC: If tag is already taken by a different address, rename the old one

@@ -131,8 +131,6 @@ def test_get_erc20_balance_wei_account_not_found(
     assert result is None
 
 
-
-
 def test_balance_service_with_wallet(mock_account_service):
     """Test BalanceService initialization with Wallet (has key_storage attr)."""
     from iwa.core.services.balance import BalanceService

@@ -181,9 +181,7 @@ class OlasServiceImporter:
             if service.service_id:
                 key = f"{service.chain_name}:{service.service_id}"
                 if key in seen_keys:
-                    logger.debug(
-                        f"Skipping duplicate service {key} from {service.source_folder}"
-                    )
+                    logger.debug(f"Skipping duplicate service {key} from {service.source_folder}")
                     duplicates += 1
                     continue
                 seen_keys.add(key)
@@ -482,9 +480,7 @@ class OlasServiceImporter:
                     staking_program_id, chain_name
                 )
 
-    def _resolve_staking_contract(
-        self, staking_program_id: str, chain_name: str
-    ) -> Optional[str]:
+    def _resolve_staking_contract(self, staking_program_id: str, chain_name: str) -> Optional[str]:
         """Resolve a staking program ID to a contract address."""
         address = STAKING_PROGRAM_MAP.get(staking_program_id)
         if address:
@@ -540,8 +536,10 @@ class OlasServiceImporter:
 
                 # Check for "safes" entry which indicates the owner is a Safe
                 # Structure: "safes": { "gnosis": "0x..." }
-                if "safes" in data and FLAGS_OWNER_SAFE in data["safes"]: # Need to detect chain dynamically or iterate
-                     pass
+                if (
+                    "safes" in data and FLAGS_OWNER_SAFE in data["safes"]
+                ):  # Need to detect chain dynamically or iterate
+                    pass
 
                 # Logic update:
                 # 1. Capture EOA address always (it's the signer)
@@ -557,9 +555,13 @@ class OlasServiceImporter:
                 if safe_owner_address:
                     # CASE: Owner is Safe
                     service.service_owner_multisig_address = safe_owner_address
-                    service.service_owner_eoa_address = eoa_address # The EOA is the signer/controller
+                    service.service_owner_eoa_address = (
+                        eoa_address  # The EOA is the signer/controller
+                    )
 
-                    logger.debug(f"Extracted Safe owner address: {safe_owner_address} (Signer: {eoa_address})")
+                    logger.debug(
+                        f"Extracted Safe owner address: {safe_owner_address} (Signer: {eoa_address})"
+                    )
                 elif eoa_address:
                     # CASE: Owner is EOA
                     service.service_owner_eoa_address = eoa_address
@@ -767,8 +769,8 @@ class OlasServiceImporter:
             safe_result = self._import_safe(
                 address=service.safe_address,
                 signers=self._get_agent_signers(service),
-                tag_suffix="multisig", # e.g. trader_zeta_safe
-                service_name=service.service_name
+                tag_suffix="multisig",  # e.g. trader_zeta_safe
+                service_name=service.service_name,
             )
             if safe_result[0]:
                 result.imported_safes.append(service.safe_address)
@@ -778,19 +780,22 @@ class OlasServiceImporter:
                 result.errors.append(f"Safe {service.safe_address}: {safe_result[1]}")
 
         # 2. Import Owner Safe (if it exists and is different)
-        if service.service_owner_multisig_address and service.service_owner_multisig_address != service.safe_address:
-             # Signer for Owner Safe is the EOA owner key
+        if (
+            service.service_owner_multisig_address
+            and service.service_owner_multisig_address != service.safe_address
+        ):
+            # Signer for Owner Safe is the EOA owner key
             owner_signers = self._get_owner_signers(service)
 
             safe_result = self._import_safe(
                 address=service.service_owner_multisig_address,
                 signers=owner_signers,
-                tag_suffix="owner_multisig", # e.g. trader_zeta_owner_safe
-                service_name=service.service_name
+                tag_suffix="owner_multisig",  # e.g. trader_zeta_owner_safe
+                service_name=service.service_name,
             )
             if safe_result[0]:
-                 result.imported_safes.append(service.service_owner_multisig_address)
-                 logger.info(f"Imported Owner Safe {service.service_owner_multisig_address}")
+                result.imported_safes.append(service.service_owner_multisig_address)
+                logger.info(f"Imported Owner Safe {service.service_owner_multisig_address}")
 
     def _get_agent_signers(self, service: DiscoveredService) -> List[str]:
         """Get list of signers for the agent safe."""
@@ -926,7 +931,7 @@ class OlasServiceImporter:
         address: str,
         signers: List[str] = None,
         tag_suffix: str = "multisig",
-        service_name: Optional[str] = None
+        service_name: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Import a generic Safe."""
         if not address:
@@ -1062,4 +1067,5 @@ class OlasServiceImporter:
             key.signature_failed = True
             logger.warning(f"Error verifying signature for key {key.address}: {e}")
 
-FLAGS_OWNER_SAFE="deprecated"
+
+FLAGS_OWNER_SAFE = "deprecated"

@@ -1,4 +1,5 @@
 """Script to verify ChainlistRPC functionality."""
+
 from iwa.core.chainlist import ChainlistRPC
 
 
@@ -32,7 +33,10 @@ def main() -> None:
 
     print("\nTracking info for first 5 RPCs:")
     for node in all_rpcs[:5]:
-        print(f"  - {node.url}: Tracking={node.is_tracking} (Privacy={node.privacy}, Tracking={node.tracking})")
+        print(
+            f"  - {node.url}: Tracking={node.is_tracking} (Privacy={node.privacy}, Tracking={node.tracking})"
+        )
+
 
 if __name__ == "__main__":
     main()

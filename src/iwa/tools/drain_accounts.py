@@ -1,5 +1,5 @@
-
 """Tool to drain specific accounts to a master address."""
+
 import argparse
 import sys
 from pathlib import Path
@@ -55,6 +55,7 @@ def main() -> None:
                 logger.warning(f"Drain failed or nothing to drain for {tag}")
         except Exception:
             logger.exception(f"Error draining {tag}")
+
 
 if __name__ == "__main__":
     main()

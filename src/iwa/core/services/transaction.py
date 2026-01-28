@@ -45,19 +45,29 @@ class TransferLogger:
         if tx_hash:
             try:
                 tx = self.chain_interface.web3.eth.get_transaction(tx_hash)
-                native_value = getattr(tx, "value", 0) or tx.get("value", 0) if isinstance(tx, dict) else getattr(tx, "value", 0)
+                native_value = (
+                    getattr(tx, "value", 0) or tx.get("value", 0)
+                    if isinstance(tx, dict)
+                    else getattr(tx, "value", 0)
+                )
                 if native_value and int(native_value) > 0:
-                    from_addr = getattr(tx, "from", "") if hasattr(tx, "from") else tx.get("from", "")
+                    from_addr = (
+                        getattr(tx, "from", "") if hasattr(tx, "from") else tx.get("from", "")
+                    )
                     # Handle AttributeDict's special 'from' attribute
                     if not from_addr and hasattr(tx, "__getitem__"):
                         from_addr = tx["from"]
-                    to_addr = getattr(tx, "to", "") or (tx.get("to", "") if isinstance(tx, dict) else "")
+                    to_addr = getattr(tx, "to", "") or (
+                        tx.get("to", "") if isinstance(tx, dict) else ""
+                    )
                     self._log_native_transfer(from_addr, to_addr, native_value)
             except Exception as e:
                 logger.debug(f"Could not get tx for native transfer logging: {e}")
 
         # Log ERC20 transfers from event logs
-        logs = receipt.get("logs", []) if isinstance(receipt, dict) else getattr(receipt, "logs", [])
+        logs = (
+            receipt.get("logs", []) if isinstance(receipt, dict) else getattr(receipt, "logs", [])
+        )
 
         for log in logs:
             self._process_log(log)
@@ -156,7 +166,9 @@ class TransferLogger:
         else:
             # Likely an NFT (ERC721) - the amount is the token ID
             if amount_wei > 0:
-                logger.info(f"[NFT TRANSFER] Token #{amount_wei} {token_label}: {from_label} → {to_label}")
+                logger.info(
+                    f"[NFT TRANSFER] Token #{amount_wei} {token_label}: {from_label} → {to_label}"
+                )
             else:
                 logger.debug(f"[NFT TRANSFER] {token_label}: {from_label} → {to_label}")
 
@@ -265,9 +277,7 @@ class TransactionService:
             """Inner operation wrapped by with_retry."""
             try:
                 signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
-                txn_hash = chain_interface.web3.eth.send_raw_transaction(
-                    signed_txn.raw_transaction
-                )
+                txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
                 receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
 
                 status = getattr(receipt, "status", None)
@@ -412,10 +422,12 @@ class TransactionService:
         signer_account: StoredSafeAccount,
         chain_interface,
         chain_name: str,
-        tags: List[str] = None
+        tags: List[str] = None,
     ) -> Tuple[bool, Dict]:
         """Execute transaction via SafeService."""
-        logger.info(f"Routing transaction via Safe {self._resolve_label(signer_account.address, chain_name)}...")
+        logger.info(
+            f"Routing transaction via Safe {self._resolve_label(signer_account.address, chain_name)}..."
+        )
 
         try:
             # Extract basic params
@@ -431,7 +443,7 @@ class TransactionService:
                 to=to_addr,
                 value=value,
                 chain_name=chain_name,
-                data=data
+                data=data,
             )
 
             # Receipt is already waited for inside execute_safe_transaction/executor
@@ -445,7 +457,13 @@ class TransactionService:
             if receipt and status == 1:
                 logger.info(f"Safe transaction executed successfully. Tx Hash: {tx_hash}")
                 self._log_successful_transaction(
-                    receipt, tx, signer_account, chain_name, bytes.fromhex(tx_hash.replace("0x", "")), tags, chain_interface
+                    receipt,
+                    tx,
+                    signer_account,
+                    chain_name,
+                    bytes.fromhex(tx_hash.replace("0x", "")),
+                    tags,
+                    chain_interface,
                 )
                 return True, receipt
             else:
@@ -460,11 +478,13 @@ class TransactionService:
             # Extract hex data from common error patterns
             # Pattern 1: ('execution reverted', '0x...')
             import re
+
             hex_match = re.search(r"0x[0-9a-fA-F]{8,}", error_text)
 
             if hex_match:
                 try:
                     from iwa.core.contracts.decoder import ErrorDecoder
+
                     data = hex_match.group(0)
                     decoded = ErrorDecoder().decode(data)
                     if decoded:

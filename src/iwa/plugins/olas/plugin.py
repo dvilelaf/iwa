@@ -151,7 +151,9 @@ class OlasPlugin(Plugin):
 
                     is_signer = key_addr in [s.lower() for s in on_chain_signers]
                     if not is_signer:
-                        safe_text += f"\n[bold red]⚠ Agent {agent_key.address} - NOT A SIGNER![/bold red]"
+                        safe_text += (
+                            f"\n[bold red]⚠ Agent {agent_key.address} - NOT A SIGNER![/bold red]"
+                        )
                     else:
                         safe_text += f" (Signer: {agent_key.address[:6]}...)"
 
@@ -182,21 +184,21 @@ class OlasPlugin(Plugin):
         # 1. Display Signer/EOA Owner
         owner_key = next((k for k in service.keys if k.role == "owner"), None)
         if owner_key:
-             val = owner_key.address
-             if not val.startswith("0x"):
-                 val = "0x" + val
+            val = owner_key.address
+            if not val.startswith("0x"):
+                val = "0x" + val
 
-             if owner_key.signature_verified:
-                 val = f"[green]{val}[/green]"
-             elif not owner_key.is_encrypted:
-                 val = f"[red]{val}[/red]"
-             status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
-             table.add_row("Owner (EOA)", f"{val} {status}")
+            if owner_key.signature_verified:
+                val = f"[green]{val}[/green]"
+            elif not owner_key.is_encrypted:
+                val = f"[red]{val}[/red]"
+            status = "🔒 encrypted" if owner_key.is_encrypted else "🔓 plaintext"
+            table.add_row("Owner (EOA)", f"{val} {status}")
         elif service.service_owner_eoa_address:
-             # Fallback if we have an address but no key object
-             table.add_row("Owner (EOA)", service.service_owner_eoa_address)
+            # Fallback if we have an address but no key object
+            table.add_row("Owner (EOA)", service.service_owner_eoa_address)
         else:
-             table.add_row("Owner (EOA)", "[yellow]N/A[/yellow]")
+            table.add_row("Owner (EOA)", "[yellow]N/A[/yellow]")
 
         # 2. Display Safe Owner
         if service.service_owner_multisig_address:

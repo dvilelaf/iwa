@@ -91,7 +91,9 @@ def test_rpc_rotation_updates_provider():
     class MockRateLimitedWeb3:
         def __init__(self, w3, rl, ci):
             self._web3 = w3
-            self.set_backend = MagicMock(side_effect=lambda new_w3: set_backend_calls.append(new_w3))
+            self.set_backend = MagicMock(
+                side_effect=lambda new_w3: set_backend_calls.append(new_w3)
+            )
 
         def __getattr__(self, name):
             return getattr(self._web3, name)
@@ -230,9 +232,7 @@ def test_rotation_applies_to_subsequent_calls():
         mock_web3_class.side_effect = create_web3
         mock_web3_class.HTTPProvider = create_provider
 
-        with patch(
-            "iwa.core.chain.interface.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3
-        ):
+        with patch("iwa.core.chain.interface.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
             ci = ChainInterface(chain)
 
             # First call uses RPC 1

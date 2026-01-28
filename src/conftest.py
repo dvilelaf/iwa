@@ -26,9 +26,12 @@ def caplog(caplog):
 @pytest.fixture(autouse=True)
 def mock_rate_limiter_sleep():
     """Bypass rate limiter and retry delays in tests globally."""
-    with patch("iwa.core.chain.rate_limiter.time.sleep"), \
-         patch("iwa.core.chain.interface.time.sleep"), \
-         patch("iwa.core.services.safe_executor.time.sleep"):
+    with (
+        patch("iwa.core.chain.rate_limiter.time.sleep"),
+        patch("iwa.core.chain.interface.time.sleep"),
+        patch("iwa.core.services.safe_executor.time.sleep"),
+    ):
         from iwa.core.chain.rate_limiter import _rate_limiters
+
         _rate_limiters.clear()
         yield

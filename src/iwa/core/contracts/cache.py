@@ -62,7 +62,7 @@ class ContractCache:
 
         key = self._make_key(contract_cls, address, chain_name)
         now = time.time()
-        expiry = (ttl if ttl is not None else self.ttl)
+        expiry = ttl if ttl is not None else self.ttl
 
         with self._lock:
             # Check if cached and valid

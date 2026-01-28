@@ -88,4 +88,3 @@ class BalanceService:
 
         contract = ERC20Contract(chain_name=chain_name, address=token_address)
         return contract.balance_of_wei(account.address)
-

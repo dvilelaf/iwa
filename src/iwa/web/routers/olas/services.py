@@ -41,7 +41,9 @@ def _determine_bond_amount(req: CreateServiceRequest) -> int:
 
     if req.token_address and req.staking_contract:
         # If a contract is specified, we MUST use its requirements
-        staking_name = wallet.account_service.get_tag_by_address(req.staking_contract) or req.staking_contract
+        staking_name = (
+            wallet.account_service.get_tag_by_address(req.staking_contract) or req.staking_contract
+        )
         logger.info(f"Fetching requirements from {staking_name}...")
         staking_contract = StakingContract(req.staking_contract, req.chain)
         reqs = staking_contract.get_requirements()
@@ -73,6 +75,7 @@ def _determine_bond_amount(req: CreateServiceRequest) -> int:
                     )
     return bond_amount
 
+
 @router.post(
     "/create",
     summary="Create Service",
@@ -81,7 +84,6 @@ def _determine_bond_amount(req: CreateServiceRequest) -> int:
 def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth)):
     """Create a new Olas service using spin_up for seamless deployment."""
     try:
-
         from iwa.plugins.olas.contracts.staking import StakingContract
         from iwa.plugins.olas.service_manager import ServiceManager
 
@@ -196,7 +198,9 @@ def deploy_service(
         if staking_contract:
             try:
                 staking_obj = StakingContract(staking_contract, service.chain_name)
-                staking_name = wallet.account_service.get_tag_by_address(staking_contract) or staking_contract
+                staking_name = (
+                    wallet.account_service.get_tag_by_address(staking_contract) or staking_contract
+                )
                 logger.info(f"Will stake in {staking_name} after deployment")
             except Exception as e:
                 logger.warning(f"Could not set up staking contract: {e}")
@@ -228,7 +232,6 @@ def deploy_service(
     except Exception as e:
         logger.error(f"Error deploying service: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from None
-
 
 
 def _resolve_service_accounts(service) -> dict:
@@ -279,7 +282,9 @@ def _resolve_service_balances(service, chain: str) -> dict:
             if role == "owner" and stored and hasattr(stored, "signers") and stored.signers:
                 signer_addr = stored.signers[0]
                 s_native = wallet.get_native_balance_eth(signer_addr, chain)
-                s_olas_wei = wallet.balance_service.get_erc20_balance_wei(signer_addr, "OLAS", chain)
+                s_olas_wei = wallet.balance_service.get_erc20_balance_wei(
+                    signer_addr, "OLAS", chain
+                )
                 s_olas = float(s_olas_wei) / 1e18 if s_olas_wei else 0
                 s_stored = wallet.key_storage.find_stored_account(signer_addr)
                 balances["owner_signer"] = {

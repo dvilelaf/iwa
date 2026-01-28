@@ -82,17 +82,27 @@ class SafeTransactionExecutor:
             try:
                 # Prepare and execute attempt
                 tx_hash = self._execute_attempt(
-                    safe_address, safe_tx, signer_keys, operation_name, attempt, current_gas, base_estimate
+                    safe_address,
+                    safe_tx,
+                    signer_keys,
+                    operation_name,
+                    attempt,
+                    current_gas,
+                    base_estimate,
                 )
 
                 # Check receipt
                 receipt = self.chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
                 if self._check_receipt_status(receipt):
                     SAFE_TX_STATS["final_successes"] += 1
-                    logger.info(f"[{operation_name}] Success on attempt {attempt + 1}. Tx Hash: {tx_hash}")
+                    logger.info(
+                        f"[{operation_name}] Success on attempt {attempt + 1}. Tx Hash: {tx_hash}"
+                    )
                     return True, tx_hash, receipt
 
-                logger.error(f"[{operation_name}] Mined but failed (status 0) on attempt {attempt + 1}.")
+                logger.error(
+                    f"[{operation_name}] Mined but failed (status 0) on attempt {attempt + 1}."
+                )
                 raise ValueError("Transaction reverted on-chain")
 
             except Exception as e:
@@ -113,7 +123,14 @@ class SafeTransactionExecutor:
         return False, str(last_error), None
 
     def _execute_attempt(
-        self, safe_address, safe_tx, signer_keys, operation_name, attempt, current_gas, base_estimate
+        self,
+        safe_address,
+        safe_tx,
+        signer_keys,
+        operation_name,
+        attempt,
+        current_gas,
+        base_estimate,
     ) -> str:
         """Prepare client, estimate gas, simulate, and execute."""
         # 1. (Re)Create Safe client
@@ -187,7 +204,12 @@ class SafeTransactionExecutor:
         return status == 1
 
     def _handle_execution_failure(
-        self, error: Exception, safe_address: str, safe_tx: SafeTx, attempt: int, operation_name: str
+        self,
+        error: Exception,
+        safe_address: str,
+        safe_tx: SafeTx,
+        attempt: int,
+        operation_name: str,
     ) -> Tuple[SafeTx, bool]:
         """Handle execution failure and determine next steps."""
         classification = self._classify_error(error)
@@ -221,7 +243,9 @@ class SafeTransactionExecutor:
         """Estimate gas for a Safe transaction with buffer and hard cap."""
         try:
             # Use on-chain simulation via safe-eth-py
-            estimated = safe.estimate_tx_gas(safe_tx.to, safe_tx.value, safe_tx.data, safe_tx.operation)
+            estimated = safe.estimate_tx_gas(
+                safe_tx.to, safe_tx.value, safe_tx.data, safe_tx.operation
+            )
             with_buffer = int(estimated * self.gas_buffer)
 
             # Apply x10 hard cap if we have a base estimate
@@ -248,9 +272,7 @@ class SafeTransactionExecutor:
         """Check if error is due to Safe nonce conflict."""
         error_text = str(error).lower()
         # GS025 = Invalid nonce (NOT GS026 which is invalid signatures)
-        return any(x in error_text for x in [
-            "nonce", "gs025", "already executed", "duplicate"
-        ])
+        return any(x in error_text for x in ["nonce", "gs025", "already executed", "duplicate"])
 
     def _is_signature_error(self, error: Exception) -> bool:
         """Check if error is due to invalid Safe signatures.
@@ -261,10 +283,17 @@ class SafeTransactionExecutor:
         GS026 = Invalid owner (signature from non-owner)
         """
         error_text = str(error).lower()
-        return any(x in error_text for x in [
-            "gs020", "gs021", "gs024", "gs026",
-            "invalid signatures", "signatures data too short"
-        ])
+        return any(
+            x in error_text
+            for x in [
+                "gs020",
+                "gs021",
+                "gs024",
+                "gs026",
+                "invalid signatures",
+                "signatures data too short",
+            ]
+        )
 
     def _refresh_nonce(self, safe: Safe, safe_tx: SafeTx) -> SafeTx:
         """Re-fetch nonce and rebuild transaction."""
@@ -287,7 +316,9 @@ class SafeTransactionExecutor:
     def _classify_error(self, error: Exception) -> dict:
         """Classify Safe transaction errors for retry decisions."""
         err_text = str(error).lower()
-        is_rpc = self.chain_interface._is_rate_limit_error(error) or self.chain_interface._is_connection_error(error)
+        is_rpc = self.chain_interface._is_rate_limit_error(
+            error
+        ) or self.chain_interface._is_connection_error(error)
 
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
@@ -300,6 +331,7 @@ class SafeTransactionExecutor:
     def _decode_revert_reason(self, error: Exception) -> Optional[str]:
         """Attempt to decode the revert reason."""
         import re
+
         error_text = str(error)
         hex_match = re.search(r"0x[0-9a-fA-F]{8,}", error_text)
         if hex_match:
@@ -315,6 +347,4 @@ class SafeTransactionExecutor:
 
     def _log_retry(self, attempt: int, error: Exception, strategy: str):
         """Log a retry attempt."""
-        logger.warning(
-            f"Safe TX attempt {attempt} failed, strategy: {strategy}. Error: {error}"
-        )
+        logger.warning(f"Safe TX attempt {attempt} failed, strategy: {strategy}. Error: {error}")

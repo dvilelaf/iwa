@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -12,7 +11,6 @@ class MockChainInterface:
 
 
 class TestRateLimitedEthRetry:
-
     @pytest.fixture
     def mock_deps(self):
         web3_eth = MagicMock()
@@ -30,7 +28,7 @@ class TestRateLimitedEthRetry:
         web3_eth.get_balance.side_effect = [
             ValueError("RPC error 1"),
             ValueError("RPC error 2"),
-            100  # Success
+            100,  # Success
         ]
 
         # Use patch to speed up sleep
@@ -95,10 +93,7 @@ class TestRateLimitedEthRetry:
         # web3.eth.block_number is a property.
 
         # We need to set side_effect on the PROPERTY of the mock
-        type(web3_eth).block_number = PropertyMock(side_effect=[
-            ValueError("Fail 1"),
-            12345
-        ])
+        type(web3_eth).block_number = PropertyMock(side_effect=[ValueError("Fail 1"), 12345])
 
         with patch("time.sleep"):
             val = eth_wrapper.block_number

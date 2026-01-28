@@ -82,7 +82,6 @@ class StakingContract(ContractInstance):
         self._activity_checker: Optional[ActivityCheckerContract] = None
         self._activity_checker_address: Optional[EthereumAddress] = None
 
-
     def get_requirements(self) -> Dict[str, Union[str, int]]:
         """Get the contract requirements for token and deposits.
 

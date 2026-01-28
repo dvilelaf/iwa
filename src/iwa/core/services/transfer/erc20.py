@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from iwa.core.services.transfer import TransferService
 
 
-
 class ERC20TransferMixin:
     """Mixin for ERC20 token transfers and approvals."""
 

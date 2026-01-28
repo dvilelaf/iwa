@@ -25,6 +25,7 @@ def mock_chain_interface():
         # Yield both interface and contract mock
         yield mock_interface, mock_contract
 
+
 def test_staking_contract_lazy_loading(mock_chain_interface):
     """Verify StakingContract init does NOT make RPC calls."""
     mock_interface, mock_contract = mock_chain_interface
@@ -55,13 +56,14 @@ def test_staking_contract_lazy_loading(mock_chain_interface):
     # Assert still 1 call (cached)
     assert mock_contract.functions.livenessPeriod.return_value.call.call_count == 1
 
+
 def test_contract_cache_singleton(mock_chain_interface):
     """Verify ContractCache returns same instance and reuses property cache."""
     mock_interface, mock_contract = mock_chain_interface
     ContractCache().clear()
 
     c1 = ContractCache().get_contract(StakingContract, "0xABC", "gnosis")
-    c2 = ContractCache().get_contract(StakingContract, "0xabc", "gnosis") # Check ignore case
+    c2 = ContractCache().get_contract(StakingContract, "0xabc", "gnosis")  # Check ignore case
 
     assert c1 is c2
 
@@ -77,6 +79,7 @@ def test_contract_cache_singleton(mock_chain_interface):
     assert val2 == 500
     # Call count should NOT increase
     assert mock_contract.functions.maxNumServices.return_value.call.call_count == 1
+
 
 def test_epoch_aware_caching(mock_chain_interface):
     """Verify ts_checkpoint caching logic."""

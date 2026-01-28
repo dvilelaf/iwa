@@ -25,6 +25,7 @@ def _reset_tenderly(profile: int) -> None:
         env = {"PYTHONPATH": "src"}
         # Merge with current env to keep PATH etc.
         import os
+
         full_env = os.environ.copy()
         full_env.update(env)
 
@@ -110,7 +111,7 @@ def main():
     parser.add_argument(
         "--keep-data",
         action="store_true",
-        help="Reset only Tenderly, keeping config.yaml and wallet.json intact."
+        help="Reset only Tenderly, keeping config.yaml and wallet.json intact.",
     )
     args = parser.parse_args()
 

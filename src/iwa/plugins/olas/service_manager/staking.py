@@ -90,6 +90,7 @@ class StakingManagerMixin:
         # Try token/contract names
         try:
             from iwa.core.chain import ChainInterfaces
+
             chain_interface = ChainInterfaces().get(self.chain_name)
             token_name = chain_interface.chain.get_token_name(address)
             if token_name:
@@ -407,7 +408,9 @@ class StakingManagerMixin:
         # NOTE: We don't check OLAS balance here because OLAS was already
         # deposited to the Token Utility during activation (min_staking_deposit)
         # and registration (agent_bond). The staking contract pulls from there.
-        logger.debug("[STAKE] OLAS already deposited to Token Utility during activation/registration")
+        logger.debug(
+            "[STAKE] OLAS already deposited to Token Utility during activation/registration"
+        )
 
         return {"min_deposit": min_deposit, "staking_token": staking_token}
 
@@ -437,7 +440,9 @@ class StakingManagerMixin:
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
         # Approve service NFT - this is an ERC-721 approval, not ERC-20
-        logger.debug(f"[STAKE] Approving service NFT for staking contract from {self._get_label(owner_address)}...")
+        logger.debug(
+            f"[STAKE] Approving service NFT for staking contract from {self._get_label(owner_address)}..."
+        )
         approve_tx = self.registry.prepare_approve_tx(
             from_address=owner_address,
             spender=staking_contract.address,
@@ -483,7 +488,9 @@ class StakingManagerMixin:
         # Use service owner which holds the NFT (not necessarily master)
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
 
-        logger.debug(f"[STAKE] Preparing stake transaction from {self._get_label(owner_address)}...")
+        logger.debug(
+            f"[STAKE] Preparing stake transaction from {self._get_label(owner_address)}..."
+        )
         stake_tx = staking_contract.prepare_stake_tx(
             from_address=owner_address,
             service_id=self.service.service_id,
@@ -601,9 +608,7 @@ class StakingManagerMixin:
             return False
 
         tx_hash = get_tx_hash(receipt)
-        logger.info(
-            f"Unstake transaction sent: {tx_hash if receipt else 'No Receipt'}"
-        )
+        logger.info(f"Unstake transaction sent: {tx_hash if receipt else 'No Receipt'}")
 
         events = staking_contract.extract_events(receipt)
 

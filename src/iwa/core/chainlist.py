@@ -1,4 +1,5 @@
 """Module for fetching and parsing RPCs from Chainlist.org."""
+
 import json
 import time
 from dataclasses import dataclass
@@ -78,7 +79,7 @@ class ChainlistRPC:
             self.fetch_data()
 
         for entry in self._data:
-            if entry.get('chainId') == chain_id:
+            if entry.get("chainId") == chain_id:
                 return entry
         return None
 
@@ -88,22 +89,25 @@ class ChainlistRPC:
         if not chain_data:
             return []
 
-        raw_rpcs = chain_data.get('rpc', [])
+        raw_rpcs = chain_data.get("rpc", [])
         nodes = []
         for rpc in raw_rpcs:
-            nodes.append(RPCNode(
-                url=rpc.get('url', ''),
-                is_working=True,
-                privacy=rpc.get('privacy'),
-                tracking=rpc.get('tracking')
-            ))
+            nodes.append(
+                RPCNode(
+                    url=rpc.get("url", ""),
+                    is_working=True,
+                    privacy=rpc.get("privacy"),
+                    tracking=rpc.get("tracking"),
+                )
+            )
         return nodes
 
     def get_https_rpcs(self, chain_id: int) -> List[str]:
         """Returns a list of HTTPS RPC URLs for the given chain."""
         rpcs = self.get_rpcs(chain_id)
         return [
-            node.url for node in rpcs
+            node.url
+            for node in rpcs
             if node.url.startswith("https://") or node.url.startswith("http://")
         ]
 
@@ -111,6 +115,7 @@ class ChainlistRPC:
         """Returns a list of WSS RPC URLs for the given chain."""
         rpcs = self.get_rpcs(chain_id)
         return [
-            node.url for node in rpcs
+            node.url
+            for node in rpcs
             if node.url.startswith("wss://") or node.url.startswith("ws://")
         ]

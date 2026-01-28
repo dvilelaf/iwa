@@ -249,7 +249,7 @@ class KeyStorage(BaseModel):
 
         with open(self._path, "w", encoding="utf-8") as f:
             # Use mode='json' to ensure all types (EthereumAddress) are correctly serialized
-            json.dump(self.model_dump(mode='json'), f, indent=4)
+            json.dump(self.model_dump(mode="json"), f, indent=4)
             f.flush()
             os.fsync(f.fileno())  # Force write to disk (critical for Docker volumes)
 
@@ -376,10 +376,14 @@ class KeyStorage(BaseModel):
             # Check for duplicate tags
             for existing in self.accounts.values():
                 if existing.tag == account.tag and existing.address != account.address:
-                    raise ValueError(f"Tag '{account.tag}' is already used by address {existing.address}")
+                    raise ValueError(
+                        f"Tag '{account.tag}' is already used by address {existing.address}"
+                    )
 
         self.accounts[account.address] = account
-        logger.info(f"[KeyStorage] Registering account: tag='{account.tag}', address={account.address}")
+        logger.info(
+            f"[KeyStorage] Registering account: tag='{account.tag}', address={account.address}"
+        )
         self.save()
 
     def get_pending_mnemonic(self) -> Optional[str]:
@@ -460,7 +464,9 @@ class KeyStorage(BaseModel):
 
         old_tag = account.tag
         account.tag = new_tag
-        logger.info(f"[KeyStorage] Renaming account: '{old_tag}' -> '{new_tag}' (address={account.address})")
+        logger.info(
+            f"[KeyStorage] Renaming account: '{old_tag}' -> '{new_tag}' (address={account.address})"
+        )
         self.save()
 
     def _get_private_key(self, address: str) -> Optional[str]:

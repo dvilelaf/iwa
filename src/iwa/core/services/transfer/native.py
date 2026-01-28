@@ -91,7 +91,7 @@ class NativeTransferMixin:
                 "from": from_account.address,
                 "to": to_address,
                 "value": amount_wei,
-            }
+            },
         )
 
         # Use unified TransactionService

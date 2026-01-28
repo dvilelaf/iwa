@@ -47,7 +47,12 @@ def real_safe_tx_mock_eth(mock_chain_interface):
     mock_contract = MagicMock()
     # Mock execTransaction function build_transaction
     mock_contract.functions.execTransaction.return_value.build_transaction.return_value = {
-        "to": "0xSafe", "data": b"", "value": 0, "gas": 500000, "nonce": 5, "from": "0xExecutor"
+        "to": "0xSafe",
+        "data": b"",
+        "value": 0,
+        "gas": 500000,
+        "nonce": 5,
+        "from": "0xExecutor",
     }
     # Mock nonce call
     mock_contract.functions.nonce().call.return_value = 5
@@ -64,14 +69,14 @@ def real_safe_tx_mock_eth(mock_chain_interface):
             0,
             b"",
             0,
-            200000, # safe_tx_gas
+            200000,  # safe_tx_gas
             0,
             0,
             None,
             None,
             signatures=MOCK_SIGNATURE,
             safe_nonce=5,
-            chain_id=1
+            chain_id=1,
         )
 
         # HACK: Force initialize properties that rely on cached_property + network
@@ -96,7 +101,7 @@ def test_integration_full_execution_flow(mock_chain_interface, real_safe_tx_mock
     # Use a dummy key (needs to be valid hex for account generation if SafeTx uses it)
     dummy_key = "0x" + "1" * 64
 
-    with patch.object(executor, '_recreate_safe_client', return_value=MagicMock()):
+    with patch.object(executor, "_recreate_safe_client", return_value=MagicMock()):
         # Pre-execution check
         assert len(safe_tx.signatures) == 65
 
@@ -129,12 +134,12 @@ def test_integration_retry_preserves_signatures(mock_chain_interface, real_safe_
     # Second attempt: Success (status 1)
     mock_chain_interface.web3.eth.wait_for_transaction_receipt.side_effect = [
         ValueError("Transaction not found"),
-        MagicMock(status=1)
+        MagicMock(status=1),
     ]
 
     dummy_key = "0x" + "1" * 64
 
-    with patch.object(executor, '_recreate_safe_client', return_value=MagicMock()):
+    with patch.object(executor, "_recreate_safe_client", return_value=MagicMock()):
         with patch("time.sleep"):  # Skip sleep
             success, tx_hash, receipt = executor.execute_with_retry("0xSafe", safe_tx, [dummy_key])
 

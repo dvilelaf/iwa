@@ -58,7 +58,7 @@ class ErrorDecoder:
         # Also check core ABIs if they are in a different place
         core_abi_path = src_root / "iwa" / "core" / "contracts" / "abis"
         if core_abi_path.exists() and core_abi_path not in [f.parent for f in abi_files]:
-             abi_files.extend(list(core_abi_path.glob("*.json")))
+            abi_files.extend(list(core_abi_path.glob("*.json")))
 
         logger.debug(f"Found {len(abi_files)} ABI files for error decoding.")
 
@@ -66,7 +66,11 @@ class ErrorDecoder:
             try:
                 with open(abi_path, "r", encoding="utf-8") as f:
                     content = json.load(f)
-                    abi = content.get("abi") if isinstance(content, dict) and "abi" in content else content
+                    abi = (
+                        content.get("abi")
+                        if isinstance(content, dict) and "abi" in content
+                        else content
+                    )
                     if isinstance(abi, list):
                         self._process_abi(abi, abi_path.name)
             except Exception as e:
@@ -91,7 +95,7 @@ class ErrorDecoder:
                     "types": types,
                     "arg_names": names,
                     "source": source_name,
-                    "signature": signature
+                    "signature": signature,
                 }
 
                 if selector not in self._selectors:
@@ -145,7 +149,9 @@ class ErrorDecoder:
             for d in self._selectors[selector]:
                 try:
                     decoded = decode(d["types"], bytes.fromhex(encoded_args))
-                    args_str = ", ".join(f"{n}={v}" for n, v in zip(d["arg_names"], decoded, strict=False))
+                    args_str = ", ".join(
+                        f"{n}={v}" for n, v in zip(d["arg_names"], decoded, strict=False)
+                    )
                     results.append((d["name"], f"{d['name']}({args_str})", d["source"]))
                 except Exception:
                     # Try next possible decoding for this selector

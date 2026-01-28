@@ -41,7 +41,9 @@ class TestGnosisFeeFix(unittest.TestCase):
 
         # CRITICAL ASSERTION: maxPriorityFeePerGas must be >= 1
         # If the fix works, it should be 1. If it fails (old behavior), it would be 0.
-        self.assertEqual(params["maxPriorityFeePerGas"], 1, "Priority fee should be forced to 1 wei")
+        self.assertEqual(
+            params["maxPriorityFeePerGas"], 1, "Priority fee should be forced to 1 wei"
+        )
 
         # Verify max fee calculation: (base * 1.5) + priority
         expected_max_fee = int(5000 * 1.5) + 1
@@ -84,4 +86,6 @@ class TestGnosisFeeFix(unittest.TestCase):
 
         params = eth_interface.calculate_transaction_params(mock_func, {"from": "0x123"})
 
-        self.assertEqual(params["maxPriorityFeePerGas"], 1, "Generic fallback should apply to all chains")
+        self.assertEqual(
+            params["maxPriorityFeePerGas"], 1, "Generic fallback should apply to all chains"
+        )

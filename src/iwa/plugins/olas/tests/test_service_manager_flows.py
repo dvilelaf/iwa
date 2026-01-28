@@ -237,7 +237,9 @@ def test_activate_registration(
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
 @patch("iwa.plugins.olas.service_manager.base.ContractCache")
-def test_register_agent(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_register_agent(
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test agent registration flow."""
     mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     mock_config_inst = mock_config_cls.return_value
@@ -354,7 +356,9 @@ def test_deploy(mock_cache, mock_sm_contract, mock_registry_contract, mock_confi
 @patch("iwa.plugins.olas.service_manager.base.ServiceRegistryContract")
 @patch("iwa.plugins.olas.service_manager.base.ServiceManagerContract")
 @patch("iwa.plugins.olas.service_manager.base.ContractCache")
-def test_terminate(mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet):
+def test_terminate(
+    mock_cache, mock_sm_contract, mock_registry_contract, mock_config_cls, mock_wallet
+):
     """Test service termination."""
     mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
     # Setup mock service
@@ -457,7 +461,6 @@ def test_stake(mock_cache, mock_sm_contract, mock_registry_contract, mock_config
         "required_agent_bond": 50000000000000000000,
     }
 
-
     success = manager.stake(mock_staking)
     assert success is True
     assert manager.service.staking_contract_address == "0xDDdDddDdDdddDDddDDddDDDDdDdDDdDDdDDDDDDd"
@@ -479,8 +482,6 @@ def test_stake(mock_cache, mock_sm_contract, mock_registry_contract, mock_config
     mock_staking.get_service_ids.return_value = [0] * 10
     assert manager.stake(mock_staking) is False
     mock_staking.get_service_ids.return_value = []
-
-
 
     # 4. Approve fail
     mock_wallet.sign_and_send_transaction.return_value = (False, {})

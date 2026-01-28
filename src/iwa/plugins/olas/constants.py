@@ -92,8 +92,12 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
 OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
     "gnosis": {
         # === LEGACY (no marketplace) ===
-        "Hobbyist 1 Legacy (100 OLAS)": EthereumAddress("0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"),
-        "Hobbyist 2 Legacy (500 OLAS)": EthereumAddress("0x238EB6993b90A978ec6AAD7530D6429c949C08DA"),
+        "Hobbyist 1 Legacy (100 OLAS)": EthereumAddress(
+            "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"
+        ),
+        "Hobbyist 2 Legacy (500 OLAS)": EthereumAddress(
+            "0x238EB6993b90A978ec6AAD7530D6429c949C08DA"
+        ),
         "Expert Legacy (1k OLAS)": EthereumAddress("0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e"),
         "Expert 2 Legacy (1k OLAS)": EthereumAddress("0xb964e44c126410df341ae04B13aB10A985fE3513"),
         "Expert 3 Legacy (2k OLAS)": EthereumAddress("0x80faD33Cadb5F53f9D29F02Db97D682E8B101618"),
@@ -103,9 +107,15 @@ OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "Expert 7 Legacy (10k OLAS)": EthereumAddress("0xD7A3C8b975f71030135f1a66E9e23164d54fF455"),
         "Expert 8 Legacy (2k OLAS)": EthereumAddress("0x356C108D49C5eebd21c84c04E9162de41933030c"),
         "Expert 9 Legacy (10k OLAS)": EthereumAddress("0x17dBAe44BC5618Cc254055B386A29576b4F87015"),
-        "Expert 10 Legacy (10k OLAS)": EthereumAddress("0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"),
-        "Expert 11 Legacy (10k OLAS)": EthereumAddress("0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"),
-        "Expert 12 Legacy (10k OLAS)": EthereumAddress("0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"),
+        "Expert 10 Legacy (10k OLAS)": EthereumAddress(
+            "0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"
+        ),
+        "Expert 11 Legacy (10k OLAS)": EthereumAddress(
+            "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"
+        ),
+        "Expert 12 Legacy (10k OLAS)": EthereumAddress(
+            "0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"
+        ),
         # === MM v1 (old marketplace 0x4554fE75...) ===
         "Expert 15 MM v1 (10k OLAS)": EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
         "Expert 16 MM v1 (10k OLAS)": EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),

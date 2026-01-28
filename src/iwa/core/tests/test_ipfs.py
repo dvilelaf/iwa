@@ -61,7 +61,7 @@ def test_push_to_ipfs_sync_uses_session(mock_config, mock_cid_decode):
 
         # Verify second call reuses session
         push_to_ipfs_sync(b"test data 2")
-        mock_session_cls.assert_called_once() # Should still be 1 call
+        mock_session_cls.assert_called_once()  # Should still be 1 call
         assert mock_session.post.call_count == 2
 
 

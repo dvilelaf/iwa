@@ -1,6 +1,5 @@
 """Event-based cache invalidation for Olas contracts."""
 
-
 from loguru import logger
 
 from iwa.core.contracts.cache import ContractCache
@@ -75,7 +74,7 @@ class OlasEventInvalidator:
             except Exception as e:
                 logger.error(f"Error in OlasEventInvalidator: {e}")
 
-            time.sleep(10) # check every 10 seconds
+            time.sleep(10)  # check every 10 seconds
 
     def _check_events(self, from_block: int, to_block: int):
         """Check for relevant events in the block range."""
@@ -101,14 +100,19 @@ class OlasEventInvalidator:
                 StakingContract, self.staking_addresses[0], self.chain_name
             )
 
-
-            logs = self.web3.eth.get_logs({
-                "fromBlock": from_block,
-                "toBlock": to_block,
-                "address": self.staking_addresses,
-                "topics": [self.web3.keccak(text="Checkpoint(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)").hex()]
-                # Note: signature might vary, safer to use the event object if ABI allows
-            })
+            logs = self.web3.eth.get_logs(
+                {
+                    "fromBlock": from_block,
+                    "toBlock": to_block,
+                    "address": self.staking_addresses,
+                    "topics": [
+                        self.web3.keccak(
+                            text="Checkpoint(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+                        ).hex()
+                    ],
+                    # Note: signature might vary, safer to use the event object if ABI allows
+                }
+            )
 
             # If we used the contract event object to filter, it handles the topic generation:
             # logs = checkpoint_event_abi.get_logs(fromBlock=from_block, toBlock=to_block)
@@ -130,9 +134,7 @@ class OlasEventInvalidator:
                 # self.contract_cache.invalidate(StakingContract, addr, self.chain_name)
 
                 # Option B: Get instance and clear specific cache (safe public access)
-                instance = self.contract_cache.get_if_cached(
-                    StakingContract, addr, self.chain_name
-                )
+                instance = self.contract_cache.get_if_cached(StakingContract, addr, self.chain_name)
                 if instance:
                     instance.clear_epoch_cache()
                     logger.debug(f"Cleared epoch cache for {addr}")

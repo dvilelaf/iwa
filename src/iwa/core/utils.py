@@ -85,9 +85,11 @@ def configure_logger():
     configure_logger.configured = True
     return logger
 
+
 def get_version(package_name: str) -> str:
     """Get package version."""
     from importlib.metadata import PackageNotFoundError, version
+
     try:
         return version(package_name)
     except PackageNotFoundError:

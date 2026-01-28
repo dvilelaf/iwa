@@ -14,6 +14,7 @@ def clean_rate_limiters():
     yield
     _rate_limiters.clear()
 
+
 def test_chain_interface_initializes_strict_limiter(clean_rate_limiters):
     """Verify ChainInterface initializes with rate=1.0 and burst=1."""
     # Create a dummy chain

@@ -34,18 +34,14 @@ class TestRegressionFixes(unittest.TestCase):
         # This is what we are testing: get_suggested_fees() provides the safety net
         mock_chain_interface.get_suggested_fees.return_value = {
             "maxFeePerGas": 1500,
-            "maxPriorityFeePerGas": 10
+            "maxPriorityFeePerGas": 10,
         }
 
         with patch("iwa.core.services.transaction.ChainInterfaces") as mock_interfaces:
             mock_interfaces.return_value.get.return_value = mock_chain_interface
 
             # 3. Prepare transaction WITHOUT fees
-            tx = {
-                "to": "0x09312C66A14a024B4e903D986Ca7E2C0dDD06227",
-                "value": 1000,
-                "gas": 21000
-            }
+            tx = {"to": "0x09312C66A14a024B4e903D986Ca7E2C0dDD06227", "value": 1000, "gas": 21000}
 
             # 4. Run internal preparation
             service._prepare_transaction(tx, "signer", mock_chain_interface)
@@ -95,6 +91,7 @@ class TestRegressionFixes(unittest.TestCase):
                     # Also check the address field inside the value
                     self.assertIsInstance(accounts[key]["address"], str)
                     self.assertEqual(accounts[key]["address"].lower(), addr_str.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

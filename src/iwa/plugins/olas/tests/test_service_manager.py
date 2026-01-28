@@ -104,8 +104,6 @@ def mock_chain_interfaces():
         yield mock
 
 
-
-
 @pytest.fixture
 def service_manager(
     mock_config,
@@ -113,13 +111,14 @@ def service_manager(
     mock_registry,
     mock_manager_contract,
     mock_chain_interfaces,
-
     mock_olas_config,
     mock_service,
 ):
     """ServiceManager fixture with mocked dependencies."""
-    with patch("iwa.plugins.olas.service_manager.base.Config") as local_mock_config, \
-         patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache:
+    with (
+        patch("iwa.plugins.olas.service_manager.base.Config") as local_mock_config,
+        patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache,
+    ):
         instance = local_mock_config.return_value
         instance.plugins = {"olas": mock_olas_config}
         instance.save_config = MagicMock()
@@ -134,7 +133,6 @@ def service_manager(
         sm.olas_config = mock_olas_config
         sm.global_config = instance
         yield sm
-
 
 
 def test_init(service_manager):
@@ -179,9 +177,7 @@ def test_create_no_event(service_manager, mock_wallet):
     mock_wallet.sign_and_send_transaction.return_value = (True, {})
     service_manager.registry.extract_events.return_value = []
 
-    res = service_manager.create(
-        token_address_or_tag="0x1111111111111111111111111111111111111111"
-    )
+    res = service_manager.create(token_address_or_tag="0x1111111111111111111111111111111111111111")
     # create() finds no ID, logs error, returns None for service_id.
     assert res is None
 
@@ -911,7 +907,9 @@ def test_activate_registration_token_service_sends_security_deposit_as_value(
 
     # Mock balance check to pass
     mock_wallet.balance_service = MagicMock()
-    mock_wallet.balance_service.get_erc20_balance_wei.return_value = 100 * 10**18  # Plenty of balance
+    mock_wallet.balance_service.get_erc20_balance_wei.return_value = (
+        100 * 10**18
+    )  # Plenty of balance
 
     # Mock allowance to pass check (return an int)
     mock_wallet.transfer_service.get_erc20_allowance.return_value = 10**20  # Plenty of allowance

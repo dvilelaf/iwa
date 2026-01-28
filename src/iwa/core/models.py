@@ -80,9 +80,7 @@ class CoreConfig(BaseModel):
     tenderly_olas_funds: float = Field(default=100000.0, description="OLAS amount for vNet funding")
 
     # Safe Transaction Retry System
-    safe_tx_max_retries: int = Field(
-        default=6, description="Maximum retries for Safe transactions"
-    )
+    safe_tx_max_retries: int = Field(default=6, description="Maximum retries for Safe transactions")
     safe_tx_gas_buffer: float = Field(
         default=1.5, description="Gas buffer multiplier for Safe transactions"
     )

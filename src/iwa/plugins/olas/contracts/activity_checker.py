@@ -48,7 +48,6 @@ class ActivityCheckerContract(ContractInstance):
         self._agent_mech: Optional[EthereumAddress] = None
         self._liveness_ratio: Optional[int] = None
 
-
     def get_multisig_nonces(self, multisig: EthereumAddress) -> Tuple[int, int]:
         """Get the nonces for a multisig address.
 
@@ -63,7 +62,6 @@ class ActivityCheckerContract(ContractInstance):
         """
         nonces = self.contract.functions.getMultisigNonces(multisig).call()
         return (nonces[0], nonces[1])
-
 
     @property
     def mech_marketplace(self) -> Optional[EthereumAddress]:
@@ -83,7 +81,9 @@ class ActivityCheckerContract(ContractInstance):
             try:
                 agent_mech_function = getattr(self.contract.functions, "agentMech", None)
                 self._agent_mech = (
-                    agent_mech_function().call() if agent_mech_function else DEFAULT_MECH_CONTRACT_ADDRESS
+                    agent_mech_function().call()
+                    if agent_mech_function
+                    else DEFAULT_MECH_CONTRACT_ADDRESS
                 )
             except Exception:
                 self._agent_mech = DEFAULT_MECH_CONTRACT_ADDRESS

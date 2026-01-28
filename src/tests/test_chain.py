@@ -155,7 +155,7 @@ def test_calculate_transaction_params(mock_web3):
     ci.web3.eth.gas_price = 20
 
     # Mock for EIP-1559 check (disable it for simple test)
-    ci.web3.eth.get_block.return_value = {} # No baseFeePerGas
+    ci.web3.eth.get_block.return_value = {}  # No baseFeePerGas
 
     with patch.object(ci, "estimate_gas", return_value=1000):
         params = ci.calculate_transaction_params(MagicMock(), {"from": "0xSender"})
@@ -324,7 +324,6 @@ def test_chain_interface_with_real_chains():
 
 
 # --- Negative Tests ---
-
 
 
 def test_get_token_symbol_fallback_on_error(mock_web3):
