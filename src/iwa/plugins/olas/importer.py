@@ -598,6 +598,15 @@ class OlasServiceImporter:
             content = file_path.read_text().strip()
             keystore = json.loads(content)
 
+            # Handle operate format: keystore is stringified inside "private_key"
+            if "private_key" in keystore and isinstance(keystore["private_key"], str):
+                try:
+                    inner_keystore = json.loads(keystore["private_key"])
+                    if "crypto" in inner_keystore and "address" in inner_keystore:
+                        keystore = inner_keystore
+                except json.JSONDecodeError:
+                    pass  # Not a nested keystore, continue with original
+
             # Validate it's a keystore
             if "crypto" not in keystore or "address" not in keystore:
                 return None
