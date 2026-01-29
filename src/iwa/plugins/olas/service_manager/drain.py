@@ -80,6 +80,13 @@ class DrainManagerMixin:
             logger.error("Failed to prepare claim transaction")
             return False, 0
 
+        # Simulate transaction to catch revert before sending
+        try:
+            staking_contract.chain_interface.web3.eth.call(claim_tx)
+        except Exception as e:
+            logger.warning(f"Claim would revert, skipping: {e}")
+            return False, 0
+
         success, receipt = self.wallet.sign_and_send_transaction(
             claim_tx,
             signer_address_or_tag=owner_address,
