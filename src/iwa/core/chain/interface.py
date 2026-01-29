@@ -55,6 +55,11 @@ class ChainInterface:
         self._initial_block = 0
         self._rotation_lock = threading.Lock()
         self._session = requests.Session()
+
+        # Enrich with public RPCs from ChainList (skip for Tenderly vNets)
+        if not self.is_tenderly:
+            self._enrich_rpcs_from_chainlist()
+
         self._init_web3()
 
     @property
@@ -250,6 +255,35 @@ class ChainInterface:
             "allowance exceeded",
         ]
         return any(signal in err_text for signal in quota_signals)
+
+    # -- ChainList enrichment ----------------------------------------------
+
+    MAX_RPCS = 10  # Cap total RPCs per chain
+
+    def _enrich_rpcs_from_chainlist(self) -> None:
+        """Add validated public RPCs from ChainList to the rotation pool."""
+        if len(self.chain.rpcs) >= self.MAX_RPCS:
+            return
+
+        try:
+            from iwa.core.chainlist import ChainlistRPC
+
+            chainlist = ChainlistRPC()
+            extra = chainlist.get_validated_rpcs(
+                self.chain.chain_id,
+                existing_rpcs=self.chain.rpcs,
+                max_results=self.MAX_RPCS - len(self.chain.rpcs),
+            )
+            if extra:
+                self.chain.rpcs.extend(extra)
+                logger.info(
+                    f"Enriched {self.chain.name} with {len(extra)} "
+                    f"ChainList RPCs (total: {len(self.chain.rpcs)})"
+                )
+        except Exception as e:
+            logger.debug(
+                f"ChainList enrichment failed for {self.chain.name}: {e}"
+            )
 
     # -- Per-RPC health tracking ------------------------------------------
 

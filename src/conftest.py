@@ -35,3 +35,15 @@ def mock_rate_limiter_sleep():
 
         _rate_limiters.clear()
         yield
+
+
+@pytest.fixture(autouse=True)
+def mock_chainlist_enrichment():
+    """Prevent ChainList network calls during tests.
+
+    Tests that explicitly test enrichment should patch ChainlistRPC directly.
+    """
+    with patch(
+        "iwa.core.chain.interface.ChainInterface._enrich_rpcs_from_chainlist"
+    ):
+        yield
