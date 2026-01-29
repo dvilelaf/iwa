@@ -359,3 +359,211 @@ def test_retry_preserves_gas(executor, mock_chain_interface, mock_safe_tx, mock_
             executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert mock_safe_tx.safe_tx_gas == original_gas
+
+
+# =============================================================================
+# Test: Gas estimation (_estimate_safe_tx_gas)
+# =============================================================================
+
+
+def test_estimate_safe_tx_gas_with_buffer(executor, mock_safe):
+    """Test gas estimation applies buffer correctly."""
+    mock_safe.estimate_tx_gas.return_value = 100_000
+    mock_safe_tx = MagicMock()
+    mock_safe_tx.to = "0xDest"
+    mock_safe_tx.value = 0
+    mock_safe_tx.data = b""
+    mock_safe_tx.operation = 0
+
+    result = executor._estimate_safe_tx_gas(mock_safe, mock_safe_tx)
+
+    # Default buffer is 1.5, so 100000 * 1.5 = 150000
+    assert result == 150_000
+
+
+def test_estimate_safe_tx_gas_caps_at_10x(executor, mock_safe):
+    """Test gas estimation respects x10 cap when base_estimate is provided."""
+    mock_safe.estimate_tx_gas.return_value = 500_000  # High estimate
+    mock_safe_tx = MagicMock()
+    mock_safe_tx.to = "0xDest"
+    mock_safe_tx.value = 0
+    mock_safe_tx.data = b""
+    mock_safe_tx.operation = 0
+
+    # 500000 * 1.5 = 750000, but base_estimate * 10 = 50000
+    result = executor._estimate_safe_tx_gas(mock_safe, mock_safe_tx, base_estimate=5_000)
+
+    # Should be capped at 5000 * 10 = 50000
+    assert result == 50_000
+
+
+def test_estimate_safe_tx_gas_fallback_on_failure(executor, mock_safe):
+    """Test gas estimation uses fallback when estimation fails."""
+    mock_safe.estimate_tx_gas.side_effect = Exception("Estimation failed")
+    mock_safe_tx = MagicMock()
+    mock_safe_tx.to = "0xDest"
+    mock_safe_tx.value = 0
+    mock_safe_tx.data = b""
+    mock_safe_tx.operation = 0
+
+    result = executor._estimate_safe_tx_gas(mock_safe, mock_safe_tx)
+
+    assert result == executor.DEFAULT_FALLBACK_GAS
+
+
+# =============================================================================
+# Test: Error decoding (_decode_revert_reason)
+# =============================================================================
+
+
+def test_decode_revert_reason_with_hex_data(executor):
+    """Test decoding when error contains hex data."""
+    # Create an error with hex data that might be decodable
+    error = ValueError("execution reverted: 0x08c379a0...")
+
+    with patch("iwa.core.services.safe_executor.ErrorDecoder") as mock_decoder:
+        mock_decoder.return_value.decode.return_value = [("Error", "Insufficient balance", "ERC20")]
+        result = executor._decode_revert_reason(error)
+
+    # Note: Due to hex matching, this should find the data and attempt decode
+    assert result == "Insufficient balance (from ERC20)"
+
+
+def test_decode_revert_reason_no_hex_data(executor):
+    """Test decoding when error has no hex data."""
+    error = ValueError("Some generic error without hex")
+
+    result = executor._decode_revert_reason(error)
+
+    assert result is None
+
+
+def test_decode_revert_reason_decode_fails(executor):
+    """Test decoding when decoder returns None."""
+    error = ValueError("error: 0xdeadbeef")
+
+    with patch("iwa.core.services.safe_executor.ErrorDecoder") as mock_decoder:
+        mock_decoder.return_value.decode.return_value = None
+        result = executor._decode_revert_reason(error)
+
+    assert result is None
+
+
+# =============================================================================
+# Test: Error classification
+# =============================================================================
+
+
+def test_classify_error_gas_error(executor):
+    """Test classification of gas-related errors."""
+    error = ValueError("intrinsic gas too low")
+    result = executor._classify_error(error)
+
+    assert result["is_gas_error"] is True
+    assert result["is_nonce_error"] is False
+
+
+def test_classify_error_revert(executor):
+    """Test classification of revert errors."""
+    error = ValueError("execution reverted: some reason")
+    result = executor._classify_error(error)
+
+    assert result["is_revert"] is True
+
+
+def test_classify_error_out_of_gas(executor):
+    """Test classification of out of gas errors."""
+    error = ValueError("out of gas")
+    result = executor._classify_error(error)
+
+    assert result["is_gas_error"] is True
+
+
+# =============================================================================
+# Test: Transaction failures
+# =============================================================================
+
+
+def test_transaction_reverts_onchain(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test handling when transaction is mined but reverts (status 0)."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.return_value = b"tx_hash"
+        # Receipt with status 0 (reverted)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=0
+        )
+
+        with patch("time.sleep"):
+            success, error, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        assert "reverted" in error.lower()
+
+
+def test_check_receipt_status_dict_format(executor):
+    """Test receipt status check with dict-style receipt."""
+    # Dict-style receipt (not MagicMock)
+    receipt_dict = {"status": 1, "gasUsed": 21000}
+    assert executor._check_receipt_status(receipt_dict) is True
+
+    receipt_dict_failed = {"status": 0}
+    assert executor._check_receipt_status(receipt_dict_failed) is False
+
+
+def test_simulation_revert_not_nonce(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test handling when simulation reverts with non-nonce error."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation fails with generic revert
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: insufficient funds")
+
+        with patch("time.sleep"):
+            success, error, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        assert "insufficient funds" in error.lower() or "reverted" in error.lower()
+
+
+def test_gas_error_strategy_triggers_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """Test that gas errors trigger retry with gas increase strategy."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = [
+            ValueError("intrinsic gas too low"),
+            b"tx_hash",
+        ]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
+        )
+
+        with patch("time.sleep"):
+            success, tx_hash, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        # Should have retried and succeeded
+        assert success is True
+        assert mock_safe_tx.execute.call_count == 2
+
+
+def test_rpc_rotation_stops_when_should_not_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """Test that execution stops when RPC handler says not to retry."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = ValueError("Rate limit exceeded")
+        mock_chain_interface._is_rate_limit_error.return_value = True
+        mock_chain_interface._handle_rpc_error.return_value = {"should_retry": False}
+
+        with patch("time.sleep"):
+            success, error, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        # Only 1 attempt because should_retry=False
+        assert mock_safe_tx.execute.call_count == 1

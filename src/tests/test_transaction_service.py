@@ -1,12 +1,17 @@
-"""Tests for TransactionService."""
+"""Tests for TransactionService and TransferLogger."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
+from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.keys import EncryptedAccount, KeyStorage
-from iwa.core.services.transaction import TransactionService
+from iwa.core.services.transaction import (
+    TRANSFER_EVENT_TOPIC,
+    TransactionService,
+    TransferLogger,
+)
 
 
 @pytest.fixture
@@ -177,3 +182,174 @@ def test_sign_and_send_rpc_rotation(
     assert success is True
     # Verify retry happened - send_raw_transaction called twice
     assert chain_interface.web3.eth.send_raw_transaction.call_count == 2
+
+
+# =============================================================================
+# TransferLogger tests
+# =============================================================================
+
+# Real-world address for tests
+_ADDR = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+_ADDR_LOWER = _ADDR.lower()
+# 32-byte topic with address in last 20 bytes
+_TOPIC_BYTES = b"\x00" * 12 + bytes.fromhex(_ADDR_LOWER[2:])
+_TOPIC_HEX_STR = "0x" + "0" * 24 + _ADDR_LOWER[2:]
+
+
+@pytest.fixture
+def transfer_logger():
+    """Create a TransferLogger with minimal mocks."""
+    account_service = MagicMock()
+    account_service.get_tag_by_address.return_value = None
+    chain_interface = MagicMock()
+    chain_interface.chain.native_currency = "xDAI"
+    chain_interface.chain.get_token_name.return_value = None
+    chain_interface.get_token_decimals.return_value = 18
+    return TransferLogger(account_service, chain_interface)
+
+
+class TestTopicToAddress:
+    """Test TransferLogger._topic_to_address with all input types."""
+
+    def test_bytes_topic(self, transfer_logger):
+        """32 bytes → last 20 bytes extracted as address."""
+        result = transfer_logger._topic_to_address(_TOPIC_BYTES)
+        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+
+    def test_hex_string_topic(self, transfer_logger):
+        """Hex string with 0x prefix → last 40 chars as address."""
+        result = transfer_logger._topic_to_address(_TOPIC_HEX_STR)
+        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+
+    def test_hex_string_no_prefix(self, transfer_logger):
+        """Hex string without 0x prefix."""
+        topic = "0" * 24 + _ADDR_LOWER[2:]
+        result = transfer_logger._topic_to_address(topic)
+        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+
+    def test_hexbytes_like_topic(self, transfer_logger):
+        """Object with .hex() method (like HexBytes)."""
+
+        class FakeHexBytes:
+            def hex(self):
+                return "0" * 24 + _ADDR_LOWER[2:]
+
+        result = transfer_logger._topic_to_address(FakeHexBytes())
+        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+
+    def test_unsupported_type_returns_empty(self, transfer_logger):
+        """Non-bytes, non-str, no .hex() → empty string."""
+        result = transfer_logger._topic_to_address(12345)
+        assert result == ""
+
+
+class TestProcessLog:
+    """Test TransferLogger._process_log with realistic log structures."""
+
+    def _make_transfer_log(self, from_addr, to_addr, amount_wei, token_addr="0xToken"):
+        """Build a dict-style Transfer event log."""
+        from_topic = "0x" + "0" * 24 + from_addr[2:].lower()
+        to_topic = "0x" + "0" * 24 + to_addr[2:].lower()
+        data = amount_wei.to_bytes(32, "big")
+        return {
+            "topics": [TRANSFER_EVENT_TOPIC, from_topic, to_topic],
+            "data": data,
+            "address": token_addr,
+        }
+
+    def test_parses_erc20_transfer(self, transfer_logger):
+        """Valid Transfer log is parsed and logged."""
+        log = self._make_transfer_log(
+            "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            10**18,  # 1 token with 18 decimals
+        )
+        # Should not raise
+        transfer_logger._process_log(log)
+
+    def test_ignores_non_transfer_event(self, transfer_logger):
+        """Log with non-Transfer topic is silently skipped."""
+        log = {
+            "topics": ["0xdeadbeef" + "0" * 56],
+            "data": b"",
+            "address": "0xToken",
+        }
+        # Should not raise or log anything
+        transfer_logger._process_log(log)
+
+    def test_ignores_log_with_no_topics(self, transfer_logger):
+        """Log with empty topics is skipped."""
+        transfer_logger._process_log({"topics": [], "data": b""})
+
+    def test_ignores_log_with_insufficient_topics(self, transfer_logger):
+        """Transfer event with < 3 topics (missing from/to) is skipped."""
+        log = {
+            "topics": [TRANSFER_EVENT_TOPIC, "0x" + "0" * 64],
+            "data": b"",
+            "address": "0xToken",
+        }
+        transfer_logger._process_log(log)
+
+    def test_handles_bytes_topics(self, transfer_logger):
+        """Log with bytes topics (not hex strings)."""
+        from_bytes = b"\x00" * 12 + b"\xAA" * 20
+        to_bytes = b"\x00" * 12 + b"\xBB" * 20
+        event_topic = bytes.fromhex(TRANSFER_EVENT_TOPIC[2:])
+        log = {
+            "topics": [event_topic, from_bytes, to_bytes],
+            "data": (100).to_bytes(32, "big"),
+            "address": "0xTokenAddr",
+        }
+        transfer_logger._process_log(log)
+
+    def test_handles_string_data(self, transfer_logger):
+        """Log with hex-encoded data string instead of bytes."""
+        log = self._make_transfer_log(
+            "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            0,
+        )
+        log["data"] = "0x" + "0" * 64  # String instead of bytes
+        transfer_logger._process_log(log)
+
+
+class TestResolveLabels:
+    """Test address/token label resolution fallbacks."""
+
+    def test_address_label_known_wallet(self, transfer_logger):
+        """Known wallet tag is preferred."""
+        transfer_logger.account_service.get_tag_by_address.return_value = "my_safe"
+        result = transfer_logger._resolve_address_label("0xABC")
+        assert result == "my_safe"
+
+    def test_address_label_known_token(self, transfer_logger):
+        """Falls back to token contract name."""
+        transfer_logger.account_service.get_tag_by_address.return_value = None
+        transfer_logger.chain_interface.chain.get_token_name.return_value = "OLAS"
+        result = transfer_logger._resolve_address_label("0xOLAS")
+        assert result == "OLAS_contract"
+
+    def test_address_label_abbreviated(self, transfer_logger):
+        """Falls back to abbreviated address."""
+        result = transfer_logger._resolve_address_label("0xABCDEF1234567890ABCDEF")
+        assert result.startswith("0xABCD")
+        assert result.endswith("CDEF")
+        assert "..." in result
+
+    def test_address_label_empty(self, transfer_logger):
+        """Empty address returns 'unknown'."""
+        assert transfer_logger._resolve_address_label("") == "unknown"
+
+    def test_token_label_known(self, transfer_logger):
+        """Known token returns its name."""
+        transfer_logger.chain_interface.chain.get_token_name.return_value = "OLAS"
+        assert transfer_logger._resolve_token_label("0xOLAS") == "OLAS"
+
+    def test_token_label_unknown(self, transfer_logger):
+        """Unknown token returns abbreviated address."""
+        result = transfer_logger._resolve_token_label("0xABCDEF1234567890ABCDEF")
+        assert "..." in result
+
+    def test_token_label_empty(self, transfer_logger):
+        """Empty address returns 'UNKNOWN'."""
+        assert transfer_logger._resolve_token_label("") == "UNKNOWN"
