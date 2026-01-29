@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.models import Config
 from iwa.web.dependencies import verify_auth
 
 router = APIRouter(prefix="/api", tags=["state"])
@@ -25,12 +26,19 @@ def get_state(auth: bool = Depends(verify_auth)):
         # Get token symbols from the interface (dict of symbol -> address)
         tokens[name] = list(interface.tokens.keys())
 
+    # Get whitelist from config
+    config = Config()
+    whitelist = {}
+    if config.core and config.core.whitelist:
+        whitelist = {tag: str(addr) for tag, addr in config.core.whitelist.items()}
+
     return {
         "chains": chain_names,
         "tokens": tokens,
         "native_currencies": native_currencies,
         "default_chain": "gnosis",
         "testing": ChainInterfaces().gnosis.is_tenderly,
+        "whitelist": whitelist,
     }
 
 

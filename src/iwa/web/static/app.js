@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     olasServicesCache: {}, // { chain: [services] }
     stakingContractsCache: null, // Cached staking contracts
     olasPriceCache: null, // Cached OLAS price in EUR
+    whitelist: {}, // { tag: address } from config
   };
 
   // Real-time countdown updater for unstake availability
@@ -138,6 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.chains = data.chains;
       state.tokens = data.tokens;
       state.nativeCurrencies = data.native_currencies || {};
+      state.whitelist = data.whitelist || {};
 
       // Update status indicator for testing mode
       const statusText = document.getElementById("status-text");
@@ -518,12 +520,24 @@ document.addEventListener("DOMContentLoaded", () => {
       )
       .join("");
 
-    toSelect.innerHTML = state.accounts
+    // Build To options: own accounts + whitelisted addresses
+    const accountOptions = state.accounts
       .map(
         (acc) =>
           `<option value="${escapeHtml(acc.tag)}">${escapeHtml(acc.tag)}</option>`,
       )
       .join("");
+    const whitelistOptions = Object.entries(state.whitelist)
+      .map(
+        ([tag, addr]) =>
+          `<option value="${escapeHtml(addr)}">${escapeHtml(tag)} (whitelist)</option>`,
+      )
+      .join("");
+    toSelect.innerHTML =
+      accountOptions +
+      (whitelistOptions
+        ? `<optgroup label="Whitelist">${whitelistOptions}</optgroup>`
+        : "");
 
     tokenSelect.innerHTML =
       `<option value="native">${escapeHtml(nativeSymbol)}</option>` +
