@@ -46,6 +46,7 @@ class SafeMultisig:
             chain_name: The chain name (e.g., 'gnosis').
             ethereum_client: Optional pre-existing EthereumClient.
                 If not provided, uses a shared cached client.
+
         """
         # Normalize chain comparison to be case-insensitive
         normalized_chains = [c.lower() for c in safe_account.chains]
