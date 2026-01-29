@@ -36,3 +36,11 @@ class ChainInterfaces:
         for name, interface in self.items():
             results[name] = interface.check_rpc_health()
         return results
+
+    def close_all(self) -> None:
+        """Close all chain interface sessions.
+
+        Call this at application shutdown to release network resources.
+        """
+        for _, interface in self.items():
+            interface.close()

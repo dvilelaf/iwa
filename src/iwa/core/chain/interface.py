@@ -54,13 +54,40 @@ class ChainInterface:
 
         self._initial_block = 0
         self._rotation_lock = threading.Lock()
-        self._session = requests.Session()
+        self._session = self._create_session()
 
         # Enrich with public RPCs from ChainList (skip for Tenderly vNets)
         if not self.is_tenderly:
             self._enrich_rpcs_from_chainlist()
 
         self._init_web3()
+
+    def _create_session(self) -> requests.Session:
+        """Create a requests Session with bounded connection pooling.
+
+        Configures the session with limited pool sizes to prevent file
+        descriptor exhaustion during RPC rotations. Connections are reused
+        within the pool but won't accumulate unboundedly.
+        """
+        session = requests.Session()
+        # Limit pool size: we only talk to one RPC at a time, but may rotate
+        # through multiple during the session lifetime. Keep modest limits.
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=5,  # Max different hosts to keep connections to
+            pool_maxsize=10,  # Max connections per host
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        return session
+
+    def close(self) -> None:
+        """Close the session and release all connections.
+
+        Call this when the ChainInterface is no longer needed to ensure
+        proper cleanup of network resources.
+        """
+        if hasattr(self, "_session") and self._session:
+            self._session.close()
 
     @property
     def current_rpc(self) -> str:

@@ -49,11 +49,21 @@ class TestIsTemplateUrl:
 class TestProbeRpc:
     """Test single RPC probing."""
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_success(self, mock_post):
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock session for probe_rpc tests."""
+        with patch("iwa.core.chainlist.requests.Session") as mock_session_cls:
+            mock_session = MagicMock()
+            mock_session_cls.return_value = mock_session
+            # Make it work as context manager too
+            mock_session.__enter__ = MagicMock(return_value=mock_session)
+            mock_session.__exit__ = MagicMock(return_value=False)
+            yield mock_session
+
+    def test_success(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"jsonrpc": "2.0", "result": "0x1A4B5C", "id": 1}
-        mock_post.return_value = mock_resp
+        mock_session.post.return_value = mock_resp
 
         result = probe_rpc("https://rpc.example.com")
 
@@ -62,51 +72,65 @@ class TestProbeRpc:
         assert url == "https://rpc.example.com"
         assert latency > 0
         assert block == 0x1A4B5C
+        # Verify session was closed
+        mock_session.close.assert_called_once()
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_timeout_returns_none(self, mock_post):
-        mock_post.side_effect = requests.exceptions.Timeout("timed out")
+    def test_timeout_returns_none(self, mock_session):
+        mock_session.post.side_effect = requests.exceptions.Timeout("timed out")
 
         result = probe_rpc("https://slow.example.com")
         assert result is None
+        # Session still closed on error
+        mock_session.close.assert_called_once()
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_connection_error_returns_none(self, mock_post):
-        mock_post.side_effect = requests.exceptions.ConnectionError("refused")
+    def test_connection_error_returns_none(self, mock_session):
+        mock_session.post.side_effect = requests.exceptions.ConnectionError("refused")
 
         result = probe_rpc("https://dead.example.com")
         assert result is None
+        mock_session.close.assert_called_once()
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_zero_block_returns_none(self, mock_post):
+    def test_zero_block_returns_none(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"jsonrpc": "2.0", "result": "0x0", "id": 1}
-        mock_post.return_value = mock_resp
+        mock_session.post.return_value = mock_resp
 
         result = probe_rpc("https://rpc.example.com")
         assert result is None
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_null_result_returns_none(self, mock_post):
+    def test_null_result_returns_none(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"jsonrpc": "2.0", "result": None, "id": 1}
-        mock_post.return_value = mock_resp
+        mock_session.post.return_value = mock_resp
 
         result = probe_rpc("https://rpc.example.com")
         assert result is None
 
-    @patch("iwa.core.chainlist.requests.post")
-    def test_error_response_returns_none(self, mock_post):
+    def test_error_response_returns_none(self, mock_session):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "jsonrpc": "2.0",
             "error": {"code": -32600, "message": "Invalid Request"},
             "id": 1,
         }
-        mock_post.return_value = mock_resp
+        mock_session.post.return_value = mock_resp
 
         result = probe_rpc("https://rpc.example.com")
         assert result is None
+
+    def test_uses_provided_session(self):
+        """When a session is provided, use it instead of creating one."""
+        provided_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"jsonrpc": "2.0", "result": "0x100", "id": 1}
+        provided_session.post.return_value = mock_resp
+
+        result = probe_rpc("https://rpc.example.com", session=provided_session)
+
+        assert result is not None
+        provided_session.post.assert_called_once()
+        # Should NOT close provided session (caller's responsibility)
+        provided_session.close.assert_not_called()
 
 
 class TestGetValidatedRpcs:

@@ -30,15 +30,31 @@ def _is_template_url(url: str) -> bool:
     return "${" in url or "{" in url
 
 
-def probe_rpc(url: str, timeout: float = PROBE_TIMEOUT) -> Optional[Tuple[str, float, int]]:
+def probe_rpc(
+    url: str,
+    timeout: float = PROBE_TIMEOUT,
+    session: Optional[requests.Session] = None,
+) -> Optional[Tuple[str, float, int]]:
     """Probe an RPC endpoint with eth_blockNumber.
 
     Returns ``(url, latency_ms, block_number)`` on success, or ``None``
     if the endpoint is unreachable, slow, or returns invalid data.
+
+    Args:
+        url: The RPC endpoint URL to probe.
+        timeout: Request timeout in seconds.
+        session: Optional requests.Session for connection reuse. If None,
+                 creates a temporary session that is properly closed.
+
     """
+    # Use provided session or create temporary one with proper cleanup
+    own_session = session is None
+    if own_session:
+        session = requests.Session()
+
     try:
         start = time.monotonic()
-        resp = requests.post(
+        resp = session.post(
             url,
             json={"jsonrpc": "2.0", "method": "eth_blockNumber", "params": [], "id": 1},
             timeout=timeout,
@@ -51,6 +67,9 @@ def probe_rpc(url: str, timeout: float = PROBE_TIMEOUT) -> Optional[Tuple[str, f
         return (url, latency_ms, int(block_hex, 16))
     except Exception:
         return None
+    finally:
+        if own_session:
+            session.close()
 
 
 def _filter_candidates(
@@ -76,17 +95,37 @@ def _filter_candidates(
 def _probe_candidates(
     candidates: List[str],
 ) -> List[Tuple[str, float, int]]:
-    """Probe a list of RPC URLs in parallel, returning successful results."""
+    """Probe a list of RPC URLs in parallel, returning successful results.
+
+    Uses a shared session for all probes to enable connection pooling and
+    ensure proper cleanup of all connections when probing completes.
+    """
     results: List[Tuple[str, float, int]] = []
-    with ThreadPoolExecutor(max_workers=min(len(candidates), 10)) as pool:
-        futures = {pool.submit(probe_rpc, url): url for url in candidates}
-        for future in as_completed(futures, timeout=15):
-            try:
-                result = future.result()
-                if result is not None:
-                    results.append(result)
-            except Exception:
-                pass
+    # Use a shared session with connection pooling for all probes
+    # This prevents FD leaks from individual probe connections
+    with requests.Session() as session:
+        # Configure connection pool size to match our max workers
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=10,
+            max_retries=0,  # No retries - we handle failure gracefully
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
+        with ThreadPoolExecutor(max_workers=min(len(candidates), 10)) as pool:
+            futures = {
+                pool.submit(probe_rpc, url, PROBE_TIMEOUT, session): url
+                for url in candidates
+            }
+            for future in as_completed(futures, timeout=15):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        results.append(result)
+                except Exception:
+                    pass
+    # Session is closed here via context manager, releasing all connections
     return results
 
 
@@ -157,11 +196,12 @@ class ChainlistRPC:
             except Exception as e:
                 print(f"Error reading Chainlist cache: {e}")
 
-        # 2. Fetch from remote
+        # 2. Fetch from remote (use session context for proper cleanup)
         try:
-            response = requests.get(self.URL, timeout=10)
-            response.raise_for_status()
-            self._data = response.json()
+            with requests.Session() as session:
+                response = session.get(self.URL, timeout=10)
+                response.raise_for_status()
+                self._data = response.json()
 
             # 3. Update local cache
             if self._data:
