@@ -388,7 +388,7 @@ class TestFilterCandidates:
 
     def test_max_candidates_limit(self):
         """Test that _filter_candidates respects MAX_CHAINLIST_CANDIDATES."""
-        from iwa.core.chainlist import _filter_candidates, MAX_CHAINLIST_CANDIDATES
+        from iwa.core.chainlist import MAX_CHAINLIST_CANDIDATES, _filter_candidates
 
         # Create more nodes than MAX_CHAINLIST_CANDIDATES
         nodes = [
@@ -408,7 +408,6 @@ class TestChainlistRPCFetchData:
     def test_fetch_data_uses_cache(self, tmp_path):
         """Test fetch_data uses cached data when valid."""
         import json
-        import time
         from unittest.mock import patch
 
         cache_file = tmp_path / "chainlist_rpcs.json"

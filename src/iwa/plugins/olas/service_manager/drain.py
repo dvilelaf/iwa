@@ -12,7 +12,9 @@ from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 class DrainManagerMixin:
     """Mixin for draining and service token management."""
 
-    def claim_rewards(self, staking_contract: Optional[StakingContract] = None) -> Tuple[bool, int]:
+    def claim_rewards(  # noqa: C901
+        self, staking_contract: Optional[StakingContract] = None
+    ) -> Tuple[bool, int]:
         """Claim staking rewards for the active service.
 
         The claimed OLAS tokens will be sent to the service's multisig (Safe).

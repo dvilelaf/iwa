@@ -201,6 +201,7 @@ def test_sm_claim_rewards_tx_fails(mock_wallet):
         mock_staking = MagicMock()
         mock_staking.prepare_claim_tx.return_value = {"to": VALID_ADDR}
         mock_staking.get_staking_state.return_value = StakingState.STAKED
+        mock_staking.calculate_staking_reward.return_value = 100
         mock_staking.get_accrued_rewards.return_value = 100
 
         def get_contract_side_effect(cls, *args, **kwargs):

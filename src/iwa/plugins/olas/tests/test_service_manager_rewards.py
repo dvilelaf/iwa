@@ -108,6 +108,7 @@ def test_claim_rewards_no_accrued_rewards(mock_wallet):
 
     mock_staking = MagicMock()
     mock_staking.get_staking_state.return_value = StakingState.STAKED
+    mock_staking.calculate_staking_reward.return_value = 0
     mock_staking.get_accrued_rewards.return_value = 0
 
     success, amount = manager.claim_rewards(staking_contract=mock_staking)
@@ -129,9 +130,12 @@ def test_claim_rewards_success(mock_wallet):
 
     mock_staking = MagicMock()
     mock_staking.get_staking_state.return_value = StakingState.STAKED
+    mock_staking.calculate_staking_reward.return_value = 10 * 10**18  # 10 OLAS
     mock_staking.get_accrued_rewards.return_value = 10 * 10**18  # 10 OLAS
     mock_staking.prepare_claim_tx.return_value = {"data": "0x"}
-    mock_staking.extract_events.return_value = [{"name": "RewardClaimed"}]
+    mock_staking.extract_events.return_value = [
+        {"name": "RewardClaimed", "args": {"amount": 10 * 10**18}}
+    ]
 
     success, amount = manager.claim_rewards(staking_contract=mock_staking)
 
@@ -152,6 +156,7 @@ def test_claim_rewards_tx_fails(mock_wallet):
 
     mock_staking = MagicMock()
     mock_staking.get_staking_state.return_value = StakingState.STAKED
+    mock_staking.calculate_staking_reward.return_value = 10 * 10**18
     mock_staking.get_accrued_rewards.return_value = 10 * 10**18
     mock_staking.prepare_claim_tx.return_value = {"data": "0x"}
     mock_wallet.sign_and_send_transaction.return_value = (False, {})

@@ -375,7 +375,7 @@ def test_drain_safe_account_with_retry(mock_drain_manager):
     ]
 
     with patch("time.sleep"):  # Don't actually sleep
-        result = mock_drain_manager._drain_safe_account(
+        mock_drain_manager._drain_safe_account(
             "0xTarget", "gnosis", claimed_rewards=1000
         )
 
