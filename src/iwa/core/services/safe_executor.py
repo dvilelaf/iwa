@@ -39,6 +39,10 @@ class SafeTransactionExecutor:
     MAX_GAS_MULTIPLIER = 10  # Hard cap: never exceed 10x original estimate
     DEFAULT_FALLBACK_GAS = 500_000  # Fallback when estimation fails
 
+    # Fee bumping for "max fee per gas less than block base fee" errors
+    FEE_BUMP_PERCENTAGE = 1.30  # 30% bump per retry on fee errors
+    MAX_FEE_BUMP_FACTOR = 3.0  # Cap: never bump more than 3x original
+
     def __init__(
         self,
         chain_interface: "ChainInterface",
@@ -76,6 +80,7 @@ class SafeTransactionExecutor:
         last_error = None
         current_gas = safe_tx.safe_tx_gas
         base_estimate = current_gas if current_gas > 0 else 0
+        fee_bump_factor = 1.0  # Multiplier for EIP-1559 fees, increases on fee errors
 
         for attempt in range(self.max_retries + 1):
             SAFE_TX_STATS["total_attempts"] += 1
@@ -89,6 +94,7 @@ class SafeTransactionExecutor:
                     attempt,
                     current_gas,
                     base_estimate,
+                    fee_bump_factor,
                 )
 
                 # Check receipt
@@ -106,7 +112,7 @@ class SafeTransactionExecutor:
                 raise ValueError("Transaction reverted on-chain")
 
             except Exception as e:
-                updated_tx, should_retry = self._handle_execution_failure(
+                updated_tx, should_retry, is_fee_error = self._handle_execution_failure(
                     e, safe_address, safe_tx, attempt, operation_name
                 )
                 last_error = e
@@ -115,7 +121,12 @@ class SafeTransactionExecutor:
 
                 # Update gas/nonce for next loop if needed
                 safe_tx = updated_tx
-                # If gas error, gas is recalculated in next _execute_attempt via fresh estimation
+
+                # Bump fee multiplier on fee-related errors (base fee > max fee)
+                if is_fee_error and fee_bump_factor < self.MAX_FEE_BUMP_FACTOR:
+                    fee_bump_factor *= self.FEE_BUMP_PERCENTAGE
+                    fee_bump_factor = min(fee_bump_factor, self.MAX_FEE_BUMP_FACTOR)
+                    logger.info(f"[{operation_name}] Fee bump factor increased to {fee_bump_factor:.2f}x")
 
                 delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
                 time.sleep(delay)
@@ -131,6 +142,7 @@ class SafeTransactionExecutor:
         attempt,
         current_gas,
         base_estimate,
+        fee_bump_factor: float = 1.0,
     ) -> str:
         """Prepare client, estimate gas, simulate, and execute."""
         # 1. (Re)Create Safe client
@@ -171,30 +183,50 @@ class SafeTransactionExecutor:
         signatures_backup = safe_tx.signatures
 
         try:
-            # Always pass the first signer key as the executor (gas payer).
-            # Note: This method does NOT re-sign the Safe hash if signatures are already present.
-            # Use EIP-1559 'FAST' to ensure adequate priority fee (fixes Gnosis FeeTooLow)
-            result = safe_tx.execute(signer_keys[0], eip1559_speed=TxSpeed.FAST)
-
-            # Handle both tuple return (tx_hash, tx) and bytes return
-            if isinstance(result, tuple):
-                tx_hash_bytes = result[0]
-            else:
-                tx_hash_bytes = result
-
-            # Handle both bytes and hex string returns
-            if isinstance(tx_hash_bytes, bytes):
-                return f"0x{tx_hash_bytes.hex()}"
-            elif isinstance(tx_hash_bytes, str):
-                return tx_hash_bytes if tx_hash_bytes.startswith("0x") else f"0x{tx_hash_bytes}"
-            else:
-                return str(tx_hash_bytes)
+            # Execute with appropriate gas pricing
+            result = self._execute_with_gas_pricing(
+                safe_tx, signer_keys[0], fee_bump_factor, operation_name
+            )
+            return self._extract_tx_hash(result)
 
         finally:
             # Restore signatures for next attempt if needed
             # (execute() clears them on lines 407-409 of safe_eth/safe/safe_tx.py)
             if safe_tx.signatures != signatures_backup:
                 safe_tx.signatures = signatures_backup
+
+    def _execute_with_gas_pricing(
+        self, safe_tx: SafeTx, signer_key: str, fee_bump_factor: float, operation_name: str
+    ):
+        """Execute transaction with appropriate gas pricing strategy.
+
+        If fee_bump_factor > 1.0, calculates a bumped gas price to overcome
+        base fee volatility. Otherwise uses EIP-1559 FAST speed.
+        """
+        if fee_bump_factor > 1.0:
+            bumped_gas_price = self._calculate_bumped_gas_price(fee_bump_factor)
+            if bumped_gas_price:
+                logger.debug(
+                    f"[{operation_name}] Using bumped gas price: {bumped_gas_price} wei "
+                    f"(factor: {fee_bump_factor:.2f}x)"
+                )
+                return safe_tx.execute(signer_key, tx_gas_price=bumped_gas_price)
+            # Fallback to FAST if calculation fails
+            return safe_tx.execute(signer_key, eip1559_speed=TxSpeed.FAST)
+        # Default: use EIP-1559 'FAST' speed
+        return safe_tx.execute(signer_key, eip1559_speed=TxSpeed.FAST)
+
+    def _extract_tx_hash(self, result) -> str:
+        """Extract transaction hash from execute() result."""
+        # Handle both tuple return (tx_hash, tx) and bytes return
+        tx_hash_bytes = result[0] if isinstance(result, tuple) else result
+
+        # Handle both bytes and hex string returns
+        if isinstance(tx_hash_bytes, bytes):
+            return f"0x{tx_hash_bytes.hex()}"
+        if isinstance(tx_hash_bytes, str):
+            return tx_hash_bytes if tx_hash_bytes.startswith("0x") else f"0x{tx_hash_bytes}"
+        return str(tx_hash_bytes)
 
     def _check_receipt_status(self, receipt) -> bool:
         """Check if receipt has successful status."""
@@ -210,14 +242,20 @@ class SafeTransactionExecutor:
         safe_tx: SafeTx,
         attempt: int,
         operation_name: str,
-    ) -> Tuple[SafeTx, bool]:
-        """Handle execution failure and determine next steps."""
+    ) -> Tuple[SafeTx, bool, bool]:
+        """Handle execution failure and determine next steps.
+
+        Returns:
+            Tuple of (updated_safe_tx, should_retry, is_fee_error)
+
+        """
         classification = self._classify_error(error)
+        is_fee_error = classification["is_fee_error"]
 
         if attempt >= self.max_retries:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {error}")
-            return safe_tx, False
+            return safe_tx, False, is_fee_error
 
         strategy = "retry"
         safe = self._recreate_safe_client(safe_address)
@@ -231,13 +269,16 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["rpc_rotations"] += 1
             result = self.chain_interface._handle_rpc_error(error)
             if not result["should_retry"]:
-                return safe_tx, False
+                return safe_tx, False, is_fee_error
+        elif is_fee_error:
+            strategy = "fee bump"
+            SAFE_TX_STATS["gas_retries"] += 1
         elif classification["is_gas_error"]:
             strategy = "gas increase"
-            # Gas increase handled in next attempt loop
+            SAFE_TX_STATS["gas_retries"] += 1
 
         self._log_retry(attempt + 1, error, strategy)
-        return safe_tx, True
+        return safe_tx, True, is_fee_error
 
     def _estimate_safe_tx_gas(self, safe: Safe, safe_tx: SafeTx, base_estimate: int = 0) -> int:
         """Estimate gas for a Safe transaction with buffer and hard cap."""
@@ -320,13 +361,56 @@ class SafeTransactionExecutor:
             error
         ) or self.chain_interface._is_connection_error(error)
 
+        # Fee-specific errors: base fee jumped above our max fee
+        fee_error_signals = [
+            "max fee per gas less than block base fee",
+            "maxfeepergas",
+            "fee too low",
+            "underpriced",
+        ]
+        is_fee_error = any(signal in err_text for signal in fee_error_signals)
+
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
+            "is_fee_error": is_fee_error,
             "is_nonce_error": self._is_nonce_error(error),
             "is_rpc_error": is_rpc,
             "is_revert": "revert" in err_text or "execution reverted" in err_text,
             "is_signature_error": self._is_signature_error(error),
         }
+
+    def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:
+        """Calculate a bumped gas price based on current base fee.
+
+        Uses legacy gas price (not EIP-1559) for compatibility with safe-eth-py's
+        tx_gas_price parameter. The bumped price ensures we're above the current
+        base fee even if it's volatile.
+
+        Args:
+            bump_factor: Multiplier to apply to the base fee (e.g., 1.3 = 30% bump)
+
+        Returns:
+            Gas price in wei, or None if calculation fails
+
+        """
+        try:
+            web3 = self.chain_interface.web3
+            latest_block = web3.eth.get_block("latest")
+            base_fee = latest_block.get("baseFeePerGas")
+
+            if base_fee is not None:
+                # EIP-1559 chain: calculate bumped max fee
+                # base_fee * bump_factor * 1.5 (extra buffer) + priority fee
+                priority_fee = max(int(web3.eth.max_priority_fee), 1)
+                bumped_fee = int(base_fee * bump_factor * 1.5) + priority_fee
+                return bumped_fee
+            else:
+                # Legacy chain: bump the gas price directly
+                gas_price = web3.eth.gas_price
+                return int(gas_price * bump_factor)
+        except Exception as e:
+            logger.debug(f"Failed to calculate bumped gas price: {e}")
+            return None
 
     def _decode_revert_reason(self, error: Exception) -> Optional[str]:
         """Attempt to decode the revert reason."""

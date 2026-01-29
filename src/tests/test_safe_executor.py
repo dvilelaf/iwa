@@ -567,3 +567,73 @@ def test_rpc_rotation_stops_when_should_not_retry(
         assert success is False
         # Only 1 attempt because should_retry=False
         assert mock_safe_tx.execute.call_count == 1
+
+
+# =============================================================================
+# Test: Fee bumping on base fee errors
+# =============================================================================
+
+
+def test_fee_error_triggers_bump(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """Test that fee errors trigger gas price bump on retry."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # First attempt fails with fee error, second succeeds
+        mock_safe_tx.execute.side_effect = [
+            ValueError("max fee per gas less than block base fee: maxFeePerGas: 596, baseFee: 681"),
+            b"tx_hash",
+        ]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
+        )
+        # Mock fee calculation
+        mock_chain_interface.web3.eth.get_block.return_value = {"baseFeePerGas": 700}
+        mock_chain_interface.web3.eth.max_priority_fee = 1
+
+        with patch("time.sleep"):
+            success, tx_hash, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is True
+        assert mock_safe_tx.execute.call_count == 2
+        # Second call should have tx_gas_price (bumped), not eip1559_speed
+        second_call_kwargs = mock_safe_tx.execute.call_args_list[1][1]
+        assert "tx_gas_price" in second_call_kwargs
+
+
+def test_fee_error_classification(executor):
+    """Test classification of fee-related errors."""
+    fee_errors = [
+        "max fee per gas less than block base fee",
+        "transaction underpriced",
+        "maxFeePerGas too low",
+        "fee too low for mempool",
+    ]
+    for error_msg in fee_errors:
+        error = ValueError(error_msg)
+        result = executor._classify_error(error)
+        assert result["is_fee_error"] is True, f"Should detect fee error: {error_msg}"
+
+
+def test_calculate_bumped_gas_price_eip1559(executor, mock_chain_interface):
+    """Test bumped gas price calculation for EIP-1559 chains."""
+    mock_chain_interface.web3.eth.get_block.return_value = {"baseFeePerGas": 1000}
+    mock_chain_interface.web3.eth.max_priority_fee = 10
+
+    # With 1.3x bump factor: base_fee * 1.3 * 1.5 + priority = 1000 * 1.3 * 1.5 + 10 = 1960
+    result = executor._calculate_bumped_gas_price(1.3)
+
+    assert result is not None
+    assert result == int(1000 * 1.3 * 1.5) + 10
+
+
+def test_calculate_bumped_gas_price_legacy(executor, mock_chain_interface):
+    """Test bumped gas price calculation for legacy chains."""
+    mock_chain_interface.web3.eth.get_block.return_value = {}  # No baseFeePerGas
+    mock_chain_interface.web3.eth.gas_price = 2000
+
+    # Legacy: gas_price * bump_factor = 2000 * 1.3 = 2600
+    result = executor._calculate_bumped_gas_price(1.3)
+
+    assert result is not None
+    assert result == int(2000 * 1.3)
