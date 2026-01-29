@@ -183,7 +183,7 @@ class LifecycleManagerMixin:
             service_name=service_name,
             chain_name=chain_name,
             agent_id_values=agent_id_values,
-            service_owner_address=service_owner_account.address,
+            service_owner_eoa_address=service_owner_account.address,
             token_address=token_address,
         )
 
@@ -263,7 +263,7 @@ class LifecycleManagerMixin:
         service_name: Optional[str],
         chain_name: str,
         agent_id_values: List[int],
-        service_owner_address: str,
+        service_owner_eoa_address: str,
         token_address: Optional[str],
     ) -> None:
         """Create and save the new Service model."""
@@ -272,7 +272,7 @@ class LifecycleManagerMixin:
             chain_name=chain_name,
             service_id=service_id,
             agent_ids=agent_id_values,
-            service_owner_address=service_owner_address,
+            service_owner_eoa_address=service_owner_eoa_address,
             token_address=token_address,
         )
 

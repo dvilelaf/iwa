@@ -43,7 +43,7 @@ def mock_olas_config():
         chain_name="gnosis",
         agent_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
         multisig_address="0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
-        service_owner_address="0x1111111111111111111111111111111111111111",
+        service_owner_eoa_address="0x1111111111111111111111111111111111111111",
         staking_contract_address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
     )
     return OlasConfig(services={"gnosis:1": service})

@@ -35,7 +35,7 @@ def mock_olas_config():
         chain_name="gnosis",
         agent_address=VALID_ADDR_1,
         multisig_address=VALID_ADDR_2,
-        service_owner_address=VALID_ADDR_3,
+        service_owner_eoa_address=VALID_ADDR_3,
         staking_contract_address=VALID_ADDR_1,
     )
     config = OlasConfig(services={"gnosis:1": service})

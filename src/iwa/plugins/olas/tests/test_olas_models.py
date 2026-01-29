@@ -14,7 +14,7 @@ class TestOlasConfig:
             chain_name="gnosis",
             service_id=456,
             agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
+            service_owner_eoa_address="0x1234567890123456789012345678901234567890",
         )
 
         config.add_service(service)
@@ -30,7 +30,7 @@ class TestOlasConfig:
             chain_name="gnosis",
             service_id=789,
             agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
+            service_owner_eoa_address="0x1234567890123456789012345678901234567890",
         )
         config.services["gnosis:789"] = service
 
@@ -53,7 +53,7 @@ class TestOlasConfig:
             chain_name="ethereum",
             service_id=200,
             agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
+            service_owner_eoa_address="0x1234567890123456789012345678901234567890",
         )
         config.services["ethereum:200"] = service
 
@@ -116,7 +116,7 @@ class TestService:
             chain_name="gnosis",
             service_id=123,
             agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
+            service_owner_eoa_address="0x1234567890123456789012345678901234567890",
         )
 
         assert service.key == "gnosis:123"
@@ -133,7 +133,7 @@ class TestService:
             chain_name="gnosis",
             service_id=456,
             agent_ids=[25],
-            service_owner_address="0x1234567890123456789012345678901234567890",
+            service_owner_eoa_address="0x1234567890123456789012345678901234567890",
             staking_contract_address=staking_addr,
             token_address=token_addr,
         )
