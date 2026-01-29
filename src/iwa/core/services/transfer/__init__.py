@@ -136,8 +136,8 @@ class TransferService(
 
         amount_eth = float(chain_interface.web3.from_wei(amount_wei, "ether"))
         logger.info(
-            f"Sending {amount_eth:.4f} {token_address_or_name} "
-            f"from {from_address_or_tag} to {to_address_or_tag}"
+            f"Sending {amount_eth:.4f} {token_symbol} "
+            f"from {from_tag or from_address_or_tag} to {to_tag or to_address_or_tag}"
         )
 
         if is_safe:
