@@ -352,3 +352,237 @@ class TestEnrichFromChainlist:
 
         # Already at MAX_RPCS=20, ChainlistRPC should not be called
         mock_cl_cls.assert_not_called()
+
+
+class TestRPCNode:
+    """Test RPCNode dataclass."""
+
+    def test_is_tracking_privacy(self):
+        """Test is_tracking returns True for privacy tracking."""
+        node = RPCNode(url="https://example.com", is_working=True, privacy="privacy")
+        assert node.is_tracking is True
+
+    def test_is_tracking_limited(self):
+        """Test is_tracking returns True for limited tracking."""
+        node = RPCNode(url="https://example.com", is_working=True, tracking="limited")
+        assert node.is_tracking is True
+
+    def test_is_tracking_yes(self):
+        """Test is_tracking returns True for explicit yes tracking."""
+        node = RPCNode(url="https://example.com", is_working=True, tracking="yes")
+        assert node.is_tracking is True
+
+    def test_is_tracking_none(self):
+        """Test is_tracking returns False for no tracking."""
+        node = RPCNode(url="https://example.com", is_working=True, tracking="none")
+        assert node.is_tracking is False
+
+    def test_is_tracking_default(self):
+        """Test is_tracking returns False by default."""
+        node = RPCNode(url="https://example.com", is_working=True)
+        assert node.is_tracking is False
+
+
+class TestFilterCandidates:
+    """Test _filter_candidates function."""
+
+    def test_max_candidates_limit(self):
+        """Test that _filter_candidates respects MAX_CHAINLIST_CANDIDATES."""
+        from iwa.core.chainlist import _filter_candidates, MAX_CHAINLIST_CANDIDATES
+
+        # Create more nodes than MAX_CHAINLIST_CANDIDATES
+        nodes = [
+            RPCNode(url=f"https://rpc{i}.example.com", is_working=True)
+            for i in range(MAX_CHAINLIST_CANDIDATES + 10)
+        ]
+
+        result = _filter_candidates(nodes, set())
+
+        # Should be limited to MAX_CHAINLIST_CANDIDATES
+        assert len(result) == MAX_CHAINLIST_CANDIDATES
+
+
+class TestChainlistRPCFetchData:
+    """Test ChainlistRPC.fetch_data with caching."""
+
+    def test_fetch_data_uses_cache(self, tmp_path):
+        """Test fetch_data uses cached data when valid."""
+        import json
+        import time
+        from unittest.mock import patch
+
+        cache_file = tmp_path / "chainlist_rpcs.json"
+        cache_data = [{"chainId": 100, "name": "Test", "rpc": []}]
+        cache_file.write_text(json.dumps(cache_data))
+
+        with patch.object(ChainlistRPC, "CACHE_PATH", cache_file):
+            with patch("iwa.core.chainlist.requests.Session") as mock_session:
+                cl = ChainlistRPC()
+                cl.fetch_data()
+
+                # Should not make network request when cache is valid
+                mock_session.return_value.get.assert_not_called()
+                assert cl._data == cache_data
+
+    def test_fetch_data_force_refresh(self, tmp_path):
+        """Test fetch_data ignores cache when force_refresh=True."""
+        import json
+
+        cache_file = tmp_path / "chainlist_rpcs.json"
+        cache_data = [{"chainId": 100, "name": "Cached", "rpc": []}]
+        cache_file.write_text(json.dumps(cache_data))
+
+        fresh_data = [{"chainId": 100, "name": "Fresh", "rpc": []}]
+
+        with patch.object(ChainlistRPC, "CACHE_PATH", cache_file):
+            with patch("iwa.core.chainlist.requests.Session") as mock_session_cls:
+                mock_session = MagicMock()
+                mock_session_cls.return_value.__enter__ = MagicMock(
+                    return_value=mock_session
+                )
+                mock_session_cls.return_value.__exit__ = MagicMock(return_value=False)
+                mock_resp = MagicMock()
+                mock_resp.json.return_value = fresh_data
+                mock_session.get.return_value = mock_resp
+
+                cl = ChainlistRPC()
+                cl.fetch_data(force_refresh=True)
+
+                mock_session.get.assert_called_once()
+                assert cl._data == fresh_data
+
+    def test_fetch_data_network_error_falls_back_to_cache(self, tmp_path):
+        """Test fetch_data falls back to expired cache on network error."""
+        import json
+
+        cache_file = tmp_path / "chainlist_rpcs.json"
+        cache_data = [{"chainId": 100, "name": "ExpiredCache", "rpc": []}]
+        cache_file.write_text(json.dumps(cache_data))
+
+        with patch.object(ChainlistRPC, "CACHE_PATH", cache_file):
+            # Force cache to be expired by setting CACHE_TTL to 0
+            with patch.object(ChainlistRPC, "CACHE_TTL", 0):
+                with patch("iwa.core.chainlist.requests.Session") as mock_session_cls:
+                    mock_session = MagicMock()
+                    mock_session_cls.return_value.__enter__ = MagicMock(
+                        return_value=mock_session
+                    )
+                    mock_session_cls.return_value.__exit__ = MagicMock(return_value=False)
+                    mock_session.get.side_effect = requests.RequestException("Network error")
+
+                    cl = ChainlistRPC()
+                    cl.fetch_data()
+
+                    # Should fall back to expired cache
+                    assert cl._data == cache_data
+
+
+class TestChainlistRPCGetRpcs:
+    """Test ChainlistRPC.get_rpcs and related methods."""
+
+    def test_get_chain_data_no_data(self):
+        """Test get_chain_data returns None when no data."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = []
+            result = cl.get_chain_data(999)
+            assert result is None
+
+    def test_get_chain_data_found(self):
+        """Test get_chain_data returns chain data when found."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = [{"chainId": 100, "name": "Gnosis"}, {"chainId": 1, "name": "Ethereum"}]
+            result = cl.get_chain_data(100)
+            assert result == {"chainId": 100, "name": "Gnosis"}
+
+    def test_get_rpcs_parses_nodes(self):
+        """Test get_rpcs parses RPC data into RPCNode objects."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = [
+                {
+                    "chainId": 100,
+                    "rpc": [
+                        {"url": "https://rpc1.example.com", "privacy": "privacy"},
+                        {"url": "https://rpc2.example.com", "tracking": "none"},
+                    ],
+                }
+            ]
+            result = cl.get_rpcs(100)
+
+            assert len(result) == 2
+            assert result[0].url == "https://rpc1.example.com"
+            assert result[0].privacy == "privacy"
+            assert result[1].url == "https://rpc2.example.com"
+            assert result[1].tracking == "none"
+
+    def test_get_rpcs_chain_not_found(self):
+        """Test get_rpcs returns empty list when chain not found."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = [{"chainId": 1, "rpc": []}]
+            result = cl.get_rpcs(999)
+            assert result == []
+
+    def test_get_https_rpcs(self):
+        """Test get_https_rpcs filters to HTTPS/HTTP URLs."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = [
+                {
+                    "chainId": 100,
+                    "rpc": [
+                        {"url": "https://rpc1.example.com"},
+                        {"url": "http://rpc2.example.com"},
+                        {"url": "wss://ws.example.com"},
+                    ],
+                }
+            ]
+            result = cl.get_https_rpcs(100)
+
+            assert len(result) == 2
+            assert "https://rpc1.example.com" in result
+            assert "http://rpc2.example.com" in result
+            assert "wss://ws.example.com" not in result
+
+    def test_get_wss_rpcs(self):
+        """Test get_wss_rpcs filters to WSS/WS URLs."""
+        with patch.object(ChainlistRPC, "fetch_data"):
+            cl = ChainlistRPC()
+            cl._data = [
+                {
+                    "chainId": 100,
+                    "rpc": [
+                        {"url": "https://rpc1.example.com"},
+                        {"url": "wss://ws.example.com"},
+                        {"url": "ws://ws2.example.com"},
+                    ],
+                }
+            ]
+            result = cl.get_wss_rpcs(100)
+
+            assert len(result) == 2
+            assert "wss://ws.example.com" in result
+            assert "ws://ws2.example.com" in result
+            assert "https://rpc1.example.com" not in result
+
+
+class TestGetValidatedRpcsEdgeCases:
+    """Test edge cases in get_validated_rpcs."""
+
+    def _make_node(self, url):
+        return RPCNode(url=url, is_working=True)
+
+    @patch.object(ChainlistRPC, "get_rpcs")
+    def test_returns_empty_when_all_filtered(self, mock_get_rpcs):
+        """Test returns empty list when all candidates are filtered."""
+        mock_get_rpcs.return_value = [
+            self._make_node("https://template.com/${API_KEY}"),
+            self._make_node("http://insecure.com"),  # Not HTTPS
+        ]
+
+        cl = ChainlistRPC()
+        result = cl.get_validated_rpcs(100, existing_rpcs=[])
+
+        assert result == []
