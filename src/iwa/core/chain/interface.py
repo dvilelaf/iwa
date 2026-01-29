@@ -285,11 +285,15 @@ class ChainInterface:
 
     # -- ChainList enrichment ----------------------------------------------
 
-    MAX_RPCS = 10  # Cap total RPCs per chain
+    MAX_RPCS = 20  # Cap total RPCs per chain
 
     def _enrich_rpcs_from_chainlist(self) -> None:
         """Add validated public RPCs from ChainList to the rotation pool."""
         if len(self.chain.rpcs) >= self.MAX_RPCS:
+            logger.debug(
+                f"{self.chain.name}: skipping ChainList enrichment "
+                f"(already have {len(self.chain.rpcs)} RPCs)"
+            )
             return
 
         try:
@@ -354,35 +358,45 @@ class ChainInterface:
 
         if should_rotate:
             failed_index = self._current_rpc_index
+            failed_rpc = sanitize_rpc_url(self.chain.rpcs[failed_index]) if self.chain.rpcs else "?"
 
             # Apply per-RPC backoff so smart rotation skips this RPC.
             if result["is_quota_exceeded"]:
-                error_type = "quota exceeded"
-                self._mark_rpc_backoff(failed_index, self.QUOTA_EXCEEDED_BACKOFF)
+                error_type = "QUOTA"
+                backoff = self.QUOTA_EXCEEDED_BACKOFF
+                self._mark_rpc_backoff(failed_index, backoff)
             elif result["is_rate_limit"]:
-                error_type = "rate limit"
-                self._mark_rpc_backoff(failed_index, self.RATE_LIMIT_BACKOFF)
+                error_type = "RATE_LIMIT"
+                backoff = self.RATE_LIMIT_BACKOFF
+                self._mark_rpc_backoff(failed_index, backoff)
                 # Brief global backoff so other threads don't immediately flood
                 # the same (now backed-off) RPC before rotation takes effect.
                 self._rate_limiter.trigger_backoff(seconds=2.0)
             else:
-                error_type = "connection"
-                self._mark_rpc_backoff(failed_index, self.CONNECTION_ERROR_BACKOFF)
+                error_type = "CONNECTION"
+                backoff = self.CONNECTION_ERROR_BACKOFF
+                self._mark_rpc_backoff(failed_index, backoff)
+
+            # Count healthy RPCs for visibility
+            healthy_count = sum(1 for i in range(len(self.chain.rpcs)) if self._is_rpc_healthy(i))
+            total_rpcs = len(self.chain.rpcs) if self.chain.rpcs else 0
 
             logger.warning(
-                f"RPC {error_type} error on {self.chain.name} "
-                f"(RPC #{failed_index}): {error}"
+                f"[{self.chain.name}] RPC #{failed_index} {error_type} → "
+                f"backoff {int(backoff)}s ({healthy_count}/{total_rpcs} healthy) | "
+                f"{failed_rpc}: {str(error)[:100]}"
             )
 
             if self.rotate_rpc():
                 result["rotated"] = True
                 result["should_retry"] = True
-                logger.info(f"Rotated to RPC #{self._current_rpc_index} for {self.chain.name}")
+                new_rpc = sanitize_rpc_url(self.chain.rpcs[self._current_rpc_index])
+                logger.info(f"[{self.chain.name}] Rotated to RPC #{self._current_rpc_index}: {new_rpc}")
             else:
                 # Rotation skipped (cooldown or single RPC) - still allow retry
                 result["should_retry"] = True
-                logger.info(
-                    f"RPC rotation skipped, retrying with current RPC #{self._current_rpc_index}"
+                logger.debug(
+                    f"[{self.chain.name}] Rotation skipped (cooldown), retrying RPC #{self._current_rpc_index}"
                 )
 
         elif result["is_server_error"]:

@@ -343,12 +343,12 @@ class TestEnrichFromChainlist:
 
         chain = MagicMock(spec=SupportedChain)
         chain.name = "TestChain"
-        chain.rpcs = [f"https://rpc{i}.example.com" for i in range(10)]
+        chain.rpcs = [f"https://rpc{i}.example.com" for i in range(20)]
         chain.rpc = "https://rpc0.example.com"
         chain.chain_id = 100
 
         with patch("iwa.core.chainlist.ChainlistRPC") as mock_cl_cls:
             ChainInterface(chain)
 
-        # Already at MAX_RPCS=10, ChainlistRPC should not be called
+        # Already at MAX_RPCS=20, ChainlistRPC should not be called
         mock_cl_cls.assert_not_called()
