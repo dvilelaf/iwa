@@ -132,8 +132,14 @@ class DrainManagerMixin:
             return False, 0
 
         olas_amount = olas_balance / 1e18
-        withdrawal_tag = self.wallet.get_tag_by_address(withdrawal_address) or withdrawal_address
-        multisig_tag = self.wallet.get_tag_by_address(multisig_address) or multisig_address
+        withdrawal_tag = (
+            self.wallet.account_service.get_tag_by_address(withdrawal_address)
+            or withdrawal_address
+        )
+        multisig_tag = (
+            self.wallet.account_service.get_tag_by_address(multisig_address)
+            or multisig_address
+        )
 
         logger.info(f"Withdrawing {olas_amount:.4f} OLAS from {multisig_tag} to {withdrawal_tag}")
 
