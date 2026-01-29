@@ -136,9 +136,12 @@ def test_redeploy_safes(safe_service, mock_deps):
     with patch("iwa.core.chain.models.secrets") as mock_settings:
         mock_settings.gnosis_rpc.get_secret_value.return_value = "http://rpc"
 
-        with patch("iwa.core.services.safe.EthereumClient") as mock_eth_client:
+        # Patch the shared EthereumClient cache function
+        with patch("iwa.plugins.gnosis.safe.get_ethereum_client") as mock_get_client:
             with patch.object(safe_service, "create_safe") as mock_create:
-                mock_w3 = mock_eth_client.return_value.w3
+                mock_eth_client = MagicMock()
+                mock_get_client.return_value = mock_eth_client
+                mock_w3 = mock_eth_client.w3
 
                 # Case 1: Code exists (no redeploy)
                 mock_w3.eth.get_code.return_value = b"code"

@@ -1,6 +1,6 @@
 """Gnosis Safe interaction."""
 
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
 from safe_eth.eth import EthereumClient
 from safe_eth.eth.constants import NULL_ADDRESS
@@ -12,6 +12,19 @@ from iwa.core.utils import configure_logger
 
 logger = configure_logger()
 
+# Shared EthereumClient cache to prevent FD leaks
+_ethereum_client_cache: Dict[str, EthereumClient] = {}
+
+
+def get_ethereum_client(rpc_url: str) -> EthereumClient:
+    """Get a cached EthereumClient for the given RPC URL.
+
+    Reuses existing clients to prevent file descriptor exhaustion.
+    """
+    if rpc_url not in _ethereum_client_cache:
+        _ethereum_client_cache[rpc_url] = EthereumClient(rpc_url)
+    return _ethereum_client_cache[rpc_url]
+
 
 class SafeMultisig:
     """Class to interact with Gnosis Safe multisig wallets.
@@ -20,17 +33,31 @@ class SafeMultisig:
     checking owners, thresholds, and building/sending multi-signature transactions.
     """
 
-    def __init__(self, safe_account: StoredSafeAccount, chain_name: str):
-        """Initialize the SafeMultisig instance."""
+    def __init__(
+        self,
+        safe_account: StoredSafeAccount,
+        chain_name: str,
+        ethereum_client: Optional[EthereumClient] = None,
+    ):
+        """Initialize the SafeMultisig instance.
+
+        Args:
+            safe_account: The Safe account to interact with.
+            chain_name: The chain name (e.g., 'gnosis').
+            ethereum_client: Optional pre-existing EthereumClient.
+                If not provided, uses a shared cached client.
+        """
         # Normalize chain comparison to be case-insensitive
         normalized_chains = [c.lower() for c in safe_account.chains]
         if chain_name.lower() not in normalized_chains:
             raise ValueError(f"Safe account is not deployed on chain: {chain_name}")
 
-        from iwa.core.chain import ChainInterfaces
+        if ethereum_client is None:
+            from iwa.core.chain import ChainInterfaces
 
-        chain_interface = ChainInterfaces().get(chain_name.lower())
-        ethereum_client = EthereumClient(chain_interface.current_rpc)
+            chain_interface = ChainInterfaces().get(chain_name.lower())
+            ethereum_client = get_ethereum_client(chain_interface.current_rpc)
+
         self.multisig = Safe(safe_account.address, ethereum_client)
         self.ethereum_client = ethereum_client
 

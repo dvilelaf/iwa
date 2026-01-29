@@ -228,6 +228,7 @@ class ChainInterface:
             "connect timeout",
             "remote end closed",
             "broken pipe",
+            "too many open files",  # FD exhaustion prevents new connections
         ]
         return any(signal in err_text for signal in connection_signals)
 

@@ -51,6 +51,7 @@ def mock_dependencies():
     """Mock external dependencies (Safe, EthereumClient, etc)."""
     with (
         patch("iwa.core.services.safe.EthereumClient") as mock_client,
+        patch("iwa.plugins.gnosis.safe.get_ethereum_client") as mock_get_client,
         patch("iwa.core.services.safe.Safe") as mock_safe,
         patch("iwa.core.services.safe.ProxyFactory") as mock_proxy_factory,
         patch("iwa.core.services.safe.log_transaction") as mock_log,
@@ -58,6 +59,8 @@ def mock_dependencies():
         patch("iwa.core.services.safe.get_safe_proxy_factory_address") as mock_factory,
         patch("time.sleep"),  # Avoid any retry delays
     ):
+        # Link get_ethereum_client to return the same mock as EthereumClient
+        mock_get_client.return_value = mock_client.return_value
         # Setup Safe creation return
         mock_create_tx = MagicMock()
         # Valid Checksum Address - New Safe (Matches Pydantic output)

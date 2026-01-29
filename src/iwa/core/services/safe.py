@@ -35,7 +35,6 @@ class SafeService:
         """Initialize SafeService."""
         self.key_storage = key_storage
         self.account_service = account_service
-        self._client_cache: Dict[str, EthereumClient] = {}
 
     def create_safe(
         self,
@@ -100,15 +99,14 @@ class SafeService:
 
     def _get_ethereum_client(self, chain_name: str) -> EthereumClient:
         from iwa.core.chain import ChainInterfaces
+        from iwa.plugins.gnosis.safe import get_ethereum_client
 
         # Use ChainInterface which has proper RPC rotation and parsing
         chain_interface = ChainInterfaces().get(chain_name)
         rpc_url = chain_interface.current_rpc
 
-        if rpc_url not in self._client_cache:
-            self._client_cache[rpc_url] = EthereumClient(rpc_url)
-
-        return self._client_cache[rpc_url]
+        # Use shared cache to prevent FD exhaustion
+        return get_ethereum_client(rpc_url)
 
     def _deploy_safe_contract(
         self,
@@ -256,11 +254,8 @@ class SafeService:
                 continue
 
             for chain in account.chains:
-                from iwa.core.chain import ChainInterfaces
-
-                # Use ChainInterface which has proper RPC rotation and parsing
-                chain_interface = ChainInterfaces().get(chain)
-                ethereum_client = EthereumClient(chain_interface.current_rpc)
+                # Reuse cached EthereumClient to prevent FD exhaustion
+                ethereum_client = self._get_ethereum_client(chain)
 
                 code = ethereum_client.w3.eth.get_code(account.address)
 
@@ -375,7 +370,9 @@ class SafeService:
         if not safe_account or not isinstance(safe_account, StoredSafeAccount):
             raise ValueError(f"Safe account '{safe_address_or_tag}' not found.")
 
-        safe = SafeMultisig(safe_account, chain_name)
+        # Reuse cached EthereumClient to prevent FD exhaustion
+        ethereum_client = self._get_ethereum_client(chain_name)
+        safe = SafeMultisig(safe_account, chain_name, ethereum_client=ethereum_client)
         safe_tx = safe.build_tx(
             to=to,
             value=value,

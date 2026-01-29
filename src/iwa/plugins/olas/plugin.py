@@ -67,10 +67,10 @@ class OlasPlugin(Plugin):
 
         """
         try:
-            from safe_eth.eth import EthereumClient
             from safe_eth.safe import Safe
 
             from iwa.core.chain import ChainInterfaces
+            from iwa.plugins.gnosis.safe import get_ethereum_client
 
             try:
                 chain_interface = ChainInterfaces().get(chain_name)
@@ -79,7 +79,8 @@ class OlasPlugin(Plugin):
             except ValueError:
                 return None, None  # Chain not supported/configured
 
-            ethereum_client = EthereumClient(chain_interface.current_rpc)
+            # Reuse cached EthereumClient to prevent FD exhaustion
+            ethereum_client = get_ethereum_client(chain_interface.current_rpc)
             safe = Safe(safe_address, ethereum_client)
             owners = safe.retrieve_owners()
             return owners, True
