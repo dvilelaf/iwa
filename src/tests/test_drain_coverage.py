@@ -46,7 +46,7 @@ def test_claim_rewards_claim_tx_fails(mock_drain_manager):
     with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
-        mock_staking.get_accrued_rewards.return_value = 1000000000000000000
+        mock_staking.calculate_staking_reward.return_value = 1000000000000000000
         mock_staking.prepare_claim_tx.return_value = None  # Failed to prepare
 
         success, amount = mock_drain_manager.claim_rewards()
@@ -63,7 +63,7 @@ def test_claim_rewards_send_fails(mock_drain_manager):
     with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
-        mock_staking.get_accrued_rewards.return_value = 1000000000000000000
+        mock_staking.calculate_staking_reward.return_value = 1000000000000000000
         mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
         mock_drain_manager.wallet.sign_and_send_transaction.return_value = (False, None)
 
@@ -81,7 +81,7 @@ def test_claim_rewards_success_no_event(mock_drain_manager):
     with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
-        mock_staking.get_accrued_rewards.return_value = 1000000000000000000
+        mock_staking.calculate_staking_reward.return_value = 1000000000000000000
         mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
         mock_staking.extract_events.return_value = []  # No RewardClaimed event
         mock_drain_manager.wallet.sign_and_send_transaction.return_value = (
@@ -92,6 +92,33 @@ def test_claim_rewards_success_no_event(mock_drain_manager):
         success, amount = mock_drain_manager.claim_rewards()
         assert success
         assert amount == 1000000000000000000
+
+
+def test_claim_rewards_fallback_to_accrued(mock_drain_manager):
+    """Test claim_rewards falls back to get_accrued_rewards when calculate_staking_reward fails."""
+    mock_drain_manager.service.staking_contract_address = "0xStaking"
+    mock_drain_manager.service.service_id = 1
+    mock_drain_manager.wallet.master_account.address = "0xMaster"
+
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_staking_cls:
+        mock_staking = mock_staking_cls.return_value
+        mock_staking.get_staking_state.return_value = StakingState.STAKED
+        # calculate_staking_reward fails, should fallback to get_accrued_rewards
+        mock_staking.calculate_staking_reward.side_effect = Exception("RPC error")
+        mock_staking.get_accrued_rewards.return_value = 2000000000000000000  # 2 OLAS
+        mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
+        mock_staking.extract_events.return_value = []
+        mock_drain_manager.wallet.sign_and_send_transaction.return_value = (
+            True,
+            {"transactionHash": "0xHash"},
+        )
+
+        success, amount = mock_drain_manager.claim_rewards()
+        assert success
+        assert amount == 2000000000000000000
+        # Verify both methods were called
+        mock_staking.calculate_staking_reward.assert_called_once()
+        mock_staking.get_accrued_rewards.assert_called_once()
 
 
 def test_withdraw_rewards_fallback_to_master(mock_drain_manager):

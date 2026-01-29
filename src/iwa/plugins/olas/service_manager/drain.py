@@ -51,13 +51,19 @@ class DrainManagerMixin:
             logger.info("Service not staked, skipping claim")
             return False, 0
 
-        # Check accrued rewards
-        accrued_rewards = staking_contract.get_accrued_rewards(service_id)
-        if accrued_rewards == 0:
-            logger.info("No accrued rewards to claim")
+        # Check claimable rewards using calculate_staking_reward for accurate value
+        # (get_accrued_rewards returns stored value which may be outdated)
+        try:
+            claimable_rewards = staking_contract.calculate_staking_reward(service_id)
+        except Exception:
+            # Fallback to stored value if calculation fails
+            claimable_rewards = staking_contract.get_accrued_rewards(service_id)
+
+        if claimable_rewards == 0:
+            logger.info("No rewards to claim")
             return False, 0
 
-        logger.info(f"Claiming {accrued_rewards / 1e18:.4f} OLAS rewards for service {service_id}")
+        logger.info(f"Claiming ~{claimable_rewards / 1e18:.4f} OLAS rewards for service {service_id}")
 
         # Use service owner which holds the reward rights (not necessarily master)
         owner_address = self.service.service_owner_address or self.wallet.master_account.address
@@ -83,11 +89,19 @@ class DrainManagerMixin:
             return False, 0
 
         events = staking_contract.extract_events(receipt)
-        if "RewardClaimed" not in [event["name"] for event in events]:
-            logger.warning("RewardClaimed event not found, but transaction succeeded")
 
-        logger.info(f"Successfully claimed {accrued_rewards / 1e18:.4f} OLAS rewards")
-        return True, accrued_rewards
+        # Extract actual claimed amount from RewardClaimed event
+        claimed_amount = claimable_rewards  # Default to estimated
+        for event in events:
+            if event["name"] == "RewardClaimed":
+                # RewardClaimed event has 'amount' or 'reward' field
+                claimed_amount = event["args"].get("amount", event["args"].get("reward", claimed_amount))
+                break
+        else:
+            logger.warning("RewardClaimed event not found, using estimated amount")
+
+        logger.info(f"Successfully claimed {claimed_amount / 1e18:.4f} OLAS rewards")
+        return True, claimed_amount
 
     def withdraw_rewards(self) -> Tuple[bool, float]:
         """Withdraw OLAS from the service Safe to the configured withdrawal address.
