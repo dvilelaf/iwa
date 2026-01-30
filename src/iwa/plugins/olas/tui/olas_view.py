@@ -545,10 +545,10 @@ class OlasView(Static):
         """Filter staking contracts based on bond requirements and slots."""
         import json
 
-        from iwa.core.chain import ChainInterface
+        from iwa.core.chain import ChainInterfaces
         from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
-        w3 = ChainInterface(self._chain).web3
+        w3 = ChainInterfaces().get(self._chain).web3
         with open(OLAS_ABI_PATH / "staking.json", "r") as f:
             abi = json.load(f)
 
@@ -677,14 +677,14 @@ class OlasView(Static):
         try:
             import json
 
-            from iwa.core.chain import ChainInterface
+            from iwa.core.chain import ChainInterfaces
             from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
             from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
 
             contracts_dict = OLAS_TRADER_STAKING_CONTRACTS.get(self._chain, {})
 
             # Load ABI and check slots for each contract
-            w3 = ChainInterface(self._chain).web3
+            w3 = ChainInterfaces().get(self._chain).web3
             with open(OLAS_ABI_PATH / "staking.json", "r") as f:
                 abi = json.load(f)
 

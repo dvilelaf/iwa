@@ -29,6 +29,20 @@ warnings.filterwarnings(
 
 logger = configure_logger()
 
+# Module-level session for connection pooling (avoids FD leak)
+_session: requests.Session | None = None
+
+
+def _get_session() -> requests.Session:
+    """Get or create the module-level HTTP session."""
+    global _session
+    if _session is None:
+        from iwa.core.http import create_retry_session
+
+        _session = create_retry_session()
+    return _session
+
+
 if TYPE_CHECKING:
     from cowdao_cowpy.common.chains import Chain
     from cowdao_cowpy.cow.swap import CompletedOrder
@@ -97,13 +111,14 @@ class CowSwap:
         logger.info(f"Checking order status for UID: {order.uid}")
 
         sleep_between_retries = 15
+        session = _get_session()
+        loop = asyncio.get_event_loop()
 
         while True:
             try:
-                # Use a thread executor for blocking requests.get
-                loop = asyncio.get_event_loop()
+                # Use a thread executor for blocking HTTP request
                 response = await loop.run_in_executor(
-                    None, lambda: requests.get(order.url, timeout=60)
+                    None, lambda s=session: s.get(order.url, timeout=60)
                 )
             except Exception as e:
                 logger.warning(f"Error checking order status: {e}")
