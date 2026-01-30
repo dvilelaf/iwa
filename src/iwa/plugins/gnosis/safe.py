@@ -13,15 +13,42 @@ from iwa.core.utils import configure_logger
 logger = configure_logger()
 
 # Shared EthereumClient cache to prevent FD leaks
+# Limited to MAX_CACHED_CLIENTS to avoid unbounded growth during RPC rotations
 _ethereum_client_cache: Dict[str, EthereumClient] = {}
+MAX_CACHED_CLIENTS = 3  # Keep only recent clients to limit FD usage
+
+
+def _cleanup_old_clients(keep_url: str) -> None:
+    """Remove oldest cached clients to stay under limit."""
+    global _ethereum_client_cache
+    while len(_ethereum_client_cache) >= MAX_CACHED_CLIENTS:
+        # Remove oldest entry (first key in dict, preserves insertion order in Python 3.7+)
+        for old_url in list(_ethereum_client_cache.keys()):
+            if old_url != keep_url:
+                old_client = _ethereum_client_cache.pop(old_url)
+                # Try to close any underlying HTTP session
+                if hasattr(old_client, "w3") and hasattr(old_client.w3, "provider"):
+                    provider = old_client.w3.provider
+                    if hasattr(provider, "_request_kwargs"):
+                        session = provider._request_kwargs.get("session")
+                        if session and hasattr(session, "close"):
+                            try:
+                                session.close()
+                            except Exception:
+                                pass
+                logger.debug(f"Evicted EthereumClient for {old_url} from cache")
+                break
 
 
 def get_ethereum_client(rpc_url: str) -> EthereumClient:
     """Get a cached EthereumClient for the given RPC URL.
 
     Reuses existing clients to prevent file descriptor exhaustion.
+    Limited to MAX_CACHED_CLIENTS to prevent unbounded cache growth
+    during RPC rotations.
     """
     if rpc_url not in _ethereum_client_cache:
+        _cleanup_old_clients(rpc_url)
         _ethereum_client_cache[rpc_url] = EthereumClient(rpc_url)
     return _ethereum_client_cache[rpc_url]
 

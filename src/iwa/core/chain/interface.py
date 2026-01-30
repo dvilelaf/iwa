@@ -228,7 +228,7 @@ class ChainInterface:
             "connect timeout",
             "remote end closed",
             "broken pipe",
-            "too many open files",  # FD exhaustion prevents new connections
+            # Note: "too many open files" handled separately by _is_fd_exhaustion_error
         ]
         return any(signal in err_text for signal in connection_signals)
 
@@ -254,6 +254,21 @@ class ChainInterface:
             "gateway timeout",
         ]
         return any(signal in err_text for signal in server_error_signals)
+
+    def _is_fd_exhaustion_error(self, error: Exception) -> bool:
+        """Check if error is due to file descriptor exhaustion (OSError 24).
+
+        When FDs are exhausted, rotating RPCs makes things WORSE because it
+        creates more connections. Instead, we need to pause and let existing
+        connections drain before retrying.
+        """
+        err_text = str(error).lower()
+        fd_signals = [
+            "too many open files",
+            "oserror(24",
+            "errno 24",
+        ]
+        return any(signal in err_text for signal in fd_signals)
 
     def _is_gas_error(self, error: Exception) -> bool:
         """Check if error is related to gas limits or fees."""
@@ -327,6 +342,9 @@ class ChainInterface:
         """Return True if the RPC at *index* is not in backoff."""
         return time.monotonic() >= self._rpc_backoff_until.get(index, 0.0)
 
+    # FD exhaustion backoff: wait for connections to drain
+    FD_EXHAUSTION_BACKOFF = 60.0  # Long pause to let FDs drain
+
     def _handle_rpc_error(self, error: Exception) -> Dict[str, Union[bool, int]]:
         """Handle RPC errors with smart rotation and retry logic."""
         result: Dict[str, Union[bool, int]] = {
@@ -336,9 +354,25 @@ class ChainInterface:
             "is_gas_error": self._is_gas_error(error),
             "is_tenderly_quota": self._is_tenderly_quota_exceeded(error),
             "is_quota_exceeded": self._is_quota_exceeded_error(error),
+            "is_fd_exhaustion": self._is_fd_exhaustion_error(error),
             "rotated": False,
             "should_retry": False,
         }
+
+        # FD exhaustion: DO NOT rotate (creates more connections), just pause
+        if result["is_fd_exhaustion"]:
+            logger.error(
+                f"[{self.chain.name}] FD EXHAUSTION detected (too many open files). "
+                f"Pausing all RPCs for {int(self.FD_EXHAUSTION_BACKOFF)}s to drain connections. "
+                f"NO rotation to avoid creating more connections."
+            )
+            # Mark ALL RPCs as in backoff to prevent any activity
+            for i in range(len(self.chain.rpcs) if self.chain.rpcs else 0):
+                self._mark_rpc_backoff(i, self.FD_EXHAUSTION_BACKOFF)
+            # Trigger global rate limit backoff
+            self._rate_limiter.trigger_backoff(seconds=self.FD_EXHAUSTION_BACKOFF)
+            result["should_retry"] = True  # Retry after backoff
+            return result
 
         if result["is_tenderly_quota"]:
             logger.error(
