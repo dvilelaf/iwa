@@ -175,19 +175,18 @@ async def test_check_cowswap_order_success(cowswap):
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
 
-    with patch("requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            "status": "fulfilled",
-            "executedSellAmount": "100",
-            "executedBuyAmount": "90",
-        }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "status": "fulfilled",
+        "executedSellAmount": "100",
+        "executedBuyAmount": "90",
+    }
 
-        # Need to mock loop.run_in_executor since check_cowswap_order uses it
-        # Or just let it run if requests.get is mocked?
-        # check_cowswap_order calls loop.run_in_executor(None, lambda: requests.get(...))
-        # This will run the lambda in a thread. The mock should work.
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
 
+    with patch("iwa.plugins.gnosis.cow.swap._get_session", return_value=mock_session):
         result = await cowswap.check_cowswap_order(mock_order)
 
         assert result == {
@@ -203,10 +202,14 @@ async def test_check_cowswap_order_expired(cowswap):
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
 
-    with patch("requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"status": "expired"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"status": "expired"}
 
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
+
+    with patch("iwa.plugins.gnosis.cow.swap._get_session", return_value=mock_session):
         result = await cowswap.check_cowswap_order(mock_order)
         assert result is None
 
@@ -217,20 +220,20 @@ async def test_check_cowswap_order_timeout(cowswap):
     mock_order = MagicMock()
     mock_order.url = "http://api/order"
 
-    with patch("requests.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        # Order is always open
-        mock_get.return_value.json.return_value = {
-            "status": "open",
-            "executedSellAmount": "0",
-            "validTo": 1000,
-        }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    # Order is always open, validTo = 1000
+    mock_response.json.return_value = {
+        "status": "open",
+        "executedSellAmount": "0",
+        "validTo": 1000,
+    }
 
-        # Mock time to start at 900 and then jump to 1100 to trigger timeout
-        with patch("time.time") as mock_time:
-            mock_time.side_effect = [900, 1100]
-            # Speed up retry sleep (asyncio.sleep)
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                result = await cowswap.check_cowswap_order(mock_order)
-                assert result is None
-                assert mock_time.call_count >= 2
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
+
+    with patch("iwa.plugins.gnosis.cow.swap._get_session", return_value=mock_session):
+        # Mock time to return >1060 (validTo + 60) to trigger timeout on first check
+        with patch("iwa.plugins.gnosis.cow.swap.time.time", return_value=1100):
+            result = await cowswap.check_cowswap_order(mock_order)
+            assert result is None
