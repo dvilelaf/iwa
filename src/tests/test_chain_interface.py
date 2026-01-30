@@ -208,3 +208,58 @@ def test_reset_rpc_failure_counts(mock_chain_interface):
     interface.reset_rpc_failure_counts()
 
     assert interface._rpc_backoff_until == {}
+
+
+def test_is_fd_exhaustion_error():
+    """Test FD exhaustion error detection."""
+    with patch("iwa.core.chain.interface.get_rate_limiter"):
+        with patch("iwa.core.chain.interface.RateLimitedWeb3"):
+            with patch("iwa.core.chain.models.Gnosis") as mock_gnosis_cls:
+                mock_gnosis = mock_gnosis_cls.return_value
+                mock_gnosis.name = "gnosis"
+                mock_gnosis.rpc = "https://rpc.example.com"
+                mock_gnosis.rpcs = ["https://rpc.example.com"]
+                mock_gnosis.chain_id = 100
+                mock_gnosis.native_currency = "xDAI"
+                mock_gnosis.tokens = {}
+                mock_gnosis.contracts = {}
+
+                interface = ChainInterface(mock_gnosis)
+
+    # Should detect FD exhaustion errors
+    assert interface._is_fd_exhaustion_error(
+        Exception("SSLError(OSError(24, 'Too many open files'))")
+    )
+    assert interface._is_fd_exhaustion_error(
+        Exception("OSError(24, 'Too many open files')")
+    )
+    assert interface._is_fd_exhaustion_error(
+        Exception("errno 24: too many open files")
+    )
+
+    # Should not detect other errors as FD exhaustion
+    assert not interface._is_fd_exhaustion_error(Exception("connection timeout"))
+    assert not interface._is_fd_exhaustion_error(Exception("429 rate limit"))
+    assert not interface._is_fd_exhaustion_error(Exception("500 server error"))
+
+
+def test_handle_fd_exhaustion_no_rotation(mock_chain_interface):
+    """Test FD exhaustion pauses all RPCs without rotating."""
+    interface, _ = mock_chain_interface
+    interface.rotate_rpc = MagicMock(return_value=True)
+
+    # Simulate FD exhaustion error
+    error = Exception("SSLError(OSError(24, 'Too many open files'))")
+    result = interface._handle_rpc_error(error)
+
+    # Should NOT rotate (rotation creates more connections)
+    interface.rotate_rpc.assert_not_called()
+
+    # Should mark for retry after backoff
+    assert result["should_retry"]
+    assert result["is_fd_exhaustion"]
+    assert not result["rotated"]
+
+    # All RPCs should be in backoff
+    for i in range(len(interface.chain.rpcs)):
+        assert not interface._is_rpc_healthy(i)

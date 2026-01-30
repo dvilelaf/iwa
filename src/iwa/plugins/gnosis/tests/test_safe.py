@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from iwa.core.models import StoredSafeAccount
-from iwa.plugins.gnosis.safe import SafeMultisig
+from iwa.plugins.gnosis.safe import (
+    MAX_CACHED_CLIENTS,
+    SafeMultisig,
+    _ethereum_client_cache,
+    get_ethereum_client,
+)
 
 
 @pytest.fixture
@@ -100,3 +105,83 @@ def test_send_tx(safe_account, mock_settings, mock_safe_eth):
     assert tx_hash == "0xHash"
 
     callback.assert_called_with("0xSafeTx")
+
+
+class TestEthereumClientCache:
+    """Tests for EthereumClient caching to prevent FD exhaustion."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        _ethereum_client_cache.clear()
+
+    def test_cache_reuses_client(self):
+        """Test that the same RPC URL returns the same cached client."""
+        with patch("iwa.plugins.gnosis.safe.EthereumClient") as mock_client_cls:
+            mock_client_cls.return_value = MagicMock()
+
+            client1 = get_ethereum_client("https://rpc1.example.com")
+            client2 = get_ethereum_client("https://rpc1.example.com")
+
+            assert client1 is client2
+            # Should only create one instance
+            assert mock_client_cls.call_count == 1
+
+    def test_cache_different_urls(self):
+        """Test that different URLs create different clients."""
+        with patch("iwa.plugins.gnosis.safe.EthereumClient") as mock_client_cls:
+            mock_client_cls.side_effect = lambda url: MagicMock(url=url)
+
+            client1 = get_ethereum_client("https://rpc1.example.com")
+            client2 = get_ethereum_client("https://rpc2.example.com")
+
+            assert client1 is not client2
+            assert mock_client_cls.call_count == 2
+
+    def test_cache_limit_enforced(self):
+        """Test that cache is limited to MAX_CACHED_CLIENTS."""
+        with patch("iwa.plugins.gnosis.safe.EthereumClient") as mock_client_cls:
+            # Create mock clients with closeable sessions
+            def create_mock_client(url):
+                client = MagicMock(url=url)
+                client.w3 = MagicMock()
+                client.w3.provider = MagicMock()
+                client.w3.provider._request_kwargs = {"session": MagicMock()}
+                return client
+
+            mock_client_cls.side_effect = create_mock_client
+
+            # Create more clients than the limit
+            urls = [f"https://rpc{i}.example.com" for i in range(MAX_CACHED_CLIENTS + 2)]
+            for url in urls:
+                get_ethereum_client(url)
+
+            # Cache should not exceed limit
+            assert len(_ethereum_client_cache) <= MAX_CACHED_CLIENTS
+
+    def test_cache_evicts_oldest(self):
+        """Test that oldest entries are evicted when limit is reached."""
+        with patch("iwa.plugins.gnosis.safe.EthereumClient") as mock_client_cls:
+
+            def create_mock_client(url):
+                client = MagicMock(url=url)
+                client.w3 = MagicMock()
+                client.w3.provider = MagicMock()
+                client.w3.provider._request_kwargs = {"session": MagicMock()}
+                return client
+
+            mock_client_cls.side_effect = create_mock_client
+
+            # Fill cache to limit
+            first_url = "https://first.example.com"
+            get_ethereum_client(first_url)
+            for i in range(1, MAX_CACHED_CLIENTS):
+                get_ethereum_client(f"https://rpc{i}.example.com")
+
+            assert first_url in _ethereum_client_cache
+
+            # Add one more - should evict the first
+            get_ethereum_client("https://new.example.com")
+
+            # First URL should be evicted
+            assert first_url not in _ethereum_client_cache
+            assert "https://new.example.com" in _ethereum_client_cache
