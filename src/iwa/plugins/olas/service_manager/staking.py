@@ -547,12 +547,12 @@ class StakingManagerMixin:
             f"Preparing to unstake service {self.service.service_id} from {self._get_label(staking_contract.address)}"
         )
 
-        # Check that the service is staked
+        # Check that the service is staked or evicted (both can be unstaked)
         try:
             staking_state = staking_contract.get_staking_state(self.service.service_id)
             logger.info(f"Current staking state: {staking_state}")
 
-            if staking_state != StakingState.STAKED:
+            if staking_state not in (StakingState.STAKED, StakingState.EVICTED):
                 logger.error(
                     f"Service {self.service.service_id} is not staked (state={staking_state}), cannot unstake"
                 )
@@ -561,23 +561,24 @@ class StakingManagerMixin:
             logger.error(f"Failed to get staking state: {e}")
             return False
 
-        # Check that enough time has passed since staking
-        try:
-            service_info = staking_contract.get_service_info(self.service.service_id)
-            ts_start = service_info.get("ts_start", 0)
-            if ts_start > 0:
-                min_duration = staking_contract.min_staking_duration
-                unlock_ts = ts_start + min_duration
-                now_ts = datetime.now(timezone.utc).timestamp()
+        # Check that enough time has passed since staking (skip for EVICTED - already expired)
+        if staking_state == StakingState.STAKED:
+            try:
+                service_info = staking_contract.get_service_info(self.service.service_id)
+                ts_start = service_info.get("ts_start", 0)
+                if ts_start > 0:
+                    min_duration = staking_contract.min_staking_duration
+                    unlock_ts = ts_start + min_duration
+                    now_ts = datetime.now(timezone.utc).timestamp()
 
-                if now_ts < unlock_ts:
-                    diff = int(unlock_ts - now_ts)
-                    logger.error(
-                        f"Cannot unstake yet. Minimum staking duration not met. Unlocks in {diff} seconds."
-                    )
-                    return False
-        except Exception as e:
-            logger.warning(f"Could not verify staking duration: {e}. Proceeding with caution.")
+                    if now_ts < unlock_ts:
+                        diff = int(unlock_ts - now_ts)
+                        logger.error(
+                            f"Cannot unstake yet. Minimum staking duration not met. Unlocks in {diff} seconds."
+                        )
+                        return False
+            except Exception as e:
+                logger.warning(f"Could not verify staking duration: {e}. Proceeding with caution.")
 
         # Use service owner which holds the NFT (not necessarily master)
         owner_address = self.service.service_owner_address or self.wallet.master_account.address

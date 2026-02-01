@@ -51,6 +51,60 @@ def test_sm_unstake_not_staked(mock_wallet):
         assert result is False
 
 
+def test_sm_unstake_evicted_succeeds(mock_wallet):
+    """Cover unstake when service is EVICTED - should succeed."""
+    with (
+        patch("iwa.core.models.Config"),
+        patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache,
+        patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache),
+    ):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
+        sm = ServiceManager(mock_wallet)
+        sm.service = Service(
+            service_name="t", chain_name="gnosis", service_id=1, multisig_address=VALID_ADDR
+        )
+
+        mock_staking = MagicMock()
+        mock_staking.get_staking_state.return_value = StakingState.EVICTED
+        mock_staking.prepare_unstake_tx.return_value = {"to": VALID_ADDR}
+        mock_staking.extract_events.return_value = [{"name": "ServiceUnstaked"}]
+
+        mock_wallet.sign_and_send_transaction.return_value = (True, {"status": 1})
+
+        result = sm.unstake(mock_staking)
+        assert result is True
+        # Verify staking_contract_address is cleared
+        assert sm.service.staking_contract_address is None
+
+
+def test_sm_unstake_evicted_skips_duration_check(mock_wallet):
+    """Cover that EVICTED services skip the min_staking_duration check."""
+    with (
+        patch("iwa.core.models.Config"),
+        patch("iwa.plugins.olas.service_manager.base.ContractCache") as mock_cache,
+        patch("iwa.plugins.olas.service_manager.staking.ContractCache", mock_cache),
+    ):
+        mock_cache.return_value.get_contract.side_effect = lambda cls, *a, **k: cls(*a, **k)
+        sm = ServiceManager(mock_wallet)
+        sm.service = Service(
+            service_name="t", chain_name="gnosis", service_id=1, multisig_address=VALID_ADDR
+        )
+
+        mock_staking = MagicMock()
+        mock_staking.get_staking_state.return_value = StakingState.EVICTED
+        mock_staking.prepare_unstake_tx.return_value = {"to": VALID_ADDR}
+        mock_staking.extract_events.return_value = [{"name": "ServiceUnstaked"}]
+        # get_service_info should NOT be called for EVICTED services
+        mock_staking.get_service_info.side_effect = AssertionError(
+            "get_service_info should not be called for EVICTED"
+        )
+
+        mock_wallet.sign_and_send_transaction.return_value = (True, {"status": 1})
+
+        result = sm.unstake(mock_staking)
+        assert result is True
+
+
 def test_sm_unstake_tx_fails(mock_wallet):
     """Cover unstake transaction failure (lines 766-768)."""
     with (
