@@ -1,5 +1,6 @@
 """Transaction service module."""
 
+import threading
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -220,11 +221,28 @@ class TransferLogger:
 class TransactionService:
     """Manages transaction lifecycle: signing, sending, retrying."""
 
+    # Class-level lock for managing per-address locks
+    _locks_lock = threading.Lock()
+    _address_locks: Dict[str, threading.Lock] = {}
+
     def __init__(self, key_storage: KeyStorage, account_service: AccountService, safe_service=None):
         """Initialize TransactionService."""
         self.key_storage = key_storage
         self.account_service = account_service
         self.safe_service = safe_service
+
+    @classmethod
+    def _get_address_lock(cls, address: str) -> threading.Lock:
+        """Get or create a lock for a specific address.
+
+        This prevents nonce collisions when sending multiple transactions
+        from the same address concurrently.
+        """
+        address_lower = address.lower()
+        with cls._locks_lock:
+            if address_lower not in cls._address_locks:
+                cls._address_locks[address_lower] = threading.Lock()
+            return cls._address_locks[address_lower]
 
     def _resolve_label(self, address: str, chain_name: str = "gnosis") -> str:
         """Resolve address to human-readable label."""
@@ -255,69 +273,84 @@ class TransactionService:
 
         Uses ChainInterface.with_retry() for consistent RPC rotation and retry logic.
         Gas errors are handled by increasing gas and retrying within the same mechanism.
+
+        Note: Uses per-address locking to prevent nonce collisions when multiple
+        transactions are sent from the same address concurrently.
         """
         chain_interface = ChainInterfaces().get(chain_name)
         tx = dict(transaction)
 
-        if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
+        # Resolve signer first to get the address for locking
+        signer_account = self.account_service.resolve_account(signer_address_or_tag)
+        if not signer_account:
+            logger.error(f"Signer {signer_address_or_tag} not found")
             return False, {}
 
-        # CHECK FOR SAFE TRANSACTION
-        signer_account = self.account_service.resolve_account(signer_address_or_tag)
+        # CHECK FOR SAFE TRANSACTION (Safe has its own nonce management)
         if isinstance(signer_account, StoredSafeAccount):
             if not self.safe_service:
                 logger.error("Attempted Safe transaction but SafeService is not initialized.")
                 return False, {}
+            # Safe transactions don't need EOA nonce locking
+            if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
+                return False, {}
             return self._execute_via_safe(tx, signer_account, chain_interface, chain_name, tags)
 
-        # Mutable state for retry attempts
-        state = {"gas_retries": 0, "max_gas_retries": 5}
-
-        def _do_sign_send_wait() -> Tuple[bool, Dict, bytes]:
-            """Inner operation wrapped by with_retry."""
-            try:
-                signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
-                txn_hash = chain_interface.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-                receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
-
-                status = getattr(receipt, "status", None)
-                if status is None and isinstance(receipt, dict):
-                    status = receipt.get("status")
-
-                if receipt and status == 1:
-                    return True, receipt, txn_hash
-                # Transaction mined but reverted - don't retry
-                logger.error("Transaction failed (status 0).")
-                raise ValueError("Transaction reverted")
-
-            except web3_exceptions.Web3RPCError as e:
-                # Handle gas errors by increasing gas and re-raising
-                self._handle_gas_retry(e, tx, state)
-                raise  # Re-raise to trigger with_retry's retry mechanism
-
-        try:
-            success, receipt, txn_hash = chain_interface.with_retry(
-                _do_sign_send_wait,
-                operation_name=f"sign_and_send to {tx.get('to', 'unknown')[:10]}...",
-            )
-            if success:
-                signer_account = self.account_service.resolve_account(signer_address_or_tag)
-                chain_interface.wait_for_no_pending_tx(signer_account.address)
-                logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
-                self._log_successful_transaction(
-                    receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
-                )
-                return True, receipt
-            return False, {}
-        except ValueError as e:
-            # Transaction reverted - already logged
-            if "reverted" in str(e).lower():
+        # Acquire lock for this address to prevent nonce collisions
+        address_lock = self._get_address_lock(signer_account.address)
+        with address_lock:
+            if not self._prepare_transaction(tx, signer_address_or_tag, chain_interface):
                 return False, {}
-            logger.exception(f"Transaction failed: {e}")
-            return False, {}
-        except Exception as e:
-            logger.exception(f"Transaction failed after retries: {e}")
-            return False, {}
+
+            # Mutable state for retry attempts
+            state = {"gas_retries": 0, "max_gas_retries": 5}
+
+            def _do_sign_send_wait() -> Tuple[bool, Dict, bytes]:
+                """Inner operation wrapped by with_retry."""
+                try:
+                    signed_txn = self.key_storage.sign_transaction(tx, signer_address_or_tag)
+                    txn_hash = chain_interface.web3.eth.send_raw_transaction(
+                        signed_txn.raw_transaction
+                    )
+                    receipt = chain_interface.web3.eth.wait_for_transaction_receipt(txn_hash)
+
+                    status = getattr(receipt, "status", None)
+                    if status is None and isinstance(receipt, dict):
+                        status = receipt.get("status")
+
+                    if receipt and status == 1:
+                        return True, receipt, txn_hash
+                    # Transaction mined but reverted - don't retry
+                    logger.error("Transaction failed (status 0).")
+                    raise ValueError("Transaction reverted")
+
+                except web3_exceptions.Web3RPCError as e:
+                    # Handle gas errors by increasing gas and re-raising
+                    self._handle_gas_retry(e, tx, state)
+                    raise  # Re-raise to trigger with_retry's retry mechanism
+
+            try:
+                success, receipt, txn_hash = chain_interface.with_retry(
+                    _do_sign_send_wait,
+                    operation_name=f"sign_and_send to {tx.get('to', 'unknown')[:10]}...",
+                )
+                if success:
+                    chain_interface.wait_for_no_pending_tx(signer_account.address)
+                    logger.info(f"Transaction sent successfully. Tx Hash: {txn_hash.hex()}")
+                    self._log_successful_transaction(
+                        receipt, tx, signer_account, chain_name, txn_hash, tags, chain_interface
+                    )
+                    return True, receipt
+                return False, {}
+            except ValueError as e:
+                # Transaction reverted - already logged
+                if "reverted" in str(e).lower():
+                    return False, {}
+                logger.exception(f"Transaction failed: {e}")
+                return False, {}
+            except Exception as e:
+                logger.exception(f"Transaction failed after retries: {e}")
+                return False, {}
 
     def _prepare_transaction(self, tx: dict, signer_tag: str, chain_interface) -> bool:
         """Ensure nonce and chainId are set."""
