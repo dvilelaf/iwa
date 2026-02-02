@@ -94,6 +94,9 @@ class ChainInterface:
         """Get the current active RPC URL."""
         if not self.chain.rpcs:
             return ""
+        # Ensure index is valid (could be stale after rpcs list changes or singleton reuse)
+        if self._current_rpc_index >= len(self.chain.rpcs):
+            self._current_rpc_index = 0
         return self.chain.rpcs[self._current_rpc_index]
 
     @property
