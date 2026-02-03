@@ -414,8 +414,9 @@ class TestIsCheckpointNeeded:
     """Test is_checkpoint_needed method."""
 
     def test_returns_false_before_epoch_end(self, mock_staking_contract):
+        from datetime import timedelta
         future_time = datetime.now(timezone.utc).replace(microsecond=0)
-        future_time = future_time.replace(hour=future_time.hour + 1)
+        future_time = future_time + timedelta(hours=1)
 
         with patch.object(mock_staking_contract, "get_next_epoch_start", return_value=future_time):
             result = mock_staking_contract.is_checkpoint_needed()
