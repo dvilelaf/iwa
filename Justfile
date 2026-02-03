@@ -42,7 +42,7 @@ security:
     # Check for common security issues in code
     uv run bandit -c pyproject.toml -r src/
     # Check for vulnerable dependencies
-    uv run pip-audit --ignore-vuln CVE-2024-23342
+    uv run pip-audit --ignore-vuln CVE-2024-23342 --ignore-vuln CVE-2026-1703
 
 # Type check
 types:

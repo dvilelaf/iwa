@@ -495,3 +495,138 @@ class StakingContract(ContractInstance):
             tx_params={"from": from_address},
         )
         return tx
+
+    def _fetch_events_chunked(
+        self,
+        event_type: str,
+        from_block: int,
+        to_block: int,
+        chunk_size: int = 500,
+    ) -> List:
+        """Fetch events in chunks to handle RPC block range limits.
+
+        Args:
+            event_type: Name of the event (Checkpoint, ServiceInactivityWarning, etc.)
+            from_block: Starting block number.
+            to_block: Ending block number.
+            chunk_size: Max blocks per request (default 500).
+
+        Returns:
+            List of event log entries.
+
+        """
+        all_logs: List = []
+        current_from = from_block
+
+        event = getattr(self.contract.events, event_type, None)
+        if event is None:
+            logger.debug(f"Event {event_type} not found in contract ABI")
+            return []
+
+        while current_from <= to_block:
+            current_to = min(current_from + chunk_size - 1, to_block)
+
+            try:
+                event_filter = event.create_filter(
+                    from_block=current_from, to_block=current_to
+                )
+                logs = event_filter.get_all_entries()
+                all_logs.extend(logs)
+            except Exception as e:
+                error_msg = str(e).lower()
+                # If range too large, try smaller chunks
+                if "range" in error_msg or "limit" in error_msg or "10000" in error_msg:
+                    if chunk_size > 100:
+                        logger.debug(
+                            "Block range too large, retrying with smaller chunks"
+                        )
+                        smaller_logs = self._fetch_events_chunked(
+                            event_type, current_from, current_to, chunk_size // 2
+                        )
+                        all_logs.extend(smaller_logs)
+                    else:
+                        logger.warning(
+                            f"Cannot fetch {event_type} events for blocks "
+                            f"{current_from}-{current_to}: {e}"
+                        )
+                else:
+                    logger.debug(f"Error fetching {event_type} events: {e}")
+
+            current_from = current_to + 1
+
+        return all_logs
+
+    def get_checkpoint_events(
+        self, from_block: int, to_block: Optional[int] = None
+    ) -> Dict:
+        """Get checkpoint-related events from a block range.
+
+        Retrieves Checkpoint, ServiceInactivityWarning, and ServicesEvicted events
+        to determine which services received rewards and which got warnings.
+
+        Uses chunked fetching to handle RPCs that limit block ranges.
+
+        Args:
+            from_block: Starting block number.
+            to_block: Ending block number (defaults to latest).
+
+        Returns:
+            Dict with:
+                - epoch: int, the new epoch number
+                - rewarded_services: Dict[int, int] mapping service_id -> reward (wei)
+                - inactivity_warnings: List[int] of service IDs with warnings
+                - evicted_services: List[int] of evicted service IDs
+                - checkpoint_block: int, block where checkpoint occurred
+
+        """
+        if to_block is None:
+            to_block = self.chain_interface.web3.eth.block_number
+
+        result: Dict = {
+            "epoch": None,
+            "rewarded_services": {},
+            "inactivity_warnings": [],
+            "evicted_services": [],
+            "checkpoint_block": None,
+        }
+
+        try:
+            # Get Checkpoint events
+            checkpoint_logs = self._fetch_events_chunked(
+                "Checkpoint", from_block, to_block
+            )
+
+            if checkpoint_logs:
+                # Take the most recent checkpoint
+                latest = checkpoint_logs[-1]
+                result["epoch"] = latest.args.get("epoch")
+                result["checkpoint_block"] = latest.blockNumber
+
+                # Parse serviceIds and rewards arrays
+                service_ids = latest.args.get("serviceIds", [])
+                rewards = latest.args.get("rewards", [])
+
+                for sid, reward in zip(service_ids, rewards, strict=True):
+                    result["rewarded_services"][sid] = reward
+
+            # Get ServiceInactivityWarning events
+            warning_logs = self._fetch_events_chunked(
+                "ServiceInactivityWarning", from_block, to_block
+            )
+            for log in warning_logs:
+                service_id = log.args.get("serviceId")
+                if service_id is not None:
+                    result["inactivity_warnings"].append(service_id)
+
+            # Get ServicesEvicted events
+            evicted_logs = self._fetch_events_chunked(
+                "ServicesEvicted", from_block, to_block
+            )
+            for log in evicted_logs:
+                evicted_ids = log.args.get("serviceIds", [])
+                result["evicted_services"].extend(evicted_ids)
+
+        except Exception as e:
+            logger.error(f"Error fetching checkpoint events: {e}")
+
+        return result
