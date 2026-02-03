@@ -55,6 +55,7 @@ from iwa.core.types import EthereumAddress
 from iwa.core.utils import get_tx_hash
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.plugins.olas.models import StakingStatus
+from iwa.web.cache import CacheTTL, response_cache
 
 
 class StakingManagerMixin:
@@ -100,8 +101,11 @@ class StakingManagerMixin:
 
         return address
 
-    def get_staking_status(self) -> Optional[StakingStatus]:
+    def get_staking_status(self, force_refresh: bool = False) -> Optional[StakingStatus]:
         """Get comprehensive staking status for the active service.
+
+        Args:
+            force_refresh: If True, bypass cache and fetch fresh data.
 
         Returns:
             StakingStatus with liveness check info, or None if no service loaded.
@@ -111,6 +115,22 @@ class StakingManagerMixin:
             logger.error("No active service")
             return None
 
+        # Build cache key
+        cache_key = f"staking_status:{self.service.key}"
+
+        # Invalidate cache if force refresh requested
+        if force_refresh:
+            response_cache.invalidate(cache_key)
+
+        def fetch_staking_status():
+            return self._fetch_staking_status_impl()
+
+        return response_cache.get_or_compute(
+            cache_key, fetch_staking_status, CacheTTL.STAKING_STATUS
+        )
+
+    def _fetch_staking_status_impl(self) -> Optional[StakingStatus]:
+        """Internal implementation for fetching staking status (uncached)."""
         service_id = self.service.service_id
         staking_address = self.service.staking_contract_address
 
@@ -534,6 +554,11 @@ class StakingManagerMixin:
         self.service.staking_contract_address = EthereumAddress(staking_contract.address)
         self._update_and_save_service_state()
 
+        # Invalidate caches - state and balances changed
+        response_cache.invalidate(f"service_state:{self.service.key}")
+        response_cache.invalidate(f"staking_status:{self.service.key}")
+        response_cache.invalidate(f"balances:{self.service.key}")
+
         logger.info(f"[STAKE] Service {self.service.service_id} is now STAKED")
         return True
 
@@ -619,6 +644,11 @@ class StakingManagerMixin:
 
         self.service.staking_contract_address = None
         self._update_and_save_service_state()
+
+        # Invalidate caches - state and balances changed
+        response_cache.invalidate(f"service_state:{self.service.key}")
+        response_cache.invalidate(f"staking_status:{self.service.key}")
+        response_cache.invalidate(f"balances:{self.service.key}")
 
         logger.info("Service unstaked successfully")
         return True
@@ -719,5 +749,9 @@ class StakingManagerMixin:
         if inactivity_warnings:
             service_ids = [e["args"]["serviceId"] for e in inactivity_warnings]
             logger.warning(f"Services with inactivity warnings: {service_ids}")
+
+        # Invalidate staking status cache - epoch info changed
+        if self.service:
+            response_cache.invalidate(f"staking_status:{self.service.key}")
 
         return True

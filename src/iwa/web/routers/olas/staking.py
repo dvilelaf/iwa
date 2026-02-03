@@ -253,6 +253,7 @@ def stake_service(
         success = manager.stake(staking)
 
         if success:
+            # Cache invalidation handled by ServiceManager.stake()
             return {"status": "success"}
         else:
             raise HTTPException(status_code=400, detail="Failed to stake service")
@@ -286,6 +287,7 @@ def claim_rewards(service_key: str, auth: bool = Depends(verify_auth)):
 
         success, amount = manager.claim_rewards()
         if success:
+            # Cache invalidation handled by ServiceManager.claim_rewards()
             return {"status": "success", "amount": amount}
         else:
             raise HTTPException(status_code=400, detail="Failed to claim rewards")
@@ -323,6 +325,7 @@ def unstake_service(service_key: str, auth: bool = Depends(verify_auth)):
 
         success = manager.unstake(staking_contract)
         if success:
+            # Cache invalidation handled by ServiceManager.unstake()
             return {"status": "success"}
         else:
             raise HTTPException(status_code=400, detail="Failed to unstake")
@@ -359,6 +362,7 @@ def checkpoint_service(service_key: str, auth: bool = Depends(verify_auth)):
 
         success = manager.call_checkpoint(staking_contract)
         if success:
+            # Cache invalidation handled by ServiceManager.call_checkpoint()
             return {"status": "success"}
         else:
             # Check if it was just not needed

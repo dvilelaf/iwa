@@ -7,6 +7,7 @@ from loguru import logger
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from iwa.web.cache import CacheTTL, response_cache
 from iwa.web.dependencies import verify_auth, wallet
 from iwa.web.models import AccountCreateRequest, SafeCreateRequest
 
@@ -24,39 +25,61 @@ limiter = Limiter(key_func=get_remote_address)
 def get_accounts(
     chain: str = "gnosis",
     tokens: str = None,
+    refresh: bool = False,
     auth: bool = Depends(verify_auth),
 ):
-    """Get all accounts and their balances for a specific chain."""
+    """Get all accounts and their balances for a specific chain.
+
+    Args:
+        chain: Chain name to query balances on.
+        tokens: Comma-separated list of token names to fetch balances for.
+        refresh: If true, bypass cache and fetch fresh data.
+
+    """
     if not chain.replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid chain name")
-    try:
-        # Parse tokens from query parameter or use defaults
-        if tokens:
-            token_names = [t.strip() for t in tokens.split(",") if t.strip()]
-        else:
-            token_names = ["native", "OLAS", "WXDAI", "USDC"]
 
-        accounts_data, balances = wallet.get_accounts_balances(chain, token_names)
+    # Parse tokens from query parameter or use defaults
+    if tokens:
+        token_names = [t.strip() for t in tokens.split(",") if t.strip()]
+    else:
+        token_names = ["native", "OLAS", "WXDAI", "USDC"]
 
-        # Merge data
-        result = []
-        for addr, data in accounts_data.items():
-            account_balances = balances.get(addr, {})
-            # Determine account type: if it has 'signers' attribute, it's a Safe
-            account_type = "Safe" if hasattr(data, "signers") else "EOA"
-            result.append(
-                {
-                    "address": addr,
-                    "tag": data.tag,
-                    "type": account_type,
-                    "balances": account_balances,
-                }
+    # Create cache key from chain and tokens
+    cache_key = f"accounts:{chain}:{','.join(sorted(token_names))}"
+
+    # Invalidate cache if refresh requested
+    if refresh:
+        response_cache.invalidate(cache_key)
+
+    def fetch_accounts():
+        try:
+            accounts_data, balances = wallet.get_accounts_balances(
+                chain, token_names
             )
 
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching accounts: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from None
+            # Merge data
+            result = []
+            for addr, data in accounts_data.items():
+                account_balances = balances.get(addr, {})
+                # Determine account type: if it has 'signers' attribute, it's a Safe
+                account_type = "Safe" if hasattr(data, "signers") else "EOA"
+                result.append(
+                    {
+                        "address": addr,
+                        "tag": data.tag,
+                        "type": account_type,
+                        "balances": account_balances,
+                    }
+                )
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching accounts: {e}")
+            raise HTTPException(status_code=500, detail=str(e)) from None
+
+    return response_cache.get_or_compute(
+        cache_key, fetch_accounts, CacheTTL.BALANCES
+    )
 
 
 @router.post(
@@ -69,6 +92,8 @@ def create_eoa(request: Request, req: AccountCreateRequest, auth: bool = Depends
     """Create a new EOA account with the given tag."""
     try:
         wallet.key_storage.generate_new_account(req.tag)
+        # Invalidate accounts cache (new account added)
+        response_cache.invalidate("accounts:")
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
@@ -108,6 +133,8 @@ def create_safe(request: Request, req: SafeCreateRequest, auth: bool = Depends(v
                 req.tag,
                 salt_nonce,
             )
+        # Invalidate accounts cache (new Safe added)
+        response_cache.invalidate("accounts:")
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error creating Safe: {e}")

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from iwa.core.models import Config
 from iwa.plugins.olas.models import OlasConfig
+from iwa.web.cache import CacheTTL, response_cache
 from iwa.web.dependencies import verify_auth, wallet
 
 router = APIRouter(tags=["olas"])
@@ -140,6 +141,11 @@ def create_service(req: CreateServiceRequest, auth: bool = Depends(verify_auth))
         # Get final state
         final_state = manager.get_service_state()
 
+        # Invalidate caches for services list
+        response_cache.invalidate("service_state:")
+        response_cache.invalidate("staking_status:")
+        response_cache.invalidate("balances:")
+
         return {
             "status": "success",
             "service_id": service_id,
@@ -220,6 +226,12 @@ def deploy_service(
             )
 
         final_state = manager.get_service_state()
+
+        # Invalidate caches for this service
+        response_cache.invalidate(f"service_state:{service_key}")
+        response_cache.invalidate(f"staking_status:{service_key}")
+        response_cache.invalidate(f"balances:{service_key}")
+
         return {
             "status": "success",
             "service_key": service_key,
@@ -303,13 +315,62 @@ def _resolve_service_balances(service, chain: str) -> dict:
     return balances
 
 
+def _get_balances_cached(
+    service_key: str, service, chain: str, force_refresh: bool = False
+) -> dict:
+    """Get service balances with caching to prevent excessive RPC calls."""
+    cache_key = f"balances:{service_key}:{chain}"
+
+    if force_refresh:
+        response_cache.invalidate(cache_key)
+
+    def fetch_balances():
+        return _resolve_service_balances(service, chain)
+
+    return response_cache.get_or_compute(
+        cache_key, fetch_balances, CacheTTL.BALANCES
+    )
+
+
+def _staking_status_to_dict(status) -> Optional[dict]:
+    """Convert StakingStatus dataclass to dict for JSON serialization."""
+    if not status:
+        return None
+    return {
+        "is_staked": status.is_staked,
+        "staking_state": status.staking_state,
+        "staking_contract_address": status.staking_contract_address,
+        "staking_contract_name": status.staking_contract_name,
+        "accrued_reward_olas": status.accrued_reward_olas,
+        "accrued_reward_wei": status.accrued_reward_wei,
+        "epoch_number": status.epoch_number,
+        "epoch_end_utc": status.epoch_end_utc,
+        "remaining_epoch_seconds": status.remaining_epoch_seconds,
+        "mech_requests_this_epoch": status.mech_requests_this_epoch,
+        "required_mech_requests": status.required_mech_requests,
+        "has_enough_requests": status.has_enough_requests,
+        "liveness_ratio_passed": status.liveness_ratio_passed,
+        "unstake_available_at": status.unstake_available_at,
+    }
+
+
 @router.get(
     "/services/basic",
     summary="Get Basic Services",
-    description="Get a lightweight list of configured Olas services without RPC calls.",
+    description="Get a lightweight list of configured Olas services.",
 )
-def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
-    """Get basic Olas service info from config (fast, no RPC calls)."""
+def get_olas_services_basic(
+    chain: str = "gnosis",
+    refresh: bool = False,
+    auth: bool = Depends(verify_auth),
+):
+    """Get basic Olas service info from config.
+
+    Args:
+        chain: Chain name to filter services.
+        refresh: If true, bypass cache and fetch fresh data.
+
+    """
     if not chain.replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
@@ -327,14 +388,15 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
             if service.chain_name != chain:
                 continue
 
-            # Get service state from registry
-            state = "UNKNOWN"
+            # Get service state using ServiceManager's built-in caching
             try:
                 manager = ServiceManager(wallet)
                 manager.service = service
-                state = manager.get_service_state()
+                manager._init_contracts(service.chain_name)
+                state = manager.get_service_state(force_refresh=refresh)
             except Exception as e:
                 logger.warning(f"Could not get state for {service_key}: {e}")
+                state = "UNKNOWN"
 
             # Get tags from wallet storage (fast, local lookup)
             accounts = _resolve_service_accounts(service)
@@ -367,8 +429,18 @@ def get_olas_services_basic(chain: str = "gnosis", auth: bool = Depends(verify_a
     summary="Get Service Details",
     description="Get detailed status, balances, and staking info for a specific Olas service.",
 )
-def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)):
-    """Get full details for a single Olas service (staking, balances)."""
+def get_olas_service_details(
+    service_key: str,
+    refresh: bool = False,
+    auth: bool = Depends(verify_auth),
+):
+    """Get full details for a single Olas service (staking, balances).
+
+    Args:
+        service_key: The service key (chain:id format).
+        refresh: If true, bypass cache and fetch fresh data.
+
+    """
     try:
         from iwa.plugins.olas.service_manager import ServiceManager
 
@@ -378,43 +450,28 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
 
         olas_config = OlasConfig.model_validate(config.plugins["olas"])
         if service_key not in olas_config.services:
-            raise HTTPException(status_code=404, detail=f"Service '{service_key}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Service '{service_key}' not found"
+            )
 
         service = olas_config.services[service_key]
         chain = service.chain_name
 
+        # Use ServiceManager with built-in caching
         manager = ServiceManager(wallet)
         manager.service = service
-        staking_status = manager.get_staking_status()
-        service_state = manager.get_service_state()
+        manager._init_contracts(service.chain_name)
 
-        # Get balances
-        balances = _resolve_service_balances(service, chain)
-
-        staking = None
-        if staking_status:
-            staking = {
-                "is_staked": staking_status.is_staked,
-                "staking_state": staking_status.staking_state,
-                "staking_contract_address": staking_status.staking_contract_address,
-                "staking_contract_name": staking_status.staking_contract_name,
-                "accrued_reward_olas": staking_status.accrued_reward_olas,
-                "accrued_reward_wei": staking_status.accrued_reward_wei,
-                "epoch_number": staking_status.epoch_number,
-                "epoch_end_utc": staking_status.epoch_end_utc,
-                "remaining_epoch_seconds": staking_status.remaining_epoch_seconds,
-                "mech_requests_this_epoch": staking_status.mech_requests_this_epoch,
-                "required_mech_requests": staking_status.required_mech_requests,
-                "has_enough_requests": staking_status.has_enough_requests,
-                "liveness_ratio_passed": staking_status.liveness_ratio_passed,
-                "unstake_available_at": staking_status.unstake_available_at,
-            }
+        # Get data with force_refresh if requested
+        service_state = manager.get_service_state(force_refresh=refresh)
+        staking_status = manager.get_staking_status(force_refresh=refresh)
+        balances = _get_balances_cached(service_key, service, chain, refresh)
 
         return {
             "key": service_key,
             "state": service_state,
             "accounts": balances,
-            "staking": staking,
+            "staking": _staking_status_to_dict(staking_status),
         }
 
     except HTTPException:
@@ -427,21 +484,29 @@ def get_olas_service_details(service_key: str, auth: bool = Depends(verify_auth)
 @router.get(
     "/services",
     summary="Get All Services",
-    description="Get comprehensive list of Olas services with full details (slower than basic).",
+    description="Get comprehensive list of Olas services with full details.",
 )
-def get_olas_services(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
-    """Get all Olas services with staking status for a specific chain."""
+def get_olas_services(
+    chain: str = "gnosis",
+    refresh: bool = False,
+    auth: bool = Depends(verify_auth),
+):
+    """Get all Olas services with staking status for a specific chain.
+
+    Args:
+        chain: Chain name to filter services.
+        refresh: If true, bypass cache and fetch fresh data.
+
+    """
     if not chain.replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
     try:
-        # Re-using detail logic iteratively (inefficient but safe for now)
-        # Ideally we refactor this to be more efficient bulk query later
-        basic = get_olas_services_basic(chain, auth)
+        basic = get_olas_services_basic(chain, refresh, auth)
         result = []
         for svc in basic:
             try:
-                details = get_olas_service_details(svc["key"], auth)
+                details = get_olas_service_details(svc["key"], refresh, auth)
                 # Merge details into basic info
                 svc["staking"] = details["staking"]
                 svc["accounts"] = details["accounts"]

@@ -7,6 +7,7 @@ from loguru import logger
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
+from iwa.web.cache import response_cache
 
 
 class DrainManagerMixin:
@@ -110,6 +111,11 @@ class DrainManagerMixin:
             logger.warning("RewardClaimed event not found, using estimated amount")
 
         logger.info(f"Successfully claimed {claimed_amount / 1e18:.4f} OLAS rewards")
+
+        # Invalidate caches - rewards and balances changed
+        response_cache.invalidate(f"staking_status:{self.service.key}")
+        response_cache.invalidate(f"balances:{self.service.key}")
+
         return True, claimed_amount
 
     def withdraw_rewards(self) -> Tuple[bool, float]:
@@ -179,6 +185,9 @@ class DrainManagerMixin:
             logger.error("Failed to transfer OLAS")
             return False, 0
 
+        # Invalidate balances cache - OLAS moved from Safe
+        response_cache.invalidate(f"balances:{self.service.key}")
+
         logger.info(f"Withdrew {olas_amount:.4f} OLAS to {withdrawal_tag}")
         return True, olas_amount
 
@@ -237,6 +246,9 @@ class DrainManagerMixin:
         if not drained and claimed_rewards > 0:
             logger.info("Drain returned empty but rewards were claimed. Reporting partial success.")
             drained["safe_rewards_only"] = {"olas": claimed_rewards / 1e18}
+
+        # Invalidate balances cache - multiple accounts drained
+        response_cache.invalidate(f"balances:{self.service.key}")
 
         logger.info(f"Drain complete. Accounts drained: {list(drained.keys())}")
         return drained

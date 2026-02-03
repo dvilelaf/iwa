@@ -11,6 +11,7 @@ from iwa.core.wallet import Wallet
 from iwa.plugins.olas.constants import OLAS_CONTRACTS
 from iwa.plugins.olas.contracts.service import ServiceManagerContract, ServiceRegistryContract
 from iwa.plugins.olas.models import OlasConfig
+from iwa.web.cache import CacheTTL, response_cache
 
 
 class ServiceManagerBase:
@@ -99,11 +100,14 @@ class ServiceManagerBase:
             return None
         return self.registry.get_service(self.service.service_id)
 
-    def get_service_state(self, service_id: Optional[int] = None) -> str:
+    def get_service_state(
+        self, service_id: Optional[int] = None, force_refresh: bool = False
+    ) -> str:
         """Get the state of a service as a string.
 
         Args:
             service_id: Optional service ID. If not provided, uses the active service.
+            force_refresh: If True, bypass cache and fetch fresh data.
 
         Returns:
             The state name (e.g., 'DEPLOYED') or 'UNKNOWN' if not found.
@@ -114,9 +118,24 @@ class ServiceManagerBase:
                 return "UNKNOWN"
             service_id = self.service.service_id
 
-        try:
-            info = self.registry.get_service(service_id)
-            return info["state"].name
-        except Exception as e:
-            logger.debug(f"Failed to get service state for {service_id}: {e}")
-            return "UNKNOWN"
+        # Build cache key using service_key if available, else chain:id
+        if self.service and self.service.key:
+            cache_key = f"service_state:{self.service.key}"
+        else:
+            cache_key = f"service_state:{self.chain_name}:{service_id}"
+
+        # Invalidate cache if force refresh requested
+        if force_refresh:
+            response_cache.invalidate(cache_key)
+
+        def fetch_state():
+            try:
+                info = self.registry.get_service(service_id)
+                return info["state"].name
+            except Exception as e:
+                logger.debug(f"Failed to get service state for {service_id}: {e}")
+                return "UNKNOWN"
+
+        return response_cache.get_or_compute(
+            cache_key, fetch_state, CacheTTL.SERVICE_STATE
+        )

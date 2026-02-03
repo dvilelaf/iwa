@@ -75,6 +75,7 @@ from iwa.plugins.olas.constants import (
 )
 from iwa.plugins.olas.contracts.service import ServiceState
 from iwa.plugins.olas.models import Service
+from iwa.web.cache import response_cache
 
 
 class LifecycleManagerMixin:
@@ -899,6 +900,10 @@ class LifecycleManagerMixin:
             except Exception as e:
                 logger.error(f"[DEPLOY] Failed to fund multisig: {e}")
 
+        # Invalidate service state cache
+        if self.service:
+            response_cache.invalidate(f"service_state:{self.service.key}")
+
         logger.info("[DEPLOY] Success - service is now DEPLOYED")
         return multisig_address
 
@@ -949,6 +954,9 @@ class LifecycleManagerMixin:
             logger.error("Terminate service event not found")
             return False
 
+        # Invalidate service state cache
+        response_cache.invalidate(f"service_state:{self.service.key}")
+
         logger.info("Service terminated successfully")
         return True
 
@@ -983,6 +991,9 @@ class LifecycleManagerMixin:
         if "OperatorUnbond" not in [event["name"] for event in events]:
             logger.error("Unbond service event not found")
             return False
+
+        # Invalidate service state cache
+        response_cache.invalidate(f"service_state:{self.service.key}")
 
         logger.info("Service unbonded successfully")
         return True
