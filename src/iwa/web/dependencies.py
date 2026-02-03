@@ -9,8 +9,42 @@ from loguru import logger
 
 from iwa.core.wallet import Wallet
 
-# Singleton wallet instance for the web app
-wallet = Wallet()
+# Singleton wallet instance (lazy-initialized or injected)
+_wallet: Optional[Wallet] = None
+
+
+def get_wallet() -> Wallet:
+    """Get the wallet instance (lazy initialization or injected).
+
+    Returns the injected wallet if set_wallet() was called,
+    otherwise creates a new Wallet on first access.
+    """
+    global _wallet
+    if _wallet is None:
+        _wallet = Wallet()
+    return _wallet
+
+
+def set_wallet(wallet: Wallet) -> None:
+    """Inject an external wallet instance.
+
+    Call this BEFORE importing routers to share a wallet
+    with an external application (e.g., Triton).
+    """
+    global _wallet
+    _wallet = wallet
+
+
+# Backwards compatibility: module-level wallet property
+# Deprecated: use get_wallet() instead
+class _WalletProxy:
+    """Proxy that redirects to get_wallet() for backwards compatibility."""
+
+    def __getattr__(self, name: str):
+        return getattr(get_wallet(), name)
+
+
+wallet = _WalletProxy()
 
 # Authentication
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)

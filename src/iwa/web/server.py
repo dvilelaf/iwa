@@ -147,10 +147,27 @@ async def root():
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000):
-    """Run the web server using uvicorn."""
+    """Run the web server using uvicorn (blocking)."""
     import uvicorn
 
     uvicorn.run(app, host=host, port=port)
+
+
+async def run_server_async(host: str = "127.0.0.1", port: int = 8000):
+    """Run the web server in an async context (non-blocking).
+
+    Use this to embed the web server in another async application.
+    The server runs until cancelled.
+
+    Args:
+        host: Bind address. Default "127.0.0.1" (localhost only for security).
+        port: Port number. Default 8000.
+    """
+    import uvicorn
+
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 if __name__ == "__main__":
