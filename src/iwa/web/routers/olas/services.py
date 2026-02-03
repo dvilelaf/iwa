@@ -369,6 +369,7 @@ def get_olas_services_basic(
     Args:
         chain: Chain name to filter services.
         refresh: If true, bypass cache and fetch fresh data.
+        auth: Authentication dependency (injected).
 
     """
     if not chain.replace("-", "").isalnum():
@@ -439,6 +440,7 @@ def get_olas_service_details(
     Args:
         service_key: The service key (chain:id format).
         refresh: If true, bypass cache and fetch fresh data.
+        auth: Authentication dependency (injected).
 
     """
     try:
@@ -496,6 +498,7 @@ def get_olas_services(
     Args:
         chain: Chain name to filter services.
         refresh: If true, bypass cache and fetch fresh data.
+        auth: Authentication dependency (injected).
 
     """
     if not chain.replace("-", "").isalnum():

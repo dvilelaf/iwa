@@ -653,7 +653,7 @@ class StakingManagerMixin:
         logger.info("Service unstaked successfully")
         return True
 
-    def call_checkpoint(
+    def call_checkpoint(  # noqa: C901
         self,
         staking_contract: Optional[StakingContract] = None,
         grace_period_seconds: int = 600,

@@ -194,7 +194,7 @@ def test_sm_get_staking_status_with_full_info(mock_wallet):
             patch("iwa.plugins.olas.service_manager.staking.Web3") as mock_web3,
         ):
             mock_web3.from_wei.return_value = 0.001
-            status = sm.get_staking_status()
+            status = sm.get_staking_status(force_refresh=True)
             assert status.is_staked is True
             assert status.epoch_number == 5
 

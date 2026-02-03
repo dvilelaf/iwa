@@ -170,14 +170,14 @@ def test_service_manager_staking_status_failures(mock_manager):
     manager.service = Service(service_name="t", chain_name="gnosis", service_id=1, agent_ids=[1])
     # Staking contract missing
     manager.service.staking_contract_address = None
-    status = manager.get_staking_status()
+    status = manager.get_staking_status(force_refresh=True)
     assert status.is_staked is False
 
     # Exception in contract loading
     manager.service.staking_contract_address = VALID_ADDR
     with patch("iwa.plugins.olas.service_manager.staking.StakingContract") as mock_staking_cls:
         mock_staking_cls.side_effect = Exception("fail")
-        status = manager.get_staking_status()
+        status = manager.get_staking_status(force_refresh=True)
         assert status.staking_state == "ERROR"
 
         # Exception in get_service_info
@@ -185,7 +185,7 @@ def test_service_manager_staking_status_failures(mock_manager):
         mock_staking = mock_staking_cls.return_value
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.get_service_info.side_effect = Exception("fail")
-        status = manager.get_staking_status()
+        status = manager.get_staking_status(force_refresh=True)
         assert status.is_staked is True
         assert status.mech_requests_this_epoch == 0
 

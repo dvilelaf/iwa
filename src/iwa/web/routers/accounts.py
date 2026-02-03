@@ -34,6 +34,7 @@ def get_accounts(
         chain: Chain name to query balances on.
         tokens: Comma-separated list of token names to fetch balances for.
         refresh: If true, bypass cache and fetch fresh data.
+        auth: Authentication dependency (injected).
 
     """
     if not chain.replace("-", "").isalnum():
