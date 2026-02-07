@@ -8,11 +8,11 @@ from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import ChainInterfaces
-from iwa.core.types import EthereumAddress
 from iwa.core.db import log_transaction
 from iwa.core.keys import KeyStorage
 from iwa.core.models import StoredSafeAccount
 from iwa.core.services.account import AccountService
+from iwa.core.types import EthereumAddress
 
 if TYPE_CHECKING:
     from iwa.core.chain import ChainInterface

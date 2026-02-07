@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
+
 from iwa.core.chain import ChainInterfaces
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.db import log_transaction

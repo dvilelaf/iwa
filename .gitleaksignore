@@ -35,3 +35,5 @@
 4f3fe045d306c2aec68dde4932c93fda4d1e01c4:src/tests/test_keys.py:generic-api-key:70
 cf38977d2ec48b52edcac965be7acec05bb6da54:src/iwa/plugins/olas/service_manager/staking.py:generic-api-key:42
 cf38977d2ec48b52edcac965be7acec05bb6da54:src/iwa/plugins/olas/service_manager/staking.py:generic-api-key:44
+# Test Ethereum address constant in test_transfer_multisend.py (not a secret)
+9fbed18c26de18a0ee83a99e1b6e44b4629ed19e:src/tests/test_transfer_multisend.py:generic-api-key:15

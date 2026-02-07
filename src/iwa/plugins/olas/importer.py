@@ -530,7 +530,7 @@ class OlasServiceImporter:
                         keys.append(key)
         return keys
 
-    def _extract_owner_address(self, service: DiscoveredService, operate_folder: Path) -> None:
+    def _extract_owner_address(self, service: DiscoveredService, operate_folder: Path) -> None:  # noqa: C901
         """Extract owner address from wallets/ethereum.json.
 
         Handles two cases:

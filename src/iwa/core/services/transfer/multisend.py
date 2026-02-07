@@ -7,7 +7,6 @@ from safe_eth.safe import SafeOperationEnum
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
-from iwa.core.types import EthereumAddress
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.contracts.multisend import (
     MULTISEND_ADDRESS,
@@ -16,6 +15,7 @@ from iwa.core.contracts.multisend import (
     MultiSendContract,
 )
 from iwa.core.models import Config, StoredSafeAccount
+from iwa.core.types import EthereumAddress
 
 if TYPE_CHECKING:
     from iwa.core.services.transfer import TransferService

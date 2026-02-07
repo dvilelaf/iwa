@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.keys import EncryptedAccount, KeyStorage
