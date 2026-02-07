@@ -1,5 +1,6 @@
 """FastAPI Server Entrypoint."""
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -77,7 +78,10 @@ async def lifespan(app: FastAPI):
     # Check block limit immediately at startup with visual progress bar
     ChainInterfaces().gnosis.check_block_limit(show_progress_bar=True)
 
-    yield
+    try:
+        yield
+    except asyncio.CancelledError:
+        pass
     logger.info("Shutting down...")
 
 
