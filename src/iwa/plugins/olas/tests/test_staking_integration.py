@@ -224,6 +224,10 @@ def test_staking_contract(tmp_path):  # noqa: C901
 
                 # Logic side effect
                 def logic_side_effect(method, *args):
+                    if method == "activityChecker":
+                        return VALID_ADDR_4
+                    if method == "stakingToken":
+                        return VALID_ADDR_2
                     if method == "getServiceInfo":
                         # Returns: (multisig, owner, nonces_on_last_checkpoint, ts_start, accrued_reward, inactivity)
                         # nonces_on_last_checkpoint must be [safe_nonce, mech_requests]

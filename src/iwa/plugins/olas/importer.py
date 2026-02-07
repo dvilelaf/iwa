@@ -17,6 +17,7 @@ from loguru import logger
 
 from iwa.core.keys import EncryptedAccount, KeyStorage
 from iwa.core.models import Config, StoredSafeAccount
+from iwa.core.types import EthereumAddress
 
 # Known mappings from olas-operate-middleware staking programs
 # See: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
@@ -75,18 +76,18 @@ class DiscoveredService:
 
     service_id: Optional[int] = None
     chain_name: str = "gnosis"
-    safe_address: Optional[str] = None
+    safe_address: Optional[EthereumAddress] = None
     keys: List[DiscoveredKey] = field(default_factory=list)
     source_folder: Path = field(default_factory=Path)
     format: str = "unknown"  # "trader_runner" or "operate"
     service_name: Optional[str] = None
     # New fields for full service import
-    staking_contract_address: Optional[str] = None
-    service_owner_eoa_address: Optional[str] = None
-    service_owner_multisig_address: Optional[str] = None
+    staking_contract_address: Optional[EthereumAddress] = None
+    service_owner_eoa_address: Optional[EthereumAddress] = None
+    service_owner_multisig_address: Optional[EthereumAddress] = None
 
     @property
-    def service_owner_address(self) -> Optional[str]:
+    def service_owner_address(self) -> Optional[EthereumAddress]:
         """Backward compatibility: effective owner address."""
         return self.service_owner_multisig_address or self.service_owner_eoa_address
 
@@ -257,11 +258,15 @@ class OlasServiceImporter:
                 logger.warning(f"Invalid service_id in {service_id_file}")
         return None
 
-    def _extract_safe_address(self, folder: Path) -> Optional[str]:
+    def _extract_safe_address(self, folder: Path) -> Optional[EthereumAddress]:
         """Extract Safe address from file."""
         safe_file = folder / "service_safe_address.txt"
         if safe_file.exists():
-            return safe_file.read_text().strip()
+            raw = safe_file.read_text().strip()
+            try:
+                return EthereumAddress(raw)
+            except ValueError:
+                logger.warning(f"Invalid Safe address in {safe_file}: {raw}")
         return None
 
     def _extract_trader_keys(self, folder: Path) -> List[DiscoveredKey]:
@@ -383,8 +388,8 @@ class OlasServiceImporter:
             try:
                 data = json.loads(eth_json.read_text())
                 if "safes" in data and "gnosis" in data["safes"]:
-                    service.safe_address = data["safes"]["gnosis"]
-            except (json.JSONDecodeError, KeyError):
+                    service.safe_address = EthereumAddress(data["safes"]["gnosis"])
+            except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
         if service.keys:
@@ -470,7 +475,11 @@ class OlasServiceImporter:
                 service.chain_name = chain_name
 
             if "multisig" in chain_data:
-                service.safe_address = chain_data["multisig"]
+                try:
+                    service.safe_address = EthereumAddress(chain_data["multisig"])
+                except ValueError:
+                    logger.warning(f"Invalid multisig address: {chain_data['multisig']}")
+                    service.safe_address = None
 
             # Extract staking contract from user_params
             user_params = chain_data.get("user_params", {})
@@ -480,14 +489,17 @@ class OlasServiceImporter:
                     staking_program_id, chain_name
                 )
 
-    def _resolve_staking_contract(self, staking_program_id: str, chain_name: str) -> Optional[str]:
+    def _resolve_staking_contract(
+        self, staking_program_id: str, chain_name: str
+    ) -> Optional[EthereumAddress]:
         """Resolve a staking program ID to a contract address."""
         address = STAKING_PROGRAM_MAP.get(staking_program_id)
         if address:
             logger.debug(f"Resolved staking program '{staking_program_id}' -> {address}")
+            return EthereumAddress(address)
         else:
             logger.warning(f"Unknown staking program ID: {staking_program_id}")
-        return address
+        return None
 
     def _extract_parent_wallet_keys(self, operate_folder: Path) -> List[DiscoveredKey]:
         """Extract owner keys from parent wallets folder."""
@@ -554,17 +566,27 @@ class OlasServiceImporter:
 
                 if safe_owner_address:
                     # CASE: Owner is Safe
-                    service.service_owner_multisig_address = safe_owner_address
-                    service.service_owner_eoa_address = (
-                        eoa_address  # The EOA is the signer/controller
-                    )
+                    try:
+                        service.service_owner_multisig_address = EthereumAddress(
+                            safe_owner_address
+                        )
+                    except ValueError:
+                        logger.warning(f"Invalid Safe owner address: {safe_owner_address}")
+                    if eoa_address:
+                        try:
+                            service.service_owner_eoa_address = EthereumAddress(eoa_address)
+                        except ValueError:
+                            logger.warning(f"Invalid EOA address: {eoa_address}")
 
                     logger.debug(
                         f"Extracted Safe owner address: {safe_owner_address} (Signer: {eoa_address})"
                     )
                 elif eoa_address:
                     # CASE: Owner is EOA
-                    service.service_owner_eoa_address = eoa_address
+                    try:
+                        service.service_owner_eoa_address = EthereumAddress(eoa_address)
+                    except ValueError:
+                        logger.warning(f"Invalid EOA address: {eoa_address}")
                     service.service_owner_multisig_address = None
                     logger.debug(f"Extracted EOA owner address: {eoa_address}")
 
@@ -586,7 +608,11 @@ class OlasServiceImporter:
 
         for key in service.keys:
             if key.role == "owner" and key.address:
-                service.service_owner_eoa_address = key.address
+                try:
+                    service.service_owner_eoa_address = EthereumAddress(key.address)
+                except ValueError:
+                    logger.warning(f"Invalid owner key address: {key.address}")
+                    continue
                 logger.debug(f"Inferred owner EOA address from key: {key.address}")
                 return
 

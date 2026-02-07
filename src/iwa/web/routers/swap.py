@@ -13,6 +13,7 @@ from slowapi.util import get_remote_address
 from web3 import Web3
 
 from iwa.core.chain import ChainInterfaces, SupportedChain
+from iwa.core.types import EthereumAddress
 from iwa.plugins.gnosis.cow import CowSwap
 from iwa.web.dependencies import verify_auth, wallet
 
@@ -29,9 +30,7 @@ def get_cached_decimals(token_address: str, chain: str) -> int:
 
         # Note: ERC20Contract init makes 4 RPC calls (decimals, symbol, name, supply)
         # Caching this result is critical for performance.
-        # FIX: Web3 requires checksum addresses
-        checksum_address = Web3.to_checksum_address(token_address)
-        contract = ERC20Contract(checksum_address, chain)
+        contract = ERC20Contract(EthereumAddress(token_address), chain)
         return contract.decimals
     except Exception as e:
         logger.warning(f"Error fetching decimals for {token_address}: {e}")

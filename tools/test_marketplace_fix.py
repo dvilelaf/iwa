@@ -46,8 +46,8 @@ def main():
     print("  OK: Uses OLD marketplace as expected")
 
     # Check if marketplace is in DEFAULT_PRIORITY_MECH mapping
-    from web3 import Web3
-    mp_checksum = Web3.to_checksum_address(marketplace)
+    from iwa.core.types import EthereumAddress
+    mp_checksum = EthereumAddress(marketplace)
     if mp_checksum in DEFAULT_PRIORITY_MECH:
         mech_info = DEFAULT_PRIORITY_MECH[mp_checksum]
         priority_mech = mech_info[0]

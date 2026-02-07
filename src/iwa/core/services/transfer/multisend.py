@@ -7,6 +7,7 @@ from safe_eth.safe import SafeOperationEnum
 
 from iwa.core.chain import ChainInterfaces
 from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
+from iwa.core.types import EthereumAddress
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.contracts.multisend import (
     MULTISEND_ADDRESS,
@@ -115,8 +116,8 @@ class MultiSendMixin:
         tx_copy = dict(tx)
         to = self.account_service.resolve_account(tx_copy["to"])
         recipient_address = to.address if to else tx_copy["to"]
-        # Ensure recipient address is checksummed for Web3 compatibility
-        recipient_address = chain_interface.web3.to_checksum_address(recipient_address)
+        # Ensure recipient address is checksummed
+        recipient_address = EthereumAddress(recipient_address)
         token_address_or_tag = tx_copy.get("token", NATIVE_CURRENCY_ADDRESS)
         chain_name = chain_interface.chain.name
 

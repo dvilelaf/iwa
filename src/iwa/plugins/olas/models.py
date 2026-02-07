@@ -48,7 +48,7 @@ class StakingStatus(BaseModel):
     """
 
     is_staked: bool
-    staking_contract_address: Optional[str] = None
+    staking_contract_address: Optional[EthereumAddress] = None
     staking_contract_name: Optional[str] = None
     staking_state: str  # "NOT_STAKED", "STAKED", "EVICTED"
 
@@ -69,7 +69,7 @@ class StakingStatus(BaseModel):
     remaining_epoch_seconds: float = 0
 
     # Activity checker info
-    activity_checker_address: Optional[str] = None
+    activity_checker_address: Optional[EthereumAddress] = None
     liveness_ratio: int = 0  # Requests per second * 1e18
 
     # Unstake timing

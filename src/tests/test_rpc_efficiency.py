@@ -34,7 +34,7 @@ def test_staking_contract_lazy_loading(mock_chain_interface):
     ContractCache().clear()
 
     # Instantiate logic
-    contract = StakingContract(address="0x123", chain_name="gnosis")
+    contract = StakingContract(address="0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", chain_name="gnosis")
 
     # Assert NO calls to call yet (since we mock with_retry to execute immediately, 0 calls means 0 executions)
     assert mock_interface.with_retry.call_count == 0
@@ -62,8 +62,8 @@ def test_contract_cache_singleton(mock_chain_interface):
     mock_interface, mock_contract = mock_chain_interface
     ContractCache().clear()
 
-    c1 = ContractCache().get_contract(StakingContract, "0xABC", "gnosis")
-    c2 = ContractCache().get_contract(StakingContract, "0xabc", "gnosis")  # Check ignore case
+    c1 = ContractCache().get_contract(StakingContract, "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D", "gnosis")
+    c2 = ContractCache().get_contract(StakingContract, "0x40a2accbd92bca938b02010e17a5b8929b49130d", "gnosis")  # Same addr lowercase
 
     assert c1 is c2
 
@@ -85,7 +85,7 @@ def test_epoch_aware_caching(mock_chain_interface):
     """Verify ts_checkpoint caching logic."""
     mock_interface, mock_contract = mock_chain_interface
     ContractCache().clear()
-    contract = StakingContract(address="0xEpoch", chain_name="gnosis")
+    contract = StakingContract(address="0x1111111111111111111111111111111111111111", chain_name="gnosis")
 
     # Mock return values for tsCheckpoint
     # We use side_effect on the call() method to simulate changing return values if needed

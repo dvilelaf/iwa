@@ -144,14 +144,14 @@ class StakingManagerMixin:
         # Load the staking contract
         try:
             staking = ContractCache().get_contract(
-                StakingContract, str(staking_address), chain_name=self.chain_name
+                StakingContract, staking_address, chain_name=self.chain_name
             )
         except Exception as e:
             logger.error(f"Failed to load staking contract: {e}")
             return StakingStatus(
                 is_staked=False,
                 staking_state="ERROR",
-                staking_contract_address=str(staking_address),
+                staking_contract_address=staking_address,
             )
 
         # Get staking state
@@ -162,7 +162,7 @@ class StakingManagerMixin:
             return StakingStatus(
                 is_staked=False,
                 staking_state=staking_state.name,
-                staking_contract_address=str(staking_address),
+                staking_contract_address=staking_address,
                 activity_checker_address=staking.activity_checker_address,
                 liveness_ratio=staking.activity_checker.liveness_ratio,
             )
@@ -182,7 +182,7 @@ class StakingManagerMixin:
             return StakingStatus(
                 is_staked=True,
                 staking_state=staking_state.name,
-                staking_contract_address=str(staking_address),
+                staking_contract_address=staking_address,
             )
 
         # Calculate unstake timing
@@ -191,7 +191,7 @@ class StakingManagerMixin:
         return StakingStatus(
             is_staked=True,
             staking_state=staking_state.name,
-            staking_contract_address=str(staking_address),
+            staking_contract_address=staking_address,
             staking_contract_name=staking_name,
             mech_requests_this_epoch=info["mech_requests_this_epoch"],
             required_mech_requests=info["required_mech_requests"],
@@ -216,7 +216,7 @@ class StakingManagerMixin:
 
         for chain_cts in OLAS_TRADER_STAKING_CONTRACTS.values():
             for name, addr in chain_cts.items():
-                if str(addr).lower() == str(staking_address).lower():
+                if str(addr).lower() == staking_address.lower():
                     return name
         return None
 
@@ -355,7 +355,7 @@ class StakingManagerMixin:
         reqs = staking_contract.get_requirements()
         min_deposit = reqs["min_staking_deposit"]
         required_bond = reqs["required_agent_bond"]
-        staking_token = Web3.to_checksum_address(reqs["staking_token"])
+        staking_token = EthereumAddress(reqs["staking_token"])
         staking_token_lower = staking_token.lower()
 
         logger.info("[STAKE] Contract requirements:")

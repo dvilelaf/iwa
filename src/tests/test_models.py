@@ -211,3 +211,62 @@ def test_storable_model_load_auto_toml_yaml():
     with patch("pathlib.Path.open", mock_open(read_data=yaml_content)):
         model = MockStorableModel.load(Path("test.yaml"))
         assert model.name == "test"
+
+
+# --- EthereumAddress enforcement in Pydantic models ---
+
+
+from iwa.plugins.olas.models import Service, StakingStatus
+
+
+def test_staking_status_auto_checksums_address():
+    """StakingStatus should auto-checksum lowercase addresses."""
+    lowercase = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"
+    checksummed = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+    status = StakingStatus(
+        is_staked=True,
+        staking_state="STAKED",
+        staking_contract_address=lowercase,
+    )
+    assert status.staking_contract_address == checksummed
+
+
+def test_staking_status_rejects_invalid_address():
+    """StakingStatus should reject invalid addresses."""
+    with pytest.raises(ValueError):
+        StakingStatus(
+            is_staked=True,
+            staking_state="STAKED",
+            staking_contract_address="0xNotAnAddress",
+        )
+
+
+def test_service_auto_checksums_all_address_fields():
+    """Service should auto-checksum all address fields."""
+    addr1 = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"
+    addr2 = "0x1111111111111111111111111111111111111111"
+    checksummed1 = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+    svc = Service(
+        service_name="test",
+        chain_name="gnosis",
+        service_id=1,
+        multisig_address=addr1,
+        agent_address=addr2,
+        staking_contract_address=addr1,
+        service_owner_eoa_address=addr2,
+    )
+    assert svc.multisig_address == checksummed1
+    assert svc.staking_contract_address == checksummed1
+    assert svc.agent_address == addr2  # All 1s doesn't change
+    assert svc.service_owner_eoa_address == addr2
+
+
+def test_service_rejects_invalid_address():
+    """Service should reject invalid address strings."""
+    with pytest.raises(ValueError):
+        Service(
+            service_name="test",
+            chain_name="gnosis",
+            service_id=1,
+            multisig_address="not_an_address",
+        )

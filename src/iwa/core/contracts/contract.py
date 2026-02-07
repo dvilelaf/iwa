@@ -13,6 +13,7 @@ from web3.exceptions import ContractCustomError
 from iwa.core.chain import ChainInterfaces
 from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.core.rpc_monitor import RPCMonitor
+from iwa.core.types import EthereumAddress
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()
@@ -56,7 +57,7 @@ class ContractInstance:
 
     def __init__(self, address: str, chain_name: str = "gnosis"):
         """Initialize contract instance."""
-        self.address = address
+        self.address = EthereumAddress(address)
         self.abi = None
         self.chain_interface = ChainInterfaces().get(chain_name)
 

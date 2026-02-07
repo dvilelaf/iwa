@@ -60,6 +60,7 @@ from loguru import logger
 from web3 import Web3
 
 from iwa.core.constants import ZERO_ADDRESS
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,
     PAYMENT_TYPE_NATIVE,
@@ -127,7 +128,7 @@ class MechManagerMixin:
 
             if checker.mech_marketplace and checker.mech_marketplace != ZERO_ADDRESS:
                 # Get priority mech from mapping based on marketplace address
-                marketplace_addr = Web3.to_checksum_address(checker.mech_marketplace)
+                marketplace_addr = EthereumAddress(checker.mech_marketplace)
                 priority_mech_info = DEFAULT_PRIORITY_MECH.get(marketplace_addr)
 
                 if priority_mech_info:
@@ -378,7 +379,7 @@ class MechManagerMixin:
         if not priority_addr:
             raise ValueError("priority_mech is required for marketplace requests")
 
-        return str(resolved_mp), Web3.to_checksum_address(priority_addr)
+        return str(resolved_mp), EthereumAddress(priority_addr)
 
     def _prepare_marketplace_params(
         self,

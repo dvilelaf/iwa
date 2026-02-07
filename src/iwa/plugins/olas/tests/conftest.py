@@ -12,7 +12,7 @@ def mock_wallet():
     """Mock wallet."""
     wallet = MagicMock()
     wallet.key_storage = MagicMock()
-    wallet.address = "0xWalletAddress"
+    wallet.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
     return wallet
 
 

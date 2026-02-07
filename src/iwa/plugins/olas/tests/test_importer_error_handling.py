@@ -8,6 +8,11 @@ import pytest
 
 from iwa.plugins.olas.importer import DiscoveredKey, DiscoveredService, OlasServiceImporter
 
+VALID_SAFE_ADDR = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+VALID_SAFE_ADDR_2 = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+VALID_AGENT_ADDR = "0x1111111111111111111111111111111111111111"
+VALID_OWNER_ADDR = "0x2222222222222222222222222222222222222222"
+
 
 @pytest.fixture
 def mock_wallet():
@@ -108,7 +113,7 @@ def test_scan_operate_success(importer, tmp_path):
     uuid_dir = services_dir / "some-uuid"
     uuid_dir.mkdir()
     (uuid_dir / "config.json").write_text(
-        '{"chain_configs": {"gnosis": {"chain_data": {"token": 42, "multisig": "0xSafe"}}}}'
+        f'{{"chain_configs": {{"gnosis": {{"chain_data": {{"token": 42, "multisig": "{VALID_SAFE_ADDR}"}}}}}}}}'
     )
 
     results = importer.scan_directory(Path(tmp_path))
@@ -133,12 +138,16 @@ def test_scan_operate_standalone_keys(importer, tmp_path):
     operate_dir.mkdir()
     wallets_dir = operate_dir / "wallets"
     wallets_dir.mkdir()
-    (wallets_dir / "ethereum.txt").write_text('{"address": "0x123", "private_key": "0xabc"}')
-    (wallets_dir / "ethereum.json").write_text('{"safes": {"gnosis": "0xSafe"}}')
+    (wallets_dir / "ethereum.txt").write_text(
+        f'{{"address": "{VALID_AGENT_ADDR}", "private_key": "0x' + "1" * 64 + '"}'
+    )
+    (wallets_dir / "ethereum.json").write_text(
+        f'{{"safes": {{"gnosis": "{VALID_SAFE_ADDR}"}}}}'
+    )
 
     services = importer._parse_operate_format(operate_dir)
     assert len(services) == 1
-    assert services[0].safe_address == "0xSafe"
+    assert services[0].safe_address == VALID_SAFE_ADDR
     assert len(services[0].keys) == 1
 
 
@@ -148,17 +157,17 @@ def test_parse_trader_runner_keys(importer, tmp_path):
     runner_dir.mkdir()
     # Provision valid-ish keystore JSON (must have 'crypto' or 'ciphertext')
     (runner_dir / "agent_pkey.txt").write_text(
-        '{"address": "0xAgent", "crypto": {"ciphertext": "abc"}}'
+        f'{{"address": "{VALID_AGENT_ADDR}", "crypto": {{"ciphertext": "abc"}}}}'
     )
     (runner_dir / "operator_pkey.txt").write_text(
-        '{"address": "0xOper", "crypto": {"ciphertext": "def"}}'
+        f'{{"address": "{VALID_OWNER_ADDR}", "crypto": {{"ciphertext": "def"}}}}'
     )
     (runner_dir / "service_id.txt").write_text("100\n")
-    (runner_dir / "service_safe_address.txt").write_text("0xSafeAddress\n")
+    (runner_dir / "service_safe_address.txt").write_text(f"{VALID_SAFE_ADDR}\n")
 
     service = importer._parse_trader_runner_format(runner_dir)
     assert service.service_id == 100
-    assert service.safe_address == "0xSafeAddress"
+    assert service.safe_address == VALID_SAFE_ADDR
     assert len(service.keys) == 2
     assert any(k.role == "agent" for k in service.keys)
     assert any(k.role == "owner" for k in service.keys)
@@ -272,7 +281,7 @@ def test_generate_tag_collisions(importer):
 
 def test_import_safe_duplicate(importer):
     """Test importing a Safe that already exists."""
-    safe_address = "0xSafe"
+    safe_address = VALID_SAFE_ADDR
 
     importer.key_storage.find_stored_account.return_value = MagicMock()
 

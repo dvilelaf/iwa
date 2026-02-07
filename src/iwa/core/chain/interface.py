@@ -599,7 +599,7 @@ class ChainInterface:
             # Call decimals() directly without with_retry to avoid error logging
             # Use _web3 directly to ensure current provider after RPC rotation
             contract = self.web3._web3.eth.contract(
-                address=self.web3.to_checksum_address(address),
+                address=address,
                 abi=[
                     {
                         "constant": True,

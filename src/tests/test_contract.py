@@ -37,8 +37,8 @@ class MockContract(ContractInstance):
 
 
 def test_init(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
-    assert contract.address == "0xAddress"
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
+    assert contract.address == "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
     assert contract.abi is not None
     assert "0x" in str(contract.error_selectors.keys())  # Check if selector generated
 
@@ -46,12 +46,12 @@ def test_init(mock_chain_interface, mock_abi_file):
 def test_init_abi_dict(mock_chain_interface):
     abi_content = '{"abi": [{"type": "function", "name": "testFunc"}]}'
     with patch("builtins.open", mock_open(read_data=abi_content)):
-        contract = MockContract("0xAddress", "gnosis")
+        contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
         assert contract.abi == [{"type": "function", "name": "testFunc"}]
 
 
 def test_call(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     contract.contract.functions.testFunc.return_value.call.return_value = "result"
     # with_retry now wraps the call - make it execute the lambda
     mock_chain_interface.with_retry.side_effect = lambda fn, **kwargs: fn()
@@ -59,7 +59,7 @@ def test_call(mock_chain_interface, mock_abi_file):
 
 
 def test_prepare_transaction_success(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     mock_chain_interface.calculate_transaction_params.return_value = {"gas": 100}
     contract.contract.functions.testFunc.return_value.build_transaction.return_value = {
         "data": "0x"
@@ -70,7 +70,7 @@ def test_prepare_transaction_success(mock_chain_interface, mock_abi_file):
 
 
 def test_prepare_transaction_custom_error_known(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     # Selector for CustomError(uint256)
     # We need to calculate it or capture what load_error_selectors produced
     selector = list(contract.error_selectors.keys())[0]  # 0x...
@@ -91,7 +91,7 @@ def test_prepare_transaction_custom_error_known(mock_chain_interface, mock_abi_f
 
 
 def test_prepare_transaction_custom_error_unknown(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     error_data = "0x12345678"  # Unknown selector
 
     contract.contract.functions.testFunc.return_value.build_transaction.side_effect = (
@@ -107,7 +107,7 @@ def test_prepare_transaction_custom_error_unknown(mock_chain_interface, mock_abi
 
 
 def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     # Encoded Error(string) with "Error" as the message
     encoded_error = "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000054572726f72000000000000000000000000000000000000000000000000000000"
     e = Exception("msg", encoded_error)
@@ -122,7 +122,7 @@ def test_prepare_transaction_revert_string(mock_chain_interface, mock_abi_file):
 
 
 def test_prepare_transaction_other_exception(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     # The code expects e.args[1] to exist, so we must provide it
     e = Exception("Generic Error", "Some Data")
     contract.contract.functions.testFunc.return_value.build_transaction.side_effect = e
@@ -134,7 +134,7 @@ def test_prepare_transaction_other_exception(mock_chain_interface, mock_abi_file
 
 
 def test_extract_events(mock_chain_interface, mock_abi_file):
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
     receipt = MagicMock()
 
     # Mock event class and its process_receipt method
@@ -171,7 +171,7 @@ def test_extract_events_edge_cases(mock_chain_interface):
     abi_content = '[{"type": "event", "name": "MissingEvent", "inputs": []}, {"type": "event", "name": "EmptyLogsEvent", "inputs": []}, {"type": "event", "name": "ErrorEvent", "inputs": []}, {"type": "function", "name": "NotAnEvent", "inputs": []}]'
 
     with patch("builtins.open", mock_open(read_data=abi_content)):
-        contract = MockContract("0xAddress", "gnosis")
+        contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
 
     receipt = MagicMock()
 
@@ -218,7 +218,7 @@ def test_call_reevaluates_contract_on_retry(mock_chain_interface, mock_abi_file)
     captured once outside the retry lambda, causing retries to use the
     stale provider after RPC rotation.
     """
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
 
     # Track how many times web3.eth.contract is called (proxy for contract property access)
     contract_creation_count = [0]
@@ -270,7 +270,7 @@ def test_call_uses_fresh_provider_after_rotation(mock_chain_interface, mock_abi_
     2. RPC rotates to new provider
     3. Retry should use the NEW provider, not the old one
     """
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
 
     # Track which provider version is being used
     provider_versions = []
@@ -325,7 +325,7 @@ def test_call_with_429_triggers_retry_with_new_contract(mock_chain_interface, mo
     2. with_retry handles it and retries
     3. The retry uses a fresh contract instance (new provider)
     """
-    contract = MockContract("0xAddress", "gnosis")
+    contract = MockContract("0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB", "gnosis")
 
     # Create distinct mock contracts for each call
     mock_contract_1 = MagicMock()

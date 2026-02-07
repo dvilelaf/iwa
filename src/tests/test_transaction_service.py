@@ -214,18 +214,18 @@ class TestTopicToAddress:
     def test_bytes_topic(self, transfer_logger):
         """32 bytes → last 20 bytes extracted as address."""
         result = transfer_logger._topic_to_address(_TOPIC_BYTES)
-        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+        assert result == _ADDR
 
     def test_hex_string_topic(self, transfer_logger):
         """Hex string with 0x prefix → last 40 chars as address."""
         result = transfer_logger._topic_to_address(_TOPIC_HEX_STR)
-        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+        assert result == _ADDR
 
     def test_hex_string_no_prefix(self, transfer_logger):
         """Hex string without 0x prefix."""
         topic = "0" * 24 + _ADDR_LOWER[2:]
         result = transfer_logger._topic_to_address(topic)
-        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+        assert result == _ADDR
 
     def test_hexbytes_like_topic(self, transfer_logger):
         """Object with .hex() method (like HexBytes)."""
@@ -235,7 +235,7 @@ class TestTopicToAddress:
                 return "0" * 24 + _ADDR_LOWER[2:]
 
         result = transfer_logger._topic_to_address(FakeHexBytes())
-        assert result == Web3.to_checksum_address(_ADDR_LOWER)
+        assert result == _ADDR
 
     def test_unsupported_type_returns_empty(self, transfer_logger):
         """Non-bytes, non-str, no .hex() → empty string."""

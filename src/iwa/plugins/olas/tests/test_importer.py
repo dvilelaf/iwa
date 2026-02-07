@@ -8,6 +8,9 @@ from eth_account import Account
 
 from iwa.plugins.olas.importer import DiscoveredKey, DiscoveredService, OlasServiceImporter
 
+VALID_SAFE_ADDR = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+VALID_SAFE_ADDR_2 = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+
 
 @pytest.fixture
 def temp_dirs(tmp_path):
@@ -16,7 +19,7 @@ def temp_dirs(tmp_path):
     tr_path = tmp_path / "tr_service" / ".trader_runner"
     tr_path.mkdir(parents=True)
     (tr_path / "service_id.txt").write_text("123")
-    (tr_path / "service_safe_address.txt").write_text("0xSafeAddress")
+    (tr_path / "service_safe_address.txt").write_text(VALID_SAFE_ADDR)
 
     # Mock encrypted keystore
     keystore = {
@@ -35,7 +38,7 @@ def temp_dirs(tmp_path):
 
     op_config = {
         "keys": [{"address": "0xAgent", "private_key": "0x123"}],
-        "chain_configs": {"gnosis": {"chain_data": {"token": 456, "multisig": "0xOpSafe"}}},
+        "chain_configs": {"gnosis": {"chain_data": {"token": 456, "multisig": VALID_SAFE_ADDR_2}}},
     }
     (services_path / "config.json").write_text(json.dumps(op_config))
 
@@ -64,14 +67,14 @@ def test_scan_directory(importer, temp_dirs):
     # Verify trader_runner service
     tr_svc = next(s for s in services if s.format == "trader_runner")
     assert tr_svc.service_id == 123
-    assert tr_svc.safe_address == "0xSafeAddress"
+    assert tr_svc.safe_address == VALID_SAFE_ADDR
     assert len(tr_svc.keys) == 1
     assert tr_svc.keys[0].role == "agent"
 
     # Verify operate service
     op_svc = next(s for s in services if s.format == "operate")
     assert op_svc.service_id == 456
-    assert op_svc.safe_address == "0xOpSafe"
+    assert op_svc.safe_address == VALID_SAFE_ADDR_2
     assert op_svc.keys[0].address == "0xAgent"
 
 
@@ -93,7 +96,7 @@ def test_import_service_success(importer):
         service_id=789,
         service_name="TestImport",
         chain_name="gnosis",
-        safe_address="0xSafe",
+        safe_address=VALID_SAFE_ADDR,
         keys=[
             DiscoveredKey(address="0xAgent", private_key="1" * 64, role="agent", is_encrypted=False)
         ],

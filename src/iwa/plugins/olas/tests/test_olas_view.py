@@ -48,7 +48,7 @@ async def test_olas_view_initial_load(mock_wallet, mock_olas_config):
             mock_sm.get_staking_status.return_value = StakingStatus(
                 is_staked=True,
                 staking_state="STAKED",
-                staking_contract_address="0xStaking",
+                staking_contract_address="0x389B46c259631Acd6a69Bde8B6cEe218230bAE8C",
                 staking_contract_name="Trader Staking",
                 accrued_reward_wei=500000000000000000,
                 liveness_ratio_passed=True,

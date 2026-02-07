@@ -3,9 +3,8 @@
 import time
 from typing import Any, Callable, Dict, List
 
-from web3 import Web3
-
 from iwa.core.chain import ChainInterfaces
+from iwa.core.types import EthereumAddress
 from iwa.core.utils import configure_logger
 
 logger = configure_logger()
@@ -19,7 +18,7 @@ class EventMonitor:
     ) -> None:
         """Initialize events monitor."""
         self.chain_name = chain_name
-        self.addresses = [Web3.to_checksum_address(addr) for addr in addresses]
+        self.addresses = [EthereumAddress(addr) for addr in addresses]
         self.callback = callback
         self.chain_interface = ChainInterfaces().get(chain_name)
         self.web3 = self.chain_interface.web3
@@ -119,9 +118,8 @@ class EventMonitor:
                         found_txs.append(
                             {
                                 "hash": tx["hash"].hex(),
-                                # Use original checksummed 'from' if available in tx, or re-checksum
-                                "from": Web3.to_checksum_address(tx_from) if tx_from else None,
-                                "to": Web3.to_checksum_address(tx_to) if tx_to else None,
+                                "from": EthereumAddress(tx_from) if tx_from else None,
+                                "to": EthereumAddress(tx_to) if tx_to else None,
                                 "value": tx.get("value", 0),
                                 "token": "NATIVE",
                                 "timestamp": block.timestamp,
@@ -186,8 +184,8 @@ class EventMonitor:
                     found_txs.append(
                         {
                             "hash": log["transactionHash"].hex(),
-                            "from": Web3.to_checksum_address(t_from),
-                            "to": Web3.to_checksum_address(t_to),
+                            "from": EthereumAddress(t_from),
+                            "to": EthereumAddress(t_to),
                             "value": int(
                                 log["data"].hex()
                                 if isinstance(log["data"], bytes)

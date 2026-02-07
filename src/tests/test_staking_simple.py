@@ -8,6 +8,12 @@ import pytest
 
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 
+ADDR_CONTRACT = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+ADDR_CHECKER = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+ADDR_TOKEN = "0x1111111111111111111111111111111111111111"
+ADDR_MULTISIG = "0x2222222222222222222222222222222222222222"
+ADDR_OWNER = "0x3333333333333333333333333333333333333333"
+
 
 @pytest.fixture
 def mock_staking_contract():
@@ -22,7 +28,7 @@ def mock_staking_contract():
 
         # Mock contract calls
         mock_interface.call_contract.side_effect = lambda method, *args: {
-            "activityChecker": "0xChecker",
+            "activityChecker": ADDR_CHECKER,
             "availableRewards": 100,
             "balance": 1000,
             "livenessPeriod": 3600,
@@ -30,7 +36,7 @@ def mock_staking_contract():
             "maxNumServices": 10,
             "minStakingDeposit": 100,
             "minStakingDuration": 86400,
-            "stakingToken": "0xToken",
+            "stakingToken": ADDR_TOKEN,
             "epochCounter": 5,
             "getNextRewardCheckpointTimestamp": int(time.time()) + 3600,
             "getServiceIds": [1, 2, 3],
@@ -38,10 +44,10 @@ def mock_staking_contract():
             "calculateStakingLastReward": 500,
             "calculateStakingReward": 600,
             "tsCheckpoint": int(time.time()) - 1000,
-            "mapServiceInfo": ("0xMultisig", "0xOwner", (10, 5), 1000, 750, 0),
+            "mapServiceInfo": (ADDR_MULTISIG, ADDR_OWNER, (10, 5), 1000, 750, 0),
             "getServiceInfo": (
-                "0xMultisig",
-                "0xOwner",
+                ADDR_MULTISIG,
+                ADDR_OWNER,
                 (10, 5),
                 int(time.time()) - 1000,
                 750,
@@ -49,7 +55,7 @@ def mock_staking_contract():
             ),
         }.get(method, 0)
 
-        contract = StakingContract(address="0x123")
+        contract = StakingContract(address=ADDR_CONTRACT)
         contract._interface = mock_interface
         yield contract
 
@@ -67,8 +73,8 @@ class TestStakingContractInit:
             mock_chains.return_value.get.return_value = mock_interface
             mock_interface.call_contract.return_value = 0
 
-            contract = StakingContract(address="0x123")
-            assert contract.address == "0x123"
+            contract = StakingContract(address=ADDR_CONTRACT)
+            assert contract.address == ADDR_CONTRACT
             assert contract.chain_name == "gnosis"
 
 
@@ -280,20 +286,20 @@ class TestActivityChecker:
     """Test activity checker related methods."""
 
     def test_activity_checker_address_value(self, mock_staking_contract):
-        mock_staking_contract.call = MagicMock(return_value="0xChecker")
+        mock_staking_contract.call = MagicMock(return_value=ADDR_CHECKER)
         mock_staking_contract._activity_checker_address = None
 
         result = mock_staking_contract.activity_checker_address_value
-        assert result == "0xChecker"
+        assert result == ADDR_CHECKER
 
     def test_activity_checker_address_backwards_compat(self, mock_staking_contract):
-        mock_staking_contract._activity_checker_address = "0xChecker"
+        mock_staking_contract._activity_checker_address = ADDR_CHECKER
         result = mock_staking_contract.activity_checker_address
-        assert result == "0xChecker"
+        assert result == ADDR_CHECKER
 
     def test_activity_checker_lazy_load(self, mock_staking_contract):
         mock_staking_contract._activity_checker = None
-        mock_staking_contract._activity_checker_address = "0xChecker"
+        mock_staking_contract._activity_checker_address = ADDR_CHECKER
 
         with patch(
             "iwa.plugins.olas.contracts.staking.ActivityCheckerContract"
@@ -303,7 +309,7 @@ class TestActivityChecker:
 
             result = mock_staking_contract.activity_checker
             assert result == mock_ac
-            mock_ac_cls.assert_called_with("0xChecker", chain_name="gnosis")
+            mock_ac_cls.assert_called_with(ADDR_CHECKER, chain_name="gnosis")
 
 
 class TestIsLivenessRatioPassed:
@@ -343,37 +349,37 @@ class TestPrepareTxMethods:
     def test_prepare_stake_tx(self, mock_staking_contract):
         mock_staking_contract.prepare_transaction = MagicMock(return_value={"to": "0x"})
 
-        result = mock_staking_contract.prepare_stake_tx("0xOwner", 1)
+        result = mock_staking_contract.prepare_stake_tx(ADDR_OWNER, 1)
 
         assert result == {"to": "0x"}
         mock_staking_contract.prepare_transaction.assert_called_with(
             method_name="stake",
             method_kwargs={"serviceId": 1},
-            tx_params={"from": "0xOwner"},
+            tx_params={"from": ADDR_OWNER},
         )
 
     def test_prepare_unstake_tx(self, mock_staking_contract):
         mock_staking_contract.prepare_transaction = MagicMock(return_value={"to": "0x"})
 
-        result = mock_staking_contract.prepare_unstake_tx("0xOwner", 1)
+        result = mock_staking_contract.prepare_unstake_tx(ADDR_OWNER, 1)
 
         assert result == {"to": "0x"}
         mock_staking_contract.prepare_transaction.assert_called_with(
             method_name="unstake",
             method_kwargs={"serviceId": 1},
-            tx_params={"from": "0xOwner"},
+            tx_params={"from": ADDR_OWNER},
         )
 
     def test_prepare_claim_tx(self, mock_staking_contract):
         mock_staking_contract.prepare_transaction = MagicMock(return_value={"to": "0x"})
 
-        result = mock_staking_contract.prepare_claim_tx("0xOwner", 1)
+        result = mock_staking_contract.prepare_claim_tx(ADDR_OWNER, 1)
 
         assert result == {"to": "0x"}
         mock_staking_contract.prepare_transaction.assert_called_with(
             method_name="claim",
             method_kwargs={"serviceId": 1},
-            tx_params={"from": "0xOwner"},
+            tx_params={"from": ADDR_OWNER},
         )
 
     def test_prepare_checkpoint_tx(self, mock_staking_contract):
@@ -395,7 +401,7 @@ class TestGetAccruedRewards:
     def test_extracts_reward_from_service_info(self, mock_staking_contract):
         # mapServiceInfo returns (multisig, owner, nonces, tsStart, reward, inactivity)
         mock_staking_contract.call = MagicMock(
-            return_value=("0xMultisig", "0xOwner", (10, 5), 1000, 750, 0)
+            return_value=(ADDR_MULTISIG, ADDR_OWNER, (10, 5), 1000, 750, 0)
         )
 
         result = mock_staking_contract.get_accrued_rewards(1)
@@ -451,7 +457,7 @@ class TestGetServiceInfo:
         ts_checkpoint_val = ts_now - 500
 
         mock_staking_contract.call = MagicMock(
-            return_value=("0xMultisig", "0xOwner", (10, 5), ts_start, 750, 0)
+            return_value=(ADDR_MULTISIG, ADDR_OWNER, (10, 5), ts_start, 750, 0)
         )
 
         mock_activity_checker = MagicMock()
@@ -469,8 +475,8 @@ class TestGetServiceInfo:
                 ):
                     result = mock_staking_contract.get_service_info(1)
 
-        assert result["multisig_address"] == "0xMultisig"
-        assert result["owner_address"] == "0xOwner"
+        assert result["multisig_address"] == ADDR_MULTISIG
+        assert result["owner_address"] == ADDR_OWNER
         assert result["current_safe_nonce"] == 15
         assert result["current_mech_requests"] == 8
         assert result["last_checkpoint_safe_nonce"] == 10
@@ -484,7 +490,7 @@ class TestGetServiceInfo:
         ts_start = ts_now - 1000
 
         # Response wrapped in extra tuple (as sometimes returned by web3)
-        nested_response = [("0xMultisig", "0xOwner", (10, 5), ts_start, 750, 0)]
+        nested_response = [(ADDR_MULTISIG, ADDR_OWNER, (10, 5), ts_start, 750, 0)]
         mock_staking_contract.call = MagicMock(return_value=nested_response)
 
         mock_activity_checker = MagicMock()
@@ -501,4 +507,4 @@ class TestGetServiceInfo:
                 ):
                     result = mock_staking_contract.get_service_info(1)
 
-        assert result["multisig_address"] == "0xMultisig"
+        assert result["multisig_address"] == ADDR_MULTISIG

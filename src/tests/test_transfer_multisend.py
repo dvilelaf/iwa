@@ -8,6 +8,16 @@ from iwa.core.constants import NATIVE_CURRENCY_ADDRESS
 from iwa.core.models import StoredSafeAccount
 from iwa.core.services.transfer import TransferService
 
+# Valid Ethereum addresses for testing
+ADDR_FROM = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+ADDR_TO_1 = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+ADDR_TO_2 = "0x389B46c259631Acd6a69Bde8B6cEe218230bAE8C"
+ADDR_TOKEN = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+ADDR_MULTISEND = "0x1111111111111111111111111111111111111111"
+ADDR_MULTISEND_CO = "0x2222222222222222222222222222222222222222"
+ADDR_RECIPIENT = "0x3333333333333333333333333333333333333333"
+ADDR_SAFE = "0x4444444444444444444444444444444444444444"
+
 
 @pytest.fixture
 def mock_deps():
@@ -32,12 +42,10 @@ def mock_deps():
 
         # Setup Chain Interface
         mock_w3 = MagicMock()
-        # Ensure to_checksum_address returns input if string
-        mock_w3.to_checksum_address.side_effect = lambda x: x
         mock_w3.to_wei.return_value = 1000  # 1000 wei default
         mock_chain.return_value.get.return_value.web3 = mock_w3
         mock_chain.return_value.get.return_value.chain.name = "gnosis"
-        mock_chain.return_value.get.return_value.chain.tokens = {"TEST": "0xToken"}
+        mock_chain.return_value.get.return_value.chain.tokens = {"TEST": ADDR_TOKEN}
         mock_erc20.return_value.allowance_wei.return_value = 0
 
         deps = {
@@ -63,7 +71,7 @@ def test_multi_send_eoa_native(mock_deps):
 
     # Mock From Account (EOA)
     mock_from = MagicMock()
-    mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"  # Valid checksum address
+    mock_from.address = ADDR_FROM
     mock_from.tag = "from_tag"
 
     def resolve_side_effect(arg):
@@ -76,15 +84,15 @@ def test_multi_send_eoa_native(mock_deps):
     # Mock dependencies
     mock_ms_co = mock_deps["contracts"]["ms_co"].return_value
     mock_ms_co.prepare_tx.return_value = {"value": 0, "data": b"encoded"}
-    mock_ms_co.address = "0xMultiSendCallOnly"
+    mock_ms_co.address = ADDR_MULTISEND_CO
 
     transactions = [
         {
-            "to": "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB",
+            "to": ADDR_TO_1,
             "amount": 1.0,
             "token": NATIVE_CURRENCY_ADDRESS,
         },
-        {"to": "0xTo2", "amount_wei": 500, "token": NATIVE_CURRENCY_ADDRESS},
+        {"to": ADDR_TO_2, "amount_wei": 500, "token": NATIVE_CURRENCY_ADDRESS},
     ]
 
     service.multi_send("from_tag", transactions)
@@ -112,7 +120,7 @@ def test_multi_send_safe_erc20(mock_deps):
 
     # Mock From Account (Safe)
     mock_safe_account = MagicMock(spec=StoredSafeAccount)
-    mock_safe_account.address = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
+    mock_safe_account.address = ADDR_SAFE
 
     service.account_service.resolve_account.side_effect = (
         lambda x: mock_safe_account if x == "safe_tag" else None
@@ -122,16 +130,16 @@ def test_multi_send_safe_erc20(mock_deps):
     mock_erc20 = mock_deps["contracts"]["erc20"].return_value
     mock_erc20.decimals = 18
     mock_erc20.prepare_transfer_tx.return_value = {"data": b"transfer_data"}
-    mock_erc20.address = "0xToken"
+    mock_erc20.address = ADDR_TOKEN
 
-    mock_deps["account_service"].get_token_address.return_value = "0xToken"
+    mock_deps["account_service"].get_token_address.return_value = ADDR_TOKEN
 
     # Mock MultiSend Normal (for Safe)
     mock_ms = mock_deps["contracts"]["ms"].return_value
     mock_ms.prepare_tx.return_value = {"value": 0, "data": b"multisend_data"}
-    mock_ms.address = "0xMultiSend"
+    mock_ms.address = ADDR_MULTISEND
 
-    transactions = [{"to": "0xRecipient", "amount": 10.0, "token": "TEST"}]
+    transactions = [{"to": ADDR_RECIPIENT, "amount": 10.0, "token": "TEST"}]
 
     service.multi_send("safe_tag", transactions)
 
@@ -157,13 +165,13 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
 
     # Mock From Account (EOA)
     mock_from = MagicMock()
-    mock_from.address = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D"
+    mock_from.address = ADDR_FROM
     del mock_from.threshold  # EOA has no threshold
     service.account_service.resolve_account.side_effect = (
         lambda x: mock_from if x == "from_tag" else None
     )
 
-    mock_deps["account_service"].get_token_address.return_value = "0xToken"
+    mock_deps["account_service"].get_token_address.return_value = ADDR_TOKEN
     mock_erc20 = mock_deps["contracts"]["erc20"].return_value
     mock_erc20.decimals = 18
     mock_erc20.prepare_transfer_from_tx.return_value = {"data": b"transferFrom"}
@@ -171,7 +179,7 @@ def test_multi_send_eoa_erc20_approval(mock_deps):
     mock_ms_co = mock_deps["contracts"]["ms_co"].return_value
     mock_ms_co.prepare_tx.return_value = {"value": 0, "data": b"encoded"}
 
-    transactions = [{"to": "0xRecipient", "amount": 10.0, "token": "TEST"}]
+    transactions = [{"to": ADDR_RECIPIENT, "amount": 10.0, "token": "TEST"}]
 
     service.multi_send("from_tag", transactions)
 

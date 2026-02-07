@@ -8,6 +8,7 @@ from web3 import Web3
 from web3 import exceptions as web3_exceptions
 
 from iwa.core.chain import ChainInterfaces
+from iwa.core.types import EthereumAddress
 from iwa.core.db import log_transaction
 from iwa.core.keys import KeyStorage
 from iwa.core.models import StoredSafeAccount
@@ -132,22 +133,22 @@ class TransferLogger:
         except Exception as e:
             logger.debug(f"Failed to parse Transfer event: {e}")
 
-    def _topic_to_address(self, topic) -> str:
+    def _topic_to_address(self, topic) -> EthereumAddress:
         """Convert a 32-byte topic to a 20-byte address."""
         if isinstance(topic, bytes):
             # Last 20 bytes
             addr_bytes = topic[-20:]
-            return Web3.to_checksum_address("0x" + addr_bytes.hex())
+            return EthereumAddress("0x" + addr_bytes.hex())
         elif hasattr(topic, "hex"):
             hex_str = topic.hex()
             if not hex_str.startswith("0x"):
                 hex_str = "0x" + hex_str
             # Last 40 chars (20 bytes)
-            return Web3.to_checksum_address("0x" + hex_str[-40:])
+            return EthereumAddress("0x" + hex_str[-40:])
         elif isinstance(topic, str):
             if topic.startswith("0x"):
                 topic = topic[2:]
-            return Web3.to_checksum_address("0x" + topic[-40:])
+            return EthereumAddress("0x" + topic[-40:])
         return ""
 
     def _log_erc20_transfer(

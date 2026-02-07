@@ -10,8 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from web3 import Web3
-
+from iwa.core.types import EthereumAddress
 from iwa.core.wallet import Wallet
 from iwa.plugins.olas.contracts.staking import StakingContract
 from iwa.plugins.olas.service_manager import ServiceManager
@@ -55,11 +54,11 @@ def test_staking_contract(contract_type: str, wallet: Wallet) -> bool:
 
     marketplace = checker.mech_marketplace if hasattr(checker, 'mech_marketplace') else None
     if marketplace:
-        marketplace = Web3.to_checksum_address(marketplace)
+        marketplace = EthereumAddress(marketplace)
 
     expected = config["expected_marketplace"]
     if expected:
-        expected = Web3.to_checksum_address(expected)
+        expected = EthereumAddress(expected)
 
     if marketplace and expected:
         if marketplace.lower() != expected.lower():

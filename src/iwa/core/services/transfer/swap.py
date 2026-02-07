@@ -3,8 +3,6 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
-from web3 import Web3
-
 from iwa.core.chain import ChainInterfaces
 from iwa.core.contracts.erc20 import ERC20Contract
 from iwa.core.db import log_transaction
@@ -170,8 +168,7 @@ class SwapMixin:
                 chain_interface = ChainInterfaces().get(chain_name)
                 token_addr = chain_interface.chain.get_token_address(sell_token_name)
                 if token_addr:
-                    checksum_addr = Web3.to_checksum_address(token_addr)
-                    decimals = ERC20Contract(checksum_addr, chain_name).decimals
+                    decimals = ERC20Contract(token_addr, chain_name).decimals
             except Exception as e:
                 logger.warning(f"Could not get decimals for {sell_token_name}, assuming 18: {e}")
 
@@ -259,13 +256,9 @@ class SwapMixin:
                 sell_addr = chain_interface.chain.get_token_address(sell_token_name)
                 buy_addr = chain_interface.chain.get_token_address(buy_token_name)
                 if sell_addr:
-                    sell_decimals = ERC20Contract(
-                        Web3.to_checksum_address(sell_addr), chain_name
-                    ).decimals
+                    sell_decimals = ERC20Contract(sell_addr, chain_name).decimals
                 if buy_addr:
-                    buy_decimals = ERC20Contract(
-                        Web3.to_checksum_address(buy_addr), chain_name
-                    ).decimals
+                    buy_decimals = ERC20Contract(buy_addr, chain_name).decimals
         except Exception as e:
             logger.warning(f"Could not get decimals for analytics: {e}")
 
