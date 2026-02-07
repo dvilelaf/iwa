@@ -25,6 +25,7 @@ class ChainInterface:
     DEFAULT_MAX_RETRIES = 6  # Allow trying most/all available RPCs on rate limit
     DEFAULT_RETRY_DELAY = 1.0  # Base delay between retries (exponential backoff)
     ROTATION_COOLDOWN_SECONDS = 2.0  # Minimum time between RPC rotations
+    MAX_RETRY_DELAY = 5.0  # Cap retry delay to avoid blocking thread pool workers
 
     # Per-error-type backoff durations (seconds) applied to the offending RPC.
     RATE_LIMIT_BACKOFF = 10.0  # 429 Too Many Requests
@@ -537,7 +538,7 @@ class ChainInterface:
                     logger.error(f"{operation_name} failed after {attempt + 1} attempts: {e}")
                     raise
 
-                delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
+                delay = min(self.DEFAULT_RETRY_DELAY * (2**attempt), self.MAX_RETRY_DELAY)
                 logger.info(
                     f"{operation_name} attempt {attempt + 1} failed, retrying in {delay:.1f}s..."
                 )
