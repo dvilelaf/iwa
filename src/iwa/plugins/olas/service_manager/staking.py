@@ -53,6 +53,7 @@ from web3 import Web3
 from iwa.core.contracts.cache import ContractCache
 from iwa.core.types import EthereumAddress
 from iwa.core.utils import get_tx_hash
+from iwa.plugins.olas.constants import CHECKPOINT_GRACE_PERIOD
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.plugins.olas.models import StakingStatus
 from iwa.web.cache import CacheTTL, response_cache
@@ -656,7 +657,7 @@ class StakingManagerMixin:
     def call_checkpoint(  # noqa: C901
         self,
         staking_contract: Optional[StakingContract] = None,
-        grace_period_seconds: int = 600,
+        grace_period_seconds: int = CHECKPOINT_GRACE_PERIOD,
     ) -> bool:
         """Call the checkpoint on the staking contract to close the current epoch.
 
