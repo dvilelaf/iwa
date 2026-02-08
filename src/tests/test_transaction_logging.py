@@ -376,3 +376,110 @@ def test_tags_are_merged_on_update():
         # Tags should be merged
         assert "erc20-transfer" in kwargs["tags"]
         assert "safe-transaction" in kwargs["tags"]
+
+
+def test_approve_logs_gas_and_tags():
+    """Test ERC20 approve logs gas cost and appropriate tags."""
+    from iwa.core.db import log_transaction
+
+    with patch("iwa.core.db.SentTransaction") as mock_model:
+        mock_model.get_or_none.return_value = None
+        mock_insert = mock_model.insert.return_value
+        mock_upsert = mock_insert.on_conflict_replace.return_value
+
+        # Simulate OLAS approve for COW vault
+        log_transaction(
+            tx_hash="0xappr123",
+            from_addr=ADDR_TRADER_AGENT,
+            to_addr="0x0000000000000000000000000000000000000001",  # Token contract
+            token="NATIVE",
+            amount_wei=0,  # No value transfer in approve
+            chain="gnosis",
+            from_tag="trader_alpha_agent",
+            to_tag="olas_token",
+            gas_cost="80000000000000000",  # 0.08 xDAI
+            gas_value_eur=0.068,
+            tags=["approve"],
+        )
+
+        mock_upsert.execute.assert_called_once()
+        _, kwargs = mock_model.insert.call_args
+
+        assert kwargs["from_tag"] == "trader_alpha_agent"
+        assert kwargs["to_tag"] == "olas_token"
+        assert kwargs["amount_wei"] == "0"
+        assert kwargs["gas_cost"] == "80000000000000000"
+        assert kwargs["gas_value_eur"] == 0.068
+        assert "approve" in kwargs["tags"]
+
+
+def test_checkpoint_logs_gas_and_tags():
+    """Test OLAS checkpoint call logs gas and contract tags."""
+    from iwa.core.db import log_transaction
+
+    with patch("iwa.core.db.SentTransaction") as mock_model:
+        mock_model.get_or_none.return_value = None
+        mock_insert = mock_model.insert.return_value
+        mock_upsert = mock_insert.on_conflict_replace.return_value
+
+        # Simulate checkpoint call
+        log_transaction(
+            tx_hash="0xchkpt456",
+            from_addr=ADDR_TRADER_AGENT,
+            to_addr=ADDR_STAKING,
+            token="NATIVE",
+            amount_wei=0,  # No value transfer
+            chain="gnosis",
+            from_tag="trader_alpha_agent",
+            to_tag="staking_contract",
+            gas_cost="250000000000000000",  # 0.25 xDAI
+            gas_value_eur=0.212,
+            tags=["olas_call_checkpoint"],
+        )
+
+        mock_upsert.execute.assert_called_once()
+        _, kwargs = mock_model.insert.call_args
+
+        assert kwargs["from_tag"] == "trader_alpha_agent"
+        assert kwargs["to_tag"] == "staking_contract"
+        assert kwargs["amount_wei"] == "0"
+        assert kwargs["gas_cost"] == "250000000000000000"
+        assert kwargs["gas_value_eur"] == 0.212
+        assert "olas_call_checkpoint" in kwargs["tags"]
+
+
+def test_all_transaction_types_have_to_tag():
+    """Verify that all transaction types are configured to save to_tag."""
+    from iwa.core.db import log_transaction
+
+    test_cases = [
+        ("native_transfer", "native-transfer"),
+        ("erc20_transfer", "erc20-transfer"),
+        ("claim", "olas_claim_rewards"),
+        ("swap", "swap"),
+        ("approve", "approve"),
+        ("checkpoint", "olas_call_checkpoint"),
+        ("safe_deploy", "safe-deployment"),
+    ]
+
+    for test_name, tag in test_cases:
+        with patch("iwa.core.db.SentTransaction") as mock_model:
+            mock_model.get_or_none.return_value = None
+            mock_insert = mock_model.insert.return_value
+            mock_upsert = mock_insert.on_conflict_replace.return_value
+
+            log_transaction(
+                tx_hash=f"0x{test_name}",
+                from_addr=ADDR_TRADER_AGENT,
+                to_addr=ADDR_MULTISIG,
+                token="NATIVE",
+                amount_wei=0,
+                chain="gnosis",
+                from_tag="from_account",
+                to_tag="to_account",  # This MUST be present
+                tags=[tag],
+            )
+
+            _, kwargs = mock_model.insert.call_args
+            assert kwargs["from_tag"] == "from_account", f"{test_name} missing from_tag"
+            assert kwargs["to_tag"] == "to_account", f"{test_name} missing to_tag"
