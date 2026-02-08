@@ -28,9 +28,10 @@ def drain_mixin():
     mixin.service = service
     mixin.chain_name = "gnosis"
 
-    # Mock wallet
+    # Mock wallet with account_service
     wallet = MagicMock()
     wallet.master_account.address = ADDR_OWNER
+    wallet.account_service.get_tag_by_address.return_value = "test_trader_safe"
     mixin.wallet = wallet
 
     return mixin
@@ -72,6 +73,8 @@ def test_claim_rewards_logs_with_price(drain_mixin):
         assert call_kwargs["amount_wei"] == claimed_amount_wei
         assert call_kwargs["price_eur"] == 1.50
         assert call_kwargs["value_eur"] == 15.0  # 10 OLAS * 1.50
+        assert call_kwargs["from_tag"] == "staking_contract"
+        assert call_kwargs["to_tag"] == "test_trader_safe"  # Resolved from account_service
         assert "olas_claim_rewards" in call_kwargs["tags"]
         assert "staking_reward" in call_kwargs["tags"]
         assert call_kwargs["tx_hash"] == "0xabc123"
@@ -113,3 +116,5 @@ def test_claim_rewards_logs_without_price_on_failure(drain_mixin):
         assert call_kwargs["price_eur"] is None
         assert call_kwargs["value_eur"] is None
         assert call_kwargs["token"] == "OLAS"
+        assert call_kwargs["from_tag"] == "staking_contract"
+        assert call_kwargs["to_tag"] == "test_trader_safe"

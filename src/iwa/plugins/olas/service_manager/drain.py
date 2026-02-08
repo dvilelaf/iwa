@@ -132,6 +132,15 @@ class DrainManagerMixin:
                 tx_hash = tx_hash.hex()
 
             if tx_hash:
+                # Resolve to_tag from multisig address
+                multisig_tag = (
+                    self.wallet.account_service.get_tag_by_address(
+                        str(self.service.multisig_address)
+                    )
+                    or self.service.service_name
+                    or None
+                )
+
                 log_transaction(
                     tx_hash=tx_hash,
                     from_addr=str(self.service.staking_contract_address),
@@ -140,7 +149,7 @@ class DrainManagerMixin:
                     amount_wei=claimed_amount,
                     chain=self.chain_name,
                     from_tag="staking_contract",
-                    to_tag=self.service.service_name or None,
+                    to_tag=multisig_tag,
                     price_eur=olas_price,
                     value_eur=value_eur,
                     tags=["olas_claim_rewards", "staking_reward"],
