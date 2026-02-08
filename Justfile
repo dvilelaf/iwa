@@ -56,13 +56,24 @@ test:
 build:
     uv build
 
-# Publish to Pypi
-publish: build
-    @if [ -n "$$(git status --porcelain)" ]; then \
-        echo "❌ Error: Uncommitted changes found! Please commit or stash them before publishing."; \
-        git status --short; \
-        exit 1; \
+# Publish to PyPI manually (normally done by GitHub Actions)
+# Only use this for emergency manual releases
+publish: build _validate-git-state _validate-tag-at-head
+    #!/usr/bin/env bash
+    set -e
+
+    VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
+
+    echo "⚠️  WARNING: Normally GitHub Actions publishes automatically when you push a tag."
+    echo "   Only proceed if you need to publish manually for emergency reasons."
+    read -p "Continue with manual publish? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Aborted"
+        exit 1
     fi
+
+    echo "📦 Publishing $VERSION to PyPI..."
     uv run twine upload dist/*
 
 # Docker build
@@ -103,8 +114,66 @@ list-backups:
 restore-wallet backup:
     PYTHONPATH=src uv run python src/iwa/tools/restore_backup.py {{backup}}
 
-# Run full release quality gate locally (Security -> Lint -> Test -> Build)
-release-check:
+# Validate git state (uncommitted changes and lockfile sync)
+_validate-git-state:
+    #!/usr/bin/env bash
+    set -e
+
+    # 1. Check for uncommitted changes
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "❌ Error: Uncommitted changes found! Commit or stash them first."
+        git status --short
+        exit 1
+    fi
+
+    # 2. Verify uv.lock is in sync
+    echo "🔍 Verifying uv.lock is up to date..."
+    uv lock --locked || {
+        echo "❌ Error: uv.lock is out of sync!"
+        echo "   Run: uv lock && git add uv.lock && git commit -m 'build: Update lockfile'"
+        exit 1
+    }
+
+# Validate that version tag exists and points to current HEAD
+_validate-tag-at-head:
+    #!/usr/bin/env bash
+    set -e
+
+    VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
+    TAG="v$VERSION"
+
+    if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+        echo "❌ Error: Tag $TAG does not exist!"
+        echo "   Create it with: git tag -a $TAG -m 'Release $TAG' && git push origin $TAG"
+        exit 1
+    fi
+
+    TAG_COMMIT=$(git rev-parse "$TAG")
+    HEAD_COMMIT=$(git rev-parse HEAD)
+    if [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
+        echo "❌ Error: Tag $TAG does not point to current HEAD!"
+        echo "   Tag points to: $TAG_COMMIT"
+        echo "   HEAD is at:    $HEAD_COMMIT"
+        echo "   Delete and recreate the tag: git tag -d $TAG && git push origin :refs/tags/$TAG"
+        echo "   Then: git tag -a $TAG -m 'Release $TAG' && git push origin $TAG"
+        exit 1
+    fi
+
+# Run full release quality gate (Security -> Lint -> Test -> Build -> Git validations)
+release-check: _validate-git-state
+    #!/usr/bin/env bash
+    set -e
+
+    VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
+    TAG="v$VERSION"
+
+    # Fail fast: check tag doesn't already exist before running quality gates
+    if git rev-parse "$TAG" >/dev/null 2>&1; then
+        echo "❌ Error: Tag $TAG already exists!"
+        echo "   If you need to recreate it: git tag -d $TAG && git push origin :refs/tags/$TAG"
+        exit 1
+    fi
+
     @echo "🛡️  Running Security Checks..."
     @just security
     @echo "🧹 Running Linters..."
@@ -113,42 +182,22 @@ release-check:
     @just test
     @echo "📦 Building Package..."
     @just build
-    @echo "✅ All checks passed! Ready for release."
 
-# Create a new release (tag and push) based on pyproject.toml version
+    echo "✅ All checks passed! Ready to release $TAG."
+
+# Create and push release tag (run release-check first)
 release: release-check
     #!/usr/bin/env bash
-
-    # Ensure lockfile is up to date
-    uv lock
-
-    # Commit uv.lock if it changed
-    if git status --porcelain | grep -q "uv.lock"; then
-        echo "🔄 Updating uv.lock..."
-        git add uv.lock
-        git commit -m "build: Update lockfile"
-    fi
-
-    # Check for other uncommitted changes
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "❌ Error: Uncommitted changes found! Please commit or stash them before releasing."
-        git status --short
-        exit 1
-    fi
+    set -e
 
     VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
-    echo "🚀 Releasing version v$VERSION..."
+    TAG="v$VERSION"
 
-    # Check if tag already exists
-    if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-        echo "❌ Error: Tag v$VERSION already exists!"
-        exit 1
-    fi
-
-    # Create tag and push
-    git tag -a "v$VERSION" -m "Release v$VERSION"
-    git push origin "v$VERSION"
-    echo "✅ v$VERSION released and pushed!"
+    echo "🚀 Creating and pushing tag $TAG..."
+    git tag -a "$TAG" -m "Release $TAG"
+    git push origin main
+    git push origin "$TAG"
+    echo "✅ Release $TAG created and pushed!"
 # List contracts status (sort options: name, rewards, epoch, slots, olas)
 contracts sort="name":
     PYTHONPATH=src uv run src/iwa/tools/list_contracts.py --sort {{sort}}
