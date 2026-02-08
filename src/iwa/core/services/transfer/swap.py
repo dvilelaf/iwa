@@ -301,6 +301,14 @@ class SwapMixin:
         executed_sell = float(result.get("executedSellAmount", 0))
         value_sold = analytics.get("_value_sold", 0.0)
 
+        # Get current EUR price for the sold token (critical for tax reporting)
+        price_eur, calculated_value_eur = self._get_token_price_info(
+            sell_token, int(executed_sell), chain_name
+        )
+
+        # Use calculated value if analytics value is not available
+        final_value_eur = float(value_sold) if value_sold > 0 else calculated_value_eur
+
         # Clean internal fields
         clean_analytics = analytics.copy()
         clean_analytics.pop("_value_sold", None)
@@ -313,9 +321,10 @@ class SwapMixin:
             amount_wei=int(executed_sell),
             chain=chain_name,
             from_tag=account_tag,
+            price_eur=price_eur,  # EUR price at swap time for tax reporting
+            value_eur=final_value_eur,
             tags=["swap", "cowswap", sell_token, buy_token],
             gas_cost="0",
             gas_value_eur=0.0,
-            value_eur=float(value_sold) if value_sold > 0 else None,
             extra_data=clean_analytics,
         )

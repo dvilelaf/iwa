@@ -1445,3 +1445,115 @@ textarea:focus {
   color: var(--accent-color);
   text-decoration: underline;
 }
+
+/* Rewards Tab */
+.rewards-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rewards-filters select {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-color);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+}
+
+.rewards-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.rewards-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 1.2rem;
+  backdrop-filter: blur(12px);
+}
+
+.rewards-card .card-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+
+.rewards-card .card-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.rewards-card .card-value.accent {
+  color: var(--accent-color);
+}
+
+.rewards-card .card-value.success {
+  color: var(--success);
+}
+
+.rewards-chart-container {
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  min-height: 300px;
+}
+
+.rewards-trader-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.rewards-trader-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 1rem;
+  backdrop-filter: blur(12px);
+}
+
+.rewards-trader-card .trader-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent-color);
+}
+
+.rewards-trader-card .trader-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+
+.rewards-trader-card .stat-label {
+  color: var(--text-muted);
+}
+
+.rewards-trader-card .stat-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+#rewards-table .tx-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+#rewards-table .tx-link:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}

@@ -10,6 +10,7 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
               rel="stylesheet" />
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     </head>
     <body>
         <div class="background-blobs">
@@ -54,6 +55,7 @@
                 <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
                 <button class="tab-btn" data-tab="olas">Olas</button>
                 <button class="tab-btn" data-tab="cowswap">CowSwap</button>
+                <button class="tab-btn" data-tab="rewards">Rewards</button>
                 <button class="tab-btn" data-tab="rpc">RPC Status</button>
             </nav>
             <main class="tab-content">
@@ -326,6 +328,76 @@
                             </div>
                         </div>
                     </div>
+                </section>
+                <!-- Rewards Tab -->
+                <section id="rewards" class="tab-pane">
+                    <div class="section-header">
+                        <h2>Staking Rewards</h2>
+                        <div class="actions rewards-filters">
+                            <select id="rewards-year" title="Filter by year"></select>
+                            <select id="rewards-month" title="Filter by month">
+                                <option value="">All months</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                            <button id="rewards-export-csv" class="btn-secondary" title="Download CSV">Export CSV</button>
+                        </div>
+                    </div>
+                    <!-- Summary cards -->
+                    <div class="rewards-summary" id="rewards-summary"></div>
+                    <!-- Monthly OLAS + EUR chart -->
+                    <div class="section-header mt-2"><h3>Monthly Rewards</h3></div>
+                    <div class="rewards-chart-container glass">
+                        <canvas id="rewards-chart"></canvas>
+                    </div>
+                    <!-- Cumulative chart -->
+                    <div class="section-header mt-2"><h3>Cumulative Rewards</h3></div>
+                    <div class="rewards-chart-container glass">
+                        <canvas id="rewards-cumulative-chart"></canvas>
+                    </div>
+                    <!-- Per-trader comparison -->
+                    <div class="section-header mt-2"><h3>Rewards by Trader</h3></div>
+                    <div class="rewards-trader-cards" id="rewards-trader-cards"></div>
+                    <div class="rewards-chart-container glass">
+                        <canvas id="rewards-trader-chart"></canvas>
+                    </div>
+                    <!-- OLAS Price at claim time -->
+                    <div class="section-header mt-2"><h3>OLAS Price at Claim Time</h3></div>
+                    <div class="rewards-chart-container glass">
+                        <canvas id="rewards-price-chart"></canvas>
+                    </div>
+                    <!-- Claim History table -->
+                    <div class="section-header mt-2"><h3>Claim History</h3></div>
+                    <div class="table-container glass">
+                        <table id="rewards-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Service</th>
+                                    <th class="val">OLAS</th>
+                                    <th class="val">Price (EUR)</th>
+                                    <th class="val">Value (EUR)</th>
+                                    <th>Tx</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rewards-body">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">Loading claims...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3"></div>
                 </section>
                 <!-- RPC Tab -->
                 <section id="rpc" class="tab-pane">

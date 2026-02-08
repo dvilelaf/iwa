@@ -393,14 +393,19 @@ class TransactionService:
             gas_cost_wei, gas_value_eur = self._calculate_gas_cost(receipt, tx, chain_name)
             final_tags = self._determine_tags(tx, tags)
 
+            # Resolve to_tag from address
+            to_address = tx.get("to", "")
+            to_tag = self.account_service.get_tag_by_address(to_address) if to_address else None
+
             log_transaction(
                 tx_hash=txn_hash.hex(),
                 from_addr=signer_account.address,
-                to_addr=tx.get("to", ""),
+                to_addr=to_address,
                 token="NATIVE",
                 amount_wei=tx.get("value", 0),
                 chain=chain_name,
                 from_tag=signer_account.tag if hasattr(signer_account, "tag") else None,
+                to_tag=to_tag,
                 gas_cost=str(gas_cost_wei) if gas_cost_wei else None,
                 gas_value_eur=gas_value_eur,
                 tags=final_tags if final_tags else None,

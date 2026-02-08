@@ -9,6 +9,12 @@ from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.web.cache import response_cache
 
+# Retry configuration for drain operations after claiming rewards
+# Max retries when waiting for claimed rewards to appear in RPC
+DRAIN_RETRY_MAX_ATTEMPTS = 6
+# Delay in seconds between retry attempts
+DRAIN_RETRY_DELAY_SECONDS = 3
+
 
 class DrainManagerMixin:
     """Mixin for draining and service token management."""
@@ -111,6 +117,45 @@ class DrainManagerMixin:
             logger.warning("RewardClaimed event not found, using estimated amount")
 
         logger.info(f"Successfully claimed {claimed_amount / 1e18:.4f} OLAS rewards")
+
+        # Log claim with OLAS amount and EUR price for tax reporting
+        try:
+            from iwa.core.db import log_transaction
+            from iwa.core.pricing import PriceService
+
+            olas_price = PriceService().get_token_price("autonolas", "eur")
+            olas_amount = claimed_amount / 1e18
+            value_eur = olas_amount * olas_price if olas_price else None
+
+            tx_hash = receipt.get("transactionHash") or getattr(receipt, "transactionHash", None)
+            if tx_hash and hasattr(tx_hash, "hex"):
+                tx_hash = tx_hash.hex()
+
+            if tx_hash:
+                # Resolve to_tag from multisig address
+                multisig_tag = (
+                    self.wallet.account_service.get_tag_by_address(
+                        str(self.service.multisig_address)
+                    )
+                    or self.service.service_name
+                    or None
+                )
+
+                log_transaction(
+                    tx_hash=tx_hash,
+                    from_addr=str(self.service.staking_contract_address),
+                    to_addr=str(self.service.multisig_address),
+                    token="OLAS",
+                    amount_wei=claimed_amount,
+                    chain=self.chain_name,
+                    from_tag="staking_contract",
+                    to_tag=multisig_tag,
+                    price_eur=olas_price,
+                    value_eur=value_eur,
+                    tags=["olas_claim_rewards", "staking_reward"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to log claim with pricing: {e}")
 
         # Invalidate caches - rewards and balances changed
         response_cache.invalidate(f"staking_status:{self.service.key}")
@@ -274,7 +319,7 @@ class DrainManagerMixin:
         logger.info(f"Attempting to drain Safe: {safe_addr}")
 
         # Retry loop if we claimed rewards to allow for RPC indexing
-        max_retries = 6 if claimed_rewards > 0 else 1
+        max_retries = DRAIN_RETRY_MAX_ATTEMPTS if claimed_rewards > 0 else 1
 
         for attempt in range(max_retries):
             try:
@@ -296,7 +341,7 @@ class DrainManagerMixin:
                     )
                     import time
 
-                    time.sleep(3)
+                    time.sleep(DRAIN_RETRY_DELAY_SECONDS)
 
             except Exception as e:
                 logger.warning(f"Could not drain Safe: {e}")
@@ -306,7 +351,7 @@ class DrainManagerMixin:
                 if attempt < max_retries - 1:
                     import time
 
-                    time.sleep(3)
+                    time.sleep(DRAIN_RETRY_DELAY_SECONDS)
         return None
 
     def _drain_agent_account(self, target: str, chain: str) -> Optional[Any]:
