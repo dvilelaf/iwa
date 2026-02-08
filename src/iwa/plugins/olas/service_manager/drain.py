@@ -9,6 +9,12 @@ from iwa.plugins.olas.constants import OLAS_TOKEN_ADDRESS_GNOSIS
 from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.web.cache import response_cache
 
+# Retry configuration for drain operations after claiming rewards
+# Max retries when waiting for claimed rewards to appear in RPC
+DRAIN_RETRY_MAX_ATTEMPTS = 6
+# Delay in seconds between retry attempts
+DRAIN_RETRY_DELAY_SECONDS = 3
+
 
 class DrainManagerMixin:
     """Mixin for draining and service token management."""
@@ -304,7 +310,7 @@ class DrainManagerMixin:
         logger.info(f"Attempting to drain Safe: {safe_addr}")
 
         # Retry loop if we claimed rewards to allow for RPC indexing
-        max_retries = 6 if claimed_rewards > 0 else 1
+        max_retries = DRAIN_RETRY_MAX_ATTEMPTS if claimed_rewards > 0 else 1
 
         for attempt in range(max_retries):
             try:
@@ -326,7 +332,7 @@ class DrainManagerMixin:
                     )
                     import time
 
-                    time.sleep(3)
+                    time.sleep(DRAIN_RETRY_DELAY_SECONDS)
 
             except Exception as e:
                 logger.warning(f"Could not drain Safe: {e}")
@@ -336,7 +342,7 @@ class DrainManagerMixin:
                 if attempt < max_retries - 1:
                     import time
 
-                    time.sleep(3)
+                    time.sleep(DRAIN_RETRY_DELAY_SECONDS)
         return None
 
     def _drain_agent_account(self, target: str, chain: str) -> Optional[Any]:

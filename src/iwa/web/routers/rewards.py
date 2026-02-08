@@ -14,7 +14,17 @@ from iwa.web.dependencies import verify_auth
 
 router = APIRouter(prefix="/api/rewards", tags=["rewards"])
 
+# Display precision constants for rounding
+OLAS_DISPLAY_DECIMALS = 6  # OLAS token amounts
+EUR_PRICE_DECIMALS = 4     # EUR price per OLAS
+EUR_VALUE_DECIMALS = 2     # Total EUR value
+
 GNOSIS_EXPLORER = "https://gnosisscan.io/tx/"
+
+
+def _wei_to_olas(amount_wei: Optional[int]) -> float:
+    """Convert wei amount to OLAS (1e18 decimals)."""
+    return float(amount_wei or 0) / 1e18
 
 
 def _query_claims(year: int, month: Optional[int] = None):
@@ -52,13 +62,13 @@ def _validate_year_month(year: int, month: Optional[int] = None) -> int:
 
 def _claim_to_dict(tx) -> dict:
     """Convert a SentTransaction to a claim dict."""
-    olas_amount = float(tx.amount_wei or 0) / 1e18
+    olas_amount = _wei_to_olas(tx.amount_wei)
     return {
         "date": tx.timestamp.isoformat(),
         "tx_hash": tx.tx_hash,
-        "olas_amount": round(olas_amount, 6),
-        "price_eur": round(tx.price_eur, 4) if tx.price_eur else None,
-        "value_eur": round(tx.value_eur, 2) if tx.value_eur else None,
+        "olas_amount": round(olas_amount, OLAS_DISPLAY_DECIMALS),
+        "price_eur": round(tx.price_eur, EUR_PRICE_DECIMALS) if tx.price_eur else None,
+        "value_eur": round(tx.value_eur, EUR_VALUE_DECIMALS) if tx.value_eur else None,
         "service_name": tx.to_tag or tx.to_address,
         "chain": tx.chain,
         "explorer_url": f"{GNOSIS_EXPLORER}{tx.tx_hash}" if tx.chain == "gnosis" else None,
@@ -97,7 +107,7 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
     monthly = defaultdict(lambda: {"olas": 0.0, "eur": 0.0, "claims": 0})
 
     for tx in claims:
-        olas_amount = float(tx.amount_wei or 0) / 1e18
+        olas_amount = _wei_to_olas(tx.amount_wei)
         eur_value = tx.value_eur or 0.0
 
         total_olas += olas_amount
@@ -115,16 +125,16 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
         months.append(
             {
                 "month": m,
-                "olas": round(data["olas"], 6),
-                "eur": round(data["eur"], 2),
+                "olas": round(data["olas"], OLAS_DISPLAY_DECIMALS),
+                "eur": round(data["eur"], EUR_VALUE_DECIMALS),
                 "claims": data["claims"],
             }
         )
 
     return {
         "year": year,
-        "total_olas": round(total_olas, 6),
-        "total_eur": round(total_eur, 2),
+        "total_olas": round(total_olas, OLAS_DISPLAY_DECIMALS),
+        "total_eur": round(total_eur, EUR_VALUE_DECIMALS),
         "total_claims": total_claims,
         "months": months,
     }
@@ -155,7 +165,7 @@ def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
     running_eur = 0.0
 
     for tx in claims:
-        olas_amount = float(tx.amount_wei or 0) / 1e18
+        olas_amount = _wei_to_olas(tx.amount_wei)
         eur_value = tx.value_eur or 0.0
         price = tx.price_eur
         trader = tx.to_tag or tx.to_address or "unknown"
@@ -175,8 +185,8 @@ def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
         running_eur += eur_value
         cumulative_series.append({
             "date": tx.timestamp.isoformat(),
-            "olas": round(running_olas, 6),
-            "eur": round(running_eur, 2),
+            "olas": round(running_olas, OLAS_DISPLAY_DECIMALS),
+            "eur": round(running_eur, EUR_VALUE_DECIMALS),
             "trader": trader,
         })
 
@@ -189,16 +199,16 @@ def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
             md = td["months"].get(m, {"olas": 0.0, "eur": 0.0, "claims": 0})
             months.append({
                 "month": m,
-                "olas": round(md["olas"], 6),
-                "eur": round(md["eur"], 2),
+                "olas": round(md["olas"], OLAS_DISPLAY_DECIMALS),
+                "eur": round(md["eur"], EUR_VALUE_DECIMALS),
                 "claims": md["claims"],
             })
         traders.append({
             "name": name,
-            "total_olas": round(td["total_olas"], 6),
-            "total_eur": round(td["total_eur"], 2),
+            "total_olas": round(td["total_olas"], OLAS_DISPLAY_DECIMALS),
+            "total_eur": round(td["total_eur"], EUR_VALUE_DECIMALS),
             "total_claims": td["total_claims"],
-            "avg_price_eur": round(avg_price, 4) if avg_price else None,
+            "avg_price_eur": round(avg_price, EUR_PRICE_DECIMALS) if avg_price else None,
             "months": months,
         })
 
@@ -231,16 +241,16 @@ def export_rewards(
     ])
 
     for tx in claims:
-        olas_amount = float(tx.amount_wei or 0) / 1e18
+        olas_amount = _wei_to_olas(tx.amount_wei)
         explorer_url = f"{GNOSIS_EXPLORER}{tx.tx_hash}" if tx.chain == "gnosis" else ""
         writer.writerow([
             tx.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             tx.to_tag or tx.to_address or "",
             tx.tx_hash,
             explorer_url,
-            f"{olas_amount:.6f}",
-            f"{tx.price_eur:.4f}" if tx.price_eur else "",
-            f"{tx.value_eur:.2f}" if tx.value_eur else "",
+            f"{olas_amount:.{OLAS_DISPLAY_DECIMALS}f}",
+            f"{tx.price_eur:.{EUR_PRICE_DECIMALS}f}" if tx.price_eur else "",
+            f"{tx.value_eur:.{EUR_VALUE_DECIMALS}f}" if tx.value_eur else "",
         ])
 
     output.seek(0)
