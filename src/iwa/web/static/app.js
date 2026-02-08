@@ -13,6 +13,10 @@ document.addEventListener("DOMContentLoaded", () => {
     stakingContractsCache: null, // Cached staking contracts
     olasPriceCache: null, // Cached OLAS price in EUR
     whitelist: {}, // { tag: address } from config
+    rewardsYear: new Date().getFullYear(),
+    rewardsMonth: null,
+    rewardsChart: null,
+    rewardsInitialized: false,
   };
 
   // Real-time countdown updater for unstake availability
@@ -219,6 +223,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (tabId === "cowswap") {
       populateSwapForm();
       loadMasterBalanceTable();
+    } else if (tabId === "rewards") {
+      initRewardsTab();
     }
   }
 
@@ -3148,6 +3154,483 @@ document.addEventListener("DOMContentLoaded", () => {
       claimOlasRewards(key);
     }
   });
+
+  // ── Rewards Tab ──────────────────────────────────────────────────
+
+  const MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const TRADER_COLORS = [
+    { bg: "rgba(0, 210, 255, 0.6)", border: "rgba(0, 210, 255, 1)" },
+    { bg: "rgba(255, 159, 64, 0.6)", border: "rgba(255, 159, 64, 1)" },
+    { bg: "rgba(153, 102, 255, 0.6)", border: "rgba(153, 102, 255, 1)" },
+    { bg: "rgba(255, 99, 132, 0.6)", border: "rgba(255, 99, 132, 1)" },
+    { bg: "rgba(75, 192, 192, 0.6)", border: "rgba(75, 192, 192, 1)" },
+    { bg: "rgba(255, 205, 86, 0.6)", border: "rgba(255, 205, 86, 1)" },
+  ];
+
+  // Chart instances for cleanup
+  const rewardsCharts = {
+    monthly: null,
+    cumulative: null,
+    trader: null,
+    price: null,
+  };
+
+  function destroyRewardsChart(key) {
+    if (rewardsCharts[key]) {
+      rewardsCharts[key].destroy();
+      rewardsCharts[key] = null;
+    }
+  }
+
+  function chartBaseOptions() {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#f1f3f5", font: { family: "Outfit" } } },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#adb5bd" },
+          grid: { color: "rgba(255,255,255,0.05)" },
+        },
+      },
+    };
+  }
+
+  function initRewardsTab() {
+    if (!state.rewardsInitialized) {
+      const yearSelect = document.getElementById("rewards-year");
+      const currentYear = new Date().getFullYear();
+      yearSelect.innerHTML = "";
+      for (let y = currentYear; y >= 2024; y--) {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        yearSelect.appendChild(opt);
+      }
+      yearSelect.value = state.rewardsYear;
+
+      yearSelect.addEventListener("change", () => {
+        state.rewardsYear = parseInt(yearSelect.value);
+        loadRewards();
+      });
+
+      document.getElementById("rewards-month").addEventListener("change", (e) => {
+        state.rewardsMonth = e.target.value ? parseInt(e.target.value) : null;
+        loadRewards();
+      });
+
+      document.getElementById("rewards-export-csv").addEventListener("click", exportRewardsCSV);
+      state.rewardsInitialized = true;
+    }
+    loadRewards();
+  }
+
+  async function loadRewards() {
+    const year = state.rewardsYear;
+    const month = state.rewardsMonth;
+    const monthParam = month ? `&month=${month}` : "";
+
+    try {
+      const [summaryRes, claimsRes, byTraderRes] = await Promise.all([
+        authFetch(`/api/rewards/summary?year=${year}`),
+        authFetch(`/api/rewards/claims?year=${year}${monthParam}`),
+        authFetch(`/api/rewards/by-trader?year=${year}`),
+      ]);
+
+      if (!summaryRes.ok || !claimsRes.ok || !byTraderRes.ok) {
+        showToast("Failed to load rewards data", "error");
+        return;
+      }
+
+      const summary = await summaryRes.json();
+      const claims = await claimsRes.json();
+      const byTrader = await byTraderRes.json();
+
+      renderRewardsSummary(summary);
+      renderRewardsChart(summary);
+      renderCumulativeChart(byTrader.cumulative);
+      renderTraderCards(byTrader.traders);
+      renderTraderChart(byTrader.traders);
+      renderPriceChart(claims);
+      renderRewardsTable(claims);
+    } catch (err) {
+      showToast("Error loading rewards: " + err.message, "error");
+    }
+  }
+
+  function renderRewardsSummary(summary) {
+    const avgPrice = summary.total_claims > 0
+      ? (summary.total_eur / summary.total_olas).toFixed(4)
+      : "N/A";
+    const container = document.getElementById("rewards-summary");
+    container.innerHTML = `
+      <div class="rewards-card">
+        <div class="card-label">Total OLAS Claimed</div>
+        <div class="card-value accent">${summary.total_olas.toFixed(4)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Total EUR Value</div>
+        <div class="card-value success">\u20AC${summary.total_eur.toFixed(2)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Total Claims</div>
+        <div class="card-value">${summary.total_claims}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Avg. Price EUR/OLAS</div>
+        <div class="card-value">${avgPrice !== "N/A" ? "\u20AC" + avgPrice : avgPrice}</div>
+      </div>
+    `;
+  }
+
+  function renderRewardsChart(summary) {
+    const ctx = document.getElementById("rewards-chart");
+    if (!ctx) return;
+    destroyRewardsChart("monthly");
+
+    const labels = summary.months.map((m) => MONTH_NAMES[m.month - 1]);
+    const olasData = summary.months.map((m) => m.olas);
+    const eurData = summary.months.map((m) => m.eur);
+
+    const opts = chartBaseOptions();
+    rewardsCharts.monthly = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "OLAS Claimed",
+            data: olasData,
+            backgroundColor: "rgba(0, 210, 255, 0.6)",
+            borderColor: "rgba(0, 210, 255, 1)",
+            borderWidth: 1,
+            yAxisID: "y",
+            order: 2,
+          },
+          {
+            label: "EUR Value",
+            data: eurData,
+            type: "line",
+            borderColor: "rgba(46, 204, 113, 1)",
+            backgroundColor: "rgba(46, 204, 113, 0.1)",
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: "rgba(46, 204, 113, 1)",
+            fill: true,
+            yAxisID: "y1",
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        ...opts,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          ...opts.plugins,
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                if (c.dataset.yAxisID === "y1") return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
+                return `OLAS: ${c.parsed.y.toFixed(4)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          ...opts.scales,
+          y: {
+            type: "linear", position: "left",
+            title: { display: true, text: "OLAS", color: "#00d2ff" },
+            ticks: { color: "#00d2ff" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+          },
+          y1: {
+            type: "linear", position: "right",
+            title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
+            ticks: { color: "#2ecc71" },
+            grid: { drawOnChartArea: false },
+          },
+        },
+      },
+    });
+  }
+
+  function renderCumulativeChart(cumulative) {
+    const ctx = document.getElementById("rewards-cumulative-chart");
+    if (!ctx || !cumulative.length) {
+      destroyRewardsChart("cumulative");
+      return;
+    }
+    destroyRewardsChart("cumulative");
+
+    const labels = cumulative.map((p) => {
+      const d = new Date(p.date);
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    });
+
+    const opts = chartBaseOptions();
+    rewardsCharts.cumulative = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Cumulative OLAS",
+            data: cumulative.map((p) => p.olas),
+            borderColor: "rgba(0, 210, 255, 1)",
+            backgroundColor: "rgba(0, 210, 255, 0.1)",
+            fill: true,
+            tension: 0.3,
+            yAxisID: "y",
+          },
+          {
+            label: "Cumulative EUR",
+            data: cumulative.map((p) => p.eur),
+            borderColor: "rgba(46, 204, 113, 1)",
+            backgroundColor: "rgba(46, 204, 113, 0.1)",
+            fill: true,
+            tension: 0.3,
+            yAxisID: "y1",
+          },
+        ],
+      },
+      options: {
+        ...opts,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          ...opts.plugins,
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                if (c.dataset.yAxisID === "y1") return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
+                return `OLAS: ${c.parsed.y.toFixed(4)}`;
+              },
+              afterBody: function (items) {
+                const idx = items[0]?.dataIndex;
+                if (idx != null && cumulative[idx]) return `Trader: ${cumulative[idx].trader}`;
+              },
+            },
+          },
+        },
+        scales: {
+          ...opts.scales,
+          y: {
+            type: "linear", position: "left",
+            title: { display: true, text: "OLAS", color: "#00d2ff" },
+            ticks: { color: "#00d2ff" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+          },
+          y1: {
+            type: "linear", position: "right",
+            title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
+            ticks: { color: "#2ecc71" },
+            grid: { drawOnChartArea: false },
+          },
+        },
+      },
+    });
+  }
+
+  function renderTraderCards(traders) {
+    const container = document.getElementById("rewards-trader-cards");
+    if (!traders.length) {
+      container.innerHTML = '<p class="text-muted">No trader data available.</p>';
+      return;
+    }
+
+    container.innerHTML = traders
+      .map((t, i) => {
+        const color = TRADER_COLORS[i % TRADER_COLORS.length].border;
+        return `<div class="rewards-trader-card" style="border-left: 3px solid ${color}">
+          <div class="trader-name">${t.name}</div>
+          <div class="trader-stats">
+            <span class="stat-label">OLAS</span>
+            <span class="stat-value">${t.total_olas.toFixed(4)}</span>
+            <span class="stat-label">EUR</span>
+            <span class="stat-value">\u20AC${t.total_eur.toFixed(2)}</span>
+            <span class="stat-label">Claims</span>
+            <span class="stat-value">${t.total_claims}</span>
+            <span class="stat-label">Avg Price</span>
+            <span class="stat-value">${t.avg_price_eur ? "\u20AC" + t.avg_price_eur.toFixed(4) : "N/A"}</span>
+          </div>
+        </div>`;
+      })
+      .join("");
+  }
+
+  function renderTraderChart(traders) {
+    const ctx = document.getElementById("rewards-trader-chart");
+    if (!ctx || !traders.length) {
+      destroyRewardsChart("trader");
+      return;
+    }
+    destroyRewardsChart("trader");
+
+    const labels = MONTH_NAMES;
+    const datasets = traders.map((t, i) => {
+      const color = TRADER_COLORS[i % TRADER_COLORS.length];
+      return {
+        label: t.name,
+        data: t.months.map((m) => m.eur),
+        backgroundColor: color.bg,
+        borderColor: color.border,
+        borderWidth: 1,
+      };
+    });
+
+    const opts = chartBaseOptions();
+    rewardsCharts.trader = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets },
+      options: {
+        ...opts,
+        plugins: {
+          ...opts.plugins,
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                return `${c.dataset.label}: \u20AC${c.parsed.y.toFixed(2)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          ...opts.scales,
+          x: { ...opts.scales.x, stacked: true },
+          y: {
+            stacked: true,
+            title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
+            ticks: { color: "#2ecc71" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+          },
+        },
+      },
+    });
+  }
+
+  function renderPriceChart(claims) {
+    const ctx = document.getElementById("rewards-price-chart");
+    if (!ctx) {
+      destroyRewardsChart("price");
+      return;
+    }
+    destroyRewardsChart("price");
+
+    const priced = claims.filter((c) => c.price_eur != null);
+    if (!priced.length) return;
+
+    const labels = priced.map((c) => {
+      const d = new Date(c.date);
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    });
+
+    const opts = chartBaseOptions();
+    rewardsCharts.price = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "OLAS Price (EUR)",
+            data: priced.map((c) => c.price_eur),
+            borderColor: "rgba(255, 205, 86, 1)",
+            backgroundColor: "rgba(255, 205, 86, 0.1)",
+            fill: true,
+            tension: 0.3,
+            pointRadius: 5,
+            pointBackgroundColor: "rgba(255, 205, 86, 1)",
+          },
+        ],
+      },
+      options: {
+        ...opts,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          ...opts.plugins,
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                return `Price: \u20AC${c.parsed.y.toFixed(4)}`;
+              },
+              afterBody: function (items) {
+                const idx = items[0]?.dataIndex;
+                if (idx != null && priced[idx]) {
+                  return `${priced[idx].olas_amount.toFixed(4)} OLAS claimed`;
+                }
+              },
+            },
+          },
+        },
+        scales: {
+          ...opts.scales,
+          y: {
+            title: { display: true, text: "EUR/OLAS", color: "#ffcd56" },
+            ticks: { color: "#ffcd56" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+          },
+        },
+      },
+    });
+  }
+
+  function renderRewardsTable(claims) {
+    const tbody = document.getElementById("rewards-body");
+    if (!claims.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No claims found for this period.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = claims
+      .map((c) => {
+        const date = new Date(c.date).toLocaleString();
+        const hashShort = c.tx_hash ? c.tx_hash.slice(0, 10) + "..." : "?";
+        const link = c.explorer_url
+          ? `<a href="${c.explorer_url}" target="_blank" rel="noopener" class="tx-link">${hashShort}</a>`
+          : hashShort;
+
+        return `<tr>
+          <td>${date}</td>
+          <td>${c.service_name || "?"}</td>
+          <td class="val">${c.olas_amount.toFixed(4)}</td>
+          <td class="val">${c.price_eur != null ? "\u20AC" + c.price_eur.toFixed(4) : "?"}</td>
+          <td class="val">${c.value_eur != null ? "\u20AC" + c.value_eur.toFixed(2) : "?"}</td>
+          <td>${link}</td>
+        </tr>`;
+      })
+      .join("");
+  }
+
+  async function exportRewardsCSV() {
+    const year = state.rewardsYear;
+    const month = state.rewardsMonth;
+    const monthParam = month ? `&month=${month}` : "";
+
+    try {
+      const res = await authFetch(`/api/rewards/export?year=${year}${monthParam}`);
+      if (!res.ok) {
+        showToast("Export failed", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const suffix = month ? `_${String(month).padStart(2, "0")}` : "";
+      a.download = `olas_rewards_${year}${suffix}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("CSV exported successfully", "success");
+    } catch (err) {
+      showToast("Export error: " + err.message, "error");
+    }
+  }
 
   init();
 });

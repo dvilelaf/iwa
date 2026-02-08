@@ -112,6 +112,36 @@ class DrainManagerMixin:
 
         logger.info(f"Successfully claimed {claimed_amount / 1e18:.4f} OLAS rewards")
 
+        # Log claim with OLAS amount and EUR price for tax reporting
+        try:
+            from iwa.core.db import log_transaction
+            from iwa.core.pricing import PriceService
+
+            olas_price = PriceService().get_token_price("autonolas", "eur")
+            olas_amount = claimed_amount / 1e18
+            value_eur = olas_amount * olas_price if olas_price else None
+
+            tx_hash = receipt.get("transactionHash") or getattr(receipt, "transactionHash", None)
+            if tx_hash and hasattr(tx_hash, "hex"):
+                tx_hash = tx_hash.hex()
+
+            if tx_hash:
+                log_transaction(
+                    tx_hash=tx_hash,
+                    from_addr=str(self.service.staking_contract_address),
+                    to_addr=str(self.service.multisig_address),
+                    token="OLAS",
+                    amount_wei=claimed_amount,
+                    chain=self.chain_name,
+                    from_tag="staking_contract",
+                    to_tag=self.service.service_name or None,
+                    price_eur=olas_price,
+                    value_eur=value_eur,
+                    tags=["olas_claim_rewards", "staking_reward"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to log claim with pricing: {e}")
+
         # Invalidate caches - rewards and balances changed
         response_cache.invalidate(f"staking_status:{self.service.key}")
         response_cache.invalidate(f"balances:{self.service.key}")
