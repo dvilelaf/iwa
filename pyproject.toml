@@ -1,6 +1,6 @@
 [project]
 name = "iwa"
-version = "0.1.9"
+version = "0.2.0"
 description = "A secure, modular, and plugin-based framework for crypto agents and ops"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -88,6 +88,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/tests/**/*.py" = ["D", "E402"]
+"src/**/tests/**/*.py" = ["D", "E402"]
 "tests/**/*.py" = ["D", "E402"]
 
 [tool.ruff.format]

@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # Test addresses - valid 42-char hex
 ADDR_MASTER = "0x1111111111111111111111111111111111111111"
 ADDR_TRADER_AGENT = "0x2222222222222222222222222222222222222222"
@@ -465,8 +464,6 @@ def test_all_transaction_types_have_to_tag():
     for test_name, tag in test_cases:
         with patch("iwa.core.db.SentTransaction") as mock_model:
             mock_model.get_or_none.return_value = None
-            mock_insert = mock_model.insert.return_value
-            mock_upsert = mock_insert.on_conflict_replace.return_value
 
             log_transaction(
                 tx_hash=f"0x{test_name}",

@@ -114,7 +114,7 @@ list-backups:
 restore-wallet backup:
     PYTHONPATH=src uv run python src/iwa/tools/restore_backup.py {{backup}}
 
-# Validate git state (uncommitted changes and lockfile sync)
+# Validate git state (uncommitted changes, lockfile sync, and branch pushability)
 _validate-git-state:
     #!/usr/bin/env bash
     set -e
@@ -133,6 +133,27 @@ _validate-git-state:
         echo "   Run: uv lock && git add uv.lock && git commit -m 'build: Update lockfile'"
         exit 1
     }
+
+    # 3. Check that local branch is in sync with remote
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    git fetch origin "$BRANCH" --quiet 2>/dev/null || {
+        echo "⚠️  Warning: Could not fetch from origin (offline?). Skipping remote sync check."
+        exit 0
+    }
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "")
+    if [ -z "$REMOTE" ]; then
+        echo "⚠️  Warning: No remote branch origin/$BRANCH found. Will be created on push."
+    elif [ "$LOCAL" != "$REMOTE" ]; then
+        # Check if local is simply ahead (normal) vs diverged (dangerous)
+        if ! git merge-base --is-ancestor "$REMOTE" "$LOCAL"; then
+            echo "❌ Error: Local $BRANCH has diverged from origin/$BRANCH!"
+            echo "   Local:  $LOCAL"
+            echo "   Remote: $REMOTE"
+            echo "   This usually means you amended commits. Push or reset first."
+            exit 1
+        fi
+    fi
 
 # Validate that version tag exists and points to current HEAD
 _validate-tag-at-head:
@@ -174,14 +195,14 @@ release-check: _validate-git-state
         exit 1
     fi
 
-    @echo "🛡️  Running Security Checks..."
-    @just security
-    @echo "🧹 Running Linters..."
-    @just check
-    @echo "🧪 Running Tests..."
-    @just test
-    @echo "📦 Building Package..."
-    @just build
+    echo "🛡️  Running Security Checks..."
+    just security
+    echo "🧹 Running Linters..."
+    just check
+    echo "🧪 Running Tests..."
+    just test
+    echo "📦 Building Package..."
+    just build
 
     echo "✅ All checks passed! Ready to release $TAG."
 

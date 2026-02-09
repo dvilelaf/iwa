@@ -3158,8 +3158,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Rewards Tab ──────────────────────────────────────────────────
 
   const MONTH_NAMES = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
   const TRADER_COLORS = [
     { bg: "rgba(0, 210, 255, 0.6)", border: "rgba(0, 210, 255, 1)" },
@@ -3219,12 +3229,16 @@ document.addEventListener("DOMContentLoaded", () => {
         loadRewards();
       });
 
-      document.getElementById("rewards-month").addEventListener("change", (e) => {
-        state.rewardsMonth = e.target.value ? parseInt(e.target.value) : null;
-        loadRewards();
-      });
+      document
+        .getElementById("rewards-month")
+        .addEventListener("change", (e) => {
+          state.rewardsMonth = e.target.value ? parseInt(e.target.value) : null;
+          loadRewards();
+        });
 
-      document.getElementById("rewards-export-csv").addEventListener("click", exportRewardsCSV);
+      document
+        .getElementById("rewards-export-csv")
+        .addEventListener("click", exportRewardsCSV);
       state.rewardsInitialized = true;
     }
     loadRewards();
@@ -3264,9 +3278,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderRewardsSummary(summary) {
-    const avgPrice = summary.total_claims > 0
-      ? (summary.total_eur / summary.total_olas).toFixed(4)
-      : "N/A";
+    const avgPrice =
+      summary.total_claims > 0
+        ? (summary.total_eur / summary.total_olas).toFixed(4)
+        : "N/A";
     const container = document.getElementById("rewards-summary");
     container.innerHTML = `
       <div class="rewards-card">
@@ -3335,7 +3350,8 @@ document.addEventListener("DOMContentLoaded", () => {
           tooltip: {
             callbacks: {
               label: function (c) {
-                if (c.dataset.yAxisID === "y1") return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
+                if (c.dataset.yAxisID === "y1")
+                  return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
                 return `OLAS: ${c.parsed.y.toFixed(4)}`;
               },
             },
@@ -3344,13 +3360,15 @@ document.addEventListener("DOMContentLoaded", () => {
         scales: {
           ...opts.scales,
           y: {
-            type: "linear", position: "left",
+            type: "linear",
+            position: "left",
             title: { display: true, text: "OLAS", color: "#00d2ff" },
             ticks: { color: "#00d2ff" },
             grid: { color: "rgba(255,255,255,0.05)" },
           },
           y1: {
-            type: "linear", position: "right",
+            type: "linear",
+            position: "right",
             title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
             ticks: { color: "#2ecc71" },
             grid: { drawOnChartArea: false },
@@ -3370,7 +3388,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const labels = cumulative.map((p) => {
       const d = new Date(p.date);
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return d.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
     });
 
     const opts = chartBaseOptions();
@@ -3407,12 +3428,14 @@ document.addEventListener("DOMContentLoaded", () => {
           tooltip: {
             callbacks: {
               label: function (c) {
-                if (c.dataset.yAxisID === "y1") return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
+                if (c.dataset.yAxisID === "y1")
+                  return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
                 return `OLAS: ${c.parsed.y.toFixed(4)}`;
               },
               afterBody: function (items) {
                 const idx = items[0]?.dataIndex;
-                if (idx != null && cumulative[idx]) return `Trader: ${cumulative[idx].trader}`;
+                if (idx != null && cumulative[idx])
+                  return `Trader: ${cumulative[idx].trader}`;
               },
             },
           },
@@ -3420,13 +3443,15 @@ document.addEventListener("DOMContentLoaded", () => {
         scales: {
           ...opts.scales,
           y: {
-            type: "linear", position: "left",
+            type: "linear",
+            position: "left",
             title: { display: true, text: "OLAS", color: "#00d2ff" },
             ticks: { color: "#00d2ff" },
             grid: { color: "rgba(255,255,255,0.05)" },
           },
           y1: {
-            type: "linear", position: "right",
+            type: "linear",
+            position: "right",
             title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
             ticks: { color: "#2ecc71" },
             grid: { drawOnChartArea: false },
@@ -3439,7 +3464,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderTraderCards(traders) {
     const container = document.getElementById("rewards-trader-cards");
     if (!traders.length) {
-      container.innerHTML = '<p class="text-muted">No trader data available.</p>';
+      container.innerHTML =
+        '<p class="text-muted">No trader data available.</p>';
       return;
     }
 
@@ -3526,7 +3552,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const labels = priced.map((c) => {
       const d = new Date(c.date);
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return d.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
     });
 
     const opts = chartBaseOptions();
@@ -3611,7 +3640,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const monthParam = month ? `&month=${month}` : "";
 
     try {
-      const res = await authFetch(`/api/rewards/export?year=${year}${monthParam}`);
+      const res = await authFetch(
+        `/api/rewards/export?year=${year}${monthParam}`,
+      );
       if (!res.ok) {
         showToast("Export failed", "error");
         return;

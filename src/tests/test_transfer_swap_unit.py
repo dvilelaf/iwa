@@ -16,6 +16,7 @@ class MockTransferService(SwapMixin):
         self.wallet = MagicMock()
         self.get_erc20_allowance = MagicMock()
         self.approve_erc20 = MagicMock()
+        self._get_token_price_info = MagicMock(return_value=(1.0, 1.0))
 
 
 @pytest.fixture
