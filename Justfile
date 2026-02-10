@@ -180,20 +180,13 @@ _validate-tag-at-head:
         exit 1
     fi
 
-# Run full release quality gate (Security -> Lint -> Test -> Build -> Git validations)
-release-check: _validate-git-state
+# Run full release quality gate (Quality -> Git validations)
+release-check:
     #!/usr/bin/env bash
     set -e
 
     VERSION=$(grep -m1 'version = "' pyproject.toml | cut -d '"' -f 2)
     TAG="v$VERSION"
-
-    # Fail fast: check tag doesn't already exist before running quality gates
-    if git rev-parse "$TAG" >/dev/null 2>&1; then
-        echo "❌ Error: Tag $TAG already exists!"
-        echo "   If you need to recreate it: git tag -d $TAG && git push origin :refs/tags/$TAG"
-        exit 1
-    fi
 
     echo "🛡️  Running Security Checks..."
     just security
@@ -203,6 +196,16 @@ release-check: _validate-git-state
     just test
     echo "📦 Building Package..."
     just build
+
+    echo "🔍 Validating git state..."
+    just _validate-git-state
+
+    # Check tag doesn't already exist (tag is created after release-check)
+    if git rev-parse "$TAG" >/dev/null 2>&1; then
+        echo "❌ Error: Tag $TAG already exists!"
+        echo "   If you need to recreate it: git tag -d $TAG && git push origin :refs/tags/$TAG"
+        exit 1
+    fi
 
     echo "✅ All checks passed! Ready to release $TAG."
 
