@@ -2143,7 +2143,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             ${
                               isLoading
                                 ? '<span class="cell-spinner"></span>'
-                                : (isStaked || isEvicted) && staking.staking_contract_address
+                                : (isStaked || isEvicted) &&
+                                    staking.staking_contract_address
                                   ? `
                                 <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
                                     ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
