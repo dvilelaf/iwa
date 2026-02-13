@@ -320,24 +320,12 @@ def test_get_checkpoint_events():
                 }
                 mock_checkpoint_log.blockNumber = 999
 
-                mock_checkpoint_filter = MagicMock()
-                mock_checkpoint_filter.get_all_entries.return_value = [mock_checkpoint_log]
-                mock_contract.events.Checkpoint.create_filter.return_value = (
-                    mock_checkpoint_filter
-                )
+                mock_contract.events.Checkpoint.get_logs.return_value = [mock_checkpoint_log]
 
                 # No warnings or evictions
-                mock_warning_filter = MagicMock()
-                mock_warning_filter.get_all_entries.return_value = []
-                mock_contract.events.ServiceInactivityWarning.create_filter.return_value = (
-                    mock_warning_filter
-                )
+                mock_contract.events.ServiceInactivityWarning.get_logs.return_value = []
 
-                mock_evicted_filter = MagicMock()
-                mock_evicted_filter.get_all_entries.return_value = []
-                mock_contract.events.ServicesEvicted.create_filter.return_value = (
-                    mock_evicted_filter
-                )
+                mock_contract.events.ServicesEvicted.get_logs.return_value = []
 
                 result = staking.get_checkpoint_events(from_block=900, to_block=1000)
 
@@ -390,11 +378,7 @@ def test_get_checkpoint_events_with_warnings():
                 }
                 mock_checkpoint_log.blockNumber = 999
 
-                mock_checkpoint_filter = MagicMock()
-                mock_checkpoint_filter.get_all_entries.return_value = [mock_checkpoint_log]
-                mock_contract.events.Checkpoint.create_filter.return_value = (
-                    mock_checkpoint_filter
-                )
+                mock_contract.events.Checkpoint.get_logs.return_value = [mock_checkpoint_log]
 
                 # Inactivity warnings
                 mock_warning_log_1 = MagicMock()
@@ -402,20 +386,12 @@ def test_get_checkpoint_events_with_warnings():
                 mock_warning_log_2 = MagicMock()
                 mock_warning_log_2.args = {"serviceId": 103}
 
-                mock_warning_filter = MagicMock()
-                mock_warning_filter.get_all_entries.return_value = [
+                mock_contract.events.ServiceInactivityWarning.get_logs.return_value = [
                     mock_warning_log_1,
                     mock_warning_log_2,
                 ]
-                mock_contract.events.ServiceInactivityWarning.create_filter.return_value = (
-                    mock_warning_filter
-                )
 
-                mock_evicted_filter = MagicMock()
-                mock_evicted_filter.get_all_entries.return_value = []
-                mock_contract.events.ServicesEvicted.create_filter.return_value = (
-                    mock_evicted_filter
-                )
+                mock_contract.events.ServicesEvicted.get_logs.return_value = []
 
                 result = staking.get_checkpoint_events(from_block=900)
 
@@ -466,28 +442,16 @@ def test_get_checkpoint_events_with_evictions():
                 }
                 mock_checkpoint_log.blockNumber = 888
 
-                mock_checkpoint_filter = MagicMock()
-                mock_checkpoint_filter.get_all_entries.return_value = [mock_checkpoint_log]
-                mock_contract.events.Checkpoint.create_filter.return_value = (
-                    mock_checkpoint_filter
-                )
+                mock_contract.events.Checkpoint.get_logs.return_value = [mock_checkpoint_log]
 
                 # No warnings
-                mock_warning_filter = MagicMock()
-                mock_warning_filter.get_all_entries.return_value = []
-                mock_contract.events.ServiceInactivityWarning.create_filter.return_value = (
-                    mock_warning_filter
-                )
+                mock_contract.events.ServiceInactivityWarning.get_logs.return_value = []
 
                 # Evictions
                 mock_evicted_log = MagicMock()
                 mock_evicted_log.args = {"serviceIds": [101, 104]}
 
-                mock_evicted_filter = MagicMock()
-                mock_evicted_filter.get_all_entries.return_value = [mock_evicted_log]
-                mock_contract.events.ServicesEvicted.create_filter.return_value = (
-                    mock_evicted_filter
-                )
+                mock_contract.events.ServicesEvicted.get_logs.return_value = [mock_evicted_log]
 
                 result = staking.get_checkpoint_events(from_block=800)
 
@@ -531,23 +495,11 @@ def test_get_checkpoint_events_no_events():
                 staking = StakingContract(VALID_ADDR_1)
 
                 # No checkpoint events
-                mock_checkpoint_filter = MagicMock()
-                mock_checkpoint_filter.get_all_entries.return_value = []
-                mock_contract.events.Checkpoint.create_filter.return_value = (
-                    mock_checkpoint_filter
-                )
+                mock_contract.events.Checkpoint.get_logs.return_value = []
 
-                mock_warning_filter = MagicMock()
-                mock_warning_filter.get_all_entries.return_value = []
-                mock_contract.events.ServiceInactivityWarning.create_filter.return_value = (
-                    mock_warning_filter
-                )
+                mock_contract.events.ServiceInactivityWarning.get_logs.return_value = []
 
-                mock_evicted_filter = MagicMock()
-                mock_evicted_filter.get_all_entries.return_value = []
-                mock_contract.events.ServicesEvicted.create_filter.return_value = (
-                    mock_evicted_filter
-                )
+                mock_contract.events.ServicesEvicted.get_logs.return_value = []
 
                 result = staking.get_checkpoint_events(from_block=900)
 
@@ -591,8 +543,8 @@ def test_get_checkpoint_events_handles_exceptions():
 
                 staking = StakingContract(VALID_ADDR_1)
 
-                # Checkpoint filter raises an exception
-                mock_contract.events.Checkpoint.create_filter.side_effect = Exception(
+                # Checkpoint get_logs raises an exception
+                mock_contract.events.Checkpoint.get_logs.side_effect = Exception(
                     "RPC error"
                 )
 
@@ -638,17 +590,15 @@ def test_fetch_events_chunked_splits_large_range():
 
                 staking = StakingContract(VALID_ADDR_1)
 
-                # Track calls to create_filter
+                # Track calls to get_logs
                 call_ranges = []
 
-                def track_filter_calls(from_block, to_block):
+                def track_get_logs_calls(from_block, to_block):
                     call_ranges.append((from_block, to_block))
-                    mock_filter = MagicMock()
-                    mock_filter.get_all_entries.return_value = []
-                    return mock_filter
+                    return []
 
-                mock_contract.events.Checkpoint.create_filter.side_effect = (
-                    track_filter_calls
+                mock_contract.events.Checkpoint.get_logs.side_effect = (
+                    track_get_logs_calls
                 )
 
                 # Fetch 1200 blocks with chunk_size=500 -> should make 3 calls
@@ -700,11 +650,9 @@ def test_fetch_events_chunked_retries_with_smaller_chunks():
                     # First call fails with range error, subsequent calls succeed
                     if call_count[0] == 1:
                         raise Exception("block range too large")
-                    mock_filter = MagicMock()
-                    mock_filter.get_all_entries.return_value = []
-                    return mock_filter
+                    return []
 
-                mock_contract.events.Checkpoint.create_filter.side_effect = (
+                mock_contract.events.Checkpoint.get_logs.side_effect = (
                     fail_then_succeed
                 )
 
@@ -755,14 +703,12 @@ def test_fetch_events_chunked_aggregates_results():
 
                 def return_different_events(from_block, to_block):
                     chunk_num[0] += 1
-                    mock_filter = MagicMock()
                     # Each chunk returns a different event
                     event = MagicMock()
                     event.args = {"serviceId": 100 + chunk_num[0]}
-                    mock_filter.get_all_entries.return_value = [event]
-                    return mock_filter
+                    return [event]
 
-                mock_contract.events.ServiceInactivityWarning.create_filter.side_effect = (
+                mock_contract.events.ServiceInactivityWarning.get_logs.side_effect = (
                     return_different_events
                 )
 

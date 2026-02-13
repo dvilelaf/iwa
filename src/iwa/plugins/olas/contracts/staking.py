@@ -505,6 +505,9 @@ class StakingContract(ContractInstance):
     ) -> List:
         """Fetch events in chunks to handle RPC block range limits.
 
+        Uses eth_getLogs (universally supported) instead of eth_newFilter
+        which many RPCs don't support or expire quickly.
+
         Args:
             event_type: Name of the event (Checkpoint, ServiceInactivityWarning, etc.)
             from_block: Starting block number.
@@ -527,10 +530,9 @@ class StakingContract(ContractInstance):
             current_to = min(current_from + chunk_size - 1, to_block)
 
             try:
-                event_filter = event.create_filter(
+                logs = event.get_logs(
                     from_block=current_from, to_block=current_to
                 )
-                logs = event_filter.get_all_entries()
                 all_logs.extend(logs)
             except Exception as e:
                 error_msg = str(e).lower()
@@ -550,7 +552,7 @@ class StakingContract(ContractInstance):
                             f"{current_from}-{current_to}: {e}"
                         )
                 else:
-                    logger.debug(f"Error fetching {event_type} events: {e}")
+                    logger.warning(f"Error fetching {event_type} events: {e}")
 
             current_from = current_to + 1
 
