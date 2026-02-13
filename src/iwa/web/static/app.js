@@ -1967,6 +1967,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderOlasServiceCard(service, isLoading = false) {
     const staking = service.staking || {};
     const isStaked = staking.is_staked || false;
+    const isEvicted = staking.staking_state === "EVICTED";
 
     // Format epoch countdown
     let epochCountdown = "";
@@ -2142,7 +2143,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             ${
                               isLoading
                                 ? '<span class="cell-spinner"></span>'
-                                : isStaked && staking.staking_contract_address
+                                : (isStaked || isEvicted) && staking.staking_contract_address
                                   ? `
                                 <a href="${getExplorerUrl(staking.staking_contract_address, service.chain)}" target="_blank" class="explorer-link" title="${escapeHtml(staking.staking_contract_address)}">
                                     ${escapeHtml(staking.staking_contract_name || shortenAddr(staking.staking_contract_address))}
@@ -2261,20 +2262,27 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                         })()}
                     `
-                        : service.state === "DEPLOYED"
+                        : isEvicted
                           ? `
-                        <button class="btn-danger btn-sm" disabled
-                                title="Cannot stake a deployed service. Terminate first to change staking configuration.">
+                        <button class="btn-primary btn-sm ${loadingClass}" data-action="restake" data-key="${escapeHtml(service.key)}" ${loadingDisabled}
+                                title="Unstake and restake on the same contract">
+                            Restake
+                        </button>
+                    `
+                          : service.state === "DEPLOYED"
+                            ? `
+                        <button class="btn-primary btn-sm ${loadingClass}" data-action="stake" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" ${loadingDisabled}
+                                title="Stake service into a staking contract">
                             Stake
                         </button>
                     `
-                          : service.state === "PRE_REGISTRATION"
-                            ? `
+                            : service.state === "PRE_REGISTRATION"
+                              ? `
                         <button class="btn-primary btn-sm ${loadingClass}" data-action="deploy" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" data-name="${escapeHtml(service.name || "")}" data-id="${escapeHtml(service.service_id)}" ${loadingDisabled}>
                             Deploy
                         </button>
                     `
-                            : ""
+                              : ""
                     }
                 ${
                   service.state !== "PRE_REGISTRATION"
@@ -2355,6 +2363,9 @@ document.addEventListener("DOMContentLoaded", () => {
                   "opacity: 0.6; cursor: not-allowed; filter: grayscale(100%);";
                 drainTitle =
                   "Nothing to drain (Agent and Safe have zero balance)";
+              } else if (isEvicted && !isLoading) {
+                drainTitle =
+                  "Service is evicted. Will unstake first, then drain.";
               } else if (isStaked && !isLoading) {
                 // Check if we can unstake yet
                 const canUnstake =
@@ -2462,6 +2473,30 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       showToast("Error unstaking service", "error");
+    }
+  };
+
+  window.restakeOlasService = async (serviceKey) => {
+    const confirmed = await showConfirm(
+      "Restake Evicted Service",
+      "This will unstake the evicted service and immediately restake it on the same contract.",
+    );
+    if (!confirmed) return;
+
+    showToast("Restaking service (unstake + stake)...", "info");
+    try {
+      const resp = await authFetch(`/api/olas/restake/${serviceKey}`, {
+        method: "POST",
+      });
+      const result = await resp.json();
+      if (resp.ok) {
+        showToast("Service restaked successfully!", "success");
+        refreshSingleService(serviceKey);
+      } else {
+        showToast(`Error: ${result.detail} `, "error");
+      }
+    } catch (err) {
+      showToast("Error restaking service", "error");
     }
   };
 
@@ -3144,6 +3179,10 @@ document.addEventListener("DOMContentLoaded", () => {
       checkpointOlasService(key);
     } else if (action === "unstake") {
       unstakeOlasService(key);
+    } else if (action === "restake") {
+      restakeOlasService(key);
+    } else if (action === "stake") {
+      showStakeModal(key, chain);
     } else if (action === "deploy") {
       showDeployModal(key, chain, btn.dataset.name, btn.dataset.id);
     } else if (action === "terminate") {

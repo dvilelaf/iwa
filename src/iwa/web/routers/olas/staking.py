@@ -338,6 +338,64 @@ def unstake_service(service_key: str, auth: bool = Depends(verify_auth)):
 
 
 @router.post(
+    "/restake/{service_key}",
+    summary="Restake Evicted Service",
+    description="Unstake an evicted service and immediately restake it on the same contract.",
+)
+@limiter.limit("3/minute")
+def restake_service(
+    request: Request,
+    service_key: str,
+    auth: bool = Depends(verify_auth),
+):
+    """Restake an evicted service: unstake + stake on the same contract."""
+    try:
+        from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service or not service.staking_contract_address:
+            raise HTTPException(status_code=404, detail="Service not found or no staking contract")
+
+        # Save the contract address before unstake clears it
+        contract_address = str(service.staking_contract_address)
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        staking_contract = StakingContract(contract_address, service.chain_name)
+
+        # Verify the service is actually evicted
+        staking_state = staking_contract.get_staking_state(service.service_id)
+        if staking_state != StakingState.EVICTED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Service is {staking_state.name}, not EVICTED. Use unstake/stake separately.",
+            )
+
+        # Step 1: Unstake
+        logger.info(f"Restake: unstaking evicted service {service_key}")
+        if not manager.unstake(staking_contract):
+            raise HTTPException(status_code=400, detail="Failed to unstake evicted service")
+
+        # Step 2: Stake on the same contract
+        logger.info(f"Restake: staking service {service_key} on {contract_address}")
+        if not manager.stake(staking_contract):
+            raise HTTPException(status_code=400, detail="Unstake succeeded but stake failed")
+
+        return {"status": "success", "staking_contract": contract_address}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error restaking service: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@router.post(
     "/checkpoint/{service_key}",
     summary="Checkpoint Service",
     description="Trigger a checkpoint for a staked service to update its liveness.",
