@@ -409,12 +409,20 @@ class TestNoToChecksumAddressInSource:
     def test_only_in_types_module(self):
         """Scan source for to_checksum_address — should only be in types.py."""
         import subprocess
+        from pathlib import Path
+
+        # Find project root (contains pyproject.toml)
+        project_root = Path(__file__).resolve()
+        while project_root != project_root.parent:
+            if (project_root / "pyproject.toml").exists():
+                break
+            project_root = project_root.parent
 
         result = subprocess.run(
             ["grep", "-r", "to_checksum_address", "src/iwa/", "--include=*.py", "-l"],
             capture_output=True,
             text=True,
-            cwd="/media/david/DATA/repos/iwa",
+            cwd=str(project_root),
         )
         files_with_checksum = [
             f.strip() for f in result.stdout.strip().split("\n") if f.strip()
