@@ -28,7 +28,17 @@ class ResponseCache:
                 cls._instance._cache: Dict[str, Any] = {}
                 cls._instance._timestamps: Dict[str, float] = {}
                 cls._instance._enabled = os.environ.get("IWA_RESPONSE_CACHE", "1") != "0"
+                cls._instance._invalidation_callbacks: list = []
         return cls._instance
+
+    def on_invalidate(self, callback: Callable[[Optional[str]], None]) -> None:
+        """Register a callback to be notified when cache entries are invalidated.
+
+        Args:
+            callback: Function that receives the invalidation pattern (or None for full clear).
+
+        """
+        self._invalidation_callbacks.append(callback)
 
     def get(self, key: str, ttl_seconds: int = 60) -> Optional[Any]:
         """Get a cached value if it exists and hasn't expired.
@@ -73,7 +83,7 @@ class ResponseCache:
             logger.debug(f"Cache SET: {key}")
 
     def invalidate(self, pattern: Optional[str] = None) -> None:
-        """Invalidate cache entries.
+        """Invalidate cache entries and notify registered callbacks.
 
         Args:
             pattern: If provided, invalidate keys containing this pattern.
@@ -92,6 +102,12 @@ class ResponseCache:
                     del self._timestamps[key]
                 if keys_to_remove:
                     logger.debug(f"Cache invalidated {len(keys_to_remove)} entries matching '{pattern}'")
+
+        for cb in self._invalidation_callbacks:
+            try:
+                cb(pattern)
+            except Exception:
+                pass
 
     def get_or_compute(
         self,
