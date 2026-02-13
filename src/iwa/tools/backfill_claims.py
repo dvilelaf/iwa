@@ -28,6 +28,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from iwa.core.constants import SECRETS_PATH
 from iwa.core.db import init_db, log_transaction
 from iwa.core.models import Config
+from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.models import OlasConfig
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -235,7 +236,7 @@ def main() -> None:
     all_events = []
     for addr in sorted(staking_contracts):
         logger.info(f"Querying RewardClaimed from {addr}...")
-        contract = web3.eth.contract(address=Web3.to_checksum_address(addr), abi=abi)
+        contract = web3.eth.contract(address=EthereumAddress(addr), abi=abi)
         events = fetch_events_chunked(contract, "RewardClaimed", start_block, latest_block, EVENT_CHUNK_SIZE)
 
         our_events = [(addr, ev) for ev in events if ev.args.serviceId in service_id_map]
