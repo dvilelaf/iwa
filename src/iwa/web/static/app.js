@@ -3224,7 +3224,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const rewardsCharts = {
     monthly: null,
     cumulative: null,
-    trader: null,
     price: null,
   };
 
@@ -3309,7 +3308,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderRewardsChart(summary);
       renderCumulativeChart(byTrader.cumulative);
       renderTraderCards(byTrader.traders);
-      renderTraderChart(byTrader.traders);
       renderPriceChart(claims);
       renderRewardsTable(claims);
     } catch (err) {
@@ -3527,56 +3525,6 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>`;
       })
       .join("");
-  }
-
-  function renderTraderChart(traders) {
-    const ctx = document.getElementById("rewards-trader-chart");
-    if (!ctx || !traders.length) {
-      destroyRewardsChart("trader");
-      return;
-    }
-    destroyRewardsChart("trader");
-
-    const labels = MONTH_NAMES;
-    const datasets = traders.map((t, i) => {
-      const color = TRADER_COLORS[i % TRADER_COLORS.length];
-      return {
-        label: t.name,
-        data: t.months.map((m) => m.eur),
-        backgroundColor: color.bg,
-        borderColor: color.border,
-        borderWidth: 1,
-      };
-    });
-
-    const opts = chartBaseOptions();
-    rewardsCharts.trader = new Chart(ctx, {
-      type: "bar",
-      data: { labels, datasets },
-      options: {
-        ...opts,
-        plugins: {
-          ...opts.plugins,
-          tooltip: {
-            callbacks: {
-              label: function (c) {
-                return `${c.dataset.label}: \u20AC${c.parsed.y.toFixed(2)}`;
-              },
-            },
-          },
-        },
-        scales: {
-          ...opts.scales,
-          x: { ...opts.scales.x, stacked: true },
-          y: {
-            stacked: true,
-            title: { display: true, text: "EUR (\u20AC)", color: "#2ecc71" },
-            ticks: { color: "#2ecc71" },
-            grid: { color: "rgba(255,255,255,0.05)" },
-          },
-        },
-      },
-    });
   }
 
   function renderPriceChart(claims) {

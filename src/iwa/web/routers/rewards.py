@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from iwa.core.db import SentTransaction
-from iwa.web.dependencies import verify_auth
+from iwa.web.dependencies import verify_auth, wallet
 
 router = APIRouter(prefix="/api/rewards", tags=["rewards"])
 
@@ -25,6 +25,27 @@ GNOSIS_EXPLORER = "https://gnosisscan.io/tx/"
 def _wei_to_olas(amount_wei: Optional[int]) -> float:
     """Convert wei amount to OLAS (1e18 decimals)."""
     return float(amount_wei or 0) / 1e18
+
+
+def _build_tag_map(claims) -> dict:
+    """Build address→tag lookup for claims missing to_tag."""
+    addresses = {tx.to_address for tx in claims if not tx.to_tag and tx.to_address}
+    if not addresses:
+        return {}
+    tag_map: dict[str, str] = {}
+    try:
+        for addr in addresses:
+            tag = wallet.account_service.get_tag_by_address(addr)
+            if tag:
+                tag_map[addr] = tag
+    except Exception:
+        pass
+    return tag_map
+
+
+def _resolve_trader_name(tx, tag_map: dict) -> str:
+    """Resolve trader name: prefer to_tag, then tag_map lookup, then address."""
+    return tx.to_tag or tag_map.get(tx.to_address, tx.to_address) or "unknown"
 
 
 def _query_claims(year: int, month: Optional[int] = None):
@@ -60,7 +81,7 @@ def _validate_year_month(year: int, month: Optional[int] = None) -> int:
     return year
 
 
-def _claim_to_dict(tx) -> dict:
+def _claim_to_dict(tx, tag_map: dict) -> dict:
     """Convert a SentTransaction to a claim dict."""
     olas_amount = _wei_to_olas(tx.amount_wei)
     return {
@@ -69,7 +90,7 @@ def _claim_to_dict(tx) -> dict:
         "olas_amount": round(olas_amount, OLAS_DISPLAY_DECIMALS),
         "price_eur": round(tx.price_eur, EUR_PRICE_DECIMALS) if tx.price_eur else None,
         "value_eur": round(tx.value_eur, EUR_VALUE_DECIMALS) if tx.value_eur else None,
-        "service_name": tx.to_tag or tx.to_address,
+        "service_name": _resolve_trader_name(tx, tag_map),
         "chain": tx.chain,
         "explorer_url": f"{GNOSIS_EXPLORER}{tx.tx_hash}" if tx.chain == "gnosis" else None,
     }
@@ -87,8 +108,9 @@ def get_claims(
 ):
     """Get claim transactions for a year (and optional month)."""
     year = _validate_year_month(year, month)
-    claims = _query_claims(year, month)
-    return [_claim_to_dict(tx) for tx in claims]
+    claims = list(_query_claims(year, month))
+    tag_map = _build_tag_map(claims)
+    return [_claim_to_dict(tx, tag_map) for tx in claims]
 
 
 @router.get(
@@ -148,7 +170,8 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
 def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
     """Per-trader rewards breakdown with monthly detail."""
     year = _validate_year_month(year)
-    claims = _query_claims(year)
+    claims = list(_query_claims(year))
+    tag_map = _build_tag_map(claims)
 
     # Per-trader monthly data
     trader_data = defaultdict(lambda: {
@@ -168,7 +191,7 @@ def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
         olas_amount = _wei_to_olas(tx.amount_wei)
         eur_value = tx.value_eur or 0.0
         price = tx.price_eur
-        trader = tx.to_tag or tx.to_address or "unknown"
+        trader = _resolve_trader_name(tx, tag_map)
         month = tx.timestamp.month
 
         td = trader_data[trader]
@@ -231,7 +254,8 @@ def export_rewards(
 ):
     """Export claim transactions as CSV."""
     year = _validate_year_month(year, month)
-    claims = _query_claims(year, month)
+    claims = list(_query_claims(year, month))
+    tag_map = _build_tag_map(claims)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -245,7 +269,7 @@ def export_rewards(
         explorer_url = f"{GNOSIS_EXPLORER}{tx.tx_hash}" if tx.chain == "gnosis" else ""
         writer.writerow([
             tx.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            tx.to_tag or tx.to_address or "",
+            _resolve_trader_name(tx, tag_map),
             tx.tx_hash,
             explorer_url,
             f"{olas_amount:.{OLAS_DISPLAY_DECIMALS}f}",
