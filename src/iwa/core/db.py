@@ -231,12 +231,13 @@ def _prepare_transaction_record(
     final_value_eur: float | None,
     merged_tags: list,
     merged_extra: dict,
+    timestamp: datetime | None = None,
 ) -> dict:
     """Prepare the dictionary for database insertion."""
     if not tx_hash.startswith("0x"):
         tx_hash = "0x" + tx_hash
 
-    return {
+    record = {
         "tx_hash": tx_hash,
         "from_address": from_addr,
         "from_tag": from_tag or (existing.from_tag if existing else None),
@@ -263,6 +264,9 @@ def _prepare_transaction_record(
         if merged_extra
         else (existing.extra_data if existing else None),
     }
+    if timestamp is not None:
+        record["timestamp"] = timestamp
+    return record
 
 
 def log_transaction(
@@ -280,6 +284,7 @@ def log_transaction(
     gas_value_eur=None,
     tags=None,
     extra_data=None,
+    timestamp=None,
 ):
     """Log a transaction to the database (create or update)."""
     try:
@@ -309,6 +314,7 @@ def log_transaction(
                 final_value,
                 merged_tags,
                 merged_extra,
+                timestamp=timestamp,
             )
 
             SentTransaction.insert(**data).on_conflict_replace().execute()
