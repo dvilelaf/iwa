@@ -145,12 +145,15 @@ _validate-git-state:
     if [ -z "$REMOTE" ]; then
         echo "⚠️  Warning: No remote branch origin/$BRANCH found. Will be created on push."
     elif [ "$LOCAL" != "$REMOTE" ]; then
-        # Check if local is simply ahead (normal) vs diverged (dangerous)
         if ! git merge-base --is-ancestor "$REMOTE" "$LOCAL"; then
             echo "❌ Error: Local $BRANCH has diverged from origin/$BRANCH!"
             echo "   Local:  $LOCAL"
             echo "   Remote: $REMOTE"
             echo "   This usually means you amended commits. Push or reset first."
+            exit 1
+        else
+            echo "❌ Error: Local $BRANCH is ahead of origin/$BRANCH (unpushed commits)!"
+            echo "   Push first: git push origin $BRANCH"
             exit 1
         fi
     fi
