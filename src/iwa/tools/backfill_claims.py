@@ -156,20 +156,33 @@ def fetch_historical_prices() -> dict[str, float]:
         sys.exit(1)
 
     # Get current EUR/USD rate for conversion
+    # DeFiLlama returns EURT price in USD (e.g., 1 EURT = $1.08)
+    # To convert USD → EUR: usd_to_eur = 1 / eur_price
+    # Valid range: 0.8 - 1.2 (sanity check for API errors)
     eur_url = "https://coins.llama.fi/prices/current/coingecko:tether-eurt"
-    eur_resp = requests.get(eur_url, timeout=10)
-    # Fallback: use approximate EUR/USD rate
-    usd_to_eur = 0.92  # approximate
+    usd_to_eur = 0.92  # Fallback: approximate rate
+
     try:
-        eur_data = eur_resp.json()
-        # Try to get inverse from EUR stablecoin price
+        eur_resp = requests.get(eur_url, timeout=10)
         if eur_resp.ok:
+            eur_data = eur_resp.json()
             eur_price = eur_data.get("coins", {}).get("coingecko:tether-eurt", {}).get("price")
+
             if eur_price and eur_price > 0:
-                usd_to_eur = 1.0 / eur_price
-    except Exception:
-        pass
-    logger.info(f"USD/EUR rate: {usd_to_eur:.4f}")
+                calculated_rate = 1.0 / eur_price
+
+                # Sanity check: USD/EUR should be ~0.8-1.2
+                if 0.8 <= calculated_rate <= 1.2:
+                    usd_to_eur = calculated_rate
+                    logger.info(f"Using DeFiLlama USD/EUR rate: {usd_to_eur:.4f} (EURT price: ${eur_price:.4f})")
+                else:
+                    logger.warning(f"Invalid USD/EUR rate {calculated_rate:.4f} from EURT=${eur_price:.4f}, using fallback {usd_to_eur}")
+            else:
+                logger.warning(f"No valid EURT price in API response, using fallback rate {usd_to_eur}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch EUR rate from DeFiLlama: {e}, using fallback {usd_to_eur}")
+
+    logger.info(f"Final USD/EUR conversion rate: {usd_to_eur:.4f}")
 
     date_prices = {}
     for entry in prices_list:
