@@ -3255,7 +3255,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const yearSelect = document.getElementById("rewards-year");
       const currentYear = new Date().getFullYear();
       yearSelect.innerHTML = "";
-      for (let y = currentYear; y >= 2024; y--) {
+      for (let y = currentYear; y >= 2025; y--) {
         const opt = document.createElement("option");
         opt.value = y;
         opt.textContent = y;
