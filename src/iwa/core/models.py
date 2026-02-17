@@ -297,6 +297,8 @@ class Config(StorableModel):
             current = self.plugins[plugin_name]
             if isinstance(current, dict):
                 self.plugins[plugin_name] = model_class(**current)
+                # Persist so that new default fields appear in the YAML
+                self.save_config()
         else:
             # Create default config for plugin and persist
             self.plugins[plugin_name] = model_class()
