@@ -537,7 +537,7 @@ class StakingContract(ContractInstance):
             except Exception as e:
                 error_msg = str(e).lower()
                 # If range too large, try smaller chunks
-                if "range" in error_msg or "limit" in error_msg or "10000" in error_msg:
+                if "range" in error_msg or "limit" in error_msg or "10000" in error_msg or "bad request" in error_msg:
                     if chunk_size > 100:
                         logger.debug(
                             "Block range too large, retrying with smaller chunks"
