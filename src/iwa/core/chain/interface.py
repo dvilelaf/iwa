@@ -232,6 +232,8 @@ class ChainInterface:
             "connect timeout",
             "remote end closed",
             "broken pipe",
+            "404",
+            "not found",
             # Note: "too many open files" handled separately by _is_fd_exhaustion_error
         ]
         return any(signal in err_text for signal in connection_signals)

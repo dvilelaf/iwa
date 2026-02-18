@@ -13,11 +13,11 @@ from iwa.core.chain import ChainInterface, SupportedChain
 
 
 class MockHTTPError(Exception):
-    """Mock HTTP 429 error with URL info."""
+    """Mock HTTP error with URL info."""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, status: int = 429, reason: str = "Too Many Requests"):
         self.url = url
-        super().__init__(f"429 Client Error: Too Many Requests for url: {url}")
+        super().__init__(f"{status} Client Error: {reason} for url: {url}")
 
 
 @pytest.fixture
@@ -333,3 +333,24 @@ def test_rotation_cooldown(multi_rpc_chain):
             result = ci.rotate_rpc()
             assert result is True
             assert ci._current_rpc_index == 2  # Index advanced
+
+
+def test_404_triggers_rotation(multi_rpc_chain):
+    """Test that a 404 Not Found error triggers RPC rotation.
+
+    When an RPC provider endpoint disappears (returns 404), the error should
+    be classified as a connection error and trigger rotation to the next RPC.
+    This was a production bug: 0xrpc.io/gno returned 404 and iwa didn't rotate.
+    """
+    with patch("iwa.core.chain.interface.RateLimitedWeb3", side_effect=lambda w3, rl, ci: w3):
+        ci = ChainInterface(multi_rpc_chain)
+
+        assert ci._current_rpc_index == 0
+
+        error = MockHTTPError("https://0xrpc.io/gno", status=404, reason="Not Found")
+        result = ci._handle_rpc_error(error)
+
+        assert result["is_connection_error"] is True
+        assert result["rotated"] is True
+        assert result["should_retry"] is True
+        assert ci._current_rpc_index == 1
