@@ -841,7 +841,7 @@ class TestTransferBaseGetTokenPriceInfo:
         """Test price info for NATIVE token uses chain coingecko ID."""
         with (
             patch("iwa.core.services.transfer.base.PriceService") as mock_ps_cls,
-            patch("iwa.core.services.transfer.base.ChainInterfaces") as mock_ci_cls,
+            patch("iwa.core.services.transfer.base.ChainInterfaces"),
         ):
             mock_ps = mock_ps_cls.return_value
             mock_ps.get_token_price.return_value = 1.0
@@ -1415,7 +1415,7 @@ class TestUtilsPrintBanner:
         from iwa.core import utils as utils_module
 
         # Directly test the except branch by temporarily making rich unavailable
-        original_fn = utils_module.print_banner
+        _ = utils_module.print_banner
 
         def fake_banner(service_name, service_version, extra_versions=None):
             # Simulate the ImportError fallback path

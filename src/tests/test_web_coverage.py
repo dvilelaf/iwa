@@ -183,7 +183,7 @@ class TestDependencies:
 
         with (
             patch("iwa.core.constants.CONFIG_PATH") as mock_path,
-            patch("builtins.open", create=True) as mock_open,
+            patch("builtins.open", create=True),
             patch("yaml.safe_load", return_value={"plugins": {}}),
         ):
             mock_path.exists.return_value = True
@@ -289,7 +289,7 @@ class TestServer:
         mock_server.serve.return_value = future
 
         with (
-            patch("uvicorn.Config") as mock_config_cls,
+            patch("uvicorn.Config"),
             patch("uvicorn.Server", return_value=mock_server) as mock_server_cls,
         ):
             await run_server_async(host="0.0.0.0", port=9000)
@@ -462,7 +462,7 @@ class TestServicesCreateEndpoint:
         with (
             patch("iwa.web.routers.olas.services._determine_bond_amount", return_value=10000),
             patch("iwa.plugins.olas.service_manager.ServiceManager") as mock_sm_cls,
-            patch("iwa.plugins.olas.contracts.staking.StakingContract") as mock_sc_cls,
+            patch("iwa.plugins.olas.contracts.staking.StakingContract"),
         ):
             mock_sm = mock_sm_cls.return_value
             mock_sm.create.return_value = 42

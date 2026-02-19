@@ -1125,8 +1125,8 @@ class TestStartMonitor:
 
         with (
             patch("iwa.tui.screens.wallets.ChainInterfaces") as mock_ci,
-            patch("iwa.tui.screens.wallets.EventMonitor") as mock_em,
-            patch("iwa.tui.screens.wallets.MonitorWorker") as mock_mw,
+            patch("iwa.tui.screens.wallets.EventMonitor"),
+            patch("iwa.tui.screens.wallets.MonitorWorker"),
             patch.object(wallets_screen, "stop_monitor"),
         ):
             mock_ci.return_value.items.return_value = chain_items
