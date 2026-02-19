@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from iwa.core import pricing as pricing_module
-from iwa.core.pricing import PriceService, _CACHE_TTL, _NEGATIVE_CACHE_TTL
+from iwa.core.pricing import _CACHE_TTL, _NEGATIVE_CACHE_TTL, PriceService
 
 
 @pytest.fixture(autouse=True)

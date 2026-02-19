@@ -8,9 +8,7 @@ Targets the missing lines: 61, 75, 85, 100-102, 133-134, 170-175, 250-264,
 from unittest.mock import MagicMock, patch
 
 import pytest
-from web3 import exceptions as web3_exceptions
 
-from iwa.core.keys import KeyStorage
 from iwa.core.models import StoredSafeAccount
 from iwa.core.services.transaction import (
     TRANSFER_EVENT_TOPIC,

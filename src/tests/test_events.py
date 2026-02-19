@@ -4,7 +4,6 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-
 # Valid Ethereum addresses for testing
 ADDR_STAKING_1 = "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"
 ADDR_STAKING_2 = "0x238EB6993b90A978ec6AAD7530D6429c949C08DA"
