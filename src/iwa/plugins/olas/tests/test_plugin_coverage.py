@@ -10,10 +10,9 @@ Covers uncovered lines in plugin.py including:
 - _print_import_summary (with skipped, with errors)
 """
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 
 from iwa.plugins.olas.importer import DiscoveredKey, DiscoveredService, ImportResult
 from iwa.plugins.olas.plugin import OlasPlugin

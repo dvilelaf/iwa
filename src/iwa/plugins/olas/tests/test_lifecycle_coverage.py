@@ -7,7 +7,7 @@ Targets uncovered lines identified by coverage report:
 1111-1112, 1119-1121, 1149, 1171, 1174-1175, 1199-1202
 """
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

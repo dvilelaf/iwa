@@ -12,7 +12,6 @@ from web3.exceptions import ContractCustomError
 
 from iwa.core.contracts.contract import (
     ContractInstance,
-    _ABI_CACHE,
     clear_abi_cache,
 )
 

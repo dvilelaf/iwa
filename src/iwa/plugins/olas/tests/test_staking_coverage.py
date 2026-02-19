@@ -24,7 +24,7 @@ import pytest
 
 from iwa.plugins.olas.contracts.service import ServiceState
 from iwa.plugins.olas.contracts.staking import StakingState
-from iwa.plugins.olas.models import Service, StakingStatus
+from iwa.plugins.olas.models import Service
 from iwa.plugins.olas.service_manager import ServiceManager
 from iwa.plugins.olas.service_manager.staking import StakingManagerMixin
 

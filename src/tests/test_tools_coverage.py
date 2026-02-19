@@ -5,7 +5,6 @@ by mocking external dependencies (KeyStorage, secrets, StakingContract, etc.).
 """
 
 import datetime
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -713,7 +712,6 @@ class TestStakeServiceModalButtonPress:
 
     def test_stake_button_with_selection(self):
         """Test pressing stake with a valid selection."""
-        from textual.widgets import Select
 
         from iwa.tui.modals.base import StakeServiceModal
 
@@ -766,7 +764,6 @@ class TestCreateServiceModalButtonPress:
 
     def test_create_button_valid(self):
         """Test pressing create with valid form data."""
-        from textual.widgets import Select
 
         from iwa.tui.modals.base import CreateServiceModal
 
@@ -797,7 +794,6 @@ class TestCreateServiceModalButtonPress:
 
     def test_create_button_no_name(self):
         """Test pressing create with no name returns early."""
-        from textual.widgets import Select
 
         from iwa.tui.modals.base import CreateServiceModal
 

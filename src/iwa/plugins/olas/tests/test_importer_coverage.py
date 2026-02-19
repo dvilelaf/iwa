@@ -11,11 +11,11 @@ import pytest
 from eth_account import Account
 
 from iwa.plugins.olas.importer import (
+    STAKING_PROGRAM_MAP,
     DiscoveredKey,
     DiscoveredService,
     ImportResult,
     OlasServiceImporter,
-    STAKING_PROGRAM_MAP,
 )
 
 # Valid 42-char hex Ethereum addresses
