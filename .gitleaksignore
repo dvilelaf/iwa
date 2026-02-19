@@ -37,3 +37,9 @@ cf38977d2ec48b52edcac965be7acec05bb6da54:src/iwa/plugins/olas/service_manager/st
 cf38977d2ec48b52edcac965be7acec05bb6da54:src/iwa/plugins/olas/service_manager/staking.py:generic-api-key:44
 # Test Ethereum address constant in test_transfer_multisend.py (not a secret)
 9fbed18c26de18a0ee83a99e1b6e44b4629ed19e:src/tests/test_transfer_multisend.py:generic-api-key:15
+# Test address in TUI wallets coverage test (not a secret)
+897dbf3f829333dd61b65fb90563ce1d85db11eb:src/tests/test_tui_wallets_coverage.py:generic-api-key:1011
+# Test passwords in importer coverage tests (not real secrets)
+897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:35
+897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:49
+897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:1087
