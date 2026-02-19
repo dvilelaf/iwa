@@ -140,6 +140,9 @@ ignore_missing_imports = true
 ignore_errors = true
 follow_imports = "skip"
 
+[tool.coverage.report]
+fail_under = 85
+
 [tool.bandit]
 exclude_dirs = ["tests", "src/tests", "src/iwa/plugins/olas/tests"]
 skips = ["B101", "B105", "B106", "B110", "B107", "B112"]
