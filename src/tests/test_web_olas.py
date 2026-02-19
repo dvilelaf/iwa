@@ -27,6 +27,13 @@ async def override_verify_auth():
 
 app.dependency_overrides[verify_auth] = override_verify_auth
 
+# Disable rate limiters for testing (prevents flaky 429 failures in full suite)
+from iwa.web.routers.olas.admin import limiter as _admin_limiter
+from iwa.web.routers.olas.funding import limiter as _funding_limiter
+
+_admin_limiter.enabled = False
+_funding_limiter.enabled = False
+
 
 @pytest.fixture(scope="module")
 def client():

@@ -184,7 +184,7 @@ class TestServerAsync:
         import pathlib
 
         # Read the source file directly to verify default
-        server_path = pathlib.Path(__file__).parent.parent / "server.py"
+        server_path = pathlib.Path(__file__).parent.parent / "iwa" / "web" / "server.py"
         source = server_path.read_text()
 
         # Verify the function signature has localhost default
@@ -194,7 +194,7 @@ class TestServerAsync:
         """run_server_async function exists in server.py source."""
         import pathlib
 
-        server_path = pathlib.Path(__file__).parent.parent / "server.py"
+        server_path = pathlib.Path(__file__).parent.parent / "iwa" / "web" / "server.py"
         source = server_path.read_text()
 
         # Verify the async function exists
