@@ -1,6 +1,7 @@
 """Tests for the MCP server and tools."""
 
 import asyncio
+import datetime
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ from fastmcp import FastMCP
 ADDR_MASTER = "0x1111111111111111111111111111111111111111"
 ADDR_WORKER = "0x2222222222222222222222222222222222222222"
 OLAS_TOKEN = "0x3333333333333333333333333333333333333333"
+ADDR_SAFE = "0x4444444444444444444444444444444444444444"
 
 
 # --- Helpers ---
@@ -32,6 +34,14 @@ def _make_mcp(mock_wallet=None, mock_ci=None) -> FastMCP:
     mcp = FastMCP("test")
     register_tools(mcp)
     return mcp
+
+
+def _mock_peewee_field():
+    """Create a MagicMock whose comparisons return MagicMock (like peewee Fields)."""
+    field = MagicMock()
+    for op in ("__ge__", "__gt__", "__le__", "__lt__"):
+        setattr(type(field), op, lambda self, other: MagicMock())
+    return field
 
 
 # --- Fixtures ---
@@ -280,6 +290,497 @@ class TestDrain:
         tool_fn(from_account=ADDR_WORKER, to_account=ADDR_MASTER)
 
         assert mock_wallet.drain.call_args.kwargs["to_address_or_tag"] == ADDR_MASTER
+
+
+# --- Account tools ---
+
+
+class TestCreateAccount:
+    def test_create_account(self, mock_wallet):
+        mcp = _make_mcp()
+        tool_fn = _get_tool_fn(mcp, "create_account")
+        result = tool_fn(tag="worker-1")
+
+        assert result["status"] == "success"
+        assert result["tag"] == "worker-1"
+        mock_wallet.key_storage.generate_new_account.assert_called_once_with("worker-1")
+
+
+class TestCreateSafe:
+    def test_create_safe_with_tags(self, mock_wallet):
+        mcp = _make_mcp()
+        account_obj = MagicMock()
+        account_obj.address = ADDR_MASTER
+        mock_wallet.account_service.resolve_account.return_value = account_obj
+
+        tool_fn = _get_tool_fn(mcp, "create_safe")
+        result = tool_fn(owners="master", threshold=1, tag="my-safe", chains="gnosis")
+
+        assert result["status"] == "success"
+        mock_wallet.safe_service.create_safe.assert_called_once()
+
+    def test_create_safe_with_addresses(self, mock_wallet):
+        mcp = _make_mcp()
+        tool_fn = _get_tool_fn(mcp, "create_safe")
+        result = tool_fn(owners=ADDR_MASTER, threshold=1, tag="safe2")
+
+        assert result["status"] == "success"
+        call_args = mock_wallet.safe_service.create_safe.call_args
+        assert ADDR_MASTER in call_args[0][1]
+
+    def test_create_safe_owner_not_found(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.account_service.resolve_account.return_value = None
+
+        tool_fn = _get_tool_fn(mcp, "create_safe")
+        result = tool_fn(owners="unknown-tag", threshold=1, tag="bad-safe")
+
+        assert result["status"] == "error"
+        assert "not found" in result["error"]
+
+
+class TestTransferFrom:
+    def test_transfer_from_success(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.transfer_from_erc20.return_value = "0xabc"
+
+        tool_fn = _get_tool_fn(mcp, "transfer_from")
+        result = tool_fn(
+            from_account="master",
+            sender=ADDR_WORKER,
+            recipient=ADDR_MASTER,
+            token="OLAS",
+            amount="100",
+        )
+
+        assert result["status"] == "success"
+        mock_wallet.transfer_from_erc20.assert_called_once()
+
+    def test_transfer_from_failed(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.transfer_from_erc20.return_value = None
+
+        tool_fn = _get_tool_fn(mcp, "transfer_from")
+        result = tool_fn(
+            from_account="master",
+            sender=ADDR_WORKER,
+            recipient=ADDR_MASTER,
+            token="OLAS",
+            amount="50",
+        )
+
+        assert result["status"] == "failed"
+
+
+# --- State tools ---
+
+
+class TestGetAppState:
+    def test_get_app_state(self, mock_chain_interfaces):
+        mcp = _make_mcp()
+
+        # Setup chain interfaces mock
+        mock_interface = MagicMock()
+        mock_interface.chain.native_currency = "xDAI"
+        mock_interface.tokens = {"OLAS": OLAS_TOKEN, "WXDAI": ADDR_SAFE}
+        mock_chain_interfaces.items.return_value = [("gnosis", mock_interface)]
+
+        with patch("iwa.core.models.Config") as mock_config_cls:
+            mock_config = MagicMock()
+            mock_config.core.whitelist = {}
+            mock_config_cls.return_value = mock_config
+
+            tool_fn = _get_tool_fn(mcp, "get_app_state")
+            result = tool_fn()
+
+        assert "gnosis" in result["chains"]
+        assert result["native_currencies"]["gnosis"] == "xDAI"
+        assert "OLAS" in result["tokens"]["gnosis"]
+
+
+class TestGetRpcStatus:
+    def test_rpc_online(self, mock_chain_interfaces):
+        mcp = _make_mcp()
+
+        mock_interface = MagicMock()
+        mock_interface.web3.eth.block_number = 12345
+        mock_chain_interfaces.items.return_value = [("gnosis", mock_interface)]
+
+        tool_fn = _get_tool_fn(mcp, "get_rpc_status")
+        result = tool_fn()
+
+        assert result["gnosis"]["status"] == "online"
+        assert result["gnosis"]["block"] == 12345
+
+    def test_rpc_offline(self, mock_chain_interfaces):
+        mcp = _make_mcp()
+
+        mock_interface = MagicMock()
+        mock_interface.web3.eth.block_number = property(
+            lambda self: (_ for _ in ()).throw(ConnectionError("timeout"))
+        )
+        type(mock_interface.web3.eth).block_number = property(
+            lambda self: (_ for _ in ()).throw(ConnectionError("timeout"))
+        )
+        mock_chain_interfaces.items.return_value = [("gnosis", mock_interface)]
+
+        tool_fn = _get_tool_fn(mcp, "get_rpc_status")
+        result = tool_fn()
+
+        assert result["gnosis"]["status"] == "offline"
+
+
+# --- Transaction tools ---
+
+
+class TestGetTransactions:
+    @patch("iwa.core.db.SentTransaction")
+    def test_get_transactions(self, mock_tx_cls, mock_wallet):
+        mcp = _make_mcp()
+
+        # Create mock transaction
+        mock_tx = MagicMock()
+        mock_tx.amount_wei = 1_000_000_000_000_000_000  # 1 ETH
+        mock_tx.timestamp = datetime.datetime(2025, 6, 15, 10, 30)
+        mock_tx.chain = "gnosis"
+        mock_tx.from_tag = "master"
+        mock_tx.from_address = ADDR_MASTER
+        mock_tx.to_tag = "worker"
+        mock_tx.to_address = ADDR_WORKER
+        mock_tx.token = "native"
+        mock_tx.value_eur = 1.50
+        mock_tx.tx_hash = "0xabc123"
+        mock_tx.tags = '["send"]'
+
+        mock_tx_cls.select.return_value.where.return_value.order_by.return_value = [
+            mock_tx
+        ]
+        mock_tx_cls.chain = _mock_peewee_field()
+        mock_tx_cls.timestamp = _mock_peewee_field()
+
+        tool_fn = _get_tool_fn(mcp, "get_transactions")
+        result = tool_fn(chain="gnosis")
+
+        assert result["chain"] == "gnosis"
+        assert len(result["transactions"]) == 1
+        assert result["transactions"][0]["from"] == "master"
+        assert result["transactions"][0]["hash"] == "0xabc123"
+
+
+# --- Swap query tools ---
+
+
+class TestSwapQuote:
+    def test_swap_quote_sell(self, mock_wallet, mock_chain_interfaces):
+        mcp = _make_mcp()
+
+        # Mock chain interface
+        mock_ci = mock_chain_interfaces.get.return_value
+        mock_chain = MagicMock()
+        mock_chain.get_token_address.side_effect = lambda t: (
+            OLAS_TOKEN if t == "OLAS" else ADDR_SAFE
+        )
+        mock_ci.chain = mock_chain
+
+        # Mock wallet account/signer
+        account_obj = MagicMock()
+        account_obj.address = ADDR_MASTER
+        mock_wallet.account_service.resolve_account.return_value = account_obj
+        mock_wallet.key_storage.get_signer.return_value = MagicMock()
+
+        # Mock CowSwap
+        with patch("iwa.plugins.gnosis.cow.CowSwap") as mock_cow_cls:
+            mock_cow = MagicMock()
+            mock_cow.get_max_buy_amount_wei = AsyncMock(
+                return_value=500_000_000_000_000_000_000
+            )
+            mock_cow_cls.return_value = mock_cow
+
+            tool_fn = _get_tool_fn(mcp, "swap_quote")
+            result = tool_fn(
+                account="master",
+                sell_token="OLAS",
+                buy_token="WXDAI",
+                amount="100",
+                mode="sell",
+            )
+
+        assert result["amount"] == 500.0
+        assert result["mode"] == "sell"
+
+    def test_swap_quote_no_signer(self, mock_wallet, mock_chain_interfaces):
+        mcp = _make_mcp()
+        mock_ci = mock_chain_interfaces.get.return_value
+        mock_ci.chain = MagicMock()
+        account_obj = MagicMock()
+        account_obj.address = ADDR_MASTER
+        mock_wallet.account_service.resolve_account.return_value = account_obj
+        mock_wallet.key_storage.get_signer.return_value = None
+
+        tool_fn = _get_tool_fn(mcp, "swap_quote")
+        result = tool_fn(
+            account="master", sell_token="OLAS", buy_token="WXDAI", amount="10"
+        )
+
+        assert "error" in result
+
+
+class TestGetSwapOrders:
+    def test_get_orders(self, mock_wallet, mock_chain_interfaces):
+        mcp = _make_mcp()
+
+        account_obj = MagicMock()
+        account_obj.address = ADDR_MASTER
+        mock_wallet.account_service.resolve_account.return_value = account_obj
+
+        mock_ci = mock_chain_interfaces.get.return_value
+        mock_ci.chain.chain_id = 100
+        mock_ci.chain.get_token_name.side_effect = lambda addr: (
+            "OLAS" if addr == OLAS_TOKEN else "WXDAI"
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [
+            {
+                "uid": "0x" + "a" * 40 + "abc",
+                "status": "fulfilled",
+                "sellToken": OLAS_TOKEN,
+                "buyToken": ADDR_SAFE,
+                "sellAmount": "1000000000000000000",
+                "buyAmount": "2000000000000000000",
+            }
+        ]
+
+        with patch("requests.get", return_value=mock_response):
+            tool_fn = _get_tool_fn(mcp, "get_swap_orders")
+            result = tool_fn(account="master", chain="gnosis", limit=5)
+
+        assert len(result["orders"]) == 1
+        assert result["orders"][0]["status"] == "fulfilled"
+
+    def test_get_orders_unsupported_chain(self, mock_wallet, mock_chain_interfaces):
+        mcp = _make_mcp()
+        account_obj = MagicMock()
+        account_obj.address = ADDR_MASTER
+        mock_wallet.account_service.resolve_account.return_value = account_obj
+        mock_ci = mock_chain_interfaces.get.return_value
+        mock_ci.chain.chain_id = 999  # Unsupported
+
+        tool_fn = _get_tool_fn(mcp, "get_swap_orders")
+        result = tool_fn(account="master")
+
+        assert result["orders"] == []
+
+
+# --- Wrap tools ---
+
+
+class TestWrap:
+    def test_wrap_success(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.transfer_service.wrap_native.return_value = "0xwrap"
+
+        tool_fn = _get_tool_fn(mcp, "wrap")
+        result = tool_fn(account="master", amount="10")
+
+        assert result["status"] == "success"
+        assert result["tx_hash"] == "0xwrap"
+
+    def test_wrap_failed(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.transfer_service.wrap_native.return_value = None
+
+        tool_fn = _get_tool_fn(mcp, "wrap")
+        result = tool_fn(account="master", amount="10")
+
+        assert result["status"] == "failed"
+
+
+class TestUnwrap:
+    def test_unwrap_success(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.transfer_service.unwrap_native.return_value = "0xunwrap"
+
+        tool_fn = _get_tool_fn(mcp, "unwrap")
+        result = tool_fn(account="master", amount="5")
+
+        assert result["status"] == "success"
+        assert result["tx_hash"] == "0xunwrap"
+
+
+class TestGetWrapBalance:
+    def test_get_wrap_balance(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.get_native_balance_wei.return_value = 2_000_000_000_000_000_000
+        mock_wallet.get_erc20_balance_wei.return_value = 3_000_000_000_000_000_000
+
+        tool_fn = _get_tool_fn(mcp, "get_wrap_balance")
+        result = tool_fn(account="master")
+
+        assert result["native"] == 2.0
+        assert result["wxdai"] == 3.0
+
+    def test_get_wrap_balance_none(self, mock_wallet):
+        mcp = _make_mcp()
+        mock_wallet.get_native_balance_wei.return_value = None
+        mock_wallet.get_erc20_balance_wei.return_value = None
+
+        tool_fn = _get_tool_fn(mcp, "get_wrap_balance")
+        result = tool_fn(account="master")
+
+        assert result["native"] == 0.0
+        assert result["wxdai"] == 0.0
+
+
+# --- Rewards tools ---
+
+
+def _make_claim_tx(amount_wei, ts, to_tag="trader-1", price_eur=0.50, value_eur=5.0):
+    """Helper to create mock claim transaction."""
+    tx = MagicMock()
+    tx.amount_wei = amount_wei
+    tx.timestamp = ts
+    tx.to_tag = to_tag
+    tx.to_address = ADDR_WORKER
+    tx.tx_hash = "0xclaim"
+    tx.price_eur = price_eur
+    tx.value_eur = value_eur
+    tx.chain = "gnosis"
+    tx.tags = '["olas_claim_rewards"]'
+    return tx
+
+
+class TestGetRewardClaims:
+    @patch("iwa.core.db.SentTransaction")
+    def test_get_claims(self, mock_tx_cls, mock_wallet):
+        mcp = _make_mcp()
+
+        claim = _make_claim_tx(
+            10_000_000_000_000_000_000,
+            datetime.datetime(2025, 6, 15, 12, 0),
+        )
+
+        mock_tx_cls.tags.contains.return_value = MagicMock()
+        mock_tx_cls.timestamp = _mock_peewee_field()
+        mock_tx_cls.select.return_value.where.return_value.order_by.return_value = [
+            claim
+        ]
+
+        tool_fn = _get_tool_fn(mcp, "get_reward_claims")
+        result = tool_fn(year=2025)
+
+        assert result["year"] == 2025
+        assert len(result["claims"]) == 1
+        assert result["claims"][0]["olas_amount"] == 10.0
+
+    @patch("iwa.core.db.SentTransaction")
+    def test_get_claims_default_year(self, mock_tx_cls, mock_wallet):
+        mcp = _make_mcp()
+        mock_tx_cls.tags.contains.return_value = MagicMock()
+        mock_tx_cls.timestamp = _mock_peewee_field()
+        mock_tx_cls.select.return_value.where.return_value.order_by.return_value = []
+
+        tool_fn = _get_tool_fn(mcp, "get_reward_claims")
+        result = tool_fn()
+
+        assert result["year"] == datetime.datetime.now().year
+
+
+class TestGetRewardsSummary:
+    @patch("iwa.core.db.SentTransaction")
+    def test_summary(self, mock_tx_cls, mock_wallet):
+        mcp = _make_mcp()
+
+        claims = [
+            _make_claim_tx(
+                5_000_000_000_000_000_000,
+                datetime.datetime(2025, 3, 10),
+                value_eur=2.50,
+            ),
+            _make_claim_tx(
+                15_000_000_000_000_000_000,
+                datetime.datetime(2025, 3, 20),
+                value_eur=7.50,
+            ),
+        ]
+
+        mock_tx_cls.tags.contains.return_value = MagicMock()
+        mock_tx_cls.timestamp = _mock_peewee_field()
+        mock_tx_cls.select.return_value.where.return_value = claims
+
+        tool_fn = _get_tool_fn(mcp, "get_rewards_summary")
+        result = tool_fn(year=2025)
+
+        assert result["year"] == 2025
+        assert result["total_olas"] == 20.0
+        assert result["total_eur"] == 10.0
+        assert result["total_claims"] == 2
+        # March (index 2) should have the data
+        march = result["months"][2]
+        assert march["month"] == 3
+        assert march["olas"] == 20.0
+
+
+class TestGetRewardsByTrader:
+    @patch("iwa.core.db.SentTransaction")
+    def test_by_trader(self, mock_tx_cls, mock_wallet):
+        mcp = _make_mcp()
+
+        claims = [
+            _make_claim_tx(
+                10_000_000_000_000_000_000,
+                datetime.datetime(2025, 1, 15),
+                to_tag="trader-A",
+                value_eur=5.0,
+            ),
+            _make_claim_tx(
+                20_000_000_000_000_000_000,
+                datetime.datetime(2025, 1, 20),
+                to_tag="trader-B",
+                value_eur=10.0,
+            ),
+        ]
+
+        mock_tx_cls.tags.contains.return_value = MagicMock()
+        mock_tx_cls.timestamp = _mock_peewee_field()
+        mock_tx_cls.select.return_value.where.return_value.order_by.return_value = (
+            claims
+        )
+
+        tool_fn = _get_tool_fn(mcp, "get_rewards_by_trader")
+        result = tool_fn(year=2025)
+
+        assert result["year"] == 2025
+        assert len(result["traders"]) == 2
+        # Sorted by total_eur desc, so trader-B first
+        assert result["traders"][0]["name"] == "trader-B"
+        assert result["traders"][0]["total_olas"] == 20.0
+
+
+# --- Tool count integration ---
+
+
+class TestToolCount:
+    def test_all_core_tools_registered(self, mock_wallet):
+        mcp = _make_mcp()
+        tools = asyncio.run(mcp.list_tools())
+        tool_names = {t.name for t in tools}
+
+        expected = {
+            # Original 9
+            "list_accounts", "get_balance", "get_token_balance",
+            "get_token_info", "get_allowance",
+            "send", "approve", "swap", "drain",
+            # New 14
+            "create_account", "create_safe", "transfer_from",
+            "get_app_state", "get_rpc_status", "get_transactions",
+            "swap_quote", "get_swap_orders",
+            "wrap", "unwrap", "get_wrap_balance",
+            "get_reward_claims", "get_rewards_summary", "get_rewards_by_trader",
+        }
+        assert expected.issubset(tool_names), f"Missing: {expected - tool_names}"
+        assert len(tools) >= 23
 
 
 # --- Server entry points ---

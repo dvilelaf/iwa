@@ -43,3 +43,7 @@ class Plugin(ABC):
     def get_tui_view(self, wallet=None) -> Optional["Widget"]:
         """Return a Textual Widget to be displayed in the TUI."""
         return None
+
+    def register_mcp_tools(self, mcp) -> None:  # noqa: B027
+        """Register MCP tools on the server. Override in plugins."""
+        pass

@@ -36,6 +36,7 @@ dependencies = [
     "urllib3>=2.6.3",
     "multiformats>=0.3.1",
     "requests>=2.32.0",
+    "fastmcp>=3.0.0",
 ]
 
 [project.scripts]
@@ -44,6 +45,7 @@ iwa-wallet-check = "iwa.tools.wallet_check:check_wallet"
 iwa-reset-tenderly = "iwa.tools.reset_tenderly:main"
 iwa-reset-env = "iwa.tools.reset_env:main"
 iwa-check-profile = "iwa.tools.check_profile:main"
+iwa-mcp = "iwa.mcp.server:main"
 
 [dependency-groups]
 dev = [

@@ -210,6 +210,18 @@ def web_server(
     run_server(host=host, port=server_port)
 
 
+@iwa_cli.command("mcp")
+def mcp_server(
+    transport: str = typer.Option("stdio", "--transport", "-t", help="Transport: stdio or http"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host for HTTP transport"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port for HTTP transport"),
+):
+    """Start MCP server for AI agent integration."""
+    from iwa.mcp.server import run_server
+
+    run_server(transport=transport, host=host, port=port)
+
+
 @iwa_cli.command("decode")
 def decode_hex(
     hex_data: str = typer.Argument(..., help="The hex-encoded error data (e.g., 0xa43d6ada...)"),
