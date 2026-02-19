@@ -33,6 +33,12 @@ class OlasPlugin(Plugin):
             "import": self.import_services,
         }
 
+    def register_mcp_tools(self, mcp) -> None:
+        """Register Olas MCP tools on the server."""
+        from iwa.plugins.olas.mcp import register_olas_tools
+
+        register_olas_tools(mcp)
+
     def get_tui_view(self, wallet=None):
         """Get TUI widget for this plugin."""
         from iwa.plugins.olas.tui.olas_view import OlasView
