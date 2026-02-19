@@ -140,6 +140,19 @@ ignore_missing_imports = true
 ignore_errors = true
 follow_imports = "skip"
 
+[tool.coverage.run]
+omit = [
+    "src/iwa/plugins/olas/scripts/*",  # Manual integration test scripts (Tenderly)
+    "src/iwa/tools/backfill_claims.py",  # One-off data migration script
+    "src/iwa/tools/check_profile.py",  # Manual Tenderly profile checker
+    "src/iwa/tools/drain_accounts.py",  # Manual account drain script
+    "src/iwa/tools/release.py",  # Release automation (runs in CI)
+    "src/iwa/tools/reset_env.py",  # Manual environment reset script
+    "src/iwa/tools/reset_tenderly.py",  # Manual Tenderly reset script
+    "src/iwa/tools/restore_backup.py",  # Manual backup restore script
+    "src/iwa/tools/test_chainlist.py",  # Manual test script
+]
+
 [tool.coverage.report]
 fail_under = 85
 
