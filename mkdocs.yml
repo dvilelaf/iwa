@@ -49,6 +49,7 @@ nav:
   - Interfaces:
     - Web UI: interfaces/web.md
     - CLI & TUI: interfaces/cli_tui.md
+    - MCP Server: interfaces/mcp.md
   - Development:
     - Release Workflow: dev/release.md
     - Contributing: dev/contributing.md

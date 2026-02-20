@@ -153,13 +153,14 @@ def _register_chain_tools(mcp: FastMCP) -> None:
 
         """
         wallet = Wallet()
-        allowance = wallet.get_erc20_allowance(owner, spender, token, chain)
+        allowance_wei = wallet.get_erc20_allowance(owner, spender, token, chain)
+        allowance_eth = float(Web3.from_wei(int(allowance_wei), "ether")) if allowance_wei is not None else None
         return {
             "owner": owner,
             "spender": spender,
             "token": token,
             "chain": chain,
-            "allowance_eth": allowance,
+            "allowance_eth": allowance_eth,
         }
 
 
@@ -222,14 +223,14 @@ def _register_write_tools(mcp: FastMCP) -> None:
         """
         wallet = Wallet()
         amount_wei = Web3.to_wei(float(amount), "ether")
-        tx_hash = wallet.approve_erc20(
+        success = wallet.approve_erc20(
             owner_address_or_tag=owner,
             spender_address_or_tag=spender,
             token_address_or_name=token,
             amount_wei=amount_wei,
             chain_name=chain,
         )
-        return {"tx_hash": tx_hash, "status": "approved" if tx_hash else "failed"}
+        return {"status": "approved" if success else "failed"}
 
     @mcp.tool
     def swap(
@@ -289,7 +290,14 @@ def _register_write_tools(mcp: FastMCP) -> None:
             to_address_or_tag=to_account,
             chain_name=chain,
         )
-        return {"result": result, "status": "drained" if result else "failed"}
+        if result is None:
+            return {"status": "nothing_to_drain"}
+        # multi_send returns (success, receipt) for EOA or a tx hash string for Safe
+        if isinstance(result, (list, tuple)):
+            success = bool(result[0]) if result else False
+        else:
+            success = bool(result)
+        return {"status": "drained" if success else "failed"}
 
 
 def _register_account_tools(mcp: FastMCP) -> None:

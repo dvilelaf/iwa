@@ -30,6 +30,8 @@ Iwa is a Python framework designed for managing crypto wallets and interacting w
   - **Rate Limiting**: Token bucket algorithm with automatic backoff.
   - **Retry Logic**: Automatic retries with exponential backoff for transient failures.
 
+- **MCP Server**: Expose all wallet and Olas operations as [Model Context Protocol](https://modelcontextprotocol.io) tools, enabling AI agents (Claude, Cursor, etc.) to interact with the blockchain directly.
+
 - **CLI & TUI Integration**: Interact with your wallet via a unified CLI or a beautiful Terminal User Interface built with Textual.
 
 - **Web API**: RESTful API built with FastAPI for web-based integrations.
@@ -46,9 +48,11 @@ iwa/
 │   ├── chain/          # Blockchain interface with rate limiting
 │   ├── services/       # Service layer (accounts, balances, transactions)
 │   └── contracts/      # Contract abstractions (ERC20, Safe)
+├── mcp/                # MCP server (Model Context Protocol)
+│   └── tools.py        # 23 core wallet tools
 ├── plugins/            # Protocol integrations
 │   ├── gnosis/         # Safe multisig and CowSwap DEX
-│   └── olas/           # Olas Registry, Services, Staking
+│   └── olas/           # Olas Registry, Services, Staking + 17 MCP tools
 ├── tui/                # Terminal User Interface (Textual)
 └── web/                # Web API (FastAPI)
 ```
@@ -114,7 +118,33 @@ just web
 
 # Use CLI
 iwa wallet list --chain gnosis
+
+# Start MCP server (for AI agent integration)
+iwa mcp --transport sse --port 18080
 ```
+
+### MCP Agent Integration
+
+The MCP server exposes 40 tools covering wallet operations, Olas service management, and staking. Example agent scripts for Claude, OpenAI GPT, and Gemini are in `scripts/mcp/`:
+
+```bash
+# Start the MCP server
+iwa mcp --transport sse --port 18080
+
+# Claude (pip install anthropic)
+export ANTHROPIC_API_KEY=sk-ant-...
+python scripts/mcp/claude_agent.py
+
+# OpenAI GPT (pip install openai)
+export OPENAI_API_KEY=sk-...
+python scripts/mcp/openai_agent.py
+
+# Gemini (pip install google-generativeai)
+export GOOGLE_API_KEY=AIza...
+python scripts/mcp/gemini_agent.py
+```
+
+See [MCP documentation](docs/interfaces/mcp.md) for the full tool reference and Claude Desktop configuration.
 
 ### Running Tests
 

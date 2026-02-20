@@ -181,7 +181,8 @@ class TestGetTokenInfo:
 class TestGetAllowance:
     def test_get_allowance(self, mock_wallet):
         mcp = _make_mcp()
-        mock_wallet.get_erc20_allowance.return_value = 1000.0
+        # get_erc20_allowance returns wei; the tool converts to ether
+        mock_wallet.get_erc20_allowance.return_value = 1000 * 10**18  # 1000 OLAS in wei
 
         tool_fn = _get_tool_fn(mcp, "get_allowance")
         result = tool_fn(owner="master", spender=ADDR_WORKER, token="OLAS")
@@ -231,7 +232,7 @@ class TestSend:
 class TestApprove:
     def test_approve(self, mock_wallet):
         mcp = _make_mcp()
-        mock_wallet.approve_erc20.return_value = "0xaaa"
+        mock_wallet.approve_erc20.return_value = True  # approve_erc20 returns bool
 
         tool_fn = _get_tool_fn(mcp, "approve")
         result = tool_fn(
@@ -239,7 +240,7 @@ class TestApprove:
         )
 
         assert result["status"] == "approved"
-        assert result["tx_hash"] == "0xaaa"
+        assert "tx_hash" not in result  # no tx_hash — approve_erc20 returns bool
 
 
 class TestSwap:
@@ -269,13 +270,13 @@ class TestSwap:
 class TestDrain:
     def test_drain(self, mock_wallet):
         mcp = _make_mcp()
-        mock_wallet.drain.return_value = "drained 3 tokens"
+        mock_wallet.drain.return_value = "drained 3 tokens"  # truthy non-list string
 
         tool_fn = _get_tool_fn(mcp, "drain")
         result = tool_fn(from_account=ADDR_WORKER)
 
         assert result["status"] == "drained"
-        assert result["result"] == "drained 3 tokens"
+        assert "result" not in result  # result key was removed; status is sufficient
         mock_wallet.drain.assert_called_once_with(
             from_address_or_tag=ADDR_WORKER,
             to_address_or_tag="master",

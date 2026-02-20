@@ -259,7 +259,7 @@ def _register_service_write_tools(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _register_admin_tools(mcp: FastMCP) -> None:
+def _register_admin_tools(mcp: FastMCP) -> None:  # noqa: C901
     @mcp.tool
     def olas_activate_service(service_key: str) -> dict:
         """Activate registration for a service (step 1 after creation).
@@ -337,10 +337,38 @@ def _register_admin_tools(mcp: FastMCP) -> None:
             )
 
         success = manager.wind_down(staking_contract=staking_contract)
-        return {
-            "status": "success" if success else "failed",
-            "message": "Wound down to PRE_REGISTRATION" if success else "Wind down failed",
-        }
+        if success:
+            return {"status": "success", "message": "Wound down to PRE_REGISTRATION"}
+
+        # Diagnose failure: check if stuck due to staking epoch lock
+        if staking_contract and service.staking_contract_address:
+            try:
+                from datetime import datetime, timezone
+
+                from iwa.plugins.olas.contracts.staking import StakingState
+
+                staking_state = staking_contract.get_staking_state(service.service_id)
+                if staking_state == StakingState.STAKED:
+                    svc_info = staking_contract.get_service_info(service.service_id)
+                    ts_start = svc_info.get("ts_start", 0)
+                    if ts_start > 0:
+                        unlock_ts = ts_start + staking_contract.min_staking_duration
+                        now_ts = datetime.now(timezone.utc).timestamp()
+                        if now_ts < unlock_ts:
+                            diff = int(unlock_ts - now_ts)
+                            h, m = diff // 3600, (diff % 3600) // 60
+                            return {
+                                "status": "failed",
+                                "message": (
+                                    "Cannot terminate: service is staked and minimum"
+                                    f" staking duration not met."
+                                    f" Unlocks in {diff}s ({h}h {m}m)."
+                                ),
+                            }
+            except Exception:
+                pass
+
+        return {"status": "failed", "message": "Wind down failed"}
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +404,7 @@ def _register_staking_query_tools(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _register_staking_action_tools(mcp: FastMCP) -> None:
+def _register_staking_action_tools(mcp: FastMCP) -> None:  # noqa: C901
     @mcp.tool
     def olas_stake_service(service_key: str, staking_contract: str) -> dict:
         """Stake a service into a staking contract.
@@ -408,7 +436,9 @@ def _register_staking_action_tools(mcp: FastMCP) -> None:
             Dictionary with operation status.
 
         """
-        from iwa.plugins.olas.contracts.staking import StakingContract
+        from datetime import datetime, timezone
+
+        from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 
         service, _ = _load_service(service_key)
         if not service.staking_contract_address:
@@ -416,6 +446,29 @@ def _register_staking_action_tools(mcp: FastMCP) -> None:
 
         manager = _make_manager_for_service(service)
         sc = StakingContract(service.staking_contract_address, service.chain_name)
+
+        # Surface epoch lock reason before attempting unstake
+        try:
+            staking_state = sc.get_staking_state(service.service_id)
+            if staking_state == StakingState.STAKED:
+                svc_info = sc.get_service_info(service.service_id)
+                ts_start = svc_info.get("ts_start", 0)
+                if ts_start > 0:
+                    unlock_ts = ts_start + sc.min_staking_duration
+                    now_ts = datetime.now(timezone.utc).timestamp()
+                    if now_ts < unlock_ts:
+                        diff = int(unlock_ts - now_ts)
+                        h, m = diff // 3600, (diff % 3600) // 60
+                        return {
+                            "status": "failed",
+                            "reason": (
+                                f"Minimum staking duration not met."
+                                f" Unlocks in {diff}s ({h}h {m}m)."
+                            ),
+                        }
+        except Exception:
+            pass  # Let unstake() handle unexpected errors
+
         success = manager.unstake(sc)
         return {"status": "success" if success else "failed"}
 
@@ -477,8 +530,12 @@ def _register_staking_reward_tools(mcp: FastMCP) -> None:
         service, _ = _load_service(service_key)
         manager = _make_manager_for_service(service)
         success, amount = manager.claim_rewards()
+        if not success and amount == 0:
+            status = "nothing_to_claim"
+        else:
+            status = "claimed" if success else "failed"
         return {
-            "status": "claimed" if success else "failed",
+            "status": status,
             "amount_olas": amount,
         }
 

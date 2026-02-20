@@ -497,7 +497,9 @@ class TestOlasClaimRewards:
             fn = _get_tool_fn(mcp, "olas_claim_rewards")
             result = fn(service_key=SERVICE_KEY)
 
-        assert result["status"] == "failed"
+        # (False, 0) means no rewards available — not an error, just nothing to claim
+        assert result["status"] == "nothing_to_claim"
+        assert result["amount_olas"] == 0
 
 
 class TestOlasCheckpoint:
