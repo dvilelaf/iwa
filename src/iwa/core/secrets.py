@@ -40,6 +40,7 @@ class Secrets(BaseSettings):
     base_test_rpc: Optional[SecretStr] = None
 
     coingecko_api_key: Optional[SecretStr] = None
+    subgraph_api_key: Optional[SecretStr] = None
     wallet_password: Optional[SecretStr] = None
 
     webui_password: Optional[SecretStr] = None
