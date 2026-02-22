@@ -36,7 +36,7 @@ class AccountService:
         except ValueError:
             token_address = chain.get_token_address(token_address_or_name)
             if not token_address:
-                logger.error(f"Token '{token_address_or_name}' not found on chain '{chain.name}'.")
+                logger.debug(f"Token '{token_address_or_name}' not found on chain '{chain.name}'.")
                 return None
             return token_address
 

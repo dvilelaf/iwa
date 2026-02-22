@@ -7,6 +7,7 @@ from loguru import logger
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from iwa.core.chain import ChainInterfaces
 from iwa.web.cache import CacheTTL, response_cache
 from iwa.web.dependencies import verify_auth, wallet
 from iwa.web.models import AccountCreateRequest, SafeCreateRequest
@@ -40,11 +41,15 @@ def get_accounts(
     if not chain.replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid chain name")
 
-    # Parse tokens from query parameter or use defaults
+    # Parse tokens from query parameter or use chain-specific defaults
     if tokens:
         token_names = [t.strip() for t in tokens.split(",") if t.strip()]
     else:
-        token_names = ["native", "OLAS", "WXDAI", "USDC"]
+        try:
+            chain_interface = ChainInterfaces().get(chain)
+            token_names = ["native"] + list(chain_interface.chain.tokens.keys())
+        except ValueError:
+            token_names = ["native", "OLAS"]
 
     # Create cache key from chain and tokens
     cache_key = f"accounts:{chain}:{','.join(sorted(token_names))}"
