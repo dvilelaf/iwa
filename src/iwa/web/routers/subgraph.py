@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
 from iwa.plugins.olas.subgraph import SubgraphClient
@@ -36,7 +36,7 @@ def _wei_to_olas(amount_wei: int) -> float:
 def get_chains(auth: bool = Depends(verify_auth)):
     """Get available chains for each subgraph type."""
     client = _get_client()
-    api_key = client._api_key
+    api_key = client.api_key
 
     def _compute():
         return {
@@ -157,7 +157,7 @@ def get_services(
         return result
     except Exception as exc:
         logger.error(f"Subgraph services error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/staking")
@@ -206,13 +206,13 @@ def get_staking(
         return {"chain": chain, "agent_id": agent_id, "count": 0, "contracts": []}
     except Exception as exc:
         logger.error(f"Subgraph staking error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/staking/checkpoints")
 def get_staking_checkpoints(
     chain: str = "gnosis",
-    limit: int = 100,
+    limit: int = Query(default=100, le=1000),
     auth: bool = Depends(verify_auth),
 ):
     """Get recent staking checkpoints."""
@@ -249,13 +249,13 @@ def get_staking_checkpoints(
         return {"chain": chain, "count": 0, "checkpoints": []}
     except Exception as exc:
         logger.error(f"Subgraph checkpoints error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/staking/events")
 def get_staking_events(
     chain: str = "gnosis",
-    limit: int = 100,
+    limit: int = Query(default=100, le=1000),
     auth: bool = Depends(verify_auth),
 ):
     """Get recent staking lifecycle events (unified)."""
@@ -292,13 +292,13 @@ def get_staking_events(
         return {"chain": chain, "count": 0, "events": []}
     except Exception as exc:
         logger.error(f"Subgraph staking events error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/staking/daily")
 def get_staking_daily(
     chain: str = "gnosis",
-    limit: int = 90,
+    limit: int = Query(default=90, le=1000),
     auth: bool = Depends(verify_auth),
 ):
     """Get daily staking trends."""
@@ -330,7 +330,7 @@ def get_staking_daily(
         return {"chain": chain, "count": 0, "trends": []}
     except Exception as exc:
         logger.error(f"Subgraph daily trends error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/agents")
@@ -405,7 +405,7 @@ def get_components(auth: bool = Depends(verify_auth)):
         return result
     except Exception as exc:
         logger.error(f"Subgraph components error: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/builders")
@@ -428,7 +428,7 @@ def get_builders(auth: bool = Depends(verify_auth)):
         return result
     except Exception as exc:
         logger.error(f"Subgraph builders error: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/protocol")
@@ -472,7 +472,7 @@ def get_protocol(auth: bool = Depends(verify_auth)):
         return result
     except Exception as exc:
         logger.error(f"Subgraph protocol error: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/tokenomics")
@@ -522,4 +522,4 @@ def get_tokenomics(
         return {"chain": chain, "token_info": None, "top_holders": [], "recent_transfers": []}
     except Exception as exc:
         logger.error(f"Subgraph tokenomics error for {chain}: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

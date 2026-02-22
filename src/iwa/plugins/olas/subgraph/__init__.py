@@ -68,6 +68,11 @@ class SubgraphClient:
         self._tokenomics: Optional[TokenomicsSubgraph] = None
 
     @property
+    def api_key(self) -> Optional[str]:
+        """Get the TheGraph API key."""
+        return self._api_key
+
+    @property
     def registry(self) -> ServiceRegistrySubgraph:
         """Service Registry subgraph queries."""
         if self._registry is None:

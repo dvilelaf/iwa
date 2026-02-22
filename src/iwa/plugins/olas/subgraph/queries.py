@@ -110,7 +110,7 @@ GLOBAL_STATS = """
 # ---------------------------------------------------------------------------
 
 STAKING_CONTRACTS_PAGINATED = """
-query StakingContracts($lastId: Bytes!, $pageSize: Int!) {
+query StakingContracts($lastId: String!, $pageSize: Int!) {
   stakingContracts(first: $pageSize, where: {id_gt: $lastId}, orderBy: id) {
     id
     instance
@@ -134,7 +134,7 @@ query StakingContracts($lastId: Bytes!, $pageSize: Int!) {
 """
 
 STAKING_CONTRACTS_BY_AGENT_ID = """
-query StakingContractsByAgentId($lastId: Bytes!, $pageSize: Int!, $agentId: BigInt!) {
+query StakingContractsByAgentId($lastId: String!, $pageSize: Int!, $agentId: BigInt!) {
   stakingContracts(
     first: $pageSize
     where: {id_gt: $lastId, agentIds_contains: [$agentId]}
@@ -299,7 +299,7 @@ STAKING_GLOBAL = """
 # ---------------------------------------------------------------------------
 
 PROTOCOL_SERVICES_PAGINATED = """
-query ProtocolServices($lastId: Bytes!, $pageSize: Int!) {
+query ProtocolServices($lastId: String!, $pageSize: Int!) {
   services(first: $pageSize, where: {id_gt: $lastId}, orderBy: id) {
     id
     serviceId
@@ -329,8 +329,13 @@ query ProtocolServiceById($serviceId: BigInt!) {
     state
     agentIds
     threshold
+    securityDeposit
+    numberOfInstances
+    maxNumberOfInstances
     multisig
     instances
+    packageHash
+    metadataHash
     description
     owner
   }
@@ -350,7 +355,7 @@ PROTOCOL_GLOBAL = """
 """
 
 PROTOCOL_AGENTS_PAGINATED = """
-query ProtocolAgents($lastId: Bytes!, $pageSize: Int!) {
+query ProtocolAgents($lastId: String!, $pageSize: Int!) {
   units(first: $pageSize, where: {id_gt: $lastId, packageType: agent}, orderBy: id) {
     id
     tokenId
@@ -367,7 +372,7 @@ query ProtocolAgents($lastId: Bytes!, $pageSize: Int!) {
 """
 
 PROTOCOL_COMPONENTS_PAGINATED = """
-query ProtocolComponents($lastId: Bytes!, $pageSize: Int!) {
+query ProtocolComponents($lastId: String!, $pageSize: Int!) {
   units(first: $pageSize, where: {id_gt: $lastId, packageType_not: agent}, orderBy: id) {
     id
     tokenId

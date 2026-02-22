@@ -15,10 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
     whitelist: {}, // { tag: address } from config
     rewardsYear: new Date().getFullYear(),
     rewardsMonth: null,
-    rewardsChart: null,
     rewardsInitialized: false,
     // Subgraph / Network tab
-    subgraphChains: null,
     subgraphAgentId: null,
     subgraphServices: [],
     subgraphProtocol: null,
@@ -1626,10 +1624,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Refresh balances safely (don't fail the whole operation if this fails)
           try {
-            await Promise.all([
-              loadWrapBalances(),
-              loadMasterBalanceTable(true),
-            ]);
+            await loadMasterBalanceTable(true);
           } catch (e) {
             console.error("Error refreshing balances after wrap/unwrap:", e);
           }
@@ -1647,7 +1642,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Update tab handler to include wrap form population
-  const originalTabClickHandler = tabBtns.forEach.bind(tabBtns);
   tabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.dataset.tab === "cowswap") {
@@ -4242,6 +4236,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     state.subgraphBuilders = data.builders;
+    const badge = document.getElementById("builders-count-badge");
+    if (badge) badge.textContent = `${data.builders.length} builders`;
     body.innerHTML = data.builders.map(addr => `<tr>
       <td class="address-cell" onclick="copyToClipboard('${escapeHtml(addr)}')" title="${escapeHtml(addr)}">${escapeHtml(addr)}</td>
     </tr>`).join("");
