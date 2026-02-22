@@ -25,7 +25,7 @@ from iwa.core.wallet import init_db
 from iwa.plugins.gnosis.cow_utils import get_cowpy_module
 
 # Import routers
-from iwa.web.routers import accounts, olas, rewards, state, swap, transactions
+from iwa.web.routers import accounts, olas, rewards, state, subgraph, swap, transactions
 
 get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
 
@@ -134,6 +134,7 @@ app.include_router(transactions.router)
 app.include_router(swap.router)
 app.include_router(olas.router)
 app.include_router(rewards.router)
+app.include_router(subgraph.router)
 
 # Mount Static Files at /static/ path
 static_dir = Path(__file__).parent / "static"

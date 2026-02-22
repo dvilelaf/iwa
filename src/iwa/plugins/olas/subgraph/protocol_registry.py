@@ -1,11 +1,15 @@
 """Protocol Registry subgraph queries (Ethereum only)."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from iwa.plugins.olas.subgraph import queries
 from iwa.plugins.olas.subgraph.client import GraphQLClient
 from iwa.plugins.olas.subgraph.endpoints import SubgraphType, get_endpoint
-from iwa.plugins.olas.subgraph.models import SubgraphProtocolGlobal, SubgraphProtocolService
+from iwa.plugins.olas.subgraph.models import (
+    SubgraphProtocolGlobal,
+    SubgraphProtocolService,
+    SubgraphProtocolUnit,
+)
 
 
 class ProtocolRegistrySubgraph:
@@ -73,6 +77,43 @@ class ProtocolRegistrySubgraph:
         all_services = self.get_services()
         term_lower = term.lower()
         return [s for s in all_services if term_lower in s.public_id.lower()]
+
+    def get_agent_names(self) -> Dict[int, str]:
+        """Get a mapping of agent tokenId → publicId.
+
+        Returns:
+            Dict mapping agent ID to public ID (e.g. {25: "valory/trader"}).
+
+        """
+        client = self._get_client()
+        raw = client.query_all(queries.PROTOCOL_AGENTS_PAGINATED, "units")
+        return {
+            int(u["tokenId"]): u.get("publicId", "")
+            for u in raw
+            if u.get("tokenId")
+        }
+
+    def get_agents(self) -> List[SubgraphProtocolUnit]:
+        """Get all registered agents with full details.
+
+        Returns:
+            List of protocol agent units.
+
+        """
+        client = self._get_client()
+        raw = client.query_all(queries.PROTOCOL_AGENTS_PAGINATED, "units")
+        return [SubgraphProtocolUnit.from_subgraph(u, package_type="agent") for u in raw]
+
+    def get_components(self) -> List[SubgraphProtocolUnit]:
+        """Get all registered components with full details.
+
+        Returns:
+            List of protocol component units.
+
+        """
+        client = self._get_client()
+        raw = client.query_all(queries.PROTOCOL_COMPONENTS_PAGINATED, "units")
+        return [SubgraphProtocolUnit.from_subgraph(u, package_type="component") for u in raw]
 
     def get_global_stats(self) -> Optional[SubgraphProtocolGlobal]:
         """Get global protocol stats.

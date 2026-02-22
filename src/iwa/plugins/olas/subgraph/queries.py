@@ -342,3 +342,28 @@ PROTOCOL_GLOBAL = """
   }
 }
 """
+
+PROTOCOL_AGENTS_PAGINATED = """
+query ProtocolAgents($lastId: Bytes!, $pageSize: Int!) {
+  units(first: $pageSize, where: {id_gt: $lastId, packageType: agent}, orderBy: id) {
+    id
+    tokenId
+    publicId
+    description
+    owner
+  }
+}
+"""
+
+PROTOCOL_COMPONENTS_PAGINATED = """
+query ProtocolComponents($lastId: Bytes!, $pageSize: Int!) {
+  units(first: $pageSize, where: {id_gt: $lastId, packageType_not: agent}, orderBy: id) {
+    id
+    tokenId
+    publicId
+    packageType
+    description
+    owner
+  }
+}
+"""

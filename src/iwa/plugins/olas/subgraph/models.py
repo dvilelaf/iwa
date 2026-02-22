@@ -271,6 +271,27 @@ class SubgraphProtocolService(BaseModel):
         )
 
 
+class SubgraphProtocolUnit(BaseModel):
+    """Agent or Component from the Autonolas Protocol Registry (Ethereum)."""
+
+    token_id: int
+    public_id: str = ""
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    package_type: str = ""
+
+    @classmethod
+    def from_subgraph(cls, data: Dict, package_type: str = "") -> "SubgraphProtocolUnit":
+        """Parse a protocol unit entity from raw subgraph JSON."""
+        return cls(
+            token_id=int(data.get("tokenId", 0)),
+            public_id=data.get("publicId", ""),
+            description=data.get("description"),
+            owner=data.get("owner"),
+            package_type=data.get("packageType", package_type),
+        )
+
+
 class SubgraphProtocolGlobal(BaseModel):
     """Global stats from the Autonolas Protocol Registry."""
 
