@@ -42,6 +42,7 @@ def get_chains(auth: bool = Depends(verify_auth)):
         return {
             "service_registry": get_available_chains(SubgraphType.SERVICE_REGISTRY, api_key),
             "staking": get_available_chains(SubgraphType.STAKING, api_key),
+            "tokenomics": get_available_chains(SubgraphType.TOKENOMICS, api_key),
         }
 
     return response_cache.get_or_compute("subgraph:chains", _compute, SUBGRAPH_TTL)
@@ -58,7 +59,6 @@ def get_overview(chain: str = "gnosis", auth: bool = Depends(verify_auth)):
         return cached
 
     try:
-        # Fetch services count
         services = client.registry.get_services(chain)
         services_count = len(services)
     except Exception as exc:
@@ -201,8 +201,135 @@ def get_staking(
         }
         response_cache.set(cache_key, result)
         return result
+    except ValueError:
+        # Chain not supported for staking — return empty result
+        return {"chain": chain, "agent_id": agent_id, "count": 0, "contracts": []}
     except Exception as exc:
         logger.error(f"Subgraph staking error for {chain}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.get("/staking/checkpoints")
+def get_staking_checkpoints(
+    chain: str = "gnosis",
+    limit: int = 100,
+    auth: bool = Depends(verify_auth),
+):
+    """Get recent staking checkpoints."""
+    client = _get_client()
+    cache_key = f"subgraph:staking-checkpoints:{chain}"
+
+    cached = response_cache.get(cache_key, SUBGRAPH_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        checkpoints = client.staking.get_checkpoints(chain, limit=limit)
+        result = {
+            "chain": chain,
+            "count": len(checkpoints),
+            "checkpoints": [
+                {
+                    "epoch": c.epoch,
+                    "available_rewards": round(_wei_to_olas(c.available_rewards), 4),
+                    "service_ids": c.service_ids,
+                    "rewards": [round(_wei_to_olas(r), 4) for r in c.rewards],
+                    "epoch_length": c.epoch_length,
+                    "block_number": c.block_number,
+                    "timestamp": c.block_timestamp.isoformat() if c.block_timestamp else None,
+                    "transaction_hash": c.transaction_hash,
+                    "contract_address": c.contract_address,
+                }
+                for c in checkpoints
+            ],
+        }
+        response_cache.set(cache_key, result)
+        return result
+    except ValueError:
+        return {"chain": chain, "count": 0, "checkpoints": []}
+    except Exception as exc:
+        logger.error(f"Subgraph checkpoints error for {chain}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.get("/staking/events")
+def get_staking_events(
+    chain: str = "gnosis",
+    limit: int = 100,
+    auth: bool = Depends(verify_auth),
+):
+    """Get recent staking lifecycle events (unified)."""
+    client = _get_client()
+    cache_key = f"subgraph:staking-events:{chain}"
+
+    cached = response_cache.get(cache_key, SUBGRAPH_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        events = client.staking.get_recent_events(chain, limit=limit)
+        result = {
+            "chain": chain,
+            "count": len(events),
+            "events": [
+                {
+                    "event_type": e.event_type,
+                    "epoch": e.epoch,
+                    "service_id": e.service_id,
+                    "service_ids": e.service_ids if e.service_ids else None,
+                    "owner": e.owner or None,
+                    "multisig": e.multisig or None,
+                    "amount": round(_wei_to_olas(e.amount), 4) if e.amount else None,
+                    "timestamp": e.block_timestamp.isoformat() if e.block_timestamp else None,
+                    "transaction_hash": e.transaction_hash,
+                }
+                for e in events
+            ],
+        }
+        response_cache.set(cache_key, result)
+        return result
+    except ValueError:
+        return {"chain": chain, "count": 0, "events": []}
+    except Exception as exc:
+        logger.error(f"Subgraph staking events error for {chain}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.get("/staking/daily")
+def get_staking_daily(
+    chain: str = "gnosis",
+    limit: int = 90,
+    auth: bool = Depends(verify_auth),
+):
+    """Get daily staking trends."""
+    client = _get_client()
+    cache_key = f"subgraph:staking-daily:{chain}"
+
+    cached = response_cache.get(cache_key, SUBGRAPH_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        trends = client.staking.get_daily_trends(chain, limit=limit)
+        result = {
+            "chain": chain,
+            "count": len(trends),
+            "trends": [
+                {
+                    "date": t.timestamp.isoformat() if t.timestamp else None,
+                    "num_services": t.num_services,
+                    "total_rewards": round(_wei_to_olas(t.total_rewards), 2),
+                    "median_cumulative_rewards": round(_wei_to_olas(t.median_cumulative_rewards), 2),
+                }
+                for t in trends
+            ],
+        }
+        response_cache.set(cache_key, result)
+        return result
+    except ValueError:
+        return {"chain": chain, "count": 0, "trends": []}
+    except Exception as exc:
+        logger.error(f"Subgraph daily trends error for {chain}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from None
 
 
@@ -210,7 +337,7 @@ def get_staking(
 def get_agents(auth: bool = Depends(verify_auth)):
     """Get all agents from Protocol Registry with full details."""
     client = _get_client()
-    cache_key = "subgraph:agents:full"
+    cache_key = "subgraph:agents:full:v2"
 
     cached = response_cache.get(cache_key, SUBGRAPH_TTL)
     if cached is not None:
@@ -218,7 +345,6 @@ def get_agents(auth: bool = Depends(verify_auth)):
 
     try:
         agents = client.protocol.get_agents()
-        # Name mapping for backward compatibility (agent name cache)
         agent_names = {str(a.token_id): a.public_id for a in agents}
         result = {
             "agents": agent_names,
@@ -229,6 +355,11 @@ def get_agents(auth: bool = Depends(verify_auth)):
                     "public_id": a.public_id,
                     "description": a.description,
                     "owner": a.owner,
+                    "package_hash": a.package_hash,
+                    "image": a.image,
+                    "metadata_hash": a.metadata_hash,
+                    "block": a.block,
+                    "tx_hash": a.tx_hash,
                 }
                 for a in agents
             ],
@@ -244,7 +375,7 @@ def get_agents(auth: bool = Depends(verify_auth)):
 def get_components(auth: bool = Depends(verify_auth)):
     """Get all components from Protocol Registry."""
     client = _get_client()
-    cache_key = "subgraph:components"
+    cache_key = "subgraph:components:v2"
 
     cached = response_cache.get(cache_key, SUBGRAPH_TTL)
     if cached is not None:
@@ -261,6 +392,11 @@ def get_components(auth: bool = Depends(verify_auth)):
                     "package_type": c.package_type,
                     "description": c.description,
                     "owner": c.owner,
+                    "package_hash": c.package_hash,
+                    "image": c.image,
+                    "metadata_hash": c.metadata_hash,
+                    "block": c.block,
+                    "tx_hash": c.tx_hash,
                 }
                 for c in components
             ],
@@ -272,11 +408,34 @@ def get_components(auth: bool = Depends(verify_auth)):
         raise HTTPException(status_code=500, detail=str(exc)) from None
 
 
+@router.get("/builders")
+def get_builders(auth: bool = Depends(verify_auth)):
+    """Get all builder addresses from Protocol Registry."""
+    client = _get_client()
+    cache_key = "subgraph:builders"
+
+    cached = response_cache.get(cache_key, SUBGRAPH_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        builders = client.protocol.get_builders()
+        result = {
+            "count": len(builders),
+            "builders": builders,
+        }
+        response_cache.set(cache_key, result)
+        return result
+    except Exception as exc:
+        logger.error(f"Subgraph builders error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
 @router.get("/protocol")
 def get_protocol(auth: bool = Depends(verify_auth)):
     """Get Protocol Registry data (Ethereum only)."""
     client = _get_client()
-    cache_key = "subgraph:protocol"
+    cache_key = "subgraph:protocol:v2"
 
     cached = response_cache.get(cache_key, SUBGRAPH_TTL)
     if cached is not None:
@@ -301,6 +460,9 @@ def get_protocol(auth: bool = Depends(verify_auth)):
                     "state": s.state,
                     "agent_ids": s.agent_ids,
                     "threshold": s.threshold,
+                    "security_deposit": round(_wei_to_olas(s.security_deposit), 2),
+                    "number_of_instances": s.number_of_instances,
+                    "max_number_of_instances": s.max_number_of_instances,
                     "owner": s.owner,
                 }
                 for s in services
@@ -310,4 +472,54 @@ def get_protocol(auth: bool = Depends(verify_auth)):
         return result
     except Exception as exc:
         logger.error(f"Subgraph protocol error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+
+
+@router.get("/tokenomics")
+def get_tokenomics(
+    chain: str = "gnosis",
+    auth: bool = Depends(verify_auth),
+):
+    """Get tokenomics data: token info, top holders, recent transfers."""
+    client = _get_client()
+    cache_key = f"subgraph:tokenomics:{chain}"
+
+    cached = response_cache.get(cache_key, SUBGRAPH_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        data = client.tokenomics.get_all_data(chain)
+        token_info = data["token_info"]
+        result = {
+            "chain": chain,
+            "token_info": {
+                "balance": round(_wei_to_olas(token_info.balance), 2),
+                "holder_count": token_info.holder_count,
+            } if token_info else None,
+            "top_holders": [
+                {
+                    "address": h.address,
+                    "balance": round(_wei_to_olas(h.balance), 2),
+                }
+                for h in data["top_holders"]
+            ],
+            "recent_transfers": [
+                {
+                    "from": t.from_address,
+                    "to": t.to_address,
+                    "value": round(_wei_to_olas(t.value), 4),
+                    "block_number": t.block_number,
+                    "timestamp": t.block_timestamp.isoformat() if t.block_timestamp else None,
+                    "transaction_hash": t.transaction_hash,
+                }
+                for t in data["recent_transfers"]
+            ],
+        }
+        response_cache.set(cache_key, result)
+        return result
+    except ValueError:
+        return {"chain": chain, "token_info": None, "top_holders": [], "recent_transfers": []}
+    except Exception as exc:
+        logger.error(f"Subgraph tokenomics error for {chain}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from None
