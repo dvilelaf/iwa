@@ -138,9 +138,8 @@ class GraphQLClient:
         """Close the HTTP session."""
         self.session.close()
 
-    @staticmethod
-    def _cache_key(query: str, variables: Optional[Dict[str, Any]]) -> str:
-        raw = query + (str(sorted(variables.items())) if variables else "")
+    def _cache_key(self, query: str, variables: Optional[Dict[str, Any]]) -> str:
+        raw = self.endpoint + query + (str(sorted(variables.items())) if variables else "")
         return hashlib.md5(raw.encode()).hexdigest()  # noqa: S324
 
 

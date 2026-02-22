@@ -6,10 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from iwa.plugins.olas.subgraph.client import (
-    DEFAULT_CACHE_TTL,
+    _QUERY_CACHE,
     GraphQLClient,
     SubgraphError,
-    _QUERY_CACHE,
     clear_cache,
 )
 
@@ -140,6 +139,40 @@ class TestGraphQLClient:
         assert len(_QUERY_CACHE) == 1
         clear_cache()
         assert len(_QUERY_CACHE) == 0
+
+    def test_cache_key_includes_endpoint(self):
+        """Cache keys must differ for different endpoints with the same query.
+
+        Regression: _cache_key previously only hashed the query text,
+        so the same query sent to two different subgraph endpoints
+        (e.g. Gnosis vs Base tokenomics) returned the cached result
+        from whichever endpoint was queried first.
+        """
+        client_a = GraphQLClient("https://subgraph.example.com/gnosis", cache_ttl=60)
+        client_b = GraphQLClient("https://subgraph.example.com/base", cache_ttl=60)
+
+        resp_a = MagicMock()
+        resp_a.status_code = 200
+        resp_a.json.return_value = {"data": {"tokens": [{"balance": "1000"}]}}
+        resp_a.raise_for_status = MagicMock()
+
+        resp_b = MagicMock()
+        resp_b.status_code = 200
+        resp_b.json.return_value = {"data": {"tokens": [{"balance": "9999"}]}}
+        resp_b.raise_for_status = MagicMock()
+
+        query = "{ tokens(first: 1) { balance } }"
+
+        with patch.object(client_a.session, "post", return_value=resp_a):
+            result_a = client_a.query(query)
+
+        with patch.object(client_b.session, "post", return_value=resp_b) as mock_b:
+            result_b = client_b.query(query)
+
+        # Must have called the network for client_b (not returned client_a's cache)
+        assert mock_b.call_count == 1
+        assert result_a == {"tokens": [{"balance": "1000"}]}
+        assert result_b == {"tokens": [{"balance": "9999"}]}
 
     def test_close(self):
         client = GraphQLClient(ENDPOINT)
