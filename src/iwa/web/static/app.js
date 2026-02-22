@@ -19,15 +19,32 @@ document.addEventListener("DOMContentLoaded", () => {
     rewardsInitialized: false,
     // Subgraph / Network tab
     subgraphChains: null,
-    subgraphChain: "gnosis",
     subgraphAgentId: null,
     subgraphServices: [],
     subgraphProtocol: null,
     subgraphAgents: [],
     subgraphComponents: [],
+    subgraphBuilders: [],
+    subgraphCheckpoints: [],
+    subgraphEvents: [],
+    subgraphDailyTrends: [],
+    subgraphTokenomics: null,
     subgraphSubTab: localStorage.getItem("iwa_network_subtab") || "registry",
     subgraphInitialized: false,
   };
+
+  // Chain label helper
+  function getChainLabel(chain) {
+    return (chain || state.activeChain).charAt(0).toUpperCase() + (chain || state.activeChain).slice(1);
+  }
+
+  // Update all chain badges across all tabs
+  function updateAllChainBadges() {
+    const label = getChainLabel();
+    document.querySelectorAll("[data-chain-badge]").forEach(el => {
+      el.textContent = `on ${label}`;
+    });
+  }
 
   // Real-time countdown updater for unstake availability
   function updateUnstakeCountdowns() {
@@ -172,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
           : data.default_chain;
 
       populateChainSelect();
+      updateAllChainBadges();
       populateTokenToggles();
       updateFormSelectors();
 
@@ -252,10 +270,18 @@ document.addEventListener("DOMContentLoaded", () => {
     state.activeChain = e.target.value;
     localStorage.setItem("iwa_active_chain", e.target.value);
     state.balanceCache = {}; // Clear cache on chain change
+    updateAllChainBadges();
     populateTokenToggles();
     loadAccounts();
     loadTransactions();
     updateFormSelectors();
+    // Reload Olas Network data if tab is initialized
+    if (state.subgraphInitialized) {
+      loadNetworkData();
+      if (state.subgraphSubTab === "tokenomics") {
+        loadTokenomicsData();
+      }
+    }
   });
 
   // Refresh button - forces full reload
@@ -810,12 +836,13 @@ document.addEventListener("DOMContentLoaded", () => {
     return value;
   }
 
-  function getExplorerUrl(address, chain) {
+  function getExplorerUrl(address, chain, type) {
     if (!address) return "#";
-    if (chain === "gnosis") return `https://gnosisscan.io/address/${address}`;
-    if (chain === "base") return `https://basescan.org/address/${address}`;
-    if (chain === "ethereum") return `https://etherscan.io/address/${address}`;
-    return `https://gnosisscan.io/address/${address}`;
+    const prefix = type === "tx" ? "tx" : "address";
+    if (chain === "gnosis") return `https://gnosisscan.io/${prefix}/${address}`;
+    if (chain === "base") return `https://basescan.org/${prefix}/${address}`;
+    if (chain === "ethereum") return `https://etherscan.io/${prefix}/${address}`;
+    return `https://gnosisscan.io/${prefix}/${address}`;
   }
 
   window.copyToClipboard = (text) => {
@@ -3689,7 +3716,7 @@ document.addEventListener("DOMContentLoaded", () => {
           authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
         ]);
         if (chainsResp) {
-          state.subgraphChains = chainsResp;
+          state.activeChains = chainsResp;
           populateSubgraphChainSelect(chainsResp);
         }
         if (agentsResp && agentsResp.agents) {
@@ -3700,10 +3727,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Event listeners
-      document.getElementById("subgraph-chain-select").addEventListener("change", (e) => {
-        state.subgraphChain = e.target.value;
-        loadNetworkData();
-      });
       document.getElementById("subgraph-agent-filter").addEventListener("change", (e) => {
         const val = e.target.value.trim();
         state.subgraphAgentId = val ? parseInt(val, 10) : null;
@@ -3711,6 +3734,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       document.getElementById("subgraph-refresh").addEventListener("click", () => {
         loadNetworkData();
+        if (state.subgraphSubTab === "tokenomics") {
+          loadTokenomicsData();
+        }
       });
 
       // Sub-tab switching
@@ -3724,6 +3750,9 @@ document.addEventListener("DOMContentLoaded", () => {
           btn.classList.add("active");
           const pane = document.getElementById(`subtab-${target}`);
           if (pane) pane.classList.add("active");
+          if (target === "tokenomics") {
+            loadTokenomicsData();
+          }
         });
       });
       // Restore saved sub-tab
@@ -3738,42 +3767,59 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Search boxes (filter on keyup with debounce)
       let servicesSearchTimeout = null;
-      document.getElementById("subgraph-services-search").addEventListener("input", (e) => {
+      document.getElementById("subgraph-services-search").addEventListener("input", () => {
         clearTimeout(servicesSearchTimeout);
-        servicesSearchTimeout = setTimeout(() => {
-          renderServicesPage();
-        }, 300);
+        servicesSearchTimeout = setTimeout(() => renderServicesPage(), 300);
       });
       let stakingSearchTimeout = null;
-      document.getElementById("subgraph-staking-search").addEventListener("input", (e) => {
+      document.getElementById("subgraph-staking-search").addEventListener("input", () => {
         clearTimeout(stakingSearchTimeout);
-        stakingSearchTimeout = setTimeout(() => {
-          renderNetworkStakingFiltered();
-        }, 300);
+        stakingSearchTimeout = setTimeout(() => renderNetworkStakingFiltered(), 300);
       });
       let protocolSearchTimeout = null;
-      document.getElementById("subgraph-protocol-search").addEventListener("input", (e) => {
+      document.getElementById("subgraph-protocol-search").addEventListener("input", () => {
         clearTimeout(protocolSearchTimeout);
-        protocolSearchTimeout = setTimeout(() => {
-          renderProtocolPage();
-        }, 300);
+        protocolSearchTimeout = setTimeout(() => renderProtocolPage(), 300);
       });
       let agentsSearchTimeout = null;
-      document.getElementById("subgraph-agents-search").addEventListener("input", (e) => {
+      document.getElementById("subgraph-agents-search").addEventListener("input", () => {
         clearTimeout(agentsSearchTimeout);
-        agentsSearchTimeout = setTimeout(() => {
-          renderAgentsPage();
-        }, 300);
+        agentsSearchTimeout = setTimeout(() => renderAgentsPage(), 300);
       });
       let componentsSearchTimeout = null;
-      document.getElementById("subgraph-components-search").addEventListener("input", (e) => {
+      document.getElementById("subgraph-components-search").addEventListener("input", () => {
         clearTimeout(componentsSearchTimeout);
-        componentsSearchTimeout = setTimeout(() => {
-          renderComponentsPage();
-        }, 300);
+        componentsSearchTimeout = setTimeout(() => renderComponentsPage(), 300);
+      });
+      let checkpointsSearchTimeout = null;
+      document.getElementById("subgraph-checkpoints-search").addEventListener("input", () => {
+        clearTimeout(checkpointsSearchTimeout);
+        checkpointsSearchTimeout = setTimeout(() => renderCheckpointsPage(), 300);
+      });
+      let eventsSearchTimeout = null;
+      document.getElementById("subgraph-events-search").addEventListener("input", () => {
+        clearTimeout(eventsSearchTimeout);
+        eventsSearchTimeout = setTimeout(() => renderEventsPage(), 300);
+      });
+      document.getElementById("staking-event-type-filter").addEventListener("change", () => {
+        renderEventsPage();
+      });
+      let holdersSearchTimeout = null;
+      document.getElementById("tokenomics-holders-search").addEventListener("input", () => {
+        clearTimeout(holdersSearchTimeout);
+        holdersSearchTimeout = setTimeout(() => renderHoldersPage(), 300);
+      });
+      let transfersSearchTimeout = null;
+      document.getElementById("tokenomics-transfers-search").addEventListener("input", () => {
+        clearTimeout(transfersSearchTimeout);
+        transfersSearchTimeout = setTimeout(() => renderTransfersPage(), 300);
       });
     }
     loadNetworkData();
+    // Load tokenomics if that's the saved sub-tab
+    if (state.subgraphSubTab === "tokenomics") {
+      loadTokenomicsData();
+    }
   }
 
   function getAgentName(agentId) {
@@ -3795,42 +3841,47 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function populateSubgraphChainSelect(chains) {
-    const select = document.getElementById("subgraph-chain-select");
-    const allChains = [...new Set([
+    // Subgraph chains may include chains not in the global selector — add them
+    const allSubgraphChains = [...new Set([
       ...(chains.service_registry || []),
       ...(chains.staking || []),
-    ])].sort();
-
-    select.innerHTML = allChains.map(c =>
-      `<option value="${escapeHtml(c)}" ${c === state.subgraphChain ? "selected" : ""}>${escapeHtml(c.charAt(0).toUpperCase() + c.slice(1))}</option>`
-    ).join("");
+      ...(chains.tokenomics || []),
+    ])];
+    const select = document.getElementById("active-chain");
+    const existing = new Set([...select.options].map(o => o.value));
+    for (const c of allSubgraphChains.sort()) {
+      if (!existing.has(c)) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c.charAt(0).toUpperCase() + c.slice(1);
+        select.appendChild(opt);
+      }
+    }
   }
 
   async function loadNetworkData() {
-    const chain = state.subgraphChain;
+    const chain = state.activeChain;
     const isEthereum = chain === "ethereum";
     const agentParam = state.subgraphAgentId ? `&agent_id=${state.subgraphAgentId}` : "";
-    const chainLabel = chain.charAt(0).toUpperCase() + chain.slice(1);
-
     // Toggle services view: Ethereum (Protocol Registry) vs other chains (Service Registry)
     document.getElementById("services-ethereum").style.display = isEthereum ? "" : "none";
     document.getElementById("services-perchain").style.display = isEthereum ? "none" : "";
 
-    // Update chain badges
-    const deployedBadge = document.getElementById("deployed-chain-badge");
-    if (deployedBadge) deployedBadge.textContent = `on ${chainLabel}`;
-    const stakingBadge = document.getElementById("staking-chain-badge");
-    if (stakingBadge) stakingBadge.textContent = `on ${chainLabel}`;
-
     // Show loading states
-    document.getElementById("subgraph-summary").innerHTML =
-      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(4);
+    document.getElementById("deployments-summary").innerHTML =
+      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(3);
     document.getElementById("subgraph-agents-body").innerHTML =
-      `<tr><td colspan="4" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+      `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
     document.getElementById("subgraph-components-body").innerHTML =
-      `<tr><td colspan="5" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+      `<tr><td colspan="7" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
     document.getElementById("subgraph-staking-body").innerHTML =
       `<tr><td colspan="7" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("subgraph-checkpoints-body").innerHTML =
+      `<tr><td colspan="7" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("subgraph-events-body").innerHTML =
+      `<tr><td colspan="7" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("subgraph-daily-body").innerHTML =
+      `<tr><td colspan="4" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
 
     if (isEthereum) {
       document.getElementById("subgraph-protocol-body").innerHTML =
@@ -3840,7 +3891,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
     }
 
-    // Fetch data in parallel — services source depends on chain
+    // Fetch all data in parallel
     const promises = [
       authFetch(`/api/subgraph/overview?chain=${chain}`).then(r => r.json()).catch(() => null),
       isEthereum
@@ -3849,16 +3900,21 @@ document.addEventListener("DOMContentLoaded", () => {
       authFetch(`/api/subgraph/staking?chain=${chain}${agentParam}`).then(r => r.json()).catch(() => null),
       authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
       authFetch("/api/subgraph/components").then(r => r.json()).catch(() => null),
+      authFetch("/api/subgraph/builders").then(r => r.json()).catch(() => null),
+      authFetch(`/api/subgraph/staking/checkpoints?chain=${chain}`).then(r => r.json()).catch(() => null),
+      authFetch(`/api/subgraph/staking/events?chain=${chain}`).then(r => r.json()).catch(() => null),
+      authFetch(`/api/subgraph/staking/daily?chain=${chain}`).then(r => r.json()).catch(() => null),
     ];
 
-    const [overview, servicesOrProtocol, staking, agents, components] = await Promise.all(promises);
+    const [overview, servicesOrProtocol, staking, agents, components, builders, checkpoints, events, daily] = await Promise.all(promises);
 
-    // Update agent name cache from enriched agents endpoint
+    // Update agent name cache
     if (agents && agents.agents) {
       agentNameCache = agents.agents;
     }
 
     renderNetworkSummary(overview);
+    renderDeploymentsSummary(overview);
     if (isEthereum) {
       renderNetworkProtocol(servicesOrProtocol);
     } else {
@@ -3867,20 +3923,59 @@ document.addEventListener("DOMContentLoaded", () => {
     renderNetworkAgents(agents);
     renderNetworkComponents(components);
     renderNetworkStaking(staking);
+    renderBuilders(builders);
+    renderCheckpoints(checkpoints);
+    renderStakingEvents(events);
+    renderDailyTrends(daily);
+  }
+
+  async function loadTokenomicsData() {
+    const chain = state.activeChain;
+
+    document.getElementById("tokenomics-summary").innerHTML =
+      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(2);
+    document.getElementById("tokenomics-holders-body").innerHTML =
+      `<tr><td colspan="4" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("tokenomics-transfers-body").innerHTML =
+      `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+
+    try {
+      const data = await authFetch(`/api/subgraph/tokenomics?chain=${chain}`).then(r => r.json());
+      state.subgraphTokenomics = data;
+      renderTokenomicsSummary(data);
+      renderTokenomicsHolders(data);
+      renderTokenomicsTransfers(data);
+    } catch (err) {
+      console.error("Failed to load tokenomics:", err);
+      document.getElementById("tokenomics-summary").innerHTML =
+        `<div class="rewards-card glass text-center text-error" style="grid-column:1/-1">Failed to load tokenomics data</div>`;
+      document.getElementById("tokenomics-holders-body").innerHTML =
+        `<tr><td colspan="4" class="text-center text-error">Failed to load holders</td></tr>`;
+      document.getElementById("tokenomics-transfers-body").innerHTML =
+        `<tr><td colspan="6" class="text-center text-error">Failed to load transfers</td></tr>`;
+    }
   }
 
   function renderNetworkSummary(overview) {
     const container = document.getElementById("subgraph-summary");
+    const proto = overview ? (overview.protocol_global || {}) : {};
+    container.innerHTML = `
+      <div class="rewards-card glass">
+        <div class="card-label">Registry</div>
+        <div class="card-value accent" style="font-size:0.85rem">${proto.total_agents || "?"} blueprints · ${proto.total_components || "?"} components · ${proto.total_builders || "?"} builders</div>
+      </div>`;
+  }
+
+  function renderDeploymentsSummary(overview) {
+    const container = document.getElementById("deployments-summary");
     if (!overview) {
       container.innerHTML = `<div class="rewards-card glass text-center text-error" style="grid-column:1/-1">Failed to load overview</div>`;
       return;
     }
-
     const stakingInfo = overview.global_staking || {};
-    const proto = overview.protocol_global || {};
     container.innerHTML = `
       <div class="rewards-card glass">
-        <div class="card-label">Deployed Services</div>
+        <div class="card-label">Deployed Agents</div>
         <div class="card-value accent">${overview.services_count.toLocaleString()}</div>
       </div>
       <div class="rewards-card glass">
@@ -3890,10 +3985,6 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="rewards-card glass">
         <div class="card-label">Total Rewards</div>
         <div class="card-value success">${stakingInfo.total_rewards != null ? Number(stakingInfo.total_rewards).toLocaleString(undefined, {maximumFractionDigits: 0}) + " OLAS" : "N/A"}</div>
-      </div>
-      <div class="rewards-card glass">
-        <div class="card-label">Registry</div>
-        <div class="card-value accent" style="font-size:0.85rem">${proto.total_agents || "?"} blueprints · ${proto.total_components || "?"} components</div>
       </div>`;
   }
 
@@ -3901,7 +3992,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-services-body");
 
     if (!data || !data.services) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load services</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load agents</td></tr>`;
       return;
     }
 
@@ -3929,10 +4020,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderServicesPage() {
     const body = document.getElementById("subgraph-services-body");
     const filtered = getFilteredServices();
-    const chain = state.subgraphChain;
+    const chain = state.activeChain;
 
     if (filtered.length === 0) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No services found</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No agents found</td></tr>`;
       return;
     }
 
@@ -3953,7 +4044,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-staking-body");
 
     if (!data || !data.contracts) {
-      const chainLabel = state.subgraphChain.charAt(0).toUpperCase() + state.subgraphChain.slice(1);
+      const chainLabel = state.activeChain.charAt(0).toUpperCase() + state.activeChain.slice(1);
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking data available for ${escapeHtml(chainLabel)}</td></tr>`;
       stakingContractsData = [];
       return;
@@ -3968,7 +4059,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderNetworkStakingFiltered() {
     const body = document.getElementById("subgraph-staking-body");
     const search = (document.getElementById("subgraph-staking-search").value || "").toLowerCase().trim();
-    const chain = state.subgraphChain;
+    const chain = state.activeChain;
     let contracts = stakingContractsData;
 
     if (search) {
@@ -4004,7 +4095,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-protocol-body");
 
     if (!data) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load services</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load agents</td></tr>`;
       return;
     }
 
@@ -4033,7 +4124,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const filtered = getFilteredProtocol();
 
     if (filtered.length === 0) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No services found</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No agents found</td></tr>`;
       return;
     }
 
@@ -4054,7 +4145,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderNetworkAgents(data) {
     const body = document.getElementById("subgraph-agents-body");
     if (!data || !data.units) {
-      body.innerHTML = `<tr><td colspan="4" class="text-center text-error">Failed to load agent blueprints</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load agent blueprints</td></tr>`;
       state.subgraphAgents = [];
       return;
     }
@@ -4078,7 +4169,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-agents-body");
     const filtered = getFilteredAgents();
     if (filtered.length === 0) {
-      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No agent blueprints found</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No agent blueprints found</td></tr>`;
       return;
     }
     body.innerHTML = filtered.map(a => {
@@ -4089,6 +4180,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${escapeHtml(a.public_id || "")}</td>
         <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(desc)}">${shortDesc}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(a.owner || "")}')" title="${escapeHtml(a.owner || "")}">${shortenAddr(a.owner || "")}</td>
+        <td class="text-muted" style="font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(a.package_hash || "")}">${shortenAddr(a.package_hash || "")}</td>
+        <td class="val">${a.block || ""}</td>
       </tr>`;
     }).join("");
   }
@@ -4097,7 +4190,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderNetworkComponents(data) {
     const body = document.getElementById("subgraph-components-body");
     if (!data || !data.units) {
-      body.innerHTML = `<tr><td colspan="5" class="text-center text-error">Failed to load components</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-error">Failed to load components</td></tr>`;
       state.subgraphComponents = [];
       return;
     }
@@ -4122,7 +4215,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-components-body");
     const filtered = getFilteredComponents();
     if (filtered.length === 0) {
-      body.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No components found</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No components found</td></tr>`;
       return;
     }
     body.innerHTML = filtered.map(c => {
@@ -4134,6 +4227,258 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${escapeHtml(c.package_type || "")}</td>
         <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(desc)}">${shortDesc}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.owner || "")}')" title="${escapeHtml(c.owner || "")}">${shortenAddr(c.owner || "")}</td>
+        <td class="text-muted" style="font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.package_hash || "")}">${shortenAddr(c.package_hash || "")}</td>
+        <td class="val">${c.block || ""}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Builders (Protocol Registry) ---
+  function renderBuilders(data) {
+    const body = document.getElementById("subgraph-builders-body");
+    if (!data || !data.builders) {
+      body.innerHTML = `<tr><td class="text-center text-muted">No builders data available</td></tr>`;
+      state.subgraphBuilders = [];
+      return;
+    }
+    state.subgraphBuilders = data.builders;
+    body.innerHTML = data.builders.map(addr => `<tr>
+      <td class="address-cell" onclick="copyToClipboard('${escapeHtml(addr)}')" title="${escapeHtml(addr)}">${escapeHtml(addr)}</td>
+    </tr>`).join("");
+  }
+
+  // --- Checkpoints ---
+  function renderCheckpoints(data) {
+    const body = document.getElementById("subgraph-checkpoints-body");
+    if (!data || !data.checkpoints) {
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No checkpoint data available</td></tr>`;
+      state.subgraphCheckpoints = [];
+      return;
+    }
+    state.subgraphCheckpoints = data.checkpoints;
+    renderCheckpointsPage();
+  }
+
+  function getFilteredCheckpoints() {
+    const search = (document.getElementById("subgraph-checkpoints-search").value || "").toLowerCase().trim();
+    if (!search) return state.subgraphCheckpoints;
+    return state.subgraphCheckpoints.filter(c =>
+      String(c.epoch || "").includes(search) ||
+      (c.contract_address || "").toLowerCase().includes(search) ||
+      (c.transaction_hash || "").toLowerCase().includes(search) ||
+      (c.service_ids || []).some(id => String(id).includes(search))
+    );
+  }
+
+  function renderCheckpointsPage() {
+    const body = document.getElementById("subgraph-checkpoints-body");
+    const filtered = getFilteredCheckpoints();
+    const chain = state.activeChain;
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No checkpoints found</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(c => {
+      const contractShort = shortenAddr(c.contract_address || "");
+      const contractLink = c.contract_address ? `<a href="${getExplorerUrl(c.contract_address, chain)}" target="_blank" class="explorer-link">${contractShort}</a>` : "";
+      const rewards = c.available_rewards != null ? Number(c.available_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      const services = (c.service_ids || []).length;
+      const time = c.timestamp ? new Date(c.timestamp).toLocaleString() : "";
+      const txShort = shortenAddr(c.transaction_hash || "");
+      const txLink = c.transaction_hash ? `<a href="${getExplorerUrl(c.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
+      return `<tr>
+        <td class="val">${c.epoch || ""}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.contract_address || "")}')" title="${escapeHtml(c.contract_address || "")}">${contractLink}</td>
+        <td class="val">${rewards}</td>
+        <td class="val">${services}</td>
+        <td class="val">${c.block_number || ""}</td>
+        <td>${time}</td>
+        <td>${txLink}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Staking Events (unified) ---
+  function renderStakingEvents(data) {
+    const body = document.getElementById("subgraph-events-body");
+    if (!data || !data.events) {
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking events available</td></tr>`;
+      state.subgraphEvents = [];
+      return;
+    }
+    state.subgraphEvents = data.events;
+    renderEventsPage();
+  }
+
+  function getFilteredEvents() {
+    const search = (document.getElementById("subgraph-events-search").value || "").toLowerCase().trim();
+    const typeFilter = (document.getElementById("staking-event-type-filter").value || "").toLowerCase();
+    let events = state.subgraphEvents;
+    if (typeFilter) {
+      events = events.filter(e => (e.event_type || "").toLowerCase() === typeFilter);
+    }
+    if (search) {
+      events = events.filter(e =>
+        String(e.service_id || "").includes(search) ||
+        String(e.epoch || "").includes(search) ||
+        (e.owner || "").toLowerCase().includes(search) ||
+        (e.transaction_hash || "").toLowerCase().includes(search)
+      );
+    }
+    return events;
+  }
+
+  function renderEventsPage() {
+    const body = document.getElementById("subgraph-events-body");
+    const filtered = getFilteredEvents();
+    const chain = state.activeChain;
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking events found</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(e => {
+      const typeBadge = `<span class="event-badge ${escapeHtml(e.event_type || "")}">${escapeHtml(e.event_type || "")}</span>`;
+      const amount = e.amount != null ? Number(e.amount).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      const time = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+      const addrShort = shortenAddr(e.owner || "");
+      const txShort = shortenAddr(e.transaction_hash || "");
+      const txLink = e.transaction_hash ? `<a href="${getExplorerUrl(e.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
+      return `<tr>
+        <td>${typeBadge}</td>
+        <td class="val">${e.epoch || ""}</td>
+        <td class="val">${e.service_id || ""}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(e.owner || "")}')" title="${escapeHtml(e.owner || "")}">${addrShort}</td>
+        <td class="val">${amount}</td>
+        <td>${time}</td>
+        <td>${txLink}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Daily Staking Trends ---
+  function renderDailyTrends(data) {
+    const body = document.getElementById("subgraph-daily-body");
+    if (!data || !data.trends) {
+      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No daily trend data available</td></tr>`;
+      state.subgraphDailyTrends = [];
+      return;
+    }
+    state.subgraphDailyTrends = data.trends;
+    body.innerHTML = data.trends.map(d => {
+      const date = d.date ? new Date(d.date).toLocaleDateString() : "";
+      const totalRewards = d.total_rewards != null ? Number(d.total_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      const median = d.median_cumulative_rewards != null ? Number(d.median_cumulative_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      return `<tr>
+        <td>${date}</td>
+        <td class="val">${d.num_services || 0}</td>
+        <td class="val">${totalRewards}</td>
+        <td class="val">${median}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Tokenomics ---
+  function renderTokenomicsSummary(data) {
+    const container = document.getElementById("tokenomics-summary");
+    if (!data || !data.token_info) {
+      container.innerHTML = `<div class="rewards-card glass text-center text-muted" style="grid-column:1/-1">No token data available</div>`;
+      return;
+    }
+    const token = data.token_info;
+    const balance = token.balance != null ? Number(token.balance).toLocaleString(undefined, {maximumFractionDigits: 0}) : "N/A";
+    const holders = token.holder_count != null ? Number(token.holder_count).toLocaleString() : "N/A";
+    container.innerHTML = `
+      <div class="rewards-card glass">
+        <div class="card-label">OLAS Supply</div>
+        <div class="card-value accent">${balance}</div>
+      </div>
+      <div class="rewards-card glass">
+        <div class="card-label">Holder Count</div>
+        <div class="card-value accent">${holders}</div>
+      </div>`;
+  }
+
+  function renderTokenomicsHolders(data) {
+    const body = document.getElementById("tokenomics-holders-body");
+    if (!data || !data.top_holders || data.top_holders.length === 0) {
+      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No holder data available</td></tr>`;
+      return;
+    }
+    state.subgraphTokenomics = data;
+    renderHoldersPage();
+  }
+
+  function getFilteredHolders() {
+    const data = state.subgraphTokenomics;
+    if (!data || !data.top_holders) return [];
+    const search = (document.getElementById("tokenomics-holders-search").value || "").toLowerCase().trim();
+    if (!search) return data.top_holders;
+    return data.top_holders.filter(h =>
+      (h.address || "").toLowerCase().includes(search)
+    );
+  }
+
+  function renderHoldersPage() {
+    const body = document.getElementById("tokenomics-holders-body");
+    const filtered = getFilteredHolders();
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No holders found</td></tr>`;
+      return;
+    }
+    const totalSupply = state.subgraphTokenomics?.token_info?.balance || 0;
+    body.innerHTML = filtered.map((h, i) => {
+      const balance = h.balance != null ? Number(h.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "";
+      const pct = (totalSupply && h.balance != null) ? ((h.balance / totalSupply) * 100).toFixed(2) : "";
+      return `<tr>
+        <td class="val">${i + 1}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(h.address || "")}')" title="${escapeHtml(h.address || "")}">${escapeHtml(h.address || "")}</td>
+        <td class="val">${balance}</td>
+        <td class="val">${pct}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderTokenomicsTransfers(data) {
+    const body = document.getElementById("tokenomics-transfers-body");
+    if (!data || !data.recent_transfers || data.recent_transfers.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No transfer data available</td></tr>`;
+      return;
+    }
+    renderTransfersPage();
+  }
+
+  function getFilteredTransfers() {
+    const data = state.subgraphTokenomics;
+    if (!data || !data.recent_transfers) return [];
+    const search = (document.getElementById("tokenomics-transfers-search").value || "").toLowerCase().trim();
+    if (!search) return data.recent_transfers;
+    return data.recent_transfers.filter(t =>
+      (t.from || "").toLowerCase().includes(search) ||
+      (t.to || "").toLowerCase().includes(search) ||
+      (t.transaction_hash || "").toLowerCase().includes(search)
+    );
+  }
+
+  function renderTransfersPage() {
+    const body = document.getElementById("tokenomics-transfers-body");
+    const filtered = getFilteredTransfers();
+    const chain = state.activeChain;
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No transfers found</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(t => {
+      const value = t.value != null ? Number(t.value).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      const time = t.timestamp ? new Date(t.timestamp).toLocaleString() : "";
+      const txShort = shortenAddr(t.transaction_hash || "");
+      const txLink = t.transaction_hash ? `<a href="${getExplorerUrl(t.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
+      return `<tr>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(t.from || "")}')" title="${escapeHtml(t.from || "")}">${shortenAddr(t.from || "")}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(t.to || "")}')" title="${escapeHtml(t.to || "")}">${shortenAddr(t.to || "")}</td>
+        <td class="val">${value}</td>
+        <td class="val">${t.block_number || ""}</td>
+        <td>${time}</td>
+        <td>${txLink}</td>
       </tr>`;
     }).join("");
   }

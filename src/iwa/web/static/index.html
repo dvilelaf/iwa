@@ -63,7 +63,7 @@
                 <!-- Dashboard Tab (Merged Wallets & Transactions) -->
                 <section id="dashboard" class="tab-pane active">
                     <div class="section-header">
-                        <h2>Accounts</h2>
+                        <h2>Accounts <span class="section-badge" data-chain-badge>on Gnosis</span></h2>
                         <div class="actions">
                             <button id="refresh-btn" class="btn-icon" title="Refresh Balances">
                                 <svg width="16"
@@ -135,7 +135,7 @@
                         </form>
                     </div>
                     <div class="section-header mt-2">
-                        <h2>Recent Activity</h2>
+                        <h2>Recent Activity <span class="section-badge" data-chain-badge>on Gnosis</span></h2>
                     </div>
                     <div class="table-container glass">
                         <table id="tx-table">
@@ -165,7 +165,7 @@
                 <!-- Olas Tab -->
                 <section id="olas" class="tab-pane">
                     <div class="section-header">
-                        <h2>Olas Services</h2>
+                        <h2>Olas Services <span class="section-badge" data-chain-badge>on Gnosis</span></h2>
                         <div class="actions">
                             <button id="refresh-olas-btn" class="btn-icon" title="Refresh All Services">
                                 <svg xmlns="http://www.w3.org/2000/svg"
@@ -217,7 +217,7 @@
                         </div>
                         <div class="swap-cards-grid">
                             <div class="swap-container glass">
-                                <h3>Token Swap</h3>
+                                <h3>Token Swap <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
                                 <form id="swap-form">
                                     <div class="swap-mode-toggle">
                                         <label class="radio-item">
@@ -307,7 +307,7 @@
                         </div>
                         <!-- Recent Orders Table -->
                         <div class="recent-orders-section mt-2">
-                            <h3>Recent Orders</h3>
+                            <h3>Recent Orders <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
                             <div class="table-container glass">
                                 <table id="recent-orders-table">
                                     <thead>
@@ -428,18 +428,19 @@
                             </svg>
                         </button>
                     </div>
-                    <!-- Summary cards -->
-                    <div id="subgraph-summary" class="rewards-summary mb-2"></div>
                     <!-- Sub-tabs -->
                     <nav class="subtabs mb-2">
                         <button class="subtab-btn active" data-subtab="registry">Registry</button>
                         <button class="subtab-btn" data-subtab="deployments">Deployments</button>
+                        <button class="subtab-btn" data-subtab="tokenomics">Tokenomics</button>
                     </nav>
                     <!-- Sub-pane: Registry (Protocol Registry — Ethereum) -->
                     <div id="subtab-registry" class="subtab-pane active">
+                        <!-- Registry summary card (chain-independent) -->
+                        <div id="subgraph-summary" class="rewards-summary mb-2" style="grid-template-columns:1fr;max-width:340px"></div>
                         <!-- Agent Blueprints -->
                         <div class="section-header">
-                            <h3>Agent Blueprints</h3>
+                            <h3>Agent Blueprints <span class="section-badge">on Ethereum</span></h3>
                             <div class="subgraph-filters">
                                 <input id="subgraph-agents-search" type="text" placeholder="Search ID, name, owner..." class="form-input" style="width:220px">
                             </div>
@@ -452,16 +453,18 @@
                                         <th>Public ID</th>
                                         <th>Description</th>
                                         <th>Owner</th>
+                                        <th>Pkg Hash</th>
+                                        <th class="val">Block</th>
                                     </tr>
                                 </thead>
                                 <tbody id="subgraph-agents-body">
-                                    <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                                    <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                         <!-- Components -->
                         <div class="section-header">
-                            <h3>Components</h3>
+                            <h3>Components <span class="section-badge">on Ethereum</span></h3>
                             <div class="subgraph-filters">
                                 <input id="subgraph-components-search" type="text" placeholder="Search ID, name, type..." class="form-input" style="width:220px">
                             </div>
@@ -475,10 +478,26 @@
                                         <th>Type</th>
                                         <th>Description</th>
                                         <th>Owner</th>
+                                        <th>Pkg Hash</th>
+                                        <th class="val">Block</th>
                                     </tr>
                                 </thead>
                                 <tbody id="subgraph-components-body">
-                                    <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Builders -->
+                        <div class="section-header">
+                            <h3>Builders <span class="section-badge">on Ethereum</span> <span class="section-badge" id="builders-count-badge"></span></h3>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr><th>Address</th></tr>
+                                </thead>
+                                <tbody id="subgraph-builders-body">
+                                    <tr><td class="text-center text-muted">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -486,14 +505,14 @@
                     <!-- Sub-pane: Deployments (per-chain) -->
                     <div id="subtab-deployments" class="subtab-pane">
                         <div class="subgraph-filters mb-2">
-                            <select id="subgraph-chain-select" class="form-select"></select>
                             <input id="subgraph-agent-filter" type="number" min="1" placeholder="Agent ID (all)" class="form-input">
                         </div>
-                        <!-- Deployed Services -->
-                        <!-- Services: Ethereum view (Protocol Registry — has state) -->
+                        <!-- Chain-dependent summary cards -->
+                        <div id="deployments-summary" class="rewards-summary mb-2"></div>
+                        <!-- Agents: Ethereum view (Protocol Registry — has state) -->
                         <div id="services-ethereum" style="display:none">
                             <div class="section-header">
-                                <h3>Services <span class="section-badge">on Ethereum</span></h3>
+                                <h3>Agents <span class="section-badge">on Ethereum</span></h3>
                                 <div class="subgraph-filters">
                                     <input id="subgraph-protocol-search" type="text" placeholder="Search ID, name, state..." class="form-input" style="width:220px">
                                 </div>
@@ -516,10 +535,10 @@
                                 </table>
                             </div>
                         </div>
-                        <!-- Services: other chains (Service Registry — no state) -->
+                        <!-- Agents: other chains (Service Registry — no state) -->
                         <div id="services-perchain">
                             <div class="section-header">
-                                <h3>Services <span class="section-badge" id="deployed-chain-badge">on Gnosis</span></h3>
+                                <h3>Agents <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
                                 <div class="subgraph-filters">
                                     <input id="subgraph-services-search" type="text" placeholder="Search ID, address, agent..." class="form-input" style="width:220px">
                                 </div>
@@ -544,7 +563,7 @@
                         </div>
                         <!-- Staking Contracts -->
                         <div class="section-header">
-                            <h3>Staking Contracts <span class="section-badge" id="staking-chain-badge">on Gnosis</span></h3>
+                            <h3>Staking Contracts <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
                             <div class="subgraph-filters">
                                 <input id="subgraph-staking-search" type="text" placeholder="Search address, agent..." class="form-input" style="width:220px">
                             </div>
@@ -564,6 +583,133 @@
                                 </thead>
                                 <tbody id="subgraph-staking-body">
                                     <tr><td colspan="7" class="text-center text-muted">Select a chain to load data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Checkpoints -->
+                        <div class="section-header">
+                            <h3>Checkpoints <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
+                            <div class="subgraph-filters">
+                                <input id="subgraph-checkpoints-search" type="text" placeholder="Search epoch, contract..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th class="val">Epoch</th>
+                                        <th>Contract</th>
+                                        <th class="val">Available Rewards</th>
+                                        <th>Services</th>
+                                        <th class="val">Block</th>
+                                        <th>Time</th>
+                                        <th>Tx</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-checkpoints-body">
+                                    <tr><td colspan="7" class="text-center text-muted">Select a chain to load data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Staking Events -->
+                        <div class="section-header">
+                            <h3>Staking Events <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
+                            <div class="subgraph-filters">
+                                <select id="staking-event-type-filter" class="form-select" style="width:140px">
+                                    <option value="">All types</option>
+                                    <option value="staked">Staked</option>
+                                    <option value="unstaked">Unstaked</option>
+                                    <option value="inactivity">Inactivity</option>
+                                    <option value="evicted">Evicted</option>
+                                </select>
+                                <input id="subgraph-events-search" type="text" placeholder="Search..." class="form-input" style="width:180px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th class="val">Epoch</th>
+                                        <th>Service</th>
+                                        <th>Address</th>
+                                        <th class="val">Amount (OLAS)</th>
+                                        <th>Time</th>
+                                        <th>Tx</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-events-body">
+                                    <tr><td colspan="7" class="text-center text-muted">Select a chain to load data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Daily Staking Trends -->
+                        <div class="section-header">
+                            <h3>Daily Staking Trends <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th class="val"># Services</th>
+                                        <th class="val">Total Rewards (OLAS)</th>
+                                        <th class="val">Median Cumulative (OLAS)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-daily-body">
+                                    <tr><td colspan="4" class="text-center text-muted">Select a chain to load data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Sub-pane: Tokenomics -->
+                    <div id="subtab-tokenomics" class="subtab-pane">
+                        <!-- Token summary cards -->
+                        <div id="tokenomics-summary" class="rewards-summary mb-2"></div>
+                        <!-- Top Holders -->
+                        <div class="section-header">
+                            <h3>Top Token Holders <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
+                            <div class="subgraph-filters">
+                                <input id="tokenomics-holders-search" type="text" placeholder="Search address..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2" style="max-height:480px;overflow-y:auto">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th class="val" style="width:50px">Rank</th>
+                                        <th>Address</th>
+                                        <th class="val">Balance (OLAS)</th>
+                                        <th class="val" style="width:70px">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tokenomics-holders-body">
+                                    <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Recent Transfers -->
+                        <div class="section-header">
+                            <h3>Recent Transfers <span class="section-badge" data-chain-badge>on Gnosis</span></h3>
+                            <div class="subgraph-filters">
+                                <input id="tokenomics-transfers-search" type="text" placeholder="Search address, tx..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>From</th>
+                                        <th>To</th>
+                                        <th class="val">Value (OLAS)</th>
+                                        <th class="val">Block</th>
+                                        <th>Time</th>
+                                        <th>Tx</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tokenomics-transfers-body">
+                                    <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -772,6 +918,6 @@
         </div>
         <!-- Modals (minimal implementation for now) -->
         <div id="toast-container" class="toast-container"></div>
-        <script src="/static/app.js?v=1.0.6"></script>
+        <script src="/static/app.js?v=1.0.11"></script>
     </body>
 </html>
