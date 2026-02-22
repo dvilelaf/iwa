@@ -167,28 +167,29 @@ query StakingServiceInfo($serviceId: ID!) {
     id
     currentOlasStaked
     olasRewardsEarned
-    olasRewardsClaimed
-    latestStakingContract
-    totalEpochsParticipated
+    blockNumber
     blockTimestamp
   }
 }
 """
 
-STAKING_REWARDS_HISTORY = """
-query StakingRewardsHistory($serviceId: String!) {
-  serviceRewardsHistories(
-    where: {service: $serviceId}
-    orderBy: epoch
+STAKING_REWARD_CLAIMS_BY_SERVICE = """
+query StakingRewardClaimsByService($serviceId: BigInt!) {
+  rewardClaimeds(
+    where: {serviceId: $serviceId}
+    orderBy: blockTimestamp
     orderDirection: desc
     first: 1000
   ) {
     id
     epoch
-    contractAddress
-    rewardAmount
-    checkpointedAt
+    serviceId
+    owner
+    multisig
+    reward
+    blockNumber
     blockTimestamp
+    transactionHash
   }
 }
 """
@@ -258,19 +259,24 @@ query ServicesEvicted($serviceId: BigInt!) {
 }
 """
 
-ACTIVE_SERVICE_EPOCH = """
-query ActiveServiceEpoch($contractAddress: Bytes!) {
-  activeServiceEpoches(
+ACTIVE_SERVICE_CHECKPOINT = """
+query ActiveServiceCheckpoint($contractAddress: Bytes!) {
+  checkpoints(
     where: {contractAddress: $contractAddress}
     orderBy: epoch
     orderDirection: desc
     first: 1
   ) {
     id
-    contractAddress
     epoch
-    activeServiceIds
+    serviceIds
+    rewards
+    availableRewards
+    epochLength
+    blockNumber
     blockTimestamp
+    transactionHash
+    contractAddress
   }
 }
 """
@@ -351,6 +357,11 @@ query ProtocolAgents($lastId: Bytes!, $pageSize: Int!) {
     publicId
     description
     owner
+    packageHash
+    image
+    metadataHash
+    block
+    txHash
   }
 }
 """
@@ -364,6 +375,191 @@ query ProtocolComponents($lastId: Bytes!, $pageSize: Int!) {
     packageType
     description
     owner
+    packageHash
+    image
+    metadataHash
+    block
+    txHash
+  }
+}
+"""
+
+PROTOCOL_BUILDERS_PAGINATED = """
+query Builders($lastId: String!, $pageSize: Int!) {
+  builders(first: $pageSize, where: {id_gt: $lastId}, orderBy: id) {
+    id
+  }
+}
+"""
+
+# ---------------------------------------------------------------------------
+# Staking — additional entities
+# ---------------------------------------------------------------------------
+
+STAKING_CHECKPOINTS = """
+query StakingCheckpoints($limit: Int!) {
+  checkpoints(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    availableRewards
+    serviceIds
+    rewards
+    epochLength
+    blockNumber
+    transactionHash
+    blockTimestamp
+    contractAddress
+  }
+}
+"""
+
+STAKING_DEPOSITS = """
+query StakingDeposits($limit: Int!) {
+  deposits(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    sender
+    amount
+    balance
+    availableRewards
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_WITHDRAWS = """
+query StakingWithdraws($limit: Int!) {
+  withdraws(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    to
+    amount
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_REWARD_CLAIMS = """
+query RewardClaims($limit: Int!) {
+  rewardClaimeds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    serviceId
+    owner
+    multisig
+    reward
+    blockNumber
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_DAILY_TRENDS = """
+query DailyTrends($limit: Int!) {
+  cumulativeDailyStakingGlobals(first: $limit, orderBy: timestamp, orderDirection: desc) {
+    id
+    timestamp
+    block
+    totalRewards
+    numServices
+    medianCumulativeRewards
+  }
+}
+"""
+
+STAKING_SERVICE_STAKED_RECENT = """
+query RecentServiceStaked($limit: Int!) {
+  serviceStakeds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    serviceId
+    owner
+    multisig
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_SERVICE_UNSTAKED_RECENT = """
+query RecentServiceUnstaked($limit: Int!) {
+  serviceUnstakeds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    serviceId
+    owner
+    multisig
+    reward
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_SERVICE_INACTIVITY_RECENT = """
+query RecentInactivity($limit: Int!) {
+  serviceInactivityWarnings(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    serviceId
+    serviceInactivity
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+STAKING_EVICTIONS_RECENT = """
+query RecentEvictions($limit: Int!) {
+  servicesEvicteds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    epoch
+    serviceIds
+    owners
+    multisigs
+    serviceInactivity
+    blockTimestamp
+    transactionHash
+  }
+}
+"""
+
+# ---------------------------------------------------------------------------
+# Tokenomics
+# ---------------------------------------------------------------------------
+
+TOKENOMICS_TOKEN = """
+{
+  tokens(first: 1) {
+    id
+    balance
+    holderCount
+  }
+}
+"""
+
+TOKENOMICS_TOP_HOLDERS = """
+query TopHolders($limit: Int!) {
+  tokenHolders(first: $limit, orderBy: balance, orderDirection: desc) {
+    id
+    balance
+  }
+}
+"""
+
+TOKENOMICS_RECENT_TRANSFERS = """
+query RecentTransfers($limit: Int!) {
+  transfers(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    from
+    to
+    value
+    blockNumber
+    blockTimestamp
+    transactionHash
   }
 }
 """

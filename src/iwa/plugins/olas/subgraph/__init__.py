@@ -12,7 +12,7 @@ Usage::
 
     # Staking
     contracts = client.staking.get_all_contracts("gnosis")
-    rewards = client.staking.get_service_rewards_history("gnosis", 2679)
+    rewards = client.staking.get_service_reward_claims("gnosis", 2679)
 
     # Protocol Registry (Ethereum)
     info = client.protocol.get_service_by_id(10)
@@ -26,6 +26,7 @@ from iwa.plugins.olas.subgraph.client import SubgraphError, clear_cache
 from iwa.plugins.olas.subgraph.protocol_registry import ProtocolRegistrySubgraph
 from iwa.plugins.olas.subgraph.service_registry import ServiceRegistrySubgraph
 from iwa.plugins.olas.subgraph.staking import StakingSubgraph
+from iwa.plugins.olas.subgraph.tokenomics import TokenomicsSubgraph
 
 __all__ = [
     "SubgraphClient",
@@ -64,6 +65,7 @@ class SubgraphClient:
         self._registry: Optional[ServiceRegistrySubgraph] = None
         self._staking: Optional[StakingSubgraph] = None
         self._protocol: Optional[ProtocolRegistrySubgraph] = None
+        self._tokenomics: Optional[TokenomicsSubgraph] = None
 
     @property
     def registry(self) -> ServiceRegistrySubgraph:
@@ -86,6 +88,13 @@ class SubgraphClient:
             self._protocol = ProtocolRegistrySubgraph(self._api_key, self._cache_ttl)
         return self._protocol
 
+    @property
+    def tokenomics(self) -> TokenomicsSubgraph:
+        """Tokenomics subgraph queries."""
+        if self._tokenomics is None:
+            self._tokenomics = TokenomicsSubgraph(self._api_key, self._cache_ttl)
+        return self._tokenomics
+
     def close(self) -> None:
         """Close all HTTP sessions."""
         if self._registry:
@@ -94,3 +103,5 @@ class SubgraphClient:
             self._staking.close()
         if self._protocol:
             self._protocol.close()
+        if self._tokenomics:
+            self._tokenomics.close()

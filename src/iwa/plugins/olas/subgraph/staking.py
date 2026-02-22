@@ -1,5 +1,6 @@
 """Staking subgraph queries."""
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from loguru import logger
@@ -8,11 +9,16 @@ from iwa.plugins.olas.subgraph import queries
 from iwa.plugins.olas.subgraph.client import GraphQLClient
 from iwa.plugins.olas.subgraph.endpoints import SubgraphType, get_available_chains, get_endpoint
 from iwa.plugins.olas.subgraph.models import (
-    SubgraphRewardEpoch,
+    SubgraphCheckpoint,
+    SubgraphDailyStakingTrend,
+    SubgraphDeposit,
+    SubgraphRewardClaim,
     SubgraphServiceEvents,
     SubgraphStakedService,
     SubgraphStakingContract,
+    SubgraphStakingEvent,
     SubgraphStakingGlobal,
+    SubgraphWithdraw,
 )
 
 
@@ -112,29 +118,29 @@ class StakingSubgraph:
             return None
         return SubgraphStakedService.from_subgraph(svc)
 
-    def get_service_rewards_history(
+    def get_service_reward_claims(
         self,
         chain: str,
         service_id: int,
-    ) -> List[SubgraphRewardEpoch]:
-        """Get per-epoch rewards history for a service.
+    ) -> List[SubgraphRewardClaim]:
+        """Get reward claims for a specific service.
 
         Args:
             chain: Chain name.
             service_id: Service ID.
 
         Returns:
-            List of reward epochs, newest first.
+            List of reward claims, newest first.
 
         """
         client = self._client(chain)
         data = client.query(
-            queries.STAKING_REWARDS_HISTORY,
+            queries.STAKING_REWARD_CLAIMS_BY_SERVICE,
             variables={"serviceId": str(service_id)},
         )
         return [
-            SubgraphRewardEpoch.from_subgraph(r)
-            for r in data.get("serviceRewardsHistories", [])
+            SubgraphRewardClaim.from_subgraph(r)
+            for r in data.get("rewardClaimeds", [])
         ]
 
     def get_service_events(
@@ -196,6 +202,8 @@ class StakingSubgraph:
     ) -> List[int]:
         """Get service IDs currently active in a staking contract.
 
+        Uses the latest checkpoint for the given contract address.
+
         Args:
             chain: Chain name.
             contract_address: Staking contract address.
@@ -206,13 +214,13 @@ class StakingSubgraph:
         """
         client = self._client(chain)
         data = client.query(
-            queries.ACTIVE_SERVICE_EPOCH,
+            queries.ACTIVE_SERVICE_CHECKPOINT,
             variables={"contractAddress": contract_address.lower()},
         )
-        epochs = data.get("activeServiceEpoches", [])
-        if not epochs:
+        checkpoints = data.get("checkpoints", [])
+        if not checkpoints:
             return []
-        return [int(sid) for sid in (epochs[0].get("activeServiceIds") or [])]
+        return [int(sid) for sid in (checkpoints[0].get("serviceIds") or [])]
 
     def get_global_stats(self, chain: str) -> Optional[SubgraphStakingGlobal]:
         """Get global staking stats for a chain.
@@ -259,6 +267,107 @@ class StakingSubgraph:
                 logger.warning(f"Failed to query staking contracts on {chain}: {exc}")
                 result[chain] = []
         return result
+
+    def get_checkpoints(
+        self, chain: str, limit: int = 100
+    ) -> List[SubgraphCheckpoint]:
+        """Get recent checkpoints."""
+        client = self._client(chain)
+        data = client.query(queries.STAKING_CHECKPOINTS, variables={"limit": limit})
+        return [SubgraphCheckpoint.from_subgraph(c) for c in data.get("checkpoints", [])]
+
+    def get_deposits(self, chain: str, limit: int = 100) -> List[SubgraphDeposit]:
+        """Get recent deposits."""
+        client = self._client(chain)
+        data = client.query(queries.STAKING_DEPOSITS, variables={"limit": limit})
+        return [SubgraphDeposit.from_subgraph(d) for d in data.get("deposits", [])]
+
+    def get_withdrawals(self, chain: str, limit: int = 100) -> List[SubgraphWithdraw]:
+        """Get recent withdrawals."""
+        client = self._client(chain)
+        data = client.query(queries.STAKING_WITHDRAWS, variables={"limit": limit})
+        return [SubgraphWithdraw.from_subgraph(w) for w in data.get("withdraws", [])]
+
+    def get_reward_claims(
+        self, chain: str, limit: int = 100
+    ) -> List[SubgraphRewardClaim]:
+        """Get recent reward claims."""
+        client = self._client(chain)
+        data = client.query(queries.STAKING_REWARD_CLAIMS, variables={"limit": limit})
+        return [SubgraphRewardClaim.from_subgraph(r) for r in data.get("rewardClaimeds", [])]
+
+    def get_daily_trends(
+        self, chain: str, limit: int = 90
+    ) -> List[SubgraphDailyStakingTrend]:
+        """Get daily staking trends."""
+        client = self._client(chain)
+        data = client.query(queries.STAKING_DAILY_TRENDS, variables={"limit": limit})
+        return [
+            SubgraphDailyStakingTrend.from_subgraph(d)
+            for d in data.get("cumulativeDailyStakingGlobals", [])
+        ]
+
+    def get_recent_events(
+        self, chain: str, limit: int = 100
+    ) -> List[SubgraphStakingEvent]:
+        """Get all staking lifecycle events merged and sorted by timestamp."""
+        client = self._client(chain)
+        events: List[SubgraphStakingEvent] = []
+
+        staked = client.query(
+            queries.STAKING_SERVICE_STAKED_RECENT, variables={"limit": limit}
+        ).get("serviceStakeds", [])
+        for e in staked:
+            events.append(SubgraphStakingEvent(
+                event_type="staked", epoch=int(e.get("epoch", 0)),
+                service_id=int(e.get("serviceId", 0)),
+                owner=e.get("owner", ""), multisig=e.get("multisig", ""),
+                block_timestamp=e.get("blockTimestamp"),
+                transaction_hash=e.get("transactionHash", ""),
+            ))
+
+        unstaked = client.query(
+            queries.STAKING_SERVICE_UNSTAKED_RECENT, variables={"limit": limit}
+        ).get("serviceUnstakeds", [])
+        for e in unstaked:
+            events.append(SubgraphStakingEvent(
+                event_type="unstaked", epoch=int(e.get("epoch", 0)),
+                service_id=int(e.get("serviceId", 0)),
+                owner=e.get("owner", ""), multisig=e.get("multisig", ""),
+                amount=int(e.get("reward", 0)),
+                block_timestamp=e.get("blockTimestamp"),
+                transaction_hash=e.get("transactionHash", ""),
+            ))
+
+        inactivity = client.query(
+            queries.STAKING_SERVICE_INACTIVITY_RECENT, variables={"limit": limit}
+        ).get("serviceInactivityWarnings", [])
+        for e in inactivity:
+            events.append(SubgraphStakingEvent(
+                event_type="inactivity", epoch=int(e.get("epoch", 0)),
+                service_id=int(e.get("serviceId", 0)),
+                amount=int(e.get("serviceInactivity", 0)),
+                block_timestamp=e.get("blockTimestamp"),
+                transaction_hash=e.get("transactionHash", ""),
+            ))
+
+        evictions = client.query(
+            queries.STAKING_EVICTIONS_RECENT, variables={"limit": limit}
+        ).get("servicesEvicteds", [])
+        for e in evictions:
+            events.append(SubgraphStakingEvent(
+                event_type="evicted", epoch=int(e.get("epoch", 0)),
+                service_ids=[int(s) for s in (e.get("serviceIds") or [])],
+                block_timestamp=e.get("blockTimestamp"),
+                transaction_hash=e.get("transactionHash", ""),
+            ))
+
+        # Sort by timestamp descending
+        events.sort(
+            key=lambda ev: ev.block_timestamp or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        return events[:limit]
 
     def close(self) -> None:
         """Close all HTTP sessions."""

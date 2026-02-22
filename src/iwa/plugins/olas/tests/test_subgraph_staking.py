@@ -98,9 +98,8 @@ class TestGetServiceStakingInfo:
                             "id": "42",
                             "currentOlasStaked": "20000000000000000000000",
                             "olasRewardsEarned": "5000000000000000000",
-                            "olasRewardsClaimed": "3000000000000000000",
-                            "latestStakingContract": "0xcontract",
-                            "totalEpochsParticipated": "100",
+                            "blockNumber": "12345",
+                            "blockTimestamp": "1700000000",
                         }
                     }
                 }
@@ -111,7 +110,9 @@ class TestGetServiceStakingInfo:
 
         assert info is not None
         assert info.service_id == 42
-        assert info.total_epochs_participated == 100
+        assert info.current_olas_staked == 20000000000000000000000
+        assert info.olas_rewards_earned == 5000000000000000000
+        assert info.block_number == 12345
 
     def test_not_found(self):
         with patch(
@@ -127,7 +128,7 @@ class TestGetServiceStakingInfo:
         assert info is None
 
 
-class TestGetServiceRewardsHistory:
+class TestGetServiceRewardClaims:
     def test_basic(self):
         with patch(
             "iwa.plugins.olas.subgraph.client.create_retry_session"
@@ -135,22 +136,28 @@ class TestGetServiceRewardsHistory:
             mock_factory.return_value = _mock_session_with([
                 {
                     "data": {
-                        "serviceRewardsHistories": [
+                        "rewardClaimeds": [
                             {
-                                "id": "42-0xcontract-50",
+                                "id": "42-50",
                                 "epoch": "50",
-                                "contractAddress": "0xcontract",
-                                "rewardAmount": "1000000000000000000",
-                                "checkpointedAt": "1700000000",
+                                "serviceId": "42",
+                                "owner": "0xowner",
+                                "multisig": "0xmultisig",
+                                "reward": "1000000000000000000",
+                                "blockNumber": "12345",
                                 "blockTimestamp": "1700000100",
+                                "transactionHash": "0xtx1",
                             },
                             {
-                                "id": "42-0xcontract-49",
+                                "id": "42-49",
                                 "epoch": "49",
-                                "contractAddress": "0xcontract",
-                                "rewardAmount": "0",
-                                "checkpointedAt": "1699990000",
+                                "serviceId": "42",
+                                "owner": "0xowner",
+                                "multisig": "0xmultisig",
+                                "reward": "0",
+                                "blockNumber": "12300",
                                 "blockTimestamp": "1699990100",
+                                "transactionHash": "0xtx2",
                             },
                         ]
                     }
@@ -158,12 +165,12 @@ class TestGetServiceRewardsHistory:
             ])
 
             staking = StakingSubgraph(api_key=API_KEY)
-            history = staking.get_service_rewards_history("gnosis", 42)
+            claims = staking.get_service_reward_claims("gnosis", 42)
 
-        assert len(history) == 2
-        assert history[0].epoch == 50
-        assert history[0].reward_amount == 1000000000000000000
-        assert history[1].reward_amount == 0
+        assert len(claims) == 2
+        assert claims[0].epoch == 50
+        assert claims[0].reward == 1000000000000000000
+        assert claims[1].reward == 0
 
 
 class TestGetServiceEvents:
@@ -194,13 +201,18 @@ class TestGetActiveServices:
             mock_factory.return_value = _mock_session_with([
                 {
                     "data": {
-                        "activeServiceEpoches": [
+                        "checkpoints": [
                             {
                                 "id": "0xcontract-50",
                                 "contractAddress": "0xcontract",
                                 "epoch": "50",
-                                "activeServiceIds": ["42", "43", "44"],
+                                "serviceIds": ["42", "43", "44"],
+                                "rewards": [],
+                                "availableRewards": "0",
+                                "epochLength": "3600",
+                                "blockNumber": "12345",
                                 "blockTimestamp": "1700000000",
+                                "transactionHash": "0xtx",
                             }
                         ]
                     }

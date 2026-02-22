@@ -1,13 +1,13 @@
 """Tests for subgraph Pydantic models."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from iwa.plugins.olas.subgraph.models import (
     SubgraphDailyActivity,
     SubgraphMultisig,
     SubgraphProtocolGlobal,
     SubgraphProtocolService,
-    SubgraphRewardEpoch,
+    SubgraphRewardClaim,
     SubgraphService,
     SubgraphServiceEvents,
     SubgraphStakedService,
@@ -127,30 +127,35 @@ class TestSubgraphStakedService:
             "id": "42",
             "currentOlasStaked": "20000000000000000000000",
             "olasRewardsEarned": "5000000000000000000",
-            "olasRewardsClaimed": "3000000000000000000",
-            "latestStakingContract": "0xcontract",
-            "totalEpochsParticipated": "100",
+            "blockNumber": "12345",
+            "blockTimestamp": "1700000000",
         }
         ss = SubgraphStakedService.from_subgraph(data)
         assert ss.service_id == 42
         assert ss.current_olas_staked == 20000000000000000000000
-        assert ss.total_epochs_participated == 100
+        assert ss.olas_rewards_earned == 5000000000000000000
+        assert ss.block_number == 12345
+        assert isinstance(ss.block_timestamp, datetime)
 
 
-class TestSubgraphRewardEpoch:
+class TestSubgraphRewardClaim:
     def test_from_subgraph(self):
         data = {
             "epoch": "50",
-            "rewardAmount": "1000000000000000000",
-            "contractAddress": "0xcontract",
-            "checkpointedAt": "1700000000",
+            "serviceId": "42",
+            "owner": "0xowner",
+            "multisig": "0xmultisig",
+            "reward": "1000000000000000000",
+            "blockNumber": "12345",
             "blockTimestamp": "1700000100",
+            "transactionHash": "0xtxhash",
         }
-        re = SubgraphRewardEpoch.from_subgraph(data)
-        assert re.epoch == 50
-        assert re.reward_amount == 1000000000000000000
-        assert isinstance(re.checkpointed_at, datetime)
-        assert isinstance(re.block_timestamp, datetime)
+        rc = SubgraphRewardClaim.from_subgraph(data)
+        assert rc.epoch == 50
+        assert rc.service_id == 42
+        assert rc.reward == 1000000000000000000
+        assert rc.owner == "0xowner"
+        assert isinstance(rc.block_timestamp, datetime)
 
 
 class TestSubgraphServiceEvents:

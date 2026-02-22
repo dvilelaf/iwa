@@ -115,6 +115,17 @@ class ProtocolRegistrySubgraph:
         raw = client.query_all(queries.PROTOCOL_COMPONENTS_PAGINATED, "units")
         return [SubgraphProtocolUnit.from_subgraph(u, package_type="component") for u in raw]
 
+    def get_builders(self) -> List[str]:
+        """Get all builder addresses.
+
+        Returns:
+            List of builder addresses.
+
+        """
+        client = self._get_client()
+        raw = client.query_all(queries.PROTOCOL_BUILDERS_PAGINATED, "builders")
+        return [b["id"] for b in raw if b.get("id")]
+
     def get_global_stats(self) -> Optional[SubgraphProtocolGlobal]:
         """Get global protocol stats.
 

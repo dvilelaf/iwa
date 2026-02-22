@@ -174,9 +174,14 @@ class SubgraphStakedService(BaseModel):
     service_id: int
     current_olas_staked: int = 0
     olas_rewards_earned: int = 0
-    olas_rewards_claimed: int = 0
-    latest_staking_contract: Optional[str] = None
-    total_epochs_participated: int = 0
+    block_number: int = 0
+    block_timestamp: Optional[datetime] = None
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
 
     @classmethod
     def from_subgraph(cls, data: Dict) -> "SubgraphStakedService":
@@ -185,36 +190,41 @@ class SubgraphStakedService(BaseModel):
             service_id=int(data["id"]),
             current_olas_staked=int(data.get("currentOlasStaked", 0)),
             olas_rewards_earned=int(data.get("olasRewardsEarned", 0)),
-            olas_rewards_claimed=int(data.get("olasRewardsClaimed", 0)),
-            latest_staking_contract=data.get("latestStakingContract"),
-            total_epochs_participated=int(data.get("totalEpochsParticipated", 0)),
+            block_number=int(data.get("blockNumber", 0)),
+            block_timestamp=data.get("blockTimestamp"),
         )
 
 
-class SubgraphRewardEpoch(BaseModel):
-    """Per-epoch reward record from the Staking subgraph."""
+class SubgraphRewardClaim(BaseModel):
+    """Reward claimed event from the Staking subgraph."""
 
-    epoch: int
-    reward_amount: int = 0
-    staking_contract: Optional[str] = None
-    checkpointed_at: Optional[datetime] = None
+    epoch: int = 0
+    service_id: int = 0
+    owner: str = ""
+    multisig: str = ""
+    reward: int = 0
+    block_number: int = 0
     block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
 
-    @field_validator("checkpointed_at", "block_timestamp", mode="before")
+    @field_validator("block_timestamp", mode="before")
     @classmethod
     def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
         """Parse Unix timestamp to datetime."""
         return _ts_to_datetime(v)
 
     @classmethod
-    def from_subgraph(cls, data: Dict) -> "SubgraphRewardEpoch":
-        """Parse a reward epoch entity from raw subgraph JSON."""
+    def from_subgraph(cls, data: Dict) -> "SubgraphRewardClaim":
+        """Parse a reward claim entity from raw subgraph JSON."""
         return cls(
             epoch=int(data.get("epoch", 0)),
-            reward_amount=int(data.get("rewardAmount", 0)),
-            staking_contract=data.get("contractAddress"),
-            checkpointed_at=data.get("checkpointedAt"),
+            service_id=int(data.get("serviceId", 0)),
+            owner=data.get("owner", ""),
+            multisig=data.get("multisig", ""),
+            reward=int(data.get("reward", 0)),
+            block_number=int(data.get("blockNumber", 0)),
             block_timestamp=data.get("blockTimestamp"),
+            transaction_hash=data.get("transactionHash", ""),
         )
 
 
@@ -250,8 +260,13 @@ class SubgraphProtocolService(BaseModel):
     state: int = 0
     agent_ids: List[int] = Field(default_factory=list)
     threshold: int = 0
+    security_deposit: int = 0
+    number_of_instances: int = 0
+    max_number_of_instances: int = 0
     multisig: Optional[str] = None
     instances: List[str] = Field(default_factory=list)
+    package_hash: Optional[str] = None
+    metadata_hash: Optional[str] = None
     owner: Optional[str] = None
     description: Optional[str] = None
 
@@ -264,8 +279,13 @@ class SubgraphProtocolService(BaseModel):
             state=int(data.get("state", 0)),
             agent_ids=[int(a) for a in (data.get("agentIds") or [])],
             threshold=int(data.get("threshold", 0)),
+            security_deposit=int(data.get("securityDeposit", 0)),
+            number_of_instances=int(data.get("numberOfInstances", 0)),
+            max_number_of_instances=int(data.get("maxNumberOfInstances", 0)),
             multisig=data.get("multisig"),
             instances=data.get("instances") or [],
+            package_hash=data.get("packageHash"),
+            metadata_hash=data.get("metadataHash"),
             owner=data.get("owner"),
             description=data.get("description"),
         )
@@ -279,6 +299,11 @@ class SubgraphProtocolUnit(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
     package_type: str = ""
+    package_hash: Optional[str] = None
+    image: Optional[str] = None
+    metadata_hash: Optional[str] = None
+    block: Optional[int] = None
+    tx_hash: Optional[str] = None
 
     @classmethod
     def from_subgraph(cls, data: Dict, package_type: str = "") -> "SubgraphProtocolUnit":
@@ -289,6 +314,11 @@ class SubgraphProtocolUnit(BaseModel):
             description=data.get("description"),
             owner=data.get("owner"),
             package_type=data.get("packageType", package_type),
+            package_hash=data.get("packageHash"),
+            image=data.get("image"),
+            metadata_hash=data.get("metadataHash"),
+            block=int(data["block"]) if data.get("block") else None,
+            tx_hash=data.get("txHash"),
         )
 
 
@@ -299,3 +329,214 @@ class SubgraphProtocolGlobal(BaseModel):
     total_agents: int = 0
     total_components: int = 0
     total_services: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Staking — additional entities
+# ---------------------------------------------------------------------------
+
+
+class SubgraphCheckpoint(BaseModel):
+    """Staking checkpoint from the Staking subgraph."""
+
+    epoch: int = 0
+    available_rewards: int = 0
+    service_ids: List[int] = Field(default_factory=list)
+    rewards: List[int] = Field(default_factory=list)
+    epoch_length: int = 0
+    block_number: int = 0
+    block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
+    contract_address: str = ""
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphCheckpoint":
+        """Parse a checkpoint entity from raw subgraph JSON."""
+        return cls(
+            epoch=int(data.get("epoch", 0)),
+            available_rewards=int(data.get("availableRewards", 0)),
+            service_ids=[int(s) for s in (data.get("serviceIds") or [])],
+            rewards=[int(r) for r in (data.get("rewards") or [])],
+            epoch_length=int(data.get("epochLength", 0)),
+            block_number=int(data.get("blockNumber", 0)),
+            block_timestamp=data.get("blockTimestamp"),
+            transaction_hash=data.get("transactionHash", ""),
+            contract_address=data.get("contractAddress", ""),
+        )
+
+
+class SubgraphDeposit(BaseModel):
+    """Staking deposit event."""
+
+    sender: str = ""
+    amount: int = 0
+    balance: int = 0
+    available_rewards: int = 0
+    block_number: int = 0
+    block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphDeposit":
+        """Parse a deposit entity from raw subgraph JSON."""
+        return cls(
+            sender=data.get("sender", ""),
+            amount=int(data.get("amount", 0)),
+            balance=int(data.get("balance", 0)),
+            available_rewards=int(data.get("availableRewards", 0)),
+            block_number=int(data.get("blockNumber", 0)),
+            block_timestamp=data.get("blockTimestamp"),
+            transaction_hash=data.get("transactionHash", ""),
+        )
+
+
+class SubgraphWithdraw(BaseModel):
+    """Staking withdrawal event."""
+
+    to_address: str = ""
+    amount: int = 0
+    block_number: int = 0
+    block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphWithdraw":
+        """Parse a withdraw entity from raw subgraph JSON."""
+        return cls(
+            to_address=data.get("to", ""),
+            amount=int(data.get("amount", 0)),
+            block_number=int(data.get("blockNumber", 0)),
+            block_timestamp=data.get("blockTimestamp"),
+            transaction_hash=data.get("transactionHash", ""),
+        )
+
+
+class SubgraphDailyStakingTrend(BaseModel):
+    """Cumulative daily staking global stats."""
+
+    timestamp: Optional[datetime] = None
+    block: int = 0
+    total_rewards: int = 0
+    num_services: int = 0
+    median_cumulative_rewards: int = 0
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphDailyStakingTrend":
+        """Parse a daily staking trend entity from raw subgraph JSON."""
+        return cls(
+            timestamp=data.get("timestamp"),
+            block=int(data.get("block", 0)),
+            total_rewards=int(data.get("totalRewards", 0)),
+            num_services=int(data.get("numServices", 0)),
+            median_cumulative_rewards=int(data.get("medianCumulativeRewards", 0)),
+        )
+
+
+class SubgraphStakingEvent(BaseModel):
+    """Unified staking lifecycle event."""
+
+    event_type: str = ""
+    epoch: int = 0
+    service_id: Optional[int] = None
+    service_ids: List[int] = Field(default_factory=list)
+    owner: str = ""
+    multisig: str = ""
+    amount: int = 0
+    block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+
+# ---------------------------------------------------------------------------
+# Tokenomics
+# ---------------------------------------------------------------------------
+
+
+class SubgraphTokenInfo(BaseModel):
+    """OLAS token info from the Tokenomics subgraph."""
+
+    token_id: str = ""
+    balance: int = 0
+    holder_count: int = 0
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphTokenInfo":
+        """Parse a token entity from raw subgraph JSON."""
+        return cls(
+            token_id=data.get("id", ""),
+            balance=int(data.get("balance", 0)),
+            holder_count=int(data.get("holderCount", 0)),
+        )
+
+
+class SubgraphTokenHolder(BaseModel):
+    """Token holder from the Tokenomics subgraph."""
+
+    address: str = ""
+    balance: int = 0
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphTokenHolder":
+        """Parse a token holder entity from raw subgraph JSON."""
+        return cls(
+            address=data.get("id", ""),
+            balance=int(data.get("balance", 0)),
+        )
+
+
+class SubgraphTransfer(BaseModel):
+    """Token transfer event from the Tokenomics subgraph."""
+
+    from_address: str = ""
+    to_address: str = ""
+    value: int = 0
+    block_number: int = 0
+    block_timestamp: Optional[datetime] = None
+    transaction_hash: str = ""
+
+    @field_validator("block_timestamp", mode="before")
+    @classmethod
+    def parse_timestamp(cls, v: int | str | None) -> Optional[datetime]:
+        """Parse Unix timestamp to datetime."""
+        return _ts_to_datetime(v)
+
+    @classmethod
+    def from_subgraph(cls, data: Dict) -> "SubgraphTransfer":
+        """Parse a transfer entity from raw subgraph JSON."""
+        return cls(
+            from_address=data.get("from", ""),
+            to_address=data.get("to", ""),
+            value=int(data.get("value", 0)),
+            block_number=int(data.get("blockNumber", 0)),
+            block_timestamp=data.get("blockTimestamp"),
+            transaction_hash=data.get("transactionHash", ""),
+        )
