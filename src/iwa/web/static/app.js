@@ -17,6 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
     rewardsMonth: null,
     rewardsChart: null,
     rewardsInitialized: false,
+    // Subgraph / Network tab
+    subgraphChains: null,
+    subgraphChain: "gnosis",
+    subgraphAgentId: null,
+    subgraphServices: [],
+    subgraphProtocol: null,
+    subgraphAgents: [],
+    subgraphComponents: [],
+    subgraphSubTab: localStorage.getItem("iwa_network_subtab") || "registry",
+    subgraphInitialized: false,
   };
 
   // Real-time countdown updater for unstake availability
@@ -225,6 +235,8 @@ document.addEventListener("DOMContentLoaded", () => {
       loadMasterBalanceTable();
     } else if (tabId === "rewards") {
       initRewardsTab();
+    } else if (tabId === "network") {
+      initNetworkTab();
     }
   }
 
@@ -3649,6 +3661,481 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       showToast("Export error: " + err.message, "error");
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Network (Subgraph) Tab
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const PROTOCOL_STATES = {
+    0: "Non-Existent",
+    1: "Pre-Registration",
+    2: "Active Registration",
+    3: "Finished Registration",
+    4: "Deployed",
+    5: "Terminated Bonded",
+  };
+
+  // Agent name cache: { agentId: "valory/trader" }
+  let agentNameCache = {};
+
+  async function initNetworkTab() {
+    if (!state.subgraphInitialized) {
+      state.subgraphInitialized = true;
+      // Load available chains + agent names in parallel
+      try {
+        const [chainsResp, agentsResp] = await Promise.all([
+          authFetch("/api/subgraph/chains").then(r => r.json()).catch(() => null),
+          authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
+        ]);
+        if (chainsResp) {
+          state.subgraphChains = chainsResp;
+          populateSubgraphChainSelect(chainsResp);
+        }
+        if (agentsResp && agentsResp.agents) {
+          agentNameCache = agentsResp.agents;
+        }
+      } catch (err) {
+        console.error("Failed to init network tab:", err);
+      }
+
+      // Event listeners
+      document.getElementById("subgraph-chain-select").addEventListener("change", (e) => {
+        state.subgraphChain = e.target.value;
+        loadNetworkData();
+      });
+      document.getElementById("subgraph-agent-filter").addEventListener("change", (e) => {
+        const val = e.target.value.trim();
+        state.subgraphAgentId = val ? parseInt(val, 10) : null;
+        loadNetworkData();
+      });
+      document.getElementById("subgraph-refresh").addEventListener("click", () => {
+        loadNetworkData();
+      });
+
+      // Sub-tab switching
+      document.querySelectorAll(".subtab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.subtab;
+          state.subgraphSubTab = target;
+          localStorage.setItem("iwa_network_subtab", target);
+          document.querySelectorAll(".subtab-btn").forEach(b => b.classList.remove("active"));
+          document.querySelectorAll(".subtab-pane").forEach(p => p.classList.remove("active"));
+          btn.classList.add("active");
+          const pane = document.getElementById(`subtab-${target}`);
+          if (pane) pane.classList.add("active");
+        });
+      });
+      // Restore saved sub-tab
+      if (state.subgraphSubTab !== "registry") {
+        document.querySelectorAll(".subtab-btn").forEach(b => {
+          b.classList.toggle("active", b.dataset.subtab === state.subgraphSubTab);
+        });
+        document.querySelectorAll(".subtab-pane").forEach(p => p.classList.remove("active"));
+        const savedPane = document.getElementById(`subtab-${state.subgraphSubTab}`);
+        if (savedPane) savedPane.classList.add("active");
+      }
+
+      // Search boxes (filter on keyup with debounce)
+      let servicesSearchTimeout = null;
+      document.getElementById("subgraph-services-search").addEventListener("input", (e) => {
+        clearTimeout(servicesSearchTimeout);
+        servicesSearchTimeout = setTimeout(() => {
+          renderServicesPage();
+        }, 300);
+      });
+      let stakingSearchTimeout = null;
+      document.getElementById("subgraph-staking-search").addEventListener("input", (e) => {
+        clearTimeout(stakingSearchTimeout);
+        stakingSearchTimeout = setTimeout(() => {
+          renderNetworkStakingFiltered();
+        }, 300);
+      });
+      let protocolSearchTimeout = null;
+      document.getElementById("subgraph-protocol-search").addEventListener("input", (e) => {
+        clearTimeout(protocolSearchTimeout);
+        protocolSearchTimeout = setTimeout(() => {
+          renderProtocolPage();
+        }, 300);
+      });
+      let agentsSearchTimeout = null;
+      document.getElementById("subgraph-agents-search").addEventListener("input", (e) => {
+        clearTimeout(agentsSearchTimeout);
+        agentsSearchTimeout = setTimeout(() => {
+          renderAgentsPage();
+        }, 300);
+      });
+      let componentsSearchTimeout = null;
+      document.getElementById("subgraph-components-search").addEventListener("input", (e) => {
+        clearTimeout(componentsSearchTimeout);
+        componentsSearchTimeout = setTimeout(() => {
+          renderComponentsPage();
+        }, 300);
+      });
+    }
+    loadNetworkData();
+  }
+
+  function getAgentName(agentId) {
+    const name = agentNameCache[String(agentId)];
+    return name || String(agentId);
+  }
+
+  function formatAgentIds(agentIds) {
+    if (!agentIds || agentIds.length === 0) return "";
+    return agentIds.map(id => {
+      const name = agentNameCache[String(id)];
+      if (name) {
+        // Show short name: "valory/trader" → "trader"
+        const short = name.includes("/") ? name.split("/").pop() : name;
+        return `<span title="${escapeHtml(name)} (ID ${id})">${escapeHtml(short)}</span>`;
+      }
+      return String(id);
+    }).join(", ");
+  }
+
+  function populateSubgraphChainSelect(chains) {
+    const select = document.getElementById("subgraph-chain-select");
+    const allChains = [...new Set([
+      ...(chains.service_registry || []),
+      ...(chains.staking || []),
+    ])].sort();
+
+    select.innerHTML = allChains.map(c =>
+      `<option value="${escapeHtml(c)}" ${c === state.subgraphChain ? "selected" : ""}>${escapeHtml(c.charAt(0).toUpperCase() + c.slice(1))}</option>`
+    ).join("");
+  }
+
+  async function loadNetworkData() {
+    const chain = state.subgraphChain;
+    const isEthereum = chain === "ethereum";
+    const agentParam = state.subgraphAgentId ? `&agent_id=${state.subgraphAgentId}` : "";
+    const chainLabel = chain.charAt(0).toUpperCase() + chain.slice(1);
+
+    // Toggle services view: Ethereum (Protocol Registry) vs other chains (Service Registry)
+    document.getElementById("services-ethereum").style.display = isEthereum ? "" : "none";
+    document.getElementById("services-perchain").style.display = isEthereum ? "none" : "";
+
+    // Update chain badges
+    const deployedBadge = document.getElementById("deployed-chain-badge");
+    if (deployedBadge) deployedBadge.textContent = `on ${chainLabel}`;
+    const stakingBadge = document.getElementById("staking-chain-badge");
+    if (stakingBadge) stakingBadge.textContent = `on ${chainLabel}`;
+
+    // Show loading states
+    document.getElementById("subgraph-summary").innerHTML =
+      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(4);
+    document.getElementById("subgraph-agents-body").innerHTML =
+      `<tr><td colspan="4" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("subgraph-components-body").innerHTML =
+      `<tr><td colspan="5" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    document.getElementById("subgraph-staking-body").innerHTML =
+      `<tr><td colspan="7" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+
+    if (isEthereum) {
+      document.getElementById("subgraph-protocol-body").innerHTML =
+        `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    } else {
+      document.getElementById("subgraph-services-body").innerHTML =
+        `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
+    }
+
+    // Fetch data in parallel — services source depends on chain
+    const promises = [
+      authFetch(`/api/subgraph/overview?chain=${chain}`).then(r => r.json()).catch(() => null),
+      isEthereum
+        ? authFetch("/api/subgraph/protocol").then(r => r.json()).catch(() => null)
+        : authFetch(`/api/subgraph/services?chain=${chain}${agentParam}`).then(r => r.json()).catch(() => null),
+      authFetch(`/api/subgraph/staking?chain=${chain}${agentParam}`).then(r => r.json()).catch(() => null),
+      authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
+      authFetch("/api/subgraph/components").then(r => r.json()).catch(() => null),
+    ];
+
+    const [overview, servicesOrProtocol, staking, agents, components] = await Promise.all(promises);
+
+    // Update agent name cache from enriched agents endpoint
+    if (agents && agents.agents) {
+      agentNameCache = agents.agents;
+    }
+
+    renderNetworkSummary(overview);
+    if (isEthereum) {
+      renderNetworkProtocol(servicesOrProtocol);
+    } else {
+      renderNetworkServices(servicesOrProtocol);
+    }
+    renderNetworkAgents(agents);
+    renderNetworkComponents(components);
+    renderNetworkStaking(staking);
+  }
+
+  function renderNetworkSummary(overview) {
+    const container = document.getElementById("subgraph-summary");
+    if (!overview) {
+      container.innerHTML = `<div class="rewards-card glass text-center text-error" style="grid-column:1/-1">Failed to load overview</div>`;
+      return;
+    }
+
+    const stakingInfo = overview.global_staking || {};
+    const proto = overview.protocol_global || {};
+    container.innerHTML = `
+      <div class="rewards-card glass">
+        <div class="card-label">Deployed Services</div>
+        <div class="card-value accent">${overview.services_count.toLocaleString()}</div>
+      </div>
+      <div class="rewards-card glass">
+        <div class="card-label">OLAS Staked</div>
+        <div class="card-value success">${stakingInfo.current_olas_staked != null ? Number(stakingInfo.current_olas_staked).toLocaleString(undefined, {maximumFractionDigits: 0}) : "N/A"}</div>
+      </div>
+      <div class="rewards-card glass">
+        <div class="card-label">Total Rewards</div>
+        <div class="card-value success">${stakingInfo.total_rewards != null ? Number(stakingInfo.total_rewards).toLocaleString(undefined, {maximumFractionDigits: 0}) + " OLAS" : "N/A"}</div>
+      </div>
+      <div class="rewards-card glass">
+        <div class="card-label">Registry</div>
+        <div class="card-value accent" style="font-size:0.85rem">${proto.total_agents || "?"} blueprints · ${proto.total_components || "?"} components</div>
+      </div>`;
+  }
+
+  function renderNetworkServices(data) {
+    const body = document.getElementById("subgraph-services-body");
+
+    if (!data || !data.services) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load services</td></tr>`;
+      return;
+    }
+
+    // Sort numerically by service_id
+    data.services.sort((a, b) => b.service_id - a.service_id);
+    state.subgraphServices = data.services;
+    renderServicesPage();
+  }
+
+  function getFilteredServices() {
+    const search = (document.getElementById("subgraph-services-search").value || "").toLowerCase().trim();
+    if (!search) return state.subgraphServices;
+    return state.subgraphServices.filter(s => {
+      const idStr = String(s.service_id);
+      const multisig = (s.multisig || "").toLowerCase();
+      const creator = (s.creator || "").toLowerCase();
+      const agents = (s.agent_ids || []).map(id => {
+        const name = agentNameCache[String(id)] || "";
+        return `${id} ${name}`;
+      }).join(" ").toLowerCase();
+      return idStr.includes(search) || multisig.includes(search) || creator.includes(search) || agents.includes(search);
+    });
+  }
+
+  function renderServicesPage() {
+    const body = document.getElementById("subgraph-services-body");
+    const filtered = getFilteredServices();
+    const chain = state.subgraphChain;
+
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No services found</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = filtered.map(s => `<tr>
+      <td><a href="${getExplorerUrl(s.multisig || "", chain)}" target="_blank" class="explorer-link">${s.service_id}</a></td>
+      <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.multisig || "")}')" title="${escapeHtml(s.multisig || "")}">${shortenAddr(s.multisig || "")}</td>
+      <td>${formatAgentIds(s.agent_ids)}</td>
+      <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.creator || "")}')" title="${escapeHtml(s.creator || "")}">${shortenAddr(s.creator || "")}</td>
+      <td>${s.created ? new Date(s.created).toLocaleDateString() : ""}</td>
+      <td class="text-muted" style="font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(s.config_hash || "")}">${shortenAddr(s.config_hash || "")}</td>
+    </tr>`).join("");
+  }
+
+  // Staking: store full data for search filtering
+  let stakingContractsData = [];
+
+  function renderNetworkStaking(data) {
+    const body = document.getElementById("subgraph-staking-body");
+
+    if (!data || !data.contracts) {
+      const chainLabel = state.subgraphChain.charAt(0).toUpperCase() + state.subgraphChain.slice(1);
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking data available for ${escapeHtml(chainLabel)}</td></tr>`;
+      stakingContractsData = [];
+      return;
+    }
+
+    // Sort by rewards_per_second descending
+    data.contracts.sort((a, b) => b.rewards_per_second - a.rewards_per_second);
+    stakingContractsData = data.contracts;
+    renderNetworkStakingFiltered();
+  }
+
+  function renderNetworkStakingFiltered() {
+    const body = document.getElementById("subgraph-staking-body");
+    const search = (document.getElementById("subgraph-staking-search").value || "").toLowerCase().trim();
+    const chain = state.subgraphChain;
+    let contracts = stakingContractsData;
+
+    if (search) {
+      contracts = contracts.filter(c => {
+        const addr = (c.address || "").toLowerCase();
+        const agents = (c.agent_ids || []).map(id => {
+          const name = agentNameCache[String(id)] || "";
+          return `${id} ${name}`;
+        }).join(" ").toLowerCase();
+        return addr.includes(search) || agents.includes(search) || String(c.max_num_services).includes(search);
+      });
+    }
+
+    if (contracts.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking contracts found</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = contracts.map(c => `<tr>
+      <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.address)}')" title="${escapeHtml(c.address)}">
+        <a href="${getExplorerUrl(c.address, chain)}" target="_blank" class="explorer-link">${shortenAddr(c.address)}</a>
+      </td>
+      <td class="val">${c.max_num_services}</td>
+      <td class="val">${c.rewards_per_second.toFixed(8)}</td>
+      <td class="val">${Number(c.min_staking_deposit).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+      <td class="val">${c.liveness_period.toLocaleString()}</td>
+      <td>${formatAgentIds(c.agent_ids)}</td>
+      <td class="val">${c.max_num_inactivity_periods}</td>
+    </tr>`).join("");
+  }
+
+  function renderNetworkProtocol(data) {
+    const body = document.getElementById("subgraph-protocol-body");
+
+    if (!data) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-error">Failed to load services</td></tr>`;
+      return;
+    }
+
+    if (data.services) {
+      data.services.sort((a, b) => b.service_id - a.service_id);
+    }
+    state.subgraphProtocol = data;
+    renderProtocolPage();
+  }
+
+  function getFilteredProtocol() {
+    const data = state.subgraphProtocol;
+    if (!data || !data.services) return [];
+    const search = (document.getElementById("subgraph-protocol-search").value || "").toLowerCase().trim();
+    if (!search) return data.services;
+    return data.services.filter(s => {
+      return String(s.service_id).includes(search) ||
+        (s.public_id || "").toLowerCase().includes(search) ||
+        (s.owner || "").toLowerCase().includes(search) ||
+        (PROTOCOL_STATES[s.state] || "").toLowerCase().includes(search);
+    });
+  }
+
+  function renderProtocolPage() {
+    const body = document.getElementById("subgraph-protocol-body");
+    const filtered = getFilteredProtocol();
+
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No services found</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = filtered.map(s => {
+      const stateName = PROTOCOL_STATES[s.state] || `Unknown (${s.state})`;
+      return `<tr>
+        <td>${s.service_id}</td>
+        <td>${escapeHtml(s.public_id || "")}</td>
+        <td><span class="protocol-state-badge state-${s.state}">${escapeHtml(stateName)}</span></td>
+        <td>${escapeHtml((s.agent_ids || []).join(", "))}</td>
+        <td>${s.threshold}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.owner || "")}')" title="${escapeHtml(s.owner || "")}">${shortenAddr(s.owner || "")}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Agent Blueprints (Protocol Registry) ---
+  function renderNetworkAgents(data) {
+    const body = document.getElementById("subgraph-agents-body");
+    if (!data || !data.units) {
+      body.innerHTML = `<tr><td colspan="4" class="text-center text-error">Failed to load agent blueprints</td></tr>`;
+      state.subgraphAgents = [];
+      return;
+    }
+    data.units.sort((a, b) => b.token_id - a.token_id);
+    state.subgraphAgents = data.units;
+    renderAgentsPage();
+  }
+
+  function getFilteredAgents() {
+    const search = (document.getElementById("subgraph-agents-search").value || "").toLowerCase().trim();
+    if (!search) return state.subgraphAgents;
+    return state.subgraphAgents.filter(a =>
+      String(a.token_id).includes(search) ||
+      (a.public_id || "").toLowerCase().includes(search) ||
+      (a.owner || "").toLowerCase().includes(search) ||
+      (a.description || "").toLowerCase().includes(search)
+    );
+  }
+
+  function renderAgentsPage() {
+    const body = document.getElementById("subgraph-agents-body");
+    const filtered = getFilteredAgents();
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No agent blueprints found</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(a => {
+      const desc = a.description || "";
+      const shortDesc = desc.length > 80 ? escapeHtml(desc.substring(0, 80)) + "..." : escapeHtml(desc);
+      return `<tr>
+        <td>${a.token_id}</td>
+        <td>${escapeHtml(a.public_id || "")}</td>
+        <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(desc)}">${shortDesc}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(a.owner || "")}')" title="${escapeHtml(a.owner || "")}">${shortenAddr(a.owner || "")}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // --- Components (Protocol Registry) ---
+  function renderNetworkComponents(data) {
+    const body = document.getElementById("subgraph-components-body");
+    if (!data || !data.units) {
+      body.innerHTML = `<tr><td colspan="5" class="text-center text-error">Failed to load components</td></tr>`;
+      state.subgraphComponents = [];
+      return;
+    }
+    data.units.sort((a, b) => b.token_id - a.token_id);
+    state.subgraphComponents = data.units;
+    renderComponentsPage();
+  }
+
+  function getFilteredComponents() {
+    const search = (document.getElementById("subgraph-components-search").value || "").toLowerCase().trim();
+    if (!search) return state.subgraphComponents;
+    return state.subgraphComponents.filter(c =>
+      String(c.token_id).includes(search) ||
+      (c.public_id || "").toLowerCase().includes(search) ||
+      (c.package_type || "").toLowerCase().includes(search) ||
+      (c.owner || "").toLowerCase().includes(search) ||
+      (c.description || "").toLowerCase().includes(search)
+    );
+  }
+
+  function renderComponentsPage() {
+    const body = document.getElementById("subgraph-components-body");
+    const filtered = getFilteredComponents();
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No components found</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(c => {
+      const desc = c.description || "";
+      const shortDesc = desc.length > 80 ? escapeHtml(desc.substring(0, 80)) + "..." : escapeHtml(desc);
+      return `<tr>
+        <td>${c.token_id}</td>
+        <td>${escapeHtml(c.public_id || "")}</td>
+        <td>${escapeHtml(c.package_type || "")}</td>
+        <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(desc)}">${shortDesc}</td>
+        <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.owner || "")}')" title="${escapeHtml(c.owner || "")}">${shortenAddr(c.owner || "")}</td>
+      </tr>`;
+    }).join("");
   }
 
   init();

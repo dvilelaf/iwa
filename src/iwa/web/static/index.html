@@ -52,10 +52,11 @@
                 </div>
             </header>
             <nav class="tabs">
-                <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-                <button class="tab-btn" data-tab="olas">Olas</button>
+                <button class="tab-btn active" data-tab="dashboard">Wallet</button>
+                <button class="tab-btn" data-tab="olas">Your Olas Services</button>
+                <button class="tab-btn" data-tab="rewards">Olas Rewards</button>
+                <button class="tab-btn" data-tab="network">Olas Network</button>
                 <button class="tab-btn" data-tab="cowswap">CowSwap</button>
-                <button class="tab-btn" data-tab="rewards">Rewards</button>
                 <button class="tab-btn" data-tab="rpc">RPC Status</button>
             </nav>
             <main class="tab-content">
@@ -86,7 +87,7 @@
                             <!-- Dynamic checkboxes -->
                         </div>
                     </div>
-                    <div class="table-container glass">
+                    <div class="table-container glass table-scroll">
                         <table id="accounts-table">
                             <thead>
                                 <tr id="accounts-header-row">
@@ -414,6 +415,160 @@
                     <div class="rpc-grid" id="rpc-cards">
                         <!-- Cards loaded via JS -->
                     </div>
+                </section>
+                <!-- Network (Subgraph) Tab -->
+                <section id="network" class="tab-pane">
+                    <div class="section-header">
+                        <h2>Olas Network</h2>
+                        <button class="btn-icon" id="subgraph-refresh" title="Refresh">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- Summary cards -->
+                    <div id="subgraph-summary" class="rewards-summary mb-2"></div>
+                    <!-- Sub-tabs -->
+                    <nav class="subtabs mb-2">
+                        <button class="subtab-btn active" data-subtab="registry">Registry</button>
+                        <button class="subtab-btn" data-subtab="deployments">Deployments</button>
+                    </nav>
+                    <!-- Sub-pane: Registry (Protocol Registry — Ethereum) -->
+                    <div id="subtab-registry" class="subtab-pane active">
+                        <!-- Agent Blueprints -->
+                        <div class="section-header">
+                            <h3>Agent Blueprints</h3>
+                            <div class="subgraph-filters">
+                                <input id="subgraph-agents-search" type="text" placeholder="Search ID, name, owner..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Public ID</th>
+                                        <th>Description</th>
+                                        <th>Owner</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-agents-body">
+                                    <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Components -->
+                        <div class="section-header">
+                            <h3>Components</h3>
+                            <div class="subgraph-filters">
+                                <input id="subgraph-components-search" type="text" placeholder="Search ID, name, type..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Public ID</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                        <th>Owner</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-components-body">
+                                    <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Sub-pane: Deployments (per-chain) -->
+                    <div id="subtab-deployments" class="subtab-pane">
+                        <div class="subgraph-filters mb-2">
+                            <select id="subgraph-chain-select" class="form-select"></select>
+                            <input id="subgraph-agent-filter" type="number" min="1" placeholder="Agent ID (all)" class="form-input">
+                        </div>
+                        <!-- Deployed Services -->
+                        <!-- Services: Ethereum view (Protocol Registry — has state) -->
+                        <div id="services-ethereum" style="display:none">
+                            <div class="section-header">
+                                <h3>Services <span class="section-badge">on Ethereum</span></h3>
+                                <div class="subgraph-filters">
+                                    <input id="subgraph-protocol-search" type="text" placeholder="Search ID, name, state..." class="form-input" style="width:220px">
+                                </div>
+                            </div>
+                            <div class="table-container glass mb-2 table-scroll">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Public ID</th>
+                                            <th>State</th>
+                                            <th>Agent IDs</th>
+                                            <th>Threshold</th>
+                                            <th>Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subgraph-protocol-body">
+                                        <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Services: other chains (Service Registry — no state) -->
+                        <div id="services-perchain">
+                            <div class="section-header">
+                                <h3>Services <span class="section-badge" id="deployed-chain-badge">on Gnosis</span></h3>
+                                <div class="subgraph-filters">
+                                    <input id="subgraph-services-search" type="text" placeholder="Search ID, address, agent..." class="form-input" style="width:220px">
+                                </div>
+                            </div>
+                            <div class="table-container glass mb-2 table-scroll">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Multisig</th>
+                                            <th>Agents</th>
+                                            <th>Creator</th>
+                                            <th>Created</th>
+                                            <th>Config Hash</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subgraph-services-body">
+                                        <tr><td colspan="6" class="text-center text-muted">Select a chain to load data</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Staking Contracts -->
+                        <div class="section-header">
+                            <h3>Staking Contracts <span class="section-badge" id="staking-chain-badge">on Gnosis</span></h3>
+                            <div class="subgraph-filters">
+                                <input id="subgraph-staking-search" type="text" placeholder="Search address, agent..." class="form-input" style="width:220px">
+                            </div>
+                        </div>
+                        <div class="table-container glass mb-2 table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Address</th>
+                                        <th class="val">Max Services</th>
+                                        <th class="val">Rewards/s (OLAS)</th>
+                                        <th class="val">Min Deposit (OLAS)</th>
+                                        <th class="val">Liveness (s)</th>
+                                        <th>Agents</th>
+                                        <th class="val">Inactivity Periods</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subgraph-staking-body">
+                                    <tr><td colspan="7" class="text-center text-muted">Select a chain to load data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="mb-3"></div>
                 </section>
             </main>
         </div>

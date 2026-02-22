@@ -228,6 +228,44 @@ select option {
   }
 }
 
+/* Sub-tabs (inside a main tab) */
+.subtabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.subtab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 0.4rem 1rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.subtab-btn:hover {
+  background: var(--card-bg);
+  color: var(--text-color);
+}
+
+.subtab-btn.active {
+  background: var(--card-bg);
+  color: var(--accent-color);
+  border-color: rgba(0, 210, 255, 0.2);
+}
+
+.subtab-pane {
+  display: none;
+}
+
+.subtab-pane.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
 /* Sections */
 .section-header {
   display: flex;
@@ -1557,3 +1595,95 @@ textarea:focus {
   color: var(--accent-color);
   text-decoration: underline;
 }
+
+/* ─── Network (Subgraph) Tab ─── */
+.subgraph-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form-select,
+.form-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-color);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-select:focus,
+.form-input:focus {
+  border-color: var(--accent-color);
+}
+
+.form-select option {
+  background: #1a1d28;
+  color: var(--text-color);
+}
+
+.form-input {
+  width: 140px;
+}
+
+/* Hide number input spinners */
+.form-input[type="number"]::-webkit-inner-spin-button,
+.form-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.form-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.section-badge {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Scrollable tables: only tbody scrolls, thead stays fixed */
+.table-scroll table {
+  table-layout: fixed;
+}
+
+.table-scroll thead,
+.table-scroll tbody {
+  display: block;
+}
+
+.table-scroll tbody {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.table-scroll thead tr,
+.table-scroll tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.protocol-state-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.protocol-state-badge.state-0 { background: rgba(173,181,189,0.15); color: var(--text-muted); }
+.protocol-state-badge.state-1 { background: rgba(0,210,255,0.15); color: var(--accent-color); }
+.protocol-state-badge.state-2 { background: rgba(0,210,255,0.2); color: var(--accent-color); }
+.protocol-state-badge.state-3 { background: rgba(241,196,15,0.15); color: var(--warning); }
+.protocol-state-badge.state-4 { background: rgba(46,204,113,0.15); color: var(--success); }
+.protocol-state-badge.state-5 { background: rgba(231,76,60,0.15); color: var(--error); }
