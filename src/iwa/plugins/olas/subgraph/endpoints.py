@@ -43,7 +43,6 @@ PROXY_ENDPOINTS: dict[str, dict[SubgraphType, str]] = {
 THEGRAPH_IDS: dict[str, dict[SubgraphType, str]] = {
     "ethereum": {
         SubgraphType.SERVICE_REGISTRY: "89VhY3d7w6Ran1C86wkchzYNEG3rLBgWvyDUZMEFyjtQ",
-        SubgraphType.STAKING: "F3iqL2iw5UTrP1qbb4S694pGEkBwzoxXp1TRikB2K4e",
         SubgraphType.TOKENOMICS: "H7dChkrYGwFGML2w9b7ti54NcRZQH8Aa9Eazd41eK4bw",
     },
     "gnosis": {
