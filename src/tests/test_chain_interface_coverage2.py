@@ -365,6 +365,36 @@ class TestHandleRpcErrorQuotaExceeded:
         # RPC 0 should be in backoff for QUOTA_EXCEEDED_BACKOFF seconds
         assert not ci._is_rpc_healthy(0)
 
+    def test_401_unauthorized_triggers_rotation(self, mock_web3):
+        """401 Unauthorized (expired API key) is treated as quota exceeded."""
+        ci = _make_ci(mock_web3, rpcs=["https://rpc1", "https://rpc2"])
+        ci._current_rpc_index = 0
+        ci._last_rotation_time = 0
+
+        error = Exception(
+            "401 Client Error: Unauthorized for url: https://lb.nodies.app/v2/xdai?apikey=abc123"
+        )
+        result = ci._handle_rpc_error(error)
+
+        assert result["is_quota_exceeded"]
+        assert result["should_retry"]
+        assert result["rotated"]
+        assert not ci._is_rpc_healthy(0)
+        assert ci._current_rpc_index == 1
+
+    def test_403_client_error_triggers_rotation(self, mock_web3):
+        """403 from a non-Tenderly RPC is treated as quota exceeded."""
+        ci = _make_ci(mock_web3, rpcs=["https://rpc1", "https://rpc2"])
+        ci._current_rpc_index = 0
+        ci._last_rotation_time = 0
+
+        error = Exception("403 Client Error: Forbidden for url: https://some-rpc.example.com")
+        result = ci._handle_rpc_error(error)
+
+        assert result["is_quota_exceeded"]
+        assert result["should_retry"]
+        assert result["rotated"]
+
 
 # ===========================================================================
 # Lines 448-449: _handle_rpc_error gas error

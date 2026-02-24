@@ -288,12 +288,13 @@ class ChainInterface:
         return any(signal in err_text for signal in gas_signals)
 
     def _is_quota_exceeded_error(self, error: Exception) -> bool:
-        """Check if the RPC's usage quota has been exhausted.
+        """Check if the RPC's usage quota has been exhausted or auth is rejected.
 
         JSON-RPC code -32001 with messages like "Exceeded the quota usage"
-        indicates the provider's daily/hourly quota is spent.  This is NOT
-        a transient 429 rate-limit; the RPC will reject ALL requests until
-        the quota resets, so it must be backed off for a long period.
+        indicates the provider's daily/hourly quota is spent.  A 401/403
+        means the API key is invalid, expired, or revoked.  In both cases
+        the RPC will reject ALL requests, so it must be backed off for a
+        long period and rotation should happen immediately.
         """
         err_text = str(error).lower()
         quota_signals = [
@@ -302,6 +303,9 @@ class ChainInterface:
             "quota usage",
             "quota exceeded",
             "allowance exceeded",
+            "401 client error",
+            "unauthorized",
+            "403 client error",
         ]
         return any(signal in err_text for signal in quota_signals)
 
