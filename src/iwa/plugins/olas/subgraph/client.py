@@ -140,7 +140,7 @@ class GraphQLClient:
 
     def _cache_key(self, query: str, variables: Optional[Dict[str, Any]]) -> str:
         raw = self.endpoint + query + (str(sorted(variables.items())) if variables else "")
-        return hashlib.md5(raw.encode()).hexdigest()  # noqa: S324
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()  # noqa: S324
 
 
 def clear_cache() -> None:

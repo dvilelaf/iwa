@@ -43,3 +43,11 @@ cf38977d2ec48b52edcac965be7acec05bb6da54:src/iwa/plugins/olas/service_manager/st
 897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:35
 897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:49
 897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:hashicorp-tf-password:1087
+# TheGraph public subgraph deployment IDs (not secrets)
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:47
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:51
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:56
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:61
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:66
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:70
+e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:74

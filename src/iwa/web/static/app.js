@@ -33,13 +33,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Chain label helper
   function getChainLabel(chain) {
-    return (chain || state.activeChain).charAt(0).toUpperCase() + (chain || state.activeChain).slice(1);
+    return (
+      (chain || state.activeChain).charAt(0).toUpperCase() +
+      (chain || state.activeChain).slice(1)
+    );
   }
 
   // Update all chain badges across all tabs
   function updateAllChainBadges() {
     const label = getChainLabel();
-    document.querySelectorAll("[data-chain-badge]").forEach(el => {
+    document.querySelectorAll("[data-chain-badge]").forEach((el) => {
       el.textContent = `on ${label}`;
     });
   }
@@ -839,7 +842,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const prefix = type === "tx" ? "tx" : "address";
     if (chain === "gnosis") return `https://gnosisscan.io/${prefix}/${address}`;
     if (chain === "base") return `https://basescan.org/${prefix}/${address}`;
-    if (chain === "ethereum") return `https://etherscan.io/${prefix}/${address}`;
+    if (chain === "ethereum")
+      return `https://etherscan.io/${prefix}/${address}`;
     return `https://gnosisscan.io/${prefix}/${address}`;
   }
 
@@ -3706,8 +3710,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // Load available chains + agent names in parallel
       try {
         const [chainsResp, agentsResp] = await Promise.all([
-          authFetch("/api/subgraph/chains").then(r => r.json()).catch(() => null),
-          authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
+          authFetch("/api/subgraph/chains")
+            .then((r) => r.json())
+            .catch(() => null),
+          authFetch("/api/subgraph/agents")
+            .then((r) => r.json())
+            .catch(() => null),
         ]);
         if (chainsResp) {
           state.activeChains = chainsResp;
@@ -3721,26 +3729,34 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Event listeners
-      document.getElementById("subgraph-agent-filter").addEventListener("change", (e) => {
-        const val = e.target.value.trim();
-        state.subgraphAgentId = val ? parseInt(val, 10) : null;
-        loadNetworkData();
-      });
-      document.getElementById("subgraph-refresh").addEventListener("click", () => {
-        loadNetworkData();
-        if (state.subgraphSubTab === "tokenomics") {
-          loadTokenomicsData();
-        }
-      });
+      document
+        .getElementById("subgraph-agent-filter")
+        .addEventListener("change", (e) => {
+          const val = e.target.value.trim();
+          state.subgraphAgentId = val ? parseInt(val, 10) : null;
+          loadNetworkData();
+        });
+      document
+        .getElementById("subgraph-refresh")
+        .addEventListener("click", () => {
+          loadNetworkData();
+          if (state.subgraphSubTab === "tokenomics") {
+            loadTokenomicsData();
+          }
+        });
 
       // Sub-tab switching
-      document.querySelectorAll(".subtab-btn").forEach(btn => {
+      document.querySelectorAll(".subtab-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           const target = btn.dataset.subtab;
           state.subgraphSubTab = target;
           localStorage.setItem("iwa_network_subtab", target);
-          document.querySelectorAll(".subtab-btn").forEach(b => b.classList.remove("active"));
-          document.querySelectorAll(".subtab-pane").forEach(p => p.classList.remove("active"));
+          document
+            .querySelectorAll(".subtab-btn")
+            .forEach((b) => b.classList.remove("active"));
+          document
+            .querySelectorAll(".subtab-pane")
+            .forEach((p) => p.classList.remove("active"));
           btn.classList.add("active");
           const pane = document.getElementById(`subtab-${target}`);
           if (pane) pane.classList.add("active");
@@ -3751,63 +3767,99 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       // Restore saved sub-tab
       if (state.subgraphSubTab !== "registry") {
-        document.querySelectorAll(".subtab-btn").forEach(b => {
-          b.classList.toggle("active", b.dataset.subtab === state.subgraphSubTab);
+        document.querySelectorAll(".subtab-btn").forEach((b) => {
+          b.classList.toggle(
+            "active",
+            b.dataset.subtab === state.subgraphSubTab,
+          );
         });
-        document.querySelectorAll(".subtab-pane").forEach(p => p.classList.remove("active"));
-        const savedPane = document.getElementById(`subtab-${state.subgraphSubTab}`);
+        document
+          .querySelectorAll(".subtab-pane")
+          .forEach((p) => p.classList.remove("active"));
+        const savedPane = document.getElementById(
+          `subtab-${state.subgraphSubTab}`,
+        );
         if (savedPane) savedPane.classList.add("active");
       }
 
       // Search boxes (filter on keyup with debounce)
       let servicesSearchTimeout = null;
-      document.getElementById("subgraph-services-search").addEventListener("input", () => {
-        clearTimeout(servicesSearchTimeout);
-        servicesSearchTimeout = setTimeout(() => renderServicesPage(), 300);
-      });
+      document
+        .getElementById("subgraph-services-search")
+        .addEventListener("input", () => {
+          clearTimeout(servicesSearchTimeout);
+          servicesSearchTimeout = setTimeout(() => renderServicesPage(), 300);
+        });
       let stakingSearchTimeout = null;
-      document.getElementById("subgraph-staking-search").addEventListener("input", () => {
-        clearTimeout(stakingSearchTimeout);
-        stakingSearchTimeout = setTimeout(() => renderNetworkStakingFiltered(), 300);
-      });
+      document
+        .getElementById("subgraph-staking-search")
+        .addEventListener("input", () => {
+          clearTimeout(stakingSearchTimeout);
+          stakingSearchTimeout = setTimeout(
+            () => renderNetworkStakingFiltered(),
+            300,
+          );
+        });
       let protocolSearchTimeout = null;
-      document.getElementById("subgraph-protocol-search").addEventListener("input", () => {
-        clearTimeout(protocolSearchTimeout);
-        protocolSearchTimeout = setTimeout(() => renderProtocolPage(), 300);
-      });
+      document
+        .getElementById("subgraph-protocol-search")
+        .addEventListener("input", () => {
+          clearTimeout(protocolSearchTimeout);
+          protocolSearchTimeout = setTimeout(() => renderProtocolPage(), 300);
+        });
       let agentsSearchTimeout = null;
-      document.getElementById("subgraph-agents-search").addEventListener("input", () => {
-        clearTimeout(agentsSearchTimeout);
-        agentsSearchTimeout = setTimeout(() => renderAgentsPage(), 300);
-      });
+      document
+        .getElementById("subgraph-agents-search")
+        .addEventListener("input", () => {
+          clearTimeout(agentsSearchTimeout);
+          agentsSearchTimeout = setTimeout(() => renderAgentsPage(), 300);
+        });
       let componentsSearchTimeout = null;
-      document.getElementById("subgraph-components-search").addEventListener("input", () => {
-        clearTimeout(componentsSearchTimeout);
-        componentsSearchTimeout = setTimeout(() => renderComponentsPage(), 300);
-      });
+      document
+        .getElementById("subgraph-components-search")
+        .addEventListener("input", () => {
+          clearTimeout(componentsSearchTimeout);
+          componentsSearchTimeout = setTimeout(
+            () => renderComponentsPage(),
+            300,
+          );
+        });
       let checkpointsSearchTimeout = null;
-      document.getElementById("subgraph-checkpoints-search").addEventListener("input", () => {
-        clearTimeout(checkpointsSearchTimeout);
-        checkpointsSearchTimeout = setTimeout(() => renderCheckpointsPage(), 300);
-      });
+      document
+        .getElementById("subgraph-checkpoints-search")
+        .addEventListener("input", () => {
+          clearTimeout(checkpointsSearchTimeout);
+          checkpointsSearchTimeout = setTimeout(
+            () => renderCheckpointsPage(),
+            300,
+          );
+        });
       let eventsSearchTimeout = null;
-      document.getElementById("subgraph-events-search").addEventListener("input", () => {
-        clearTimeout(eventsSearchTimeout);
-        eventsSearchTimeout = setTimeout(() => renderEventsPage(), 300);
-      });
-      document.getElementById("staking-event-type-filter").addEventListener("change", () => {
-        renderEventsPage();
-      });
+      document
+        .getElementById("subgraph-events-search")
+        .addEventListener("input", () => {
+          clearTimeout(eventsSearchTimeout);
+          eventsSearchTimeout = setTimeout(() => renderEventsPage(), 300);
+        });
+      document
+        .getElementById("staking-event-type-filter")
+        .addEventListener("change", () => {
+          renderEventsPage();
+        });
       let holdersSearchTimeout = null;
-      document.getElementById("tokenomics-holders-search").addEventListener("input", () => {
-        clearTimeout(holdersSearchTimeout);
-        holdersSearchTimeout = setTimeout(() => renderHoldersPage(), 300);
-      });
+      document
+        .getElementById("tokenomics-holders-search")
+        .addEventListener("input", () => {
+          clearTimeout(holdersSearchTimeout);
+          holdersSearchTimeout = setTimeout(() => renderHoldersPage(), 300);
+        });
       let transfersSearchTimeout = null;
-      document.getElementById("tokenomics-transfers-search").addEventListener("input", () => {
-        clearTimeout(transfersSearchTimeout);
-        transfersSearchTimeout = setTimeout(() => renderTransfersPage(), 300);
-      });
+      document
+        .getElementById("tokenomics-transfers-search")
+        .addEventListener("input", () => {
+          clearTimeout(transfersSearchTimeout);
+          transfersSearchTimeout = setTimeout(() => renderTransfersPage(), 300);
+        });
     }
     loadNetworkData();
     // Load tokenomics if that's the saved sub-tab
@@ -3823,26 +3875,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function formatAgentIds(agentIds) {
     if (!agentIds || agentIds.length === 0) return "";
-    return agentIds.map(id => {
-      const name = agentNameCache[String(id)];
-      if (name) {
-        // Show short name: "valory/trader" → "trader"
-        const short = name.includes("/") ? name.split("/").pop() : name;
-        return `<span title="${escapeHtml(name)} (ID ${id})">${escapeHtml(short)}</span>`;
-      }
-      return String(id);
-    }).join(", ");
+    return agentIds
+      .map((id) => {
+        const name = agentNameCache[String(id)];
+        if (name) {
+          // Show short name: "valory/trader" → "trader"
+          const short = name.includes("/") ? name.split("/").pop() : name;
+          return `<span title="${escapeHtml(name)} (ID ${id})">${escapeHtml(short)}</span>`;
+        }
+        return String(id);
+      })
+      .join(", ");
   }
 
   function populateSubgraphChainSelect(chains) {
     // Subgraph chains may include chains not in the global selector — add them
-    const allSubgraphChains = [...new Set([
-      ...(chains.service_registry || []),
-      ...(chains.staking || []),
-      ...(chains.tokenomics || []),
-    ])];
+    const allSubgraphChains = [
+      ...new Set([
+        ...(chains.service_registry || []),
+        ...(chains.staking || []),
+        ...(chains.tokenomics || []),
+      ]),
+    ];
     const select = document.getElementById("active-chain");
-    const existing = new Set([...select.options].map(o => o.value));
+    const existing = new Set([...select.options].map((o) => o.value));
     for (const c of allSubgraphChains.sort()) {
       if (!existing.has(c)) {
         const opt = document.createElement("option");
@@ -3856,14 +3912,22 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadNetworkData() {
     const chain = state.activeChain;
     const isEthereum = chain === "ethereum";
-    const agentParam = state.subgraphAgentId ? `&agent_id=${state.subgraphAgentId}` : "";
+    const agentParam = state.subgraphAgentId
+      ? `&agent_id=${state.subgraphAgentId}`
+      : "";
     // Toggle services view: Ethereum (Protocol Registry) vs other chains (Service Registry)
-    document.getElementById("services-ethereum").style.display = isEthereum ? "" : "none";
-    document.getElementById("services-perchain").style.display = isEthereum ? "none" : "";
+    document.getElementById("services-ethereum").style.display = isEthereum
+      ? ""
+      : "none";
+    document.getElementById("services-perchain").style.display = isEthereum
+      ? "none"
+      : "";
 
     // Show loading states
     document.getElementById("deployments-summary").innerHTML =
-      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(3);
+      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(
+        3,
+      );
     document.getElementById("subgraph-agents-body").innerHTML =
       `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
     document.getElementById("subgraph-components-body").innerHTML =
@@ -3887,20 +3951,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Fetch all data in parallel
     const promises = [
-      authFetch(`/api/subgraph/overview?chain=${chain}`).then(r => r.json()).catch(() => null),
+      authFetch(`/api/subgraph/overview?chain=${chain}`)
+        .then((r) => r.json())
+        .catch(() => null),
       isEthereum
-        ? authFetch("/api/subgraph/protocol").then(r => r.json()).catch(() => null)
-        : authFetch(`/api/subgraph/services?chain=${chain}${agentParam}`).then(r => r.json()).catch(() => null),
-      authFetch(`/api/subgraph/staking?chain=${chain}${agentParam}`).then(r => r.json()).catch(() => null),
-      authFetch("/api/subgraph/agents").then(r => r.json()).catch(() => null),
-      authFetch("/api/subgraph/components").then(r => r.json()).catch(() => null),
-      authFetch("/api/subgraph/builders").then(r => r.json()).catch(() => null),
-      authFetch(`/api/subgraph/staking/checkpoints?chain=${chain}`).then(r => r.json()).catch(() => null),
-      authFetch(`/api/subgraph/staking/events?chain=${chain}`).then(r => r.json()).catch(() => null),
-      authFetch(`/api/subgraph/staking/daily?chain=${chain}`).then(r => r.json()).catch(() => null),
+        ? authFetch("/api/subgraph/protocol")
+            .then((r) => r.json())
+            .catch(() => null)
+        : authFetch(`/api/subgraph/services?chain=${chain}${agentParam}`)
+            .then((r) => r.json())
+            .catch(() => null),
+      authFetch(`/api/subgraph/staking?chain=${chain}${agentParam}`)
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch("/api/subgraph/agents")
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch("/api/subgraph/components")
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch("/api/subgraph/builders")
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch(`/api/subgraph/staking/checkpoints?chain=${chain}`)
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch(`/api/subgraph/staking/events?chain=${chain}`)
+        .then((r) => r.json())
+        .catch(() => null),
+      authFetch(`/api/subgraph/staking/daily?chain=${chain}`)
+        .then((r) => r.json())
+        .catch(() => null),
     ];
 
-    const [overview, servicesOrProtocol, staking, agents, components, builders, checkpoints, events, daily] = await Promise.all(promises);
+    const [
+      overview,
+      servicesOrProtocol,
+      staking,
+      agents,
+      components,
+      builders,
+      checkpoints,
+      events,
+      daily,
+    ] = await Promise.all(promises);
 
     // Update agent name cache
     if (agents && agents.agents) {
@@ -3927,14 +4021,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const chain = state.activeChain;
 
     document.getElementById("tokenomics-summary").innerHTML =
-      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(2);
+      `<div class="rewards-card glass"><div class="text-center"><span class="loading-spinner"></span></div></div>`.repeat(
+        2,
+      );
     document.getElementById("tokenomics-holders-body").innerHTML =
       `<tr><td colspan="4" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
     document.getElementById("tokenomics-transfers-body").innerHTML =
       `<tr><td colspan="6" class="text-center"><span class="loading-spinner"></span> Loading...</td></tr>`;
 
     try {
-      const data = await authFetch(`/api/subgraph/tokenomics?chain=${chain}`).then(r => r.json());
+      const data = await authFetch(
+        `/api/subgraph/tokenomics?chain=${chain}`,
+      ).then((r) => r.json());
       state.subgraphTokenomics = data;
       renderTokenomicsSummary(data);
       renderTokenomicsHolders(data);
@@ -3952,7 +4050,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderNetworkSummary(overview) {
     const container = document.getElementById("subgraph-summary");
-    const proto = overview ? (overview.protocol_global || {}) : {};
+    const proto = overview ? overview.protocol_global || {} : {};
     container.innerHTML = `
       <div class="rewards-card glass">
         <div class="card-label">Registry</div>
@@ -3974,11 +4072,11 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div class="rewards-card glass">
         <div class="card-label">OLAS Staked</div>
-        <div class="card-value success">${stakingInfo.current_olas_staked != null ? Number(stakingInfo.current_olas_staked).toLocaleString(undefined, {maximumFractionDigits: 0}) : "N/A"}</div>
+        <div class="card-value success">${stakingInfo.current_olas_staked != null ? Number(stakingInfo.current_olas_staked).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "N/A"}</div>
       </div>
       <div class="rewards-card glass">
         <div class="card-label">Total Rewards</div>
-        <div class="card-value success">${stakingInfo.total_rewards != null ? Number(stakingInfo.total_rewards).toLocaleString(undefined, {maximumFractionDigits: 0}) + " OLAS" : "N/A"}</div>
+        <div class="card-value success">${stakingInfo.total_rewards != null ? Number(stakingInfo.total_rewards).toLocaleString(undefined, { maximumFractionDigits: 0 }) + " OLAS" : "N/A"}</div>
       </div>`;
   }
 
@@ -3997,17 +4095,29 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getFilteredServices() {
-    const search = (document.getElementById("subgraph-services-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-services-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return state.subgraphServices;
-    return state.subgraphServices.filter(s => {
+    return state.subgraphServices.filter((s) => {
       const idStr = String(s.service_id);
       const multisig = (s.multisig || "").toLowerCase();
       const creator = (s.creator || "").toLowerCase();
-      const agents = (s.agent_ids || []).map(id => {
-        const name = agentNameCache[String(id)] || "";
-        return `${id} ${name}`;
-      }).join(" ").toLowerCase();
-      return idStr.includes(search) || multisig.includes(search) || creator.includes(search) || agents.includes(search);
+      const agents = (s.agent_ids || [])
+        .map((id) => {
+          const name = agentNameCache[String(id)] || "";
+          return `${id} ${name}`;
+        })
+        .join(" ")
+        .toLowerCase();
+      return (
+        idStr.includes(search) ||
+        multisig.includes(search) ||
+        creator.includes(search) ||
+        agents.includes(search)
+      );
     });
   }
 
@@ -4021,14 +4131,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    body.innerHTML = filtered.map(s => `<tr>
+    body.innerHTML = filtered
+      .map(
+        (s) => `<tr>
       <td><a href="${getExplorerUrl(s.multisig || "", chain)}" target="_blank" class="explorer-link">${s.service_id}</a></td>
       <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.multisig || "")}')" title="${escapeHtml(s.multisig || "")}">${shortenAddr(s.multisig || "")}</td>
       <td>${formatAgentIds(s.agent_ids)}</td>
       <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.creator || "")}')" title="${escapeHtml(s.creator || "")}">${shortenAddr(s.creator || "")}</td>
       <td>${s.created ? new Date(s.created).toLocaleDateString() : ""}</td>
       <td class="text-muted" style="font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(s.config_hash || "")}">${shortenAddr(s.config_hash || "")}</td>
-    </tr>`).join("");
+    </tr>`,
+      )
+      .join("");
   }
 
   // Staking: store full data for search filtering
@@ -4038,7 +4152,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = document.getElementById("subgraph-staking-body");
 
     if (!data || !data.contracts) {
-      const chainLabel = state.activeChain.charAt(0).toUpperCase() + state.activeChain.slice(1);
+      const chainLabel =
+        state.activeChain.charAt(0).toUpperCase() + state.activeChain.slice(1);
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking data available for ${escapeHtml(chainLabel)}</td></tr>`;
       stakingContractsData = [];
       return;
@@ -4052,18 +4167,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderNetworkStakingFiltered() {
     const body = document.getElementById("subgraph-staking-body");
-    const search = (document.getElementById("subgraph-staking-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-staking-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     const chain = state.activeChain;
     let contracts = stakingContractsData;
 
     if (search) {
-      contracts = contracts.filter(c => {
+      contracts = contracts.filter((c) => {
         const addr = (c.address || "").toLowerCase();
-        const agents = (c.agent_ids || []).map(id => {
-          const name = agentNameCache[String(id)] || "";
-          return `${id} ${name}`;
-        }).join(" ").toLowerCase();
-        return addr.includes(search) || agents.includes(search) || String(c.max_num_services).includes(search);
+        const agents = (c.agent_ids || [])
+          .map((id) => {
+            const name = agentNameCache[String(id)] || "";
+            return `${id} ${name}`;
+          })
+          .join(" ")
+          .toLowerCase();
+        return (
+          addr.includes(search) ||
+          agents.includes(search) ||
+          String(c.max_num_services).includes(search)
+        );
       });
     }
 
@@ -4072,17 +4198,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    body.innerHTML = contracts.map(c => `<tr>
+    body.innerHTML = contracts
+      .map(
+        (c) => `<tr>
       <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.address)}')" title="${escapeHtml(c.address)}">
         <a href="${getExplorerUrl(c.address, chain)}" target="_blank" class="explorer-link">${shortenAddr(c.address)}</a>
       </td>
       <td class="val">${c.max_num_services}</td>
       <td class="val">${c.rewards_per_second.toFixed(8)}</td>
-      <td class="val">${Number(c.min_staking_deposit).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+      <td class="val">${Number(c.min_staking_deposit).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
       <td class="val">${c.liveness_period.toLocaleString()}</td>
       <td>${formatAgentIds(c.agent_ids)}</td>
       <td class="val">${c.max_num_inactivity_periods}</td>
-    </tr>`).join("");
+    </tr>`,
+      )
+      .join("");
   }
 
   function renderNetworkProtocol(data) {
@@ -4103,13 +4233,19 @@ document.addEventListener("DOMContentLoaded", () => {
   function getFilteredProtocol() {
     const data = state.subgraphProtocol;
     if (!data || !data.services) return [];
-    const search = (document.getElementById("subgraph-protocol-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-protocol-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return data.services;
-    return data.services.filter(s => {
-      return String(s.service_id).includes(search) ||
+    return data.services.filter((s) => {
+      return (
+        String(s.service_id).includes(search) ||
         (s.public_id || "").toLowerCase().includes(search) ||
         (s.owner || "").toLowerCase().includes(search) ||
-        (PROTOCOL_STATES[s.state] || "").toLowerCase().includes(search);
+        (PROTOCOL_STATES[s.state] || "").toLowerCase().includes(search)
+      );
     });
   }
 
@@ -4122,9 +4258,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    body.innerHTML = filtered.map(s => {
-      const stateName = PROTOCOL_STATES[s.state] || `Unknown (${s.state})`;
-      return `<tr>
+    body.innerHTML = filtered
+      .map((s) => {
+        const stateName = PROTOCOL_STATES[s.state] || `Unknown (${s.state})`;
+        return `<tr>
         <td>${s.service_id}</td>
         <td>${escapeHtml(s.public_id || "")}</td>
         <td><span class="protocol-state-badge state-${s.state}">${escapeHtml(stateName)}</span></td>
@@ -4132,7 +4269,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${s.threshold}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(s.owner || "")}')" title="${escapeHtml(s.owner || "")}">${shortenAddr(s.owner || "")}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Agent Blueprints (Protocol Registry) ---
@@ -4149,13 +4287,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getFilteredAgents() {
-    const search = (document.getElementById("subgraph-agents-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-agents-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return state.subgraphAgents;
-    return state.subgraphAgents.filter(a =>
-      String(a.token_id).includes(search) ||
-      (a.public_id || "").toLowerCase().includes(search) ||
-      (a.owner || "").toLowerCase().includes(search) ||
-      (a.description || "").toLowerCase().includes(search)
+    return state.subgraphAgents.filter(
+      (a) =>
+        String(a.token_id).includes(search) ||
+        (a.public_id || "").toLowerCase().includes(search) ||
+        (a.owner || "").toLowerCase().includes(search) ||
+        (a.description || "").toLowerCase().includes(search),
     );
   }
 
@@ -4166,10 +4309,14 @@ document.addEventListener("DOMContentLoaded", () => {
       body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No agent blueprints found</td></tr>`;
       return;
     }
-    body.innerHTML = filtered.map(a => {
-      const desc = a.description || "";
-      const shortDesc = desc.length > 80 ? escapeHtml(desc.substring(0, 80)) + "..." : escapeHtml(desc);
-      return `<tr>
+    body.innerHTML = filtered
+      .map((a) => {
+        const desc = a.description || "";
+        const shortDesc =
+          desc.length > 80
+            ? escapeHtml(desc.substring(0, 80)) + "..."
+            : escapeHtml(desc);
+        return `<tr>
         <td>${a.token_id}</td>
         <td>${escapeHtml(a.public_id || "")}</td>
         <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(desc)}">${shortDesc}</td>
@@ -4177,7 +4324,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td class="text-muted" style="font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(a.package_hash || "")}">${shortenAddr(a.package_hash || "")}</td>
         <td class="val">${a.block || ""}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Components (Protocol Registry) ---
@@ -4194,14 +4342,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getFilteredComponents() {
-    const search = (document.getElementById("subgraph-components-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-components-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return state.subgraphComponents;
-    return state.subgraphComponents.filter(c =>
-      String(c.token_id).includes(search) ||
-      (c.public_id || "").toLowerCase().includes(search) ||
-      (c.package_type || "").toLowerCase().includes(search) ||
-      (c.owner || "").toLowerCase().includes(search) ||
-      (c.description || "").toLowerCase().includes(search)
+    return state.subgraphComponents.filter(
+      (c) =>
+        String(c.token_id).includes(search) ||
+        (c.public_id || "").toLowerCase().includes(search) ||
+        (c.package_type || "").toLowerCase().includes(search) ||
+        (c.owner || "").toLowerCase().includes(search) ||
+        (c.description || "").toLowerCase().includes(search),
     );
   }
 
@@ -4212,10 +4365,14 @@ document.addEventListener("DOMContentLoaded", () => {
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No components found</td></tr>`;
       return;
     }
-    body.innerHTML = filtered.map(c => {
-      const desc = c.description || "";
-      const shortDesc = desc.length > 80 ? escapeHtml(desc.substring(0, 80)) + "..." : escapeHtml(desc);
-      return `<tr>
+    body.innerHTML = filtered
+      .map((c) => {
+        const desc = c.description || "";
+        const shortDesc =
+          desc.length > 80
+            ? escapeHtml(desc.substring(0, 80)) + "..."
+            : escapeHtml(desc);
+        return `<tr>
         <td>${c.token_id}</td>
         <td>${escapeHtml(c.public_id || "")}</td>
         <td>${escapeHtml(c.package_type || "")}</td>
@@ -4224,7 +4381,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td class="text-muted" style="font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.package_hash || "")}">${shortenAddr(c.package_hash || "")}</td>
         <td class="val">${c.block || ""}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Builders (Protocol Registry) ---
@@ -4238,9 +4396,13 @@ document.addEventListener("DOMContentLoaded", () => {
     state.subgraphBuilders = data.builders;
     const badge = document.getElementById("builders-count-badge");
     if (badge) badge.textContent = `${data.builders.length} builders`;
-    body.innerHTML = data.builders.map(addr => `<tr>
+    body.innerHTML = data.builders
+      .map(
+        (addr) => `<tr>
       <td class="address-cell" onclick="copyToClipboard('${escapeHtml(addr)}')" title="${escapeHtml(addr)}">${escapeHtml(addr)}</td>
-    </tr>`).join("");
+    </tr>`,
+      )
+      .join("");
   }
 
   // --- Checkpoints ---
@@ -4256,13 +4418,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getFilteredCheckpoints() {
-    const search = (document.getElementById("subgraph-checkpoints-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("subgraph-checkpoints-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return state.subgraphCheckpoints;
-    return state.subgraphCheckpoints.filter(c =>
-      String(c.epoch || "").includes(search) ||
-      (c.contract_address || "").toLowerCase().includes(search) ||
-      (c.transaction_hash || "").toLowerCase().includes(search) ||
-      (c.service_ids || []).some(id => String(id).includes(search))
+    return state.subgraphCheckpoints.filter(
+      (c) =>
+        String(c.epoch || "").includes(search) ||
+        (c.contract_address || "").toLowerCase().includes(search) ||
+        (c.transaction_hash || "").toLowerCase().includes(search) ||
+        (c.service_ids || []).some((id) => String(id).includes(search)),
     );
   }
 
@@ -4274,15 +4441,25 @@ document.addEventListener("DOMContentLoaded", () => {
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No checkpoints found</td></tr>`;
       return;
     }
-    body.innerHTML = filtered.map(c => {
-      const contractShort = shortenAddr(c.contract_address || "");
-      const contractLink = c.contract_address ? `<a href="${getExplorerUrl(c.contract_address, chain)}" target="_blank" class="explorer-link">${contractShort}</a>` : "";
-      const rewards = c.available_rewards != null ? Number(c.available_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
-      const services = (c.service_ids || []).length;
-      const time = c.timestamp ? new Date(c.timestamp).toLocaleString() : "";
-      const txShort = shortenAddr(c.transaction_hash || "");
-      const txLink = c.transaction_hash ? `<a href="${getExplorerUrl(c.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
-      return `<tr>
+    body.innerHTML = filtered
+      .map((c) => {
+        const contractShort = shortenAddr(c.contract_address || "");
+        const contractLink = c.contract_address
+          ? `<a href="${getExplorerUrl(c.contract_address, chain)}" target="_blank" class="explorer-link">${contractShort}</a>`
+          : "";
+        const rewards =
+          c.available_rewards != null
+            ? Number(c.available_rewards).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })
+            : "";
+        const services = (c.service_ids || []).length;
+        const time = c.timestamp ? new Date(c.timestamp).toLocaleString() : "";
+        const txShort = shortenAddr(c.transaction_hash || "");
+        const txLink = c.transaction_hash
+          ? `<a href="${getExplorerUrl(c.transaction_hash, chain, "tx")}" target="_blank" class="explorer-link">${txShort}</a>`
+          : "";
+        return `<tr>
         <td class="val">${c.epoch || ""}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(c.contract_address || "")}')" title="${escapeHtml(c.contract_address || "")}">${contractLink}</td>
         <td class="val">${rewards}</td>
@@ -4291,7 +4468,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${time}</td>
         <td>${txLink}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Staking Events (unified) ---
@@ -4307,18 +4485,27 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getFilteredEvents() {
-    const search = (document.getElementById("subgraph-events-search").value || "").toLowerCase().trim();
-    const typeFilter = (document.getElementById("staking-event-type-filter").value || "").toLowerCase();
+    const search = (
+      document.getElementById("subgraph-events-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
+    const typeFilter = (
+      document.getElementById("staking-event-type-filter").value || ""
+    ).toLowerCase();
     let events = state.subgraphEvents;
     if (typeFilter) {
-      events = events.filter(e => (e.event_type || "").toLowerCase() === typeFilter);
+      events = events.filter(
+        (e) => (e.event_type || "").toLowerCase() === typeFilter,
+      );
     }
     if (search) {
-      events = events.filter(e =>
-        String(e.service_id || "").includes(search) ||
-        String(e.epoch || "").includes(search) ||
-        (e.owner || "").toLowerCase().includes(search) ||
-        (e.transaction_hash || "").toLowerCase().includes(search)
+      events = events.filter(
+        (e) =>
+          String(e.service_id || "").includes(search) ||
+          String(e.epoch || "").includes(search) ||
+          (e.owner || "").toLowerCase().includes(search) ||
+          (e.transaction_hash || "").toLowerCase().includes(search),
       );
     }
     return events;
@@ -4332,14 +4519,22 @@ document.addEventListener("DOMContentLoaded", () => {
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No staking events found</td></tr>`;
       return;
     }
-    body.innerHTML = filtered.map(e => {
-      const typeBadge = `<span class="event-badge ${escapeHtml(e.event_type || "")}">${escapeHtml(e.event_type || "")}</span>`;
-      const amount = e.amount != null ? Number(e.amount).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
-      const time = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
-      const addrShort = shortenAddr(e.owner || "");
-      const txShort = shortenAddr(e.transaction_hash || "");
-      const txLink = e.transaction_hash ? `<a href="${getExplorerUrl(e.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
-      return `<tr>
+    body.innerHTML = filtered
+      .map((e) => {
+        const typeBadge = `<span class="event-badge ${escapeHtml(e.event_type || "")}">${escapeHtml(e.event_type || "")}</span>`;
+        const amount =
+          e.amount != null
+            ? Number(e.amount).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })
+            : "";
+        const time = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+        const addrShort = shortenAddr(e.owner || "");
+        const txShort = shortenAddr(e.transaction_hash || "");
+        const txLink = e.transaction_hash
+          ? `<a href="${getExplorerUrl(e.transaction_hash, chain, "tx")}" target="_blank" class="explorer-link">${txShort}</a>`
+          : "";
+        return `<tr>
         <td>${typeBadge}</td>
         <td class="val">${e.epoch || ""}</td>
         <td class="val">${e.service_id || ""}</td>
@@ -4348,7 +4543,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${time}</td>
         <td>${txLink}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Daily Staking Trends ---
@@ -4360,17 +4556,29 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     state.subgraphDailyTrends = data.trends;
-    body.innerHTML = data.trends.map(d => {
-      const date = d.date ? new Date(d.date).toLocaleDateString() : "";
-      const totalRewards = d.total_rewards != null ? Number(d.total_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
-      const median = d.median_cumulative_rewards != null ? Number(d.median_cumulative_rewards).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
-      return `<tr>
+    body.innerHTML = data.trends
+      .map((d) => {
+        const date = d.date ? new Date(d.date).toLocaleDateString() : "";
+        const totalRewards =
+          d.total_rewards != null
+            ? Number(d.total_rewards).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })
+            : "";
+        const median =
+          d.median_cumulative_rewards != null
+            ? Number(d.median_cumulative_rewards).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })
+            : "";
+        return `<tr>
         <td>${date}</td>
         <td class="val">${d.num_services || 0}</td>
         <td class="val">${totalRewards}</td>
         <td class="val">${median}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   // --- Tokenomics ---
@@ -4381,8 +4589,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const token = data.token_info;
-    const balance = token.balance != null ? Number(token.balance).toLocaleString(undefined, {maximumFractionDigits: 0}) : "N/A";
-    const holders = token.holder_count != null ? Number(token.holder_count).toLocaleString() : "N/A";
+    const balance =
+      token.balance != null
+        ? Number(token.balance).toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+          })
+        : "N/A";
+    const holders =
+      token.holder_count != null
+        ? Number(token.holder_count).toLocaleString()
+        : "N/A";
     container.innerHTML = `
       <div class="rewards-card glass">
         <div class="card-label">OLAS Supply</div>
@@ -4407,10 +4623,14 @@ document.addEventListener("DOMContentLoaded", () => {
   function getFilteredHolders() {
     const data = state.subgraphTokenomics;
     if (!data || !data.top_holders) return [];
-    const search = (document.getElementById("tokenomics-holders-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("tokenomics-holders-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return data.top_holders;
-    return data.top_holders.filter(h =>
-      (h.address || "").toLowerCase().includes(search)
+    return data.top_holders.filter((h) =>
+      (h.address || "").toLowerCase().includes(search),
     );
   }
 
@@ -4422,16 +4642,27 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const totalSupply = state.subgraphTokenomics?.token_info?.balance || 0;
-    body.innerHTML = filtered.map((h, i) => {
-      const balance = h.balance != null ? Number(h.balance).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "";
-      const pct = (totalSupply && h.balance != null) ? ((h.balance / totalSupply) * 100).toFixed(2) : "";
-      return `<tr>
+    body.innerHTML = filtered
+      .map((h, i) => {
+        const balance =
+          h.balance != null
+            ? Number(h.balance).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : "";
+        const pct =
+          totalSupply && h.balance != null
+            ? ((h.balance / totalSupply) * 100).toFixed(2)
+            : "";
+        return `<tr>
         <td class="val">${i + 1}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(h.address || "")}')" title="${escapeHtml(h.address || "")}">${escapeHtml(h.address || "")}</td>
         <td class="val">${balance}</td>
         <td class="val">${pct}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   function renderTokenomicsTransfers(data) {
@@ -4446,12 +4677,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function getFilteredTransfers() {
     const data = state.subgraphTokenomics;
     if (!data || !data.recent_transfers) return [];
-    const search = (document.getElementById("tokenomics-transfers-search").value || "").toLowerCase().trim();
+    const search = (
+      document.getElementById("tokenomics-transfers-search").value || ""
+    )
+      .toLowerCase()
+      .trim();
     if (!search) return data.recent_transfers;
-    return data.recent_transfers.filter(t =>
-      (t.from || "").toLowerCase().includes(search) ||
-      (t.to || "").toLowerCase().includes(search) ||
-      (t.transaction_hash || "").toLowerCase().includes(search)
+    return data.recent_transfers.filter(
+      (t) =>
+        (t.from || "").toLowerCase().includes(search) ||
+        (t.to || "").toLowerCase().includes(search) ||
+        (t.transaction_hash || "").toLowerCase().includes(search),
     );
   }
 
@@ -4463,12 +4699,20 @@ document.addEventListener("DOMContentLoaded", () => {
       body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No transfers found</td></tr>`;
       return;
     }
-    body.innerHTML = filtered.map(t => {
-      const value = t.value != null ? Number(t.value).toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
-      const time = t.timestamp ? new Date(t.timestamp).toLocaleString() : "";
-      const txShort = shortenAddr(t.transaction_hash || "");
-      const txLink = t.transaction_hash ? `<a href="${getExplorerUrl(t.transaction_hash, chain, 'tx')}" target="_blank" class="explorer-link">${txShort}</a>` : "";
-      return `<tr>
+    body.innerHTML = filtered
+      .map((t) => {
+        const value =
+          t.value != null
+            ? Number(t.value).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })
+            : "";
+        const time = t.timestamp ? new Date(t.timestamp).toLocaleString() : "";
+        const txShort = shortenAddr(t.transaction_hash || "");
+        const txLink = t.transaction_hash
+          ? `<a href="${getExplorerUrl(t.transaction_hash, chain, "tx")}" target="_blank" class="explorer-link">${txShort}</a>`
+          : "";
+        return `<tr>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(t.from || "")}')" title="${escapeHtml(t.from || "")}">${shortenAddr(t.from || "")}</td>
         <td class="address-cell" onclick="copyToClipboard('${escapeHtml(t.to || "")}')" title="${escapeHtml(t.to || "")}">${shortenAddr(t.to || "")}</td>
         <td class="val">${value}</td>
@@ -4476,7 +4720,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${time}</td>
         <td>${txLink}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   init();
