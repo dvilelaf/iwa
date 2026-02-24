@@ -178,6 +178,7 @@ class NativeTransferMixin:
         amount_eth = float(Web3.from_wei(amount_wei, "ether"))
         logger.info(f"Wrapping {amount_eth:.4f} xDAI → WXDAI...")
 
+        tx_hash = None
         try:
             tx_params = chain_interface.calculate_transaction_params(
                 built_method=contract.functions.deposit(),
@@ -186,9 +187,17 @@ class NativeTransferMixin:
             transaction = contract.functions.deposit().build_transaction(tx_params)
 
             signed = self.key_storage.sign_transaction(transaction, account.address)
-            tx_hash = chain_interface.web3._web3.eth.send_raw_transaction(signed.raw_transaction)
-            receipt = chain_interface.web3._web3.eth.wait_for_transaction_receipt(
-                tx_hash, timeout=60
+            tx_hash = chain_interface.with_retry(
+                lambda: chain_interface.web3._web3.eth.send_raw_transaction(
+                    signed.raw_transaction
+                ),
+                operation_name="send_raw_transaction(wrap)",
+            )
+            receipt = chain_interface.with_retry(
+                lambda: chain_interface.web3._web3.eth.wait_for_transaction_receipt(
+                    tx_hash, timeout=60
+                ),
+                operation_name="wait_for_receipt(wrap)",
             )
 
             if receipt.status == 1:
@@ -198,6 +207,9 @@ class NativeTransferMixin:
                 logger.error(f"Wrap failed. TX: {tx_hash.hex()}")
                 return None
         except Exception as e:
+            if tx_hash:
+                logger.error(f"Wrap TX sent ({tx_hash.hex()}) but receipt failed: {e}")
+                return tx_hash.hex()
             logger.error(f"Error wrapping: {e}")
             return None
 
@@ -255,6 +267,7 @@ class NativeTransferMixin:
         amount_eth = float(Web3.from_wei(amount_wei, "ether"))
         logger.info(f"Unwrapping {amount_eth:.4f} WXDAI → xDAI...")
 
+        tx_hash = None
         try:
             tx_params = chain_interface.calculate_transaction_params(
                 built_method=contract.functions.withdraw(amount_wei),
@@ -263,9 +276,17 @@ class NativeTransferMixin:
             tx = contract.functions.withdraw(amount_wei).build_transaction(tx_params)
 
             signed = self.key_storage.sign_transaction(tx, account.address)
-            tx_hash = chain_interface.web3._web3.eth.send_raw_transaction(signed.raw_transaction)
-            receipt = chain_interface.web3._web3.eth.wait_for_transaction_receipt(
-                tx_hash, timeout=60
+            tx_hash = chain_interface.with_retry(
+                lambda: chain_interface.web3._web3.eth.send_raw_transaction(
+                    signed.raw_transaction
+                ),
+                operation_name="send_raw_transaction(unwrap)",
+            )
+            receipt = chain_interface.with_retry(
+                lambda: chain_interface.web3._web3.eth.wait_for_transaction_receipt(
+                    tx_hash, timeout=60
+                ),
+                operation_name="wait_for_receipt(unwrap)",
             )
 
             if receipt.status == 1:
@@ -275,5 +296,8 @@ class NativeTransferMixin:
                 logger.error(f"Unwrap failed. TX: {tx_hash.hex()}")
                 return None
         except Exception as e:
+            if tx_hash:
+                logger.error(f"Unwrap TX sent ({tx_hash.hex()}) but receipt failed: {e}")
+                return tx_hash.hex()
             logger.error(f"Error unwrapping: {e}")
             return None

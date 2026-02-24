@@ -32,6 +32,8 @@ def mock_deps():
         mock_chain_instance = mock_chain.return_value.get.return_value
         mock_chain_instance.web3 = mock_w3
         mock_chain_instance.chain.tokens = {"WXDAI": "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d"}
+        # Make with_retry actually execute the passed function
+        mock_chain_instance.with_retry.side_effect = lambda fn, **kw: fn()
 
         deps = {
             "account_service": mock_account_service,
