@@ -251,6 +251,13 @@ class SafeTransactionExecutor:
         classification = self._classify_error(error)
         is_fee_error = classification["is_fee_error"]
 
+        # Signature errors (GS020, GS026) are never recoverable — abort immediately
+        if classification["is_signature_error"]:
+            SAFE_TX_STATS["signature_errors"] += 1
+            SAFE_TX_STATS["final_failures"] += 1
+            logger.error(f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): {error}")
+            return safe_tx, False, is_fee_error
+
         if attempt >= self.max_retries:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {error}")
@@ -259,8 +266,8 @@ class SafeTransactionExecutor:
         strategy = "retry"
         safe = self._recreate_safe_client(safe_address)
 
-        if classification["is_nonce_error"]:
-            strategy = "nonce refresh"
+        if classification["is_nonce_error"] or classification["is_timeout"]:
+            strategy = "nonce refresh" if classification["is_nonce_error"] else "timeout + nonce refresh"
             SAFE_TX_STATS["nonce_retries"] += 1
             safe_tx = self._refresh_nonce(safe, safe_tx)
         elif classification["is_rpc_error"]:
@@ -313,7 +320,17 @@ class SafeTransactionExecutor:
         """Check if error is due to Safe nonce conflict."""
         error_text = str(error).lower()
         # GS025 = Invalid nonce (NOT GS026 which is invalid signatures)
-        return any(x in error_text for x in ["nonce", "gs025", "already executed", "duplicate"])
+        return any(
+            x in error_text
+            for x in [
+                "nonce",
+                "gs025",
+                "already executed",
+                "duplicate",
+                "could not replace existing tx",
+                "replacement transaction underpriced",
+            ]
+        )
 
     def _is_signature_error(self, error: Exception) -> bool:
         """Check if error is due to invalid Safe signatures.
@@ -370,6 +387,13 @@ class SafeTransactionExecutor:
         ]
         is_fee_error = any(signal in err_text for signal in fee_error_signals)
 
+        # Timeout: TX was broadcast but not mined within the wait window.
+        # The nonce is likely consumed or pending, so a nonce refresh is needed.
+        # NOTE: Only match specific receipt-wait messages here.  Generic
+        # "timeout" or "timed out" could be network-level and should go
+        # through the RPC rotation path instead.
+        is_timeout = "not in the chain after" in err_text
+
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
             "is_fee_error": is_fee_error,
@@ -377,6 +401,7 @@ class SafeTransactionExecutor:
             "is_rpc_error": is_rpc,
             "is_revert": "revert" in err_text or "execution reverted" in err_text,
             "is_signature_error": self._is_signature_error(error),
+            "is_timeout": is_timeout,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:

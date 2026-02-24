@@ -191,15 +191,19 @@ def test_gs020_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_saf
 
 
 def test_gs026_fails_fast(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """GS026 (invalid owner) should not trigger retries."""
+    """GS026 (invalid owner) should abort after exactly 1 attempt, never retried."""
     with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
         mock_safe_tx.call.side_effect = ValueError("execution reverted: GS026")
 
-        with patch("time.sleep"):
+        with patch("time.sleep") as mock_sleep:
             success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert success is False
         assert "GS026" in error
+        # Must have called simulation exactly once (no retries)
+        assert mock_safe_tx.call.call_count == 1
+        # Must never have slept (no retry delay)
+        mock_sleep.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -637,3 +641,128 @@ def test_calculate_bumped_gas_price_legacy(executor, mock_chain_interface):
 
     assert result is not None
     assert result == int(2000 * 1.3)
+
+
+# =============================================================================
+# Test: Signature errors abort immediately (_handle_execution_failure)
+# =============================================================================
+
+
+def test_gs026_in_execute_phase_aborts(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS026 raised during execute (not simulation) also aborts immediately."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation passes, but execute raises GS026
+        mock_safe_tx.execute.side_effect = ValueError("execution reverted: GS026")
+
+        with patch("time.sleep") as mock_sleep:
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS026" in error
+        assert mock_safe_tx.execute.call_count == 1
+        mock_sleep.assert_not_called()
+        assert SAFE_TX_STATS["signature_errors"] == 1
+
+
+def test_gs020_in_execute_phase_aborts(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS020 raised during execute phase also aborts immediately."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = ValueError("GS020: Signatures data too short")
+
+        with patch("time.sleep") as mock_sleep:
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS020" in error
+        assert mock_safe_tx.execute.call_count == 1
+        mock_sleep.assert_not_called()
+
+
+# =============================================================================
+# Test: Nonce collision error classification
+# =============================================================================
+
+
+def test_could_not_replace_tx_classified_as_nonce(executor):
+    """'could not replace existing tx' should be classified as nonce error."""
+    error = ValueError("could not replace existing tx 0xabc123 with same nonce")
+    assert executor._is_nonce_error(error) is True
+
+
+def test_replacement_tx_underpriced_classified_as_nonce(executor):
+    """'replacement transaction underpriced' should be classified as nonce error."""
+    error = ValueError("replacement transaction underpriced")
+    assert executor._is_nonce_error(error) is True
+
+
+def test_could_not_replace_triggers_nonce_refresh(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """'could not replace existing tx' triggers nonce refresh strategy."""
+    new_tx = MagicMock(spec=SafeTx)
+    new_tx.signatures = b"x" * 65
+
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = [
+            ValueError("could not replace existing tx 0xabc"),
+            b"tx_hash",
+        ]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
+        )
+        executor._refresh_nonce = MagicMock(return_value=new_tx)
+
+        with patch("time.sleep"):
+            success, _, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert executor._refresh_nonce.called
+        assert SAFE_TX_STATS["nonce_retries"] >= 1
+
+
+# =============================================================================
+# Test: Timeout classification and handling
+# =============================================================================
+
+
+def test_classify_timeout_not_in_chain(executor):
+    """'not in the chain after N seconds' classified as timeout."""
+    error = ValueError("Transaction 0xabc not in the chain after 120 seconds")
+    result = executor._classify_error(error)
+    assert result["is_timeout"] is True
+
+
+def test_generic_timed_out_not_classified_as_timeout(executor):
+    """Generic 'timed out' is NOT classified as timeout (could be network-level)."""
+    error = ValueError("Request timed out waiting for receipt")
+    result = executor._classify_error(error)
+    assert result["is_timeout"] is False
+
+
+def test_timeout_triggers_nonce_refresh(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """TX timeout triggers nonce refresh for next attempt."""
+    new_tx = MagicMock(spec=SafeTx)
+    new_tx.signatures = b"x" * 65
+
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.return_value = b"tx_hash"
+        # First wait_for_receipt times out, second succeeds
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.side_effect = [
+            ValueError("Transaction 0xabc not in the chain after 120 seconds"),
+            MagicMock(status=1),
+        ]
+        executor._refresh_nonce = MagicMock(return_value=new_tx)
+
+        with patch("time.sleep"):
+            success, _, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert executor._refresh_nonce.called
+        assert SAFE_TX_STATS["nonce_retries"] >= 1
+
+
+def test_normal_error_not_classified_as_timeout(executor):
+    """Regular errors should not be classified as timeout."""
+    error = ValueError("intrinsic gas too low")
+    result = executor._classify_error(error)
+    assert result["is_timeout"] is False
