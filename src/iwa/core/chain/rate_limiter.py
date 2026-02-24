@@ -234,41 +234,43 @@ class RateLimitedEth:
         This ensures ALL callers of web3.eth.* get automatic 429 protection
         without needing to wrap in ChainInterface.with_retry().
         """
+        try:
+            if skip_transient:
+                return method(*args, **kwargs)
+            return self._try_transient(method, method_name, *args, **kwargs)
+        except Exception as last_error:
+            return self._try_rotation(last_error, method_name, *args, **kwargs)
+
+    def _try_transient(self, method, method_name, *args, **kwargs):
+        """Phase 1: retry transient (connection-level) errors on same RPC."""
         last_error = None
-
-        # Phase 1: transient retry (skipped for writes)
-        if not skip_transient:
-            for attempt in range(self.DEFAULT_READ_RETRIES + 1):
-                try:
-                    return method(*args, **kwargs)
-                except Exception as e:
-                    last_error = e
-                    if attempt >= self.DEFAULT_READ_RETRIES:
-                        break
-
-                    err_text = str(e).lower()
-                    if not any(signal in err_text for signal in self.TRANSIENT_SIGNALS):
-                        break
-
-                    if not self._rate_limiter.acquire(timeout=30.0):
-                        raise TimeoutError(
-                            f"Rate limit timeout for retry of {method_name}"
-                        ) from e
-
-                    delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
-                    logger.debug(
-                        f"{method_name} attempt {attempt + 1} failed (transient), "
-                        f"retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-        else:
-            # Writes: single attempt, then fall through to rotation
+        for attempt in range(self.DEFAULT_READ_RETRIES + 1):
             try:
                 return method(*args, **kwargs)
             except Exception as e:
                 last_error = e
+                if attempt >= self.DEFAULT_READ_RETRIES:
+                    break
 
-        # Phase 2: RPC rotation for rate-limit / server errors
+                err_text = str(e).lower()
+                if not any(signal in err_text for signal in self.TRANSIENT_SIGNALS):
+                    break
+
+                if not self._rate_limiter.acquire(timeout=30.0):
+                    raise TimeoutError(
+                        f"Rate limit timeout for retry of {method_name}"
+                    ) from e
+
+                delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
+                logger.debug(
+                    f"{method_name} attempt {attempt + 1} failed (transient), "
+                    f"retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+        raise last_error
+
+    def _try_rotation(self, last_error, method_name, *args, **kwargs):
+        """Phase 2: rotate RPC on rate-limit / server errors and retry once."""
         err_text = str(last_error).lower()
         if any(signal in err_text for signal in self.ROTATION_SIGNALS):
             try:
@@ -276,13 +278,12 @@ class RateLimitedEth:
             except Exception as handle_err:
                 raise handle_err from last_error
 
-            if result.get("should_retry"):
-                if self._rate_limiter.acquire(timeout=30.0):
-                    # Re-resolve method from updated _eth (new provider after rotation)
-                    fresh = getattr(self._eth, method_name)
-                    if callable(fresh):
-                        return fresh(*args, **kwargs)
-                    return fresh  # property (block_number, gas_price)
+            if result.get("should_retry") and self._rate_limiter.acquire(timeout=30.0):
+                # Re-resolve method from updated _eth (new provider after rotation)
+                fresh = getattr(self._eth, method_name)
+                if callable(fresh):
+                    return fresh(*args, **kwargs)
+                return fresh  # property (block_number, gas_price)
 
         raise last_error
 
