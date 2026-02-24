@@ -766,3 +766,52 @@ def test_normal_error_not_classified_as_timeout(executor):
     error = ValueError("intrinsic gas too low")
     result = executor._classify_error(error)
     assert result["is_timeout"] is False
+
+
+# =============================================================================
+# Test: InsufficientFunds aborts immediately
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    "error_msg",
+    [
+        "InsufficientFunds, Balance is 403578595673862 less than sending value + gas 2230304448944600",
+        "{'code': -32010, 'message': 'InsufficientFunds'}",
+        "insufficient funds for gas * price + value",
+        "sender doesn't have enough funds to send tx",
+        "insufficient balance for transfer",
+    ],
+)
+def test_insufficient_funds_classified(executor, error_msg):
+    """Various InsufficientFunds messages are correctly classified."""
+    error = ValueError(error_msg)
+    result = executor._classify_error(error)
+    assert result["is_insufficient_funds"] is True
+
+
+def test_insufficient_funds_aborts_immediately(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """InsufficientFunds should abort after exactly 1 attempt."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.execute.side_effect = ValueError(
+            "{'code': -32010, 'message': 'InsufficientFunds, Balance is 403578595673862 "
+            "less than sending value + gas 2230304448944600'}"
+        )
+
+        with patch("time.sleep") as mock_sleep:
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "insufficientfunds" in error.lower() or "insufficient" in error.lower()
+        assert mock_safe_tx.execute.call_count == 1
+        mock_sleep.assert_not_called()
+        assert SAFE_TX_STATS["insufficient_funds"] == 1
+
+
+def test_normal_error_not_classified_as_insufficient_funds(executor):
+    """Regular errors should not be classified as insufficient funds."""
+    error = ValueError("execution reverted: GS026")
+    result = executor._classify_error(error)
+    assert result["is_insufficient_funds"] is False

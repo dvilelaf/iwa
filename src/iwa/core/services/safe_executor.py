@@ -24,6 +24,7 @@ SAFE_TX_STATS = {
     "final_successes": 0,
     "final_failures": 0,
     "signature_errors": 0,
+    "insufficient_funds": 0,
 }
 
 # Minimum signature length (65 bytes per signature for ECDSA)
@@ -258,6 +259,16 @@ class SafeTransactionExecutor:
             logger.error(f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): {error}")
             return safe_tx, False, is_fee_error
 
+        # InsufficientFunds: account can't cover value + gas.  Retrying won't
+        # help — the balance won't increase by itself.
+        if classification["is_insufficient_funds"]:
+            SAFE_TX_STATS["insufficient_funds"] += 1
+            SAFE_TX_STATS["final_failures"] += 1
+            logger.error(
+                f"[{operation_name}] Insufficient funds — aborting (attempt {attempt + 1}): {error}"
+            )
+            return safe_tx, False, is_fee_error
+
         if attempt >= self.max_retries:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {error}")
@@ -394,6 +405,16 @@ class SafeTransactionExecutor:
         # through the RPC rotation path instead.
         is_timeout = "not in the chain after" in err_text
 
+        # InsufficientFunds: the sender can't cover value + gas.
+        # RPC code -32010 with "InsufficientFunds" or similar.
+        insufficient_funds_signals = [
+            "insufficientfunds",
+            "insufficient funds",
+            "sender doesn't have enough funds",
+            "insufficient balance",
+        ]
+        is_insufficient_funds = any(s in err_text for s in insufficient_funds_signals)
+
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
             "is_fee_error": is_fee_error,
@@ -402,6 +423,7 @@ class SafeTransactionExecutor:
             "is_revert": "revert" in err_text or "execution reverted" in err_text,
             "is_signature_error": self._is_signature_error(error),
             "is_timeout": is_timeout,
+            "is_insufficient_funds": is_insufficient_funds,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:
