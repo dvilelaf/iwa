@@ -128,11 +128,10 @@ class RateLimitedEth:
     # Helper sets for efficient lookup
     RPC_METHODS = READ_METHODS | WRITE_METHODS
 
-    DEFAULT_READ_RETRIES = 1  # Keep low; ChainInterface.with_retry handles cross-RPC retries
+    DEFAULT_READ_RETRIES = 1  # Keep low; rotation handles cross-RPC retries
     DEFAULT_READ_RETRY_DELAY = 0.5
 
-    # Only retry errors that are clearly transient network issues.
-    # Rate-limit / quota / server errors propagate up to with_retry for rotation.
+    # Connection-level failures: retry on same RPC.
     TRANSIENT_SIGNALS = (
         "timeout",
         "timed out",
@@ -142,6 +141,32 @@ class RateLimitedEth:
         "broken pipe",
         "eof",
         "remote end closed",
+    )
+
+    # RPC-level failures: trigger rotation to a different RPC + single retry.
+    # Must be consistent with ChainInterface._handle_rpc_error() classification.
+    ROTATION_SIGNALS = (
+        # Rate limit
+        "429",
+        "rate limit",
+        "too many requests",
+        "ratelimit",
+        # Quota / auth
+        "exceeded the quota",
+        "exceeded quota",
+        "quota exceeded",
+        "allowance exceeded",
+        "401",
+        "unauthorized",
+        "403",
+        # Server errors
+        "500",
+        "502",
+        "503",
+        "504",
+        "internal server error",
+        "bad gateway",
+        "service unavailable",
     )
 
     def __init__(self, web3_eth, rate_limiter: RPCRateLimiter, chain_interface: "ChainInterface"):
@@ -184,54 +209,82 @@ class RateLimitedEth:
         return self._execute_with_retry(lambda: self._eth.gas_price, "gas_price")
 
     def _wrap_with_retry(self, method, method_name):
-        """Wrap method with rate limiting and retry for reads."""
+        """Wrap method with rate limiting, transient retry, and RPC rotation."""
 
         def wrapper(*args, **kwargs):
             if not self._rate_limiter.acquire(timeout=30.0):
                 raise TimeoutError(f"Rate limit timeout for {method_name}")
 
-            # Writes: no auto-retry (handled by caller or not safe)
-            if method_name in self.WRITE_METHODS:
-                return method(*args, **kwargs)
-
-            # Reads: with retry
-            return self._execute_with_retry(method, method_name, *args, **kwargs)
+            is_write = method_name in self.WRITE_METHODS
+            return self._execute_with_retry(
+                method, method_name, *args, skip_transient=is_write, **kwargs
+            )
 
         return wrapper
 
-    def _execute_with_retry(self, method, method_name, *args, **kwargs):
-        """Execute a read operation with limited retry for transient errors.
+    def _execute_with_retry(self, method, method_name, *args, skip_transient=False, **kwargs):
+        """Execute an RPC operation with transient retry and RPC rotation.
 
-        Only connection-level failures (timeout, reset, broken pipe) are
-        retried here.  Rate-limit, quota, and server errors propagate up
-        to ``ChainInterface.with_retry`` which handles RPC rotation.
-        This avoids the double-retry amplification that previously caused
-        up to 4x7 = 28 RPC requests per logical call.
+        Two-phase retry strategy:
+        1. Transient retry (reads only): connection-level failures (timeout,
+           reset, broken pipe) are retried on the same RPC.
+        2. RPC rotation: rate-limit (429), quota, and server errors trigger
+           rotation to a different RPC via ChainInterface + single retry.
+
+        This ensures ALL callers of web3.eth.* get automatic 429 protection
+        without needing to wrap in ChainInterface.with_retry().
         """
-        for attempt in range(self.DEFAULT_READ_RETRIES + 1):
+        last_error = None
+
+        # Phase 1: transient retry (skipped for writes)
+        if not skip_transient:
+            for attempt in range(self.DEFAULT_READ_RETRIES + 1):
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if attempt >= self.DEFAULT_READ_RETRIES:
+                        break
+
+                    err_text = str(e).lower()
+                    if not any(signal in err_text for signal in self.TRANSIENT_SIGNALS):
+                        break
+
+                    if not self._rate_limiter.acquire(timeout=30.0):
+                        raise TimeoutError(
+                            f"Rate limit timeout for retry of {method_name}"
+                        ) from e
+
+                    delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
+                    logger.debug(
+                        f"{method_name} attempt {attempt + 1} failed (transient), "
+                        f"retrying in {delay:.1f}s..."
+                    )
+                    time.sleep(delay)
+        else:
+            # Writes: single attempt, then fall through to rotation
             try:
                 return method(*args, **kwargs)
             except Exception as e:
-                if attempt >= self.DEFAULT_READ_RETRIES:
-                    raise
+                last_error = e
 
-                # Only retry clearly transient network errors.
-                err_text = str(e).lower()
-                if not any(signal in err_text for signal in self.TRANSIENT_SIGNALS):
-                    raise
+        # Phase 2: RPC rotation for rate-limit / server errors
+        err_text = str(last_error).lower()
+        if any(signal in err_text for signal in self.ROTATION_SIGNALS):
+            try:
+                result = self._chain_interface._handle_rpc_error(last_error)
+            except Exception as handle_err:
+                raise handle_err from last_error
 
-                # Re-acquire a rate-limiter token before retrying.
-                if not self._rate_limiter.acquire(timeout=30.0):
-                    raise TimeoutError(
-                        f"Rate limit timeout for retry of {method_name}"
-                    ) from e
+            if result.get("should_retry"):
+                if self._rate_limiter.acquire(timeout=30.0):
+                    # Re-resolve method from updated _eth (new provider after rotation)
+                    fresh = getattr(self._eth, method_name)
+                    if callable(fresh):
+                        return fresh(*args, **kwargs)
+                    return fresh  # property (block_number, gas_price)
 
-                delay = self.DEFAULT_READ_RETRY_DELAY * (2**attempt)
-                logger.debug(
-                    f"{method_name} attempt {attempt + 1} failed (transient), "
-                    f"retrying in {delay:.1f}s..."
-                )
-                time.sleep(delay)
+        raise last_error
 
 
 class RateLimitedWeb3:
@@ -254,10 +307,17 @@ class RateLimitedWeb3:
         self._update_eth_wrapper()
 
     def _update_eth_wrapper(self):
-        """Update the eth wrapper to point to the current _web3.eth."""
-        self._eth_wrapper = RateLimitedEth(
-            self._web3.eth, self._rate_limiter, self._chain_interface
-        )
+        """Update the eth wrapper to point to the current _web3.eth.
+
+        Hot-swaps _eth in-place so in-flight retries inside RateLimitedEth
+        see the new provider after RPC rotation.
+        """
+        if self._eth_wrapper is not None:
+            object.__setattr__(self._eth_wrapper, "_eth", self._web3.eth)
+        else:
+            self._eth_wrapper = RateLimitedEth(
+                self._web3.eth, self._rate_limiter, self._chain_interface
+            )
 
     @property
     def eth(self):
