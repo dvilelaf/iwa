@@ -51,3 +51,5 @@ e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints
 e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:66
 e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:70
 e27fdb04757f893afe57c16b7d7819a0054cfec2:src/iwa/plugins/olas/subgraph/endpoints.py:generic-api-key:74
+# is_encrypted=True in test mock data (not a secret)
+897dbf3f829333dd61b65fb90563ce1d85db11eb:src/iwa/plugins/olas/tests/test_importer_coverage.py:generic-api-key:763
