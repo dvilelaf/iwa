@@ -3377,7 +3377,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div class="rewards-card">
         <div class="card-label">Net Profit</div>
-        <div class="card-value" style="color:${totalNet >= 0 ? '#2ecc71' : '#e74c3c'}">\u20AC${totalNet.toFixed(2)}</div>
+        <div class="card-value" style="color:${totalNet >= 0 ? "#2ecc71" : "#e74c3c"}">\u20AC${totalNet.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
         <div class="card-label">Total OLAS</div>
