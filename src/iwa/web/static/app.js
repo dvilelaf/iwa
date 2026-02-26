@@ -3327,9 +3327,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const [summaryRes, claimsRes, byTraderRes] = await Promise.all([
-        authFetch(`/api/rewards/summary?year=${year}`),
+        authFetch(`/api/rewards/summary?year=${year}${monthParam}`),
         authFetch(`/api/rewards/claims?year=${year}${monthParam}`),
-        authFetch(`/api/rewards/by-trader?year=${year}`),
+        authFetch(`/api/rewards/by-trader?year=${year}${monthParam}`),
       ]);
 
       if (!summaryRes.ok || !claimsRes.ok || !byTraderRes.ok) {

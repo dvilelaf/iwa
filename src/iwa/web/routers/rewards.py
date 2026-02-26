@@ -102,8 +102,8 @@ def _query_claims(year: int, month: Optional[int] = None):
     return SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc())
 
 
-def _query_costs(year: int) -> list:
-    """Query cost transactions (funding transfers from master to traders) for a year."""
+def _query_costs(year: int, month: Optional[int] = None) -> list:
+    """Query cost transactions (funding transfers from master to traders)."""
     year_start = datetime.datetime(year, 1, 1)
     year_end = datetime.datetime(year + 1, 1, 1)
 
@@ -113,11 +113,17 @@ def _query_costs(year: int) -> list:
         & (SentTransaction.timestamp >= year_start)
         & (SentTransaction.timestamp < year_end)
     )
+
+    if month and 1 <= month <= 12:
+        month_start = datetime.datetime(year, month, 1)
+        month_end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
+        query = query & (SentTransaction.timestamp >= month_start) & (SentTransaction.timestamp < month_end)
+
     return list(SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc()))
 
 
-def _query_gas_costs(year: int) -> float:
-    """Sum gas costs (EUR) for all claim and checkpoint transactions in a year."""
+def _query_gas_costs(year: int, month: Optional[int] = None) -> float:
+    """Sum gas costs (EUR) for claim and checkpoint transactions."""
     year_start = datetime.datetime(year, 1, 1)
     year_end = datetime.datetime(year + 1, 1, 1)
 
@@ -129,6 +135,12 @@ def _query_gas_costs(year: int) -> float:
         & (SentTransaction.timestamp >= year_start)
         & (SentTransaction.timestamp < year_end)
     )
+
+    if month and 1 <= month <= 12:
+        month_start = datetime.datetime(year, month, 1)
+        month_end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
+        query = query & (SentTransaction.timestamp >= month_start) & (SentTransaction.timestamp < month_end)
+
     total = 0.0
     for tx in SentTransaction.select().where(query):
         total += tx.gas_value_eur or 0.0
@@ -184,10 +196,14 @@ def get_claims(
     description="Get aggregated staking rewards summary by month, including costs, "
     "tax estimates, and net profit.",
 )
-def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
+def get_summary(
+    year: int = 0,
+    month: Optional[int] = None,
+    auth: bool = Depends(verify_auth),
+):
     """Get rewards summary aggregated by month with costs and net profit."""
-    year = _validate_year_month(year)
-    claims = _query_claims(year)
+    year = _validate_year_month(year, month)
+    claims = _query_claims(year, month)
 
     total_olas = 0.0
     total_eur = 0.0
@@ -202,13 +218,13 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
         total_eur += eur_value
         total_claims += 1
 
-        month = tx.timestamp.month
-        monthly[month]["olas"] += olas_amount
-        monthly[month]["eur"] += eur_value
-        monthly[month]["claims"] += 1
+        m = tx.timestamp.month
+        monthly[m]["olas"] += olas_amount
+        monthly[m]["eur"] += eur_value
+        monthly[m]["claims"] += 1
 
     # Query costs: funding transfers (master → traders) per month
-    cost_txs = _query_costs(year)
+    cost_txs = _query_costs(year, month)
     monthly_costs = defaultdict(float)
     total_costs = 0.0
     for tx in cost_txs:
@@ -217,7 +233,7 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
         total_costs += eur
 
     # Gas costs from claims and checkpoints
-    gas_costs = _query_gas_costs(year)
+    gas_costs = _query_gas_costs(year, month)
     total_costs += gas_costs
 
     # IRPF tax estimate (annualized from year-to-date)
@@ -264,10 +280,14 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
     summary="Get Rewards Breakdown by Trader",
     description="Per-trader breakdown with monthly detail and cumulative totals.",
 )
-def get_by_trader(year: int = 0, auth: bool = Depends(verify_auth)):
+def get_by_trader(
+    year: int = 0,
+    month: Optional[int] = None,
+    auth: bool = Depends(verify_auth),
+):
     """Per-trader rewards breakdown with monthly detail."""
-    year = _validate_year_month(year)
-    claims = list(_query_claims(year))
+    year = _validate_year_month(year, month)
+    claims = list(_query_claims(year, month))
     tag_map = _build_tag_map(claims)
 
     # Per-trader monthly data
