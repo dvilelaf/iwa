@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from loguru import logger
+from peewee import SqliteDatabase
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +22,39 @@ def caplog(caplog):
         logger.remove(handler_id)
     except ValueError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_database(tmp_path):
+    """Isolate database for each test to prevent test data leaking to production.
+
+    Redirects all DB writes to a temporary SQLite database that is
+    destroyed after the test.  This prevents MagicMock objects and other
+    test artefacts from polluting data/activity.db.
+    """
+    from iwa.core import db as db_module
+
+    test_db_path = tmp_path / "test_activity.db"
+    test_db = SqliteDatabase(
+        str(test_db_path),
+        pragmas={"journal_mode": "wal", "foreign_keys": 1},
+    )
+
+    # Swap the module-level database with the temporary one
+    original_db = db_module.db
+    db_module.db = test_db
+    db_module.SentTransaction._meta.database = test_db
+
+    # Create tables in the temp DB
+    test_db.connect()
+    test_db.create_tables([db_module.SentTransaction])
+
+    yield test_db
+
+    # Restore the original database
+    test_db.close()
+    db_module.db = original_db
+    db_module.SentTransaction._meta.database = original_db
 
 
 @pytest.fixture(autouse=True)

@@ -3357,22 +3357,34 @@ document.addEventListener("DOMContentLoaded", () => {
       summary.total_claims > 0
         ? (summary.total_eur / summary.total_olas).toFixed(4)
         : "N/A";
+    const totalCosts = summary.total_costs || 0;
+    const totalTax = summary.total_tax || 0;
+    const totalNet = summary.total_net || 0;
+    const taxRate = summary.effective_tax_rate || 0;
     const container = document.getElementById("rewards-summary");
     container.innerHTML = `
       <div class="rewards-card">
-        <div class="card-label">Total OLAS Claimed</div>
-        <div class="card-value accent">${summary.total_olas.toFixed(4)}</div>
-      </div>
-      <div class="rewards-card">
-        <div class="card-label">Total EUR Value</div>
+        <div class="card-label">Gross Rewards</div>
         <div class="card-value success">\u20AC${summary.total_eur.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
-        <div class="card-label">Total Claims</div>
-        <div class="card-value">${summary.total_claims}</div>
+        <div class="card-label">Costs (Funding + Gas)</div>
+        <div class="card-value" style="color:#e74c3c">\u2212\u20AC${totalCosts.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
-        <div class="card-label">Avg. Price EUR/OLAS</div>
+        <div class="card-label">IRPF Tax (${taxRate.toFixed(1)}%)</div>
+        <div class="card-value" style="color:#e67e22">\u2212\u20AC${totalTax.toFixed(2)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Net Profit</div>
+        <div class="card-value" style="color:${totalNet >= 0 ? '#2ecc71' : '#e74c3c'}">\u20AC${totalNet.toFixed(2)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Total OLAS</div>
+        <div class="card-value accent">${summary.total_olas.toFixed(4)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Avg. Price</div>
         <div class="card-value">${avgPrice !== "N/A" ? "\u20AC" + avgPrice : avgPrice}</div>
       </div>
     `;
@@ -3385,7 +3397,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const labels = summary.months.map((m) => MONTH_NAMES[m.month - 1]);
     const olasData = summary.months.map((m) => m.olas);
-    const eurData = summary.months.map((m) => m.eur);
+    const grossData = summary.months.map((m) => m.eur);
+    const costsData = summary.months.map((m) => m.costs || 0);
+    const taxData = summary.months.map((m) => m.tax || 0);
+    const netData = summary.months.map((m) => m.net || 0);
 
     const opts = chartBaseOptions();
     rewardsCharts.monthly = new Chart(ctx, {
@@ -3400,11 +3415,25 @@ document.addEventListener("DOMContentLoaded", () => {
             borderColor: "rgba(0, 210, 255, 1)",
             borderWidth: 1,
             yAxisID: "y",
-            order: 2,
+            order: 4,
           },
           {
-            label: "EUR Value",
-            data: eurData,
+            label: "Gross EUR",
+            data: grossData,
+            type: "line",
+            borderColor: "rgba(46, 204, 113, 0.5)",
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 3,
+            pointBackgroundColor: "rgba(46, 204, 113, 0.5)",
+            fill: false,
+            yAxisID: "y1",
+            order: 3,
+          },
+          {
+            label: "Net Profit",
+            data: netData,
             type: "line",
             borderColor: "rgba(46, 204, 113, 1)",
             backgroundColor: "rgba(46, 204, 113, 0.1)",
@@ -3414,6 +3443,19 @@ document.addEventListener("DOMContentLoaded", () => {
             fill: true,
             yAxisID: "y1",
             order: 1,
+          },
+          {
+            label: "Costs",
+            data: costsData,
+            type: "line",
+            borderColor: "rgba(231, 76, 60, 0.8)",
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            pointRadius: 3,
+            pointBackgroundColor: "rgba(231, 76, 60, 0.8)",
+            fill: false,
+            yAxisID: "y1",
+            order: 2,
           },
         ],
       },
@@ -3426,7 +3468,7 @@ document.addEventListener("DOMContentLoaded", () => {
             callbacks: {
               label: function (c) {
                 if (c.dataset.yAxisID === "y1")
-                  return `EUR: \u20AC${c.parsed.y.toFixed(2)}`;
+                  return `${c.dataset.label}: \u20AC${c.parsed.y.toFixed(2)}`;
                 return `OLAS: ${c.parsed.y.toFixed(4)}`;
               },
             },

@@ -21,6 +21,38 @@ EUR_VALUE_DECIMALS = 2     # Total EUR value
 
 GNOSIS_EXPLORER = "https://gnosisscan.io/tx/"
 
+# Spanish IRPF "base del ahorro" progressive tax brackets (2025+)
+# Crypto staking rewards are "rendimientos del capital mobiliario"
+SAVINGS_TAX_BRACKETS: list[tuple[float, float]] = [
+    (6_000, 0.19),        # First €6,000 at 19%
+    (44_000, 0.21),       # €6,001 – €50,000 at 21%
+    (150_000, 0.23),      # €50,001 – €200,000 at 23%
+    (100_000, 0.27),      # €200,001 – €300,000 at 27%
+    (float("inf"), 0.30),  # Above €300,000 at 30%
+]
+
+
+def _calculate_savings_tax(annual_profit_eur: float) -> tuple[float, float]:
+    """Calculate Spanish IRPF savings tax using progressive brackets.
+
+    Returns (tax_amount, effective_rate).
+    """
+    if annual_profit_eur <= 0:
+        return 0.0, 0.0
+
+    remaining = annual_profit_eur
+    total_tax = 0.0
+
+    for bracket_size, rate in SAVINGS_TAX_BRACKETS:
+        taxable = min(remaining, bracket_size)
+        total_tax += taxable * rate
+        remaining -= taxable
+        if remaining <= 0:
+            break
+
+    effective_rate = total_tax / annual_profit_eur
+    return total_tax, effective_rate
+
 
 def _wei_to_olas(amount_wei: Optional[int]) -> float:
     """Convert wei amount to OLAS (1e18 decimals)."""
@@ -70,6 +102,39 @@ def _query_claims(year: int, month: Optional[int] = None):
     return SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc())
 
 
+def _query_costs(year: int) -> list:
+    """Query cost transactions (funding transfers from master to traders) for a year."""
+    year_start = datetime.datetime(year, 1, 1)
+    year_end = datetime.datetime(year + 1, 1, 1)
+
+    query = (
+        SentTransaction.tags.contains("native-transfer")
+        & (SentTransaction.from_tag == "master")
+        & (SentTransaction.timestamp >= year_start)
+        & (SentTransaction.timestamp < year_end)
+    )
+    return list(SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc()))
+
+
+def _query_gas_costs(year: int) -> float:
+    """Sum gas costs (EUR) for all claim and checkpoint transactions in a year."""
+    year_start = datetime.datetime(year, 1, 1)
+    year_end = datetime.datetime(year + 1, 1, 1)
+
+    query = (
+        (
+            SentTransaction.tags.contains("olas_claim_rewards")
+            | SentTransaction.tags.contains("olas_call_checkpoint")
+        )
+        & (SentTransaction.timestamp >= year_start)
+        & (SentTransaction.timestamp < year_end)
+    )
+    total = 0.0
+    for tx in SentTransaction.select().where(query):
+        total += tx.gas_value_eur or 0.0
+    return total
+
+
 def _validate_year_month(year: int, month: Optional[int] = None) -> int:
     """Validate and default year/month params. Returns resolved year."""
     if year == 0:
@@ -116,10 +181,11 @@ def get_claims(
 @router.get(
     "/summary",
     summary="Get Rewards Summary",
-    description="Get aggregated staking rewards summary by month for a given year.",
+    description="Get aggregated staking rewards summary by month, including costs, "
+    "tax estimates, and net profit.",
 )
 def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
-    """Get rewards summary aggregated by month."""
+    """Get rewards summary aggregated by month with costs and net profit."""
     year = _validate_year_month(year)
     claims = _query_claims(year)
 
@@ -141,22 +207,53 @@ def get_summary(year: int = 0, auth: bool = Depends(verify_auth)):
         monthly[month]["eur"] += eur_value
         monthly[month]["claims"] += 1
 
+    # Query costs: funding transfers (master → traders) per month
+    cost_txs = _query_costs(year)
+    monthly_costs = defaultdict(float)
+    total_costs = 0.0
+    for tx in cost_txs:
+        eur = tx.value_eur or 0.0
+        monthly_costs[tx.timestamp.month] += eur
+        total_costs += eur
+
+    # Gas costs from claims and checkpoints
+    gas_costs = _query_gas_costs(year)
+    total_costs += gas_costs
+
+    # IRPF tax estimate (annualized from year-to-date)
+    annual_gross = total_eur
+    annual_costs = total_costs
+    annual_profit = annual_gross - annual_costs
+    annual_tax, effective_tax_rate = _calculate_savings_tax(annual_profit)
+
     months = []
     for m in range(1, 13):
         data = monthly.get(m, {"olas": 0.0, "eur": 0.0, "claims": 0})
-        months.append(
-            {
-                "month": m,
-                "olas": round(data["olas"], OLAS_DISPLAY_DECIMALS),
-                "eur": round(data["eur"], EUR_VALUE_DECIMALS),
-                "claims": data["claims"],
-            }
-        )
+        m_gross = data["eur"]
+        m_costs = monthly_costs.get(m, 0.0)
+        m_profit_pre_tax = m_gross - m_costs
+        # Apply effective annual tax rate to each month proportionally
+        m_tax = m_profit_pre_tax * effective_tax_rate if m_profit_pre_tax > 0 else 0.0
+        m_net = m_profit_pre_tax - m_tax
+
+        months.append({
+            "month": m,
+            "olas": round(data["olas"], OLAS_DISPLAY_DECIMALS),
+            "eur": round(m_gross, EUR_VALUE_DECIMALS),
+            "costs": round(m_costs, EUR_VALUE_DECIMALS),
+            "tax": round(m_tax, EUR_VALUE_DECIMALS),
+            "net": round(m_net, EUR_VALUE_DECIMALS),
+            "claims": data["claims"],
+        })
 
     return {
         "year": year,
         "total_olas": round(total_olas, OLAS_DISPLAY_DECIMALS),
         "total_eur": round(total_eur, EUR_VALUE_DECIMALS),
+        "total_costs": round(total_costs, EUR_VALUE_DECIMALS),
+        "total_tax": round(annual_tax, EUR_VALUE_DECIMALS),
+        "total_net": round(annual_profit - annual_tax, EUR_VALUE_DECIMALS),
+        "effective_tax_rate": round(effective_tax_rate * 100, 1),
         "total_claims": total_claims,
         "months": months,
     }

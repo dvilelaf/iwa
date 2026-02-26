@@ -117,11 +117,26 @@ def test_get_summary(client):
     assert data["total_olas"] == pytest.approx(18.0, abs=0.01)
     assert data["total_eur"] == pytest.approx(23.6, abs=0.01)
 
+    # Net profit fields present (no costs in mock, so net ≈ gross - tax)
+    assert "total_costs" in data
+    assert "total_tax" in data
+    assert "total_net" in data
+    assert "effective_tax_rate" in data
+    assert data["total_costs"] >= 0
+    # With 0 costs, net = gross - tax
+    assert data["total_net"] == pytest.approx(
+        data["total_eur"] - data["total_tax"], abs=0.01
+    )
+
     # January should have 2 claims
     jan = data["months"][0]
     assert jan["month"] == 1
     assert jan["claims"] == 2
     assert jan["olas"] == pytest.approx(8.0, abs=0.01)
+    # Monthly net profit fields
+    assert "costs" in jan
+    assert "tax" in jan
+    assert "net" in jan
 
     # March should have 1 claim
     mar = data["months"][2]
@@ -131,6 +146,7 @@ def test_get_summary(client):
     # February should be empty
     feb = data["months"][1]
     assert feb["claims"] == 0
+    assert feb["net"] == 0.0
 
 
 def test_export_csv(client):
@@ -170,7 +186,65 @@ def test_get_summary_empty_year(client):
     assert data["total_claims"] == 0
     assert data["total_olas"] == 0.0
     assert data["total_eur"] == 0.0
+    assert data["total_costs"] == 0.0
+    assert data["total_tax"] == 0.0
+    assert data["total_net"] == 0.0
+    assert data["effective_tax_rate"] == 0.0
     assert len(data["months"]) == 12
+
+
+def test_get_summary_with_costs(client):
+    """Test summary includes costs from funding transfers."""
+    mock_claims = [
+        _make_mock_tx(
+            tx_hash="0xR1", timestamp=datetime.datetime(2026, 2, 10),
+            amount_wei="50000000000000000000", price_eur=0.05, value_eur=2.5,
+        ),
+    ]
+
+    mock_cost_tx = MagicMock()
+    mock_cost_tx.value_eur = 1.0
+    mock_cost_tx.timestamp = datetime.datetime(2026, 2, 15)
+
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=mock_claims),
+        patch("iwa.web.routers.rewards._query_costs", return_value=[mock_cost_tx]),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.1),
+    ):
+        response = client.get("/api/rewards/summary?year=2026")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_eur"] == pytest.approx(2.5, abs=0.01)
+    assert data["total_costs"] == pytest.approx(1.1, abs=0.01)  # 1.0 funding + 0.1 gas
+    # Profit = 2.5 - 1.1 = 1.4, tax at 19% = 0.266
+    assert data["total_tax"] == pytest.approx(0.27, abs=0.01)
+    assert data["total_net"] == pytest.approx(1.13, abs=0.01)
+    assert data["effective_tax_rate"] == pytest.approx(19.0, abs=0.1)
+
+
+def test_savings_tax_brackets():
+    """Test IRPF progressive tax calculation."""
+    from iwa.web.routers.rewards import _calculate_savings_tax
+
+    # Below first bracket: 19%
+    tax, rate = _calculate_savings_tax(1000)
+    assert tax == pytest.approx(190, abs=0.01)
+    assert rate == pytest.approx(0.19, abs=0.001)
+
+    # Zero profit: no tax
+    tax, rate = _calculate_savings_tax(0)
+    assert tax == 0.0
+    assert rate == 0.0
+
+    # Negative profit: no tax
+    tax, rate = _calculate_savings_tax(-500)
+    assert tax == 0.0
+    assert rate == 0.0
+
+    # Crosses into second bracket: 6000*0.19 + 4000*0.21 = 1140+840 = 1980
+    tax, rate = _calculate_savings_tax(10000)
+    assert tax == pytest.approx(1980, abs=0.01)
 
 
 def test_by_trader_breakdown(client):
