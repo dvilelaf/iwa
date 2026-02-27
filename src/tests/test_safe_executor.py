@@ -817,7 +817,7 @@ def test_nonce_refresh_skips_empty_keys(executor, mock_safe):
     mock_safe.build_multisig_tx.return_value = new_tx
     mock_safe.retrieve_nonce.return_value = 1
 
-    result = executor._refresh_nonce(mock_safe, old_tx, ["0xkey1", "", None])
+    executor._refresh_nonce(mock_safe, old_tx, ["0xkey1", "", None])
 
     # Only "0xkey1" should be signed (empty string and None skipped)
     assert new_tx.sign.call_count == 1
