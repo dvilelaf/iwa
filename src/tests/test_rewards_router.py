@@ -194,7 +194,7 @@ def test_get_summary_empty_year(client):
 
 
 def test_get_summary_with_costs(client):
-    """Test summary includes costs from funding transfers."""
+    """Test summary includes mech request costs and gas."""
     mock_claims = [
         _make_mock_tx(
             tx_hash="0xR1", timestamp=datetime.datetime(2026, 2, 10),
@@ -202,13 +202,10 @@ def test_get_summary_with_costs(client):
         ),
     ]
 
-    mock_cost_tx = MagicMock()
-    mock_cost_tx.value_eur = 1.0
-    mock_cost_tx.timestamp = datetime.datetime(2026, 2, 15)
-
+    # Mech costs: 1.0 EUR total, all in February
     with (
         patch("iwa.web.routers.rewards._query_claims", return_value=mock_claims),
-        patch("iwa.web.routers.rewards._query_costs", return_value=[mock_cost_tx]),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(1.0, {2: 1.0})),
         patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.1),
     ):
         response = client.get("/api/rewards/summary?year=2026")
@@ -216,7 +213,7 @@ def test_get_summary_with_costs(client):
     assert response.status_code == 200
     data = response.json()
     assert data["total_eur"] == pytest.approx(2.5, abs=0.01)
-    assert data["total_costs"] == pytest.approx(1.1, abs=0.01)  # 1.0 funding + 0.1 gas
+    assert data["total_costs"] == pytest.approx(1.1, abs=0.01)  # 1.0 mech + 0.1 gas
     # Profit = 2.5 - 1.1 = 1.4, tax at 19% = 0.266
     assert data["total_tax"] == pytest.approx(0.27, abs=0.01)
     assert data["total_net"] == pytest.approx(1.13, abs=0.01)

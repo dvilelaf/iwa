@@ -21,6 +21,12 @@ EUR_VALUE_DECIMALS = 2     # Total EUR value
 
 GNOSIS_EXPLORER = "https://gnosisscan.io/tx/"
 
+# Mech request execution costs (per trader per epoch/day)
+# All staking contracts require 60 on-chain requests; with safety buffer ~64 actual
+MECH_REQUESTS_PER_EPOCH = 64
+MECH_PRICE_XDAI = 0.01  # 10^16 wei per request
+DAILY_MECH_COST_XDAI = MECH_REQUESTS_PER_EPOCH * MECH_PRICE_XDAI  # 0.64 xDAI
+
 # Spanish IRPF "base del ahorro" progressive tax brackets (2025+)
 # Crypto staking rewards are "rendimientos del capital mobiliario"
 SAVINGS_TAX_BRACKETS: list[tuple[float, float]] = [
@@ -102,24 +108,126 @@ def _query_claims(year: int, month: Optional[int] = None):
     return SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc())
 
 
-def _query_costs(year: int, month: Optional[int] = None) -> list:
-    """Query cost transactions (funding transfers from master to traders)."""
-    year_start = datetime.datetime(year, 1, 1)
-    year_end = datetime.datetime(year + 1, 1, 1)
+def _fetch_safe_creation_date(safe_address: str) -> Optional[str]:
+    """Fetch Safe multisig deployment date from Gnosis Safe Transaction Service.
 
-    query = (
-        SentTransaction.tags.contains("native-transfer")
-        & (SentTransaction.from_tag == "master")
-        & (SentTransaction.timestamp >= year_start)
-        & (SentTransaction.timestamp < year_end)
+    Returns ISO date string (YYYY-MM-DD) or None.
+    """
+    import requests
+
+    url = f"https://safe-transaction-gnosis-chain.safe.global/api/v1/safes/{safe_address}/creation/"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            created = resp.json().get("created")
+            if created:
+                return datetime.datetime.fromisoformat(created).date().isoformat()
+    except Exception:
+        pass
+    return None
+
+
+def _get_trader_start_dates() -> dict[str, datetime.date]:
+    """Get creation date per trader multisig from OlasConfig.
+
+    For services missing creation_date, fetches from Gnosis Safe
+    Transaction Service and persists to config.yaml.
+    """
+    from iwa.core.models import Config
+    from iwa.plugins.olas.models import OlasConfig
+
+    try:
+        config = Config()
+        if "olas" not in config.plugins:
+            return {}
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+    except Exception:
+        return {}
+
+    result: dict[str, datetime.date] = {}
+    updated = False
+
+    for service in olas_config.services.values():
+        addr = str(service.multisig_address) if service.multisig_address else None
+        if not addr:
+            continue
+
+        if service.creation_date:
+            result[addr] = datetime.date.fromisoformat(service.creation_date)
+        else:
+            # Fetch from chain and persist
+            date_str = _fetch_safe_creation_date(addr)
+            if date_str:
+                service.creation_date = date_str
+                result[addr] = datetime.date.fromisoformat(date_str)
+                updated = True
+
+    if updated:
+        try:
+            config.plugins["olas"] = olas_config
+            config.save_config()
+        except Exception:
+            pass
+
+    return result
+
+
+def _calculate_mech_costs(
+    year: int, month: Optional[int] = None
+) -> tuple[float, dict[int, float]]:
+    """Estimate mech request costs from active trader-days.
+
+    Each active trader costs DAILY_MECH_COST_XDAI per epoch (day).
+    Trader start dates come from their Safe multisig deployment date.
+
+    Returns (total_cost_eur, {month_num: cost_eur}).
+    """
+    from iwa.core.pricing import PriceService
+
+    trader_starts = _get_trader_start_dates()
+    if not trader_starts:
+        return 0.0, {}
+
+    try:
+        xdai_eur = PriceService().get_token_price(
+            "dai", "eur"
+        ) or 1.0
+    except Exception:
+        xdai_eur = 1.0
+
+    today = datetime.date.today()
+    monthly_costs: dict[int, float] = {}
+    months_range = (
+        range(month, month + 1) if month else range(1, 13)
     )
 
-    if month and 1 <= month <= 12:
-        month_start = datetime.datetime(year, month, 1)
-        month_end = datetime.datetime(year + 1, 1, 1) if month == 12 else datetime.datetime(year, month + 1, 1)
-        query = query & (SentTransaction.timestamp >= month_start) & (SentTransaction.timestamp < month_end)
+    for m in months_range:
+        m_start = datetime.date(year, m, 1)
+        m_end = (
+            datetime.date(year + 1, 1, 1)
+            if m == 12
+            else datetime.date(year, m + 1, 1)
+        )
+        effective_end = min(
+            m_end, today + datetime.timedelta(days=1)
+        )
+        if effective_end <= m_start:
+            monthly_costs[m] = 0.0
+            continue
 
-    return list(SentTransaction.select().where(query).order_by(SentTransaction.timestamp.asc()))
+        trader_days = 0
+        for start_date in trader_starts.values():
+            active_from = max(start_date, m_start)
+            if active_from >= effective_end:
+                continue
+            trader_days += (effective_end - active_from).days
+
+        monthly_costs[m] = (
+            trader_days * DAILY_MECH_COST_XDAI * xdai_eur
+        )
+
+    total = sum(monthly_costs.values())
+    return total, monthly_costs
 
 
 def _query_gas_costs(year: int, month: Optional[int] = None) -> float:
@@ -223,14 +331,10 @@ def get_summary(
         monthly[m]["eur"] += eur_value
         monthly[m]["claims"] += 1
 
-    # Query costs: funding transfers (master → traders) per month
-    cost_txs = _query_costs(year, month)
-    monthly_costs = defaultdict(float)
-    total_costs = 0.0
-    for tx in cost_txs:
-        eur = tx.value_eur or 0.0
-        monthly_costs[tx.timestamp.month] += eur
-        total_costs += eur
+    # Mech request costs: estimated from active trader-days
+    mech_total, mech_monthly = _calculate_mech_costs(year, month)
+    monthly_costs = defaultdict(float, mech_monthly)
+    total_costs = mech_total
 
     # Gas costs from claims and checkpoints
     gas_costs = _query_gas_costs(year, month)

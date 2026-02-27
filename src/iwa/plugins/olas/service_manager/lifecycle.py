@@ -57,6 +57,7 @@ Token Utility Contract:
     3. The actual OLAS moves via transferFrom(), not msg.value
 """
 
+import datetime
 from typing import List, Optional, Union
 
 from loguru import logger
@@ -847,6 +848,7 @@ class LifecycleManagerMixin:
 
         logger.info(f"[DEPLOY] Multisig created: {multisig_address}")
         self.service.multisig_address = EthereumAddress(multisig_address)
+        self.service.creation_date = datetime.date.today().isoformat()
         self._update_and_save_service_state()
 
         # Register multisig in wallet KeyStorage

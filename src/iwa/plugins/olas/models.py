@@ -26,6 +26,9 @@ class Service(BaseModel):
     staking_contract_address: Optional[EthereumAddress] = None
     token_address: Optional[EthereumAddress] = None
 
+    # Safe multisig deployment date (YYYY-MM-DD); fetched from chain if missing
+    creation_date: Optional[str] = None
+
     @property
     def service_owner_address(self) -> Optional[EthereumAddress]:
         """Returns effective owner address (Safe multisig if present, else EOA)."""
