@@ -113,7 +113,7 @@ class SafeTransactionExecutor:
 
             except Exception as e:
                 updated_tx, should_retry, is_fee_error = self._handle_execution_failure(
-                    e, safe_address, safe_tx, attempt, operation_name
+                    e, safe_address, safe_tx, signer_keys, attempt, operation_name
                 )
                 last_error = e
                 if not should_retry:
@@ -240,6 +240,7 @@ class SafeTransactionExecutor:
         error: Exception,
         safe_address: str,
         safe_tx: SafeTx,
+        signer_keys: List[str],
         attempt: int,
         operation_name: str,
     ) -> Tuple[SafeTx, bool, bool]:
@@ -280,7 +281,7 @@ class SafeTransactionExecutor:
         if classification["is_nonce_error"] or classification["is_timeout"]:
             strategy = "nonce refresh" if classification["is_nonce_error"] else "timeout + nonce refresh"
             SAFE_TX_STATS["nonce_retries"] += 1
-            safe_tx = self._refresh_nonce(safe, safe_tx)
+            safe_tx = self._refresh_nonce(safe, safe_tx, signer_keys)
         elif classification["is_rpc_error"]:
             strategy = "RPC rotation"
             SAFE_TX_STATS["rpc_rotations"] += 1
@@ -364,11 +365,17 @@ class SafeTransactionExecutor:
             ]
         )
 
-    def _refresh_nonce(self, safe: Safe, safe_tx: SafeTx) -> SafeTx:
-        """Re-fetch nonce and rebuild transaction."""
+    def _refresh_nonce(
+        self, safe: Safe, safe_tx: SafeTx, signer_keys: List[str]
+    ) -> SafeTx:
+        """Re-fetch nonce, rebuild transaction, and re-sign.
+
+        The Safe tx hash includes the nonce, so changing the nonce invalidates
+        all existing signatures.  We must re-sign with the available keys.
+        """
         current_nonce = safe.retrieve_nonce()
         logger.info(f"Refreshing Safe nonce to {current_nonce}")
-        return safe.build_multisig_tx(
+        new_tx = safe.build_multisig_tx(
             safe_tx.to,
             safe_tx.value,
             safe_tx.data,
@@ -378,9 +385,15 @@ class SafeTransactionExecutor:
             gas_price=safe_tx.gas_price,
             gas_token=safe_tx.gas_token,
             refund_receiver=safe_tx.refund_receiver,
-            # Note: signatures are NOT copied - tx hash changes with new nonce
             safe_nonce=current_nonce,
         )
+
+        # Re-sign with all available keys (hash changed with new nonce)
+        for key in signer_keys:
+            if key:
+                new_tx.sign(key)
+
+        return new_tx
 
     def _classify_error(self, error: Exception) -> dict:
         """Classify Safe transaction errors for retry decisions."""

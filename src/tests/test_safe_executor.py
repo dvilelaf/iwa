@@ -251,7 +251,7 @@ def test_retry_on_transient_error(executor, mock_chain_interface, mock_safe_tx, 
 
 
 def test_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """Test nonce refresh on GS025 error."""
+    """Test nonce refresh and re-signing on GS025 error."""
     with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
         mock_safe_tx.execute.side_effect = [ValueError("GS025: invalid nonce"), b"success_hash"]
         mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
@@ -265,7 +265,10 @@ def test_retry_on_nonce_error(executor, mock_chain_interface, mock_safe_tx, mock
         with patch("time.sleep"):
             executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
-        assert executor._refresh_nonce.called
+        # Verify _refresh_nonce received signer_keys
+        executor._refresh_nonce.assert_called_once()
+        call_args = executor._refresh_nonce.call_args
+        assert call_args[0][2] == ["key1"]  # signer_keys
         assert new_tx.execute.called
 
 
@@ -698,7 +701,7 @@ def test_replacement_tx_underpriced_classified_as_nonce(executor):
 def test_could_not_replace_triggers_nonce_refresh(
     executor, mock_chain_interface, mock_safe_tx, mock_safe
 ):
-    """'could not replace existing tx' triggers nonce refresh strategy."""
+    """'could not replace existing tx' triggers nonce refresh and re-signing."""
     new_tx = MagicMock(spec=SafeTx)
     new_tx.signatures = b"x" * 65
 
@@ -715,7 +718,10 @@ def test_could_not_replace_triggers_nonce_refresh(
         with patch("time.sleep"):
             success, _, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
-        assert executor._refresh_nonce.called
+        # Verify _refresh_nonce received signer_keys
+        executor._refresh_nonce.assert_called_once()
+        call_args = executor._refresh_nonce.call_args
+        assert call_args[0][2] == ["key1"]  # signer_keys
         assert SAFE_TX_STATS["nonce_retries"] >= 1
 
 
@@ -741,7 +747,7 @@ def test_generic_timed_out_not_classified_as_timeout(executor):
 def test_timeout_triggers_nonce_refresh(
     executor, mock_chain_interface, mock_safe_tx, mock_safe
 ):
-    """TX timeout triggers nonce refresh for next attempt."""
+    """TX timeout triggers nonce refresh and re-signing."""
     new_tx = MagicMock(spec=SafeTx)
     new_tx.signatures = b"x" * 65
 
@@ -757,8 +763,65 @@ def test_timeout_triggers_nonce_refresh(
         with patch("time.sleep"):
             success, _, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
-        assert executor._refresh_nonce.called
+        # Verify _refresh_nonce received signer_keys
+        executor._refresh_nonce.assert_called_once()
+        call_args = executor._refresh_nonce.call_args
+        assert call_args[0][2] == ["key1"]  # signer_keys
         assert SAFE_TX_STATS["nonce_retries"] >= 1
+
+
+def test_nonce_refresh_resigns_transaction(executor, mock_chain_interface, mock_safe):
+    """Verify _refresh_nonce re-signs the new SafeTx with all signer keys."""
+    # Build a mock SafeTx that _refresh_nonce will use as input
+    old_tx = MagicMock(spec=SafeTx)
+    old_tx.to = "0xDest"
+    old_tx.value = 0
+    old_tx.data = b""
+    old_tx.operation = 0
+    old_tx.safe_tx_gas = 100000
+    old_tx.base_gas = 0
+    old_tx.gas_price = 0
+    old_tx.gas_token = "0x0000000000000000000000000000000000000000"
+    old_tx.refund_receiver = "0x0000000000000000000000000000000000000000"
+
+    # The new tx returned by build_multisig_tx
+    new_tx = MagicMock(spec=SafeTx)
+    new_tx.signatures = b""
+    mock_safe.build_multisig_tx.return_value = new_tx
+    mock_safe.retrieve_nonce.return_value = 42
+
+    signer_keys = ["0xkey1", "0xkey2"]
+    result = executor._refresh_nonce(mock_safe, old_tx, signer_keys)
+
+    assert result is new_tx
+    # Must have called sign() once per key
+    assert new_tx.sign.call_count == 2
+    new_tx.sign.assert_any_call("0xkey1")
+    new_tx.sign.assert_any_call("0xkey2")
+
+
+def test_nonce_refresh_skips_empty_keys(executor, mock_safe):
+    """Verify _refresh_nonce skips None/empty keys."""
+    old_tx = MagicMock(spec=SafeTx)
+    old_tx.to = "0xDest"
+    old_tx.value = 0
+    old_tx.data = b""
+    old_tx.operation = 0
+    old_tx.safe_tx_gas = 0
+    old_tx.base_gas = 0
+    old_tx.gas_price = 0
+    old_tx.gas_token = "0x0000000000000000000000000000000000000000"
+    old_tx.refund_receiver = "0x0000000000000000000000000000000000000000"
+
+    new_tx = MagicMock(spec=SafeTx)
+    mock_safe.build_multisig_tx.return_value = new_tx
+    mock_safe.retrieve_nonce.return_value = 1
+
+    result = executor._refresh_nonce(mock_safe, old_tx, ["0xkey1", "", None])
+
+    # Only "0xkey1" should be signed (empty string and None skipped)
+    assert new_tx.sign.call_count == 1
+    new_tx.sign.assert_called_once_with("0xkey1")
 
 
 def test_normal_error_not_classified_as_timeout(executor):
