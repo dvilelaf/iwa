@@ -247,9 +247,15 @@ class ChainInterface:
         return False
 
     def _is_server_error(self, error: Exception) -> bool:
-        """Check if error is a server-side error (5xx)."""
+        """Check if error is a server-side error (4xx/5xx).
+
+        Includes 400 Bad Request because RPCs returning 400 for valid
+        eth_getLogs calls indicates an RPC-side issue, not a caller error.
+        """
         err_text = str(error).lower()
         server_error_signals = [
+            "400 client error",
+            "bad request",
             "500",
             "502",
             "503",
@@ -399,6 +405,7 @@ class ChainInterface:
             result["is_rate_limit"]
             or result["is_connection_error"]
             or result["is_quota_exceeded"]
+            or result["is_server_error"]
         )
 
         if should_rotate:
@@ -417,6 +424,10 @@ class ChainInterface:
                 # Brief global backoff so other threads don't immediately flood
                 # the same (now backed-off) RPC before rotation takes effect.
                 self._rate_limiter.trigger_backoff(seconds=2.0)
+            elif result["is_server_error"]:
+                error_type = "SERVER_ERROR"
+                backoff = self.CONNECTION_ERROR_BACKOFF
+                self._mark_rpc_backoff(failed_index, backoff)
             else:
                 error_type = "CONNECTION"
                 backoff = self.CONNECTION_ERROR_BACKOFF
@@ -443,10 +454,6 @@ class ChainInterface:
                 logger.debug(
                     f"[{self.chain.name}] Rotation skipped (cooldown), retrying RPC #{self._current_rpc_index}"
                 )
-
-        elif result["is_server_error"]:
-            logger.warning(f"Server error on {self.chain.name}: {error}")
-            result["should_retry"] = True
 
         elif result["is_gas_error"]:
             logger.warning(f"Gas/Fee error detected: {error}. Allowing retry for adjustment.")

@@ -110,7 +110,6 @@ class OlasEventInvalidator:
                             text="Checkpoint(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
                         ).hex()
                     ],
-                    # Note: signature might vary, safer to use the event object if ABI allows
                 }
             )
 

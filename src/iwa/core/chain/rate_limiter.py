@@ -159,7 +159,9 @@ class RateLimitedEth:
         "401",
         "unauthorized",
         "403",
-        # Server errors
+        # Server / client errors (400 = RPC-side issue for valid calls)
+        "400 client error",
+        "bad request",
         "500",
         "502",
         "503",

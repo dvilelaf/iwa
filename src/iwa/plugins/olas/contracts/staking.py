@@ -508,6 +508,9 @@ class StakingContract(ContractInstance):
         Uses eth_getLogs (universally supported) instead of eth_newFilter
         which many RPCs don't support or expire quickly.
 
+        All RPC calls go through chain_interface.with_retry() so that
+        failures trigger automatic RPC rotation.
+
         Args:
             event_type: Name of the event (Checkpoint, ServiceInactivityWarning, etc.)
             from_block: Starting block number.
@@ -518,20 +521,27 @@ class StakingContract(ContractInstance):
             List of event log entries.
 
         """
-        all_logs: List = []
-        current_from = from_block
-
-        event = getattr(self.contract.events, event_type, None)
-        if event is None:
+        # Verify event exists in ABI (use contract property for fresh provider)
+        if getattr(self.contract.events, event_type, None) is None:
             logger.debug(f"Event {event_type} not found in contract ABI")
             return []
+
+        all_logs: List = []
+        current_from = from_block
 
         while current_from <= to_block:
             current_to = min(current_from + chunk_size - 1, to_block)
 
             try:
-                logs = event.get_logs(
-                    from_block=current_from, to_block=current_to
+
+                def do_get_logs(fr=current_from, to=current_to):
+                    # Re-evaluate self.contract each retry for fresh provider
+                    evt = getattr(self.contract.events, event_type)
+                    return list(evt.get_logs(from_block=fr, to_block=to))
+
+                logs = self.chain_interface.with_retry(
+                    do_get_logs,
+                    operation_name=f"get_logs {event_type} [{current_from}-{current_to}]",
                 )
                 all_logs.extend(logs)
             except Exception as e:
@@ -539,7 +549,7 @@ class StakingContract(ContractInstance):
                 # If range too large, try smaller chunks
                 if any(
                     signal in error_msg
-                    for signal in ("range", "limit", "10000", "bad request", "too large", "413")
+                    for signal in ("range", "limit", "10000", "too large", "413")
                 ):
                     if chunk_size > 100:
                         logger.debug(

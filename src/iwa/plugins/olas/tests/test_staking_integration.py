@@ -192,6 +192,7 @@ def test_staking_contract(tmp_path):  # noqa: C901
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             # Mock web3 - use _web3 since contract.py now accesses _web3 directly
@@ -282,6 +283,7 @@ def test_get_checkpoint_events():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -341,6 +343,7 @@ def test_get_checkpoint_events_with_warnings():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -405,6 +408,7 @@ def test_get_checkpoint_events_with_evictions():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -466,6 +470,7 @@ def test_get_checkpoint_events_no_events():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -515,6 +520,7 @@ def test_get_checkpoint_events_handles_exceptions():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -562,6 +568,7 @@ def test_fetch_events_chunked_splits_large_range():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -615,6 +622,7 @@ def test_fetch_events_chunked_retries_with_smaller_chunks():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
@@ -671,6 +679,7 @@ def test_fetch_events_chunked_aggregates_results():
     with patch("builtins.open", side_effect=side_effect_open):
         with patch("iwa.core.contracts.contract.ChainInterfaces") as mock_interfaces:
             mock_chain = MagicMock()
+            mock_chain.with_retry.side_effect = lambda fn, **kw: fn()
             mock_interfaces.return_value.get.return_value = mock_chain
 
             mock_web3 = MagicMock()
