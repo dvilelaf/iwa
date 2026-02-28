@@ -3361,6 +3361,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const totalTax = summary.total_tax || 0;
     const totalNet = summary.total_net || 0;
     const taxRate = summary.effective_tax_rate || 0;
+    const preTaxProfit = summary.total_eur - totalCosts;
+    const eureWithdrawn = summary.total_eure_withdrawn || 0;
     const container = document.getElementById("rewards-summary");
     container.innerHTML = `
       <div class="rewards-card">
@@ -3370,6 +3372,14 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="rewards-card">
         <div class="card-label">Costs (Funding + Gas)</div>
         <div class="card-value" style="color:#e74c3c">\u2212\u20AC${totalCosts.toFixed(2)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Pre-tax Profit</div>
+        <div class="card-value" style="color:${preTaxProfit >= 0 ? "#3498db" : "#e74c3c"}">\u20AC${preTaxProfit.toFixed(2)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">EURe Withdrawn</div>
+        <div class="card-value" style="color:#9b59b6">\u20AC${eureWithdrawn.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
         <div class="card-label">IRPF Tax (${taxRate.toFixed(1)}%)</div>

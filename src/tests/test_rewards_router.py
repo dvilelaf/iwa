@@ -122,6 +122,7 @@ def test_get_summary(client):
     assert "total_tax" in data
     assert "total_net" in data
     assert "effective_tax_rate" in data
+    assert "total_eure_withdrawn" in data
     assert data["total_costs"] >= 0
     # With 0 costs, net = gross - tax
     assert data["total_net"] == pytest.approx(
@@ -190,6 +191,7 @@ def test_get_summary_empty_year(client):
     assert data["total_tax"] == 0.0
     assert data["total_net"] == 0.0
     assert data["effective_tax_rate"] == 0.0
+    assert data["total_eure_withdrawn"] == 0.0
     assert len(data["months"]) == 12
 
 
@@ -324,3 +326,151 @@ def test_export_csv_includes_service(client):
     content = response.text
     assert "Service" in content  # Header row
     assert "trader_alpha" in content
+
+
+# --- EURe withdrawal tests ---
+
+MASTER_ADDR = "0x1111111111111111111111111111111111111111"
+OTHER_ADDR = "0x2222222222222222222222222222222222222222"
+EURE_BRIDGED = "0xcB444e90D8198415266c6a2724b7900fb12FC56E"
+EURE_MONERIUM = "0x420CA0f9B9b604cE0fd9C18EF134C705e5Fa3430"
+
+
+def _make_eure_tx(
+    tx_hash="0xEURE1",
+    from_address=MASTER_ADDR,
+    token="EURE",
+    amount_wei="100000000000000000000",  # 100 EURE
+    timestamp=None,
+):
+    """Create a mock EURe withdrawal transaction."""
+    tx = MagicMock()
+    tx.tx_hash = tx_hash
+    tx.from_address = from_address
+    tx.token = token
+    tx.amount_wei = amount_wei
+    tx.timestamp = timestamp or datetime.datetime(2026, 2, 15)
+    tx.tags = '["erc20-transfer", "safe-transaction"]'
+    return tx
+
+
+def _run_query_eure_withdrawn(mock_txs, year=2026, month=None):
+    """Helper to run _query_eure_withdrawn with mocked DB."""
+    from iwa.web.routers.rewards import _query_eure_withdrawn
+
+    with (
+        patch("iwa.web.routers.rewards.wallet") as mock_wallet,
+        patch("iwa.web.routers.rewards.SentTransaction.select") as mock_select,
+    ):
+        mock_wallet.master_account.address = MASTER_ADDR
+        mock_select.return_value.where.return_value = mock_txs
+
+        return _query_eure_withdrawn(year, month)
+
+
+def test_query_eure_withdrawn_by_symbol():
+    """Test _query_eure_withdrawn matches token='EURE'."""
+    mock_txs = [
+        _make_eure_tx(token="EURE", amount_wei="50000000000000000000"),  # 50
+        _make_eure_tx(tx_hash="0xE2", token="EURE", amount_wei="25000000000000000000"),  # 25
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(75.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_by_bridged_contract():
+    """Test _query_eure_withdrawn matches bridged EURe contract address."""
+    mock_txs = [
+        _make_eure_tx(token=EURE_BRIDGED, amount_wei="30000000000000000000"),
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(30.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_by_monerium_contract():
+    """Test _query_eure_withdrawn matches Monerium native EURe contract."""
+    mock_txs = [
+        _make_eure_tx(token=EURE_MONERIUM, amount_wei="20000000000000000000"),
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(20.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_ignores_other_tokens():
+    """Test _query_eure_withdrawn skips non-EURE tokens."""
+    mock_txs = [
+        _make_eure_tx(token="EURE", amount_wei="50000000000000000000"),
+        _make_eure_tx(tx_hash="0xOLAS", token="OLAS", amount_wei="999000000000000000000"),
+        _make_eure_tx(tx_hash="0xDAI", token="WXDAI", amount_wei="999000000000000000000"),
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(50.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_ignores_non_master():
+    """Test _query_eure_withdrawn only counts transfers from master."""
+    mock_txs = [
+        _make_eure_tx(from_address=MASTER_ADDR, amount_wei="50000000000000000000"),
+        _make_eure_tx(
+            tx_hash="0xOther", from_address=OTHER_ADDR,
+            amount_wei="200000000000000000000",
+        ),
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(50.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_empty():
+    """Test _query_eure_withdrawn returns 0 with no matching transactions."""
+    assert _run_query_eure_withdrawn([]) == 0.0
+
+
+def test_query_eure_withdrawn_with_month_filter():
+    """Test _query_eure_withdrawn applies month filter."""
+    mock_txs = [
+        _make_eure_tx(token="EURE", amount_wei="40000000000000000000"),
+    ]
+    result = _run_query_eure_withdrawn(mock_txs, year=2026, month=2)
+    assert result == pytest.approx(40.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_with_december_filter():
+    """Test _query_eure_withdrawn handles December (month=12) edge case."""
+    mock_txs = [
+        _make_eure_tx(token="EURE", amount_wei="15000000000000000000"),
+    ]
+    result = _run_query_eure_withdrawn(mock_txs, year=2026, month=12)
+    assert result == pytest.approx(15.0, abs=0.01)
+
+
+def test_query_eure_withdrawn_case_insensitive():
+    """Test _query_eure_withdrawn handles mixed-case token and addresses."""
+    mock_txs = [
+        _make_eure_tx(token="eure", amount_wei="10000000000000000000"),
+        _make_eure_tx(
+            tx_hash="0xE2", token=EURE_BRIDGED.upper(),
+            amount_wei="10000000000000000000",
+        ),
+    ]
+    assert _run_query_eure_withdrawn(mock_txs) == pytest.approx(20.0, abs=0.01)
+
+
+def test_get_summary_with_eure_withdrawn(client):
+    """Test summary endpoint includes EURe withdrawal total."""
+    mock_claims = [
+        _make_mock_tx(
+            tx_hash="0xW1", timestamp=datetime.datetime(2026, 2, 10),
+            amount_wei="50000000000000000000", price_eur=1.0, value_eur=50.0,
+        ),
+    ]
+
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=mock_claims),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(10.0, {2: 10.0})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.5),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=38.75),
+    ):
+        response = client.get("/api/rewards/summary?year=2026")
+
+    assert response.status_code == 200
+    data = response.json()
+    # Pre-tax profit: 50.0 - 10.5 = 39.5
+    pre_tax = data["total_eur"] - data["total_costs"]
+    assert pre_tax == pytest.approx(39.5, abs=0.01)
+    # EURe withdrawn should be close to pre-tax
+    assert data["total_eure_withdrawn"] == pytest.approx(38.75, abs=0.01)

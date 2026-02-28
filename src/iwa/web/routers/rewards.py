@@ -172,6 +172,58 @@ def _get_trader_start_dates() -> dict[str, datetime.date]:
     return result
 
 
+def _get_avg_xdai_eur(year: int, month: int) -> float:
+    """Get average xDAI/EUR price for a given month.
+
+    Uses CoinGecko market_chart/range for past months,
+    falls back to current spot price for the current month.
+    """
+    from iwa.core.pricing import PriceService
+
+    today = datetime.date.today()
+    m_start = datetime.date(year, month, 1)
+    m_end = (
+        datetime.date(year + 1, 1, 1)
+        if month == 12
+        else datetime.date(year, month + 1, 1)
+    )
+
+    # Current or future month: use spot price
+    if m_start >= today.replace(day=1):
+        try:
+            return PriceService().get_token_price("dai", "eur") or 1.0
+        except Exception:
+            return 1.0
+
+    # Past month: query CoinGecko for daily prices
+    try:
+        import requests as req
+
+        from_ts = int(datetime.datetime(year, month, 1).timestamp())
+        to_ts = int(datetime.datetime.combine(
+            min(m_end, today), datetime.time()
+        ).timestamp())
+        url = "https://api.coingecko.com/api/v3/coins/dai/market_chart/range"
+        resp = req.get(
+            url,
+            params={"vs_currency": "eur", "from": from_ts, "to": to_ts},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            prices = resp.json().get("prices", [])
+            if prices:
+                avg = sum(p[1] for p in prices) / len(prices)
+                return avg
+    except Exception:
+        pass
+
+    # Fallback to spot
+    try:
+        return PriceService().get_token_price("dai", "eur") or 1.0
+    except Exception:
+        return 1.0
+
+
 def _calculate_mech_costs(
     year: int, month: Optional[int] = None
 ) -> tuple[float, dict[int, float]]:
@@ -179,21 +231,13 @@ def _calculate_mech_costs(
 
     Each active trader costs DAILY_MECH_COST_XDAI per epoch (day).
     Trader start dates come from their Safe multisig deployment date.
+    xDAI/EUR conversion uses the monthly average rate.
 
     Returns (total_cost_eur, {month_num: cost_eur}).
     """
-    from iwa.core.pricing import PriceService
-
     trader_starts = _get_trader_start_dates()
     if not trader_starts:
         return 0.0, {}
-
-    try:
-        xdai_eur = PriceService().get_token_price(
-            "dai", "eur"
-        ) or 1.0
-    except Exception:
-        xdai_eur = 1.0
 
     today = datetime.date.today()
     monthly_costs: dict[int, float] = {}
@@ -222,6 +266,7 @@ def _calculate_mech_costs(
                 continue
             trader_days += (effective_end - active_from).days
 
+        xdai_eur = _get_avg_xdai_eur(year, m)
         monthly_costs[m] = (
             trader_days * DAILY_MECH_COST_XDAI * xdai_eur
         )
@@ -252,6 +297,46 @@ def _query_gas_costs(year: int, month: Optional[int] = None) -> float:
     total = 0.0
     for tx in SentTransaction.select().where(query):
         total += tx.gas_value_eur or 0.0
+    return total
+
+
+def _query_eure_withdrawn(year: int, month: Optional[int] = None) -> float:
+    """Sum EURe sent from master to external addresses (withdrawals).
+
+    Matches both EURe contract variants (bridged and Monerium native).
+    """
+    master_addr = str(wallet.master_account.address).lower()
+
+    # Match token field: symbol "EURE" or known contract addresses
+    eure_bridged = "0xcB444e90D8198415266c6a2724b7900fb12FC56E".lower()
+    eure_monerium = "0x420CA0f9B9b604cE0fd9C18EF134C705e5Fa3430".lower()
+
+    year_start = datetime.datetime(year, 1, 1)
+    year_end = datetime.datetime(year + 1, 1, 1)
+
+    query = (
+        (SentTransaction.timestamp >= year_start)
+        & (SentTransaction.timestamp < year_end)
+    )
+
+    if month and 1 <= month <= 12:
+        month_start = datetime.datetime(year, month, 1)
+        month_end = (
+            datetime.datetime(year + 1, 1, 1) if month == 12
+            else datetime.datetime(year, month + 1, 1)
+        )
+        query = query & (SentTransaction.timestamp >= month_start) & (
+            SentTransaction.timestamp < month_end
+        )
+
+    total = 0.0
+    for tx in SentTransaction.select().where(query):
+        token_lower = (tx.token or "").lower()
+        if token_lower not in ("eure", eure_bridged, eure_monerium):
+            continue
+        if tx.from_address and tx.from_address.lower() == master_addr:
+            amount = int(tx.amount_wei or 0)
+            total += amount / 1e18
     return total
 
 
@@ -340,6 +425,9 @@ def get_summary(
     gas_costs = _query_gas_costs(year, month)
     total_costs += gas_costs
 
+    # EURe actually withdrawn (sent from master to external wallet)
+    eure_withdrawn = _query_eure_withdrawn(year, month)
+
     # IRPF tax estimate (annualized from year-to-date)
     annual_gross = total_eur
     annual_costs = total_costs
@@ -375,6 +463,7 @@ def get_summary(
         "total_net": round(annual_profit - annual_tax, EUR_VALUE_DECIMALS),
         "effective_tax_rate": round(effective_tax_rate * 100, 1),
         "total_claims": total_claims,
+        "total_eure_withdrawn": round(eure_withdrawn, EUR_VALUE_DECIMALS),
         "months": months,
     }
 
