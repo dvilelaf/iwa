@@ -3366,6 +3366,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const container = document.getElementById("rewards-summary");
     container.innerHTML = `
       <div class="rewards-card">
+        <div class="card-label">Total OLAS</div>
+        <div class="card-value accent">${summary.total_olas.toFixed(4)}</div>
+      </div>
+      <div class="rewards-card">
+        <div class="card-label">Avg. Price</div>
+        <div class="card-value">${avgPrice !== "N/A" ? "\u20AC" + avgPrice : avgPrice}</div>
+      </div>
+      <div class="rewards-card">
         <div class="card-label">Gross Rewards</div>
         <div class="card-value success">\u20AC${summary.total_eur.toFixed(2)}</div>
       </div>
@@ -3378,10 +3386,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="card-value" style="color:${preTaxProfit >= 0 ? "#3498db" : "#e74c3c"}">\u20AC${preTaxProfit.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
-        <div class="card-label">EURe Withdrawn</div>
-        <div class="card-value" style="color:#9b59b6">\u20AC${eureWithdrawn.toFixed(2)}</div>
-      </div>
-      <div class="rewards-card">
         <div class="card-label">IRPF Tax (${taxRate.toFixed(1)}%)</div>
         <div class="card-value" style="color:#e67e22">\u2212\u20AC${totalTax.toFixed(2)}</div>
       </div>
@@ -3390,12 +3394,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="card-value" style="color:${totalNet >= 0 ? "#2ecc71" : "#e74c3c"}">\u20AC${totalNet.toFixed(2)}</div>
       </div>
       <div class="rewards-card">
-        <div class="card-label">Total OLAS</div>
-        <div class="card-value accent">${summary.total_olas.toFixed(4)}</div>
-      </div>
-      <div class="rewards-card">
-        <div class="card-label">Avg. Price</div>
-        <div class="card-value">${avgPrice !== "N/A" ? "\u20AC" + avgPrice : avgPrice}</div>
+        <div class="card-label">EURe Withdrawn</div>
+        <div class="card-value" style="color:#9b59b6">\u20AC${eureWithdrawn.toFixed(2)}</div>
       </div>
     `;
   }
