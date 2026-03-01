@@ -2,6 +2,7 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 from functools import lru_cache
 from typing import Any, Optional
 
@@ -214,9 +215,9 @@ def get_swap_quote(
 
         # Convert input amount to wei using the correct decimals
         if mode == "sell":
-            amount_wei = int(amount * (10**sell_decimals))
+            amount_wei = int(Decimal(str(amount)) * Decimal(10**sell_decimals))
         else:
-            amount_wei = int(amount * (10**buy_decimals))
+            amount_wei = int(Decimal(str(amount)) * Decimal(10**buy_decimals))
 
         def run_async_quote():
             """Run the async CowSwap quote in a new event loop."""

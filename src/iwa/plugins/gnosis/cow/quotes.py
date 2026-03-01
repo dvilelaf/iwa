@@ -1,5 +1,6 @@
 """CoW Swap quote utilities."""
 
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from eth_typing.evm import ChecksumAddress
@@ -82,7 +83,8 @@ async def get_max_sell_amount_wei(
 
     order_quote = await _get_order_quote(order_quote_request, order_side, order_book_api)
 
-    sell_amount_wei = int(int(order_quote.quote.sellAmount.root) * (1.0 + slippage_tolerance))
+    base = int(order_quote.quote.sellAmount.root)
+    sell_amount_wei = int(base + Decimal(str(slippage_tolerance)) * base)
     return sell_amount_wei
 
 
@@ -144,5 +146,6 @@ async def get_max_buy_amount_wei(
     order_quote = await _get_order_quote(order_quote_request, order_side, order_book_api)
 
     # Apply slippage (reduce buy amount)
-    buy_amount_wei = int(int(order_quote.quote.buyAmount.root) * (1.0 - slippage_tolerance))
+    base = int(order_quote.quote.buyAmount.root)
+    buy_amount_wei = int(base - Decimal(str(slippage_tolerance)) * base)
     return buy_amount_wei

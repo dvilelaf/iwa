@@ -2,6 +2,7 @@
 
 import time
 import warnings
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import requests
@@ -368,7 +369,8 @@ class CowSwap:
 
         order_quote = await _get_order_quote(order_quote_request, order_side, order_book_api)
 
-        sell_amount_wei = int(int(order_quote.quote.sellAmount.root) * (1.0 + slippage_tolerance))
+        base = int(order_quote.quote.sellAmount.root)
+        sell_amount_wei = int(base + Decimal(str(slippage_tolerance)) * base)
 
         min_valid_to = (
             order_quote.quote.validTo

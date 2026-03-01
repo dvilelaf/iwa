@@ -561,7 +561,9 @@ def _register_swap_query_tools(mcp: FastMCP) -> None:
         buy_token_addr = chain_obj.get_token_address(buy_token)
 
         # Use 18 decimals as default
-        amount_wei = int(float(amount) * 1e18)
+        from decimal import Decimal
+
+        amount_wei = int(Decimal(str(amount)) * Decimal(10**18))
 
         def run_quote():
             loop = asyncio.new_event_loop()

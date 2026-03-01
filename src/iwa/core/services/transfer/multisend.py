@@ -1,5 +1,6 @@
 """Multisend and drain mixin."""
 
+from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
@@ -91,7 +92,7 @@ class MultiSendMixin:
                 amount_wei = tx["amount_wei"]
             elif "amount" in tx:
                 erc20_temp = ERC20Contract(token_address, chain_interface.chain.name)
-                amount_wei = int(tx["amount"] * (10**erc20_temp.decimals))
+                amount_wei = int(Decimal(str(tx["amount"])) * Decimal(10 ** int(erc20_temp.decimals)))
             else:
                 continue
             erc20_totals[token_address] = erc20_totals.get(token_address, 0) + amount_wei
@@ -134,7 +135,7 @@ class MultiSendMixin:
                 )
                 erc20_temp = ERC20Contract(token_address, chain_name)
                 # Use the token's actual decimals
-                amount_wei = int(tx_copy["amount"] * (10**erc20_temp.decimals))
+                amount_wei = int(Decimal(str(tx_copy["amount"])) * Decimal(10 ** int(erc20_temp.decimals)))
         else:
             logger.error(f"Transaction missing amount or amount_wei: {tx_copy}")
             return None

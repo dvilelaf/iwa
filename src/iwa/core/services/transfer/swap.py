@@ -1,5 +1,6 @@
 """Swap mixin module."""
 
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
@@ -173,7 +174,7 @@ class SwapMixin:
             except Exception as e:
                 logger.warning(f"Could not get decimals for {sell_token_name}, assuming 18: {e}")
 
-            return int(amount_eth * (10**decimals))
+            return int(Decimal(str(amount_eth)) * Decimal(10 ** int(decimals)))
 
     async def _ensure_allowance_for_swap(
         self: "TransferService",
