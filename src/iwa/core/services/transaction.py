@@ -401,7 +401,7 @@ class TransactionService:
                 tx_hash=txn_hash.hex(),
                 from_addr=signer_account.address,
                 to_addr=to_address,
-                token="NATIVE",
+                token=chain_interface.chain.native_currency,
                 amount_wei=tx.get("value", 0),
                 chain=chain_name,
                 from_tag=signer_account.tag if hasattr(signer_account, "tag") else None,
