@@ -562,29 +562,73 @@ def export_rewards(
     month: Optional[int] = None,
     auth: bool = Depends(verify_auth),
 ):
-    """Export claim transactions as CSV."""
+    """Export claim transactions as CSV with tax summary."""
     year = _validate_year_month(year, month)
     claims = list(_query_claims(year, month))
     tag_map = _build_tag_map(claims)
 
+    # Compute costs and totals for the summary section
+    mech_total, mech_monthly = _calculate_mech_costs(year, month)
+    gas_costs = _query_gas_costs(year, month)
+    total_costs = mech_total + gas_costs
+    eure_withdrawn = _query_eure_withdrawn(year, month)
+
     output = io.StringIO()
     writer = csv.writer(output)
+
+    # --- Section 1: Individual claims ---
     writer.writerow([
-        "Date", "Service", "Tx Hash", "Explorer Link",
+        "Date", "Service", "Chain", "Tx Hash", "Explorer Link",
         "OLAS Amount", "EUR Price", "EUR Value",
     ])
 
+    total_olas = 0.0
+    total_eur = 0.0
     for tx in claims:
         olas_amount = _wei_to_olas(tx.amount_wei)
+        eur_value = tx.value_eur or 0.0
+        total_olas += olas_amount
+        total_eur += eur_value
         explorer_url = f"{GNOSIS_EXPLORER}{tx.tx_hash}" if tx.chain == "gnosis" else ""
         writer.writerow([
             tx.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             _resolve_trader_name(tx, tag_map),
+            tx.chain,
             tx.tx_hash,
             explorer_url,
             f"{olas_amount:.{OLAS_DISPLAY_DECIMALS}f}",
             f"{tx.price_eur:.{EUR_PRICE_DECIMALS}f}" if tx.price_eur else "",
-            f"{tx.value_eur:.{EUR_VALUE_DECIMALS}f}" if tx.value_eur else "",
+            f"{eur_value:.{EUR_VALUE_DECIMALS}f}" if eur_value else "",
+        ])
+
+    # --- Section 2: Tax summary ---
+    writer.writerow([])  # blank line separator
+    writer.writerow(["TAX SUMMARY"])
+    writer.writerow(["Concept", "EUR"])
+    writer.writerow(["Gross rewards (rendimiento íntegro)", f"{total_eur:.{EUR_VALUE_DECIMALS}f}"])
+    writer.writerow(["Total OLAS claimed", f"{total_olas:.{OLAS_DISPLAY_DECIMALS}f}"])
+    writer.writerow(["Mech request costs", f"-{mech_total:.{EUR_VALUE_DECIMALS}f}"])
+    writer.writerow(["Gas costs (claims + checkpoints)", f"-{gas_costs:.{EUR_VALUE_DECIMALS}f}"])
+    writer.writerow(["Total deductible costs", f"-{total_costs:.{EUR_VALUE_DECIMALS}f}"])
+
+    net_taxable = total_eur - total_costs
+    writer.writerow(["Net taxable income (rendimiento neto)", f"{net_taxable:.{EUR_VALUE_DECIMALS}f}"])
+    writer.writerow([])
+    writer.writerow(["EURe withdrawn to bank", f"{eure_withdrawn:.{EUR_VALUE_DECIMALS}f}"])
+
+    # --- Section 3: Monthly cost breakdown ---
+    writer.writerow([])
+    writer.writerow(["MONTHLY COST BREAKDOWN"])
+    writer.writerow(["Month", "Mech Costs (EUR)", "Gas Costs (EUR)", "Total (EUR)"])
+    for m in sorted(mech_monthly.keys()):
+        m_gas = _query_gas_costs(year, m)
+        m_total = mech_monthly[m] + m_gas
+        month_name = datetime.datetime(year, m, 1).strftime("%B")
+        writer.writerow([
+            month_name,
+            f"{mech_monthly[m]:.{EUR_VALUE_DECIMALS}f}",
+            f"{m_gas:.{EUR_VALUE_DECIMALS}f}",
+            f"{m_total:.{EUR_VALUE_DECIMALS}f}",
         ])
 
     output.seek(0)

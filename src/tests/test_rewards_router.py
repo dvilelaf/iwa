@@ -150,12 +150,22 @@ def test_get_summary(client):
     assert feb["net"] == 0.0
 
 
+def _export_patches():
+    """Return patches for cost/withdrawal dependencies used by export."""
+    return (
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(5.0, {2: 5.0})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.50),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=42.0),
+    )
+
+
 def test_export_csv(client):
     mock_txs = [
         _make_mock_tx(tx_hash="0xExport1", timestamp=datetime.datetime(2026, 2, 14)),
     ]
+    p1, p2, p3 = _export_patches()
 
-    with patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs):
+    with patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs), p1, p2, p3:
         response = client.get("/api/rewards/export?year=2026")
 
     assert response.status_code == 200
@@ -164,13 +174,20 @@ def test_export_csv(client):
 
     content = response.text
     assert "Date" in content  # Header row
+    assert "Chain" in content  # New column
     assert "0xExport1" in content
     assert "gnosisscan.io" in content
     assert "10.000000" in content  # OLAS amount
+    assert "TAX SUMMARY" in content
+    assert "Gross rewards" in content
+    assert "Net taxable income" in content
+    assert "EURe withdrawn" in content
+    assert "MONTHLY COST BREAKDOWN" in content
 
 
 def test_export_csv_with_month(client):
-    with patch("iwa.web.routers.rewards._query_claims", return_value=[]) as mock_query:
+    p1, p2, p3 = _export_patches()
+    with patch("iwa.web.routers.rewards._query_claims", return_value=[]) as mock_query, p1, p2, p3:
         response = client.get("/api/rewards/export?year=2026&month=5")
 
     assert response.status_code == 200
@@ -319,7 +336,8 @@ def test_export_csv_includes_service(client):
         _make_mock_tx(tx_hash="0xSvc1", to_tag="trader_alpha",
                       timestamp=datetime.datetime(2026, 4, 1)),
     ]
-    with patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs):
+    p1, p2, p3 = _export_patches()
+    with patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs), p1, p2, p3:
         response = client.get("/api/rewards/export?year=2026")
 
     assert response.status_code == 200
