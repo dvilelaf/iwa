@@ -70,7 +70,7 @@ class CoreConfig(BaseModel):
     web_port: int = Field(default=8080, description="Web UI port")
 
     # IPFS Configuration
-    ipfs_api_url: str = Field(default="http://localhost:5001", description="IPFS API URL")
+    ipfs_api_url: str = Field(default="https://registry.autonolas.tech", description="IPFS API URL")
 
     # Tenderly Configuration
     tenderly_profile: int = Field(default=1, description="Tenderly profile ID (1, 2, 3)")
