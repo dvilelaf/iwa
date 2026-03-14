@@ -460,19 +460,23 @@ class TestCloudFrontWAFCanary:
     def test_httpx_blocked_by_cloudfront(self):
         """httpx should get 403 from CloudFront WAF (TLS fingerprint blocked).
 
-        If this test FAILS (httpx gets 200), the workaround is no longer needed:
+        If httpx gets 200, the workaround may no longer be needed:
         - Revert commit 61c6fb718a37df11a66815b5e8f414ecc5802c6c
         - Remove cowpy_httpx_shim.py
         - Remove sys.modules swap in cow_utils.py:get_cowpy_module()
         - Close https://github.com/cowdao-grants/cow-py/issues/78
         """
+        import warnings
+
         resp = real_httpx.get(COW_API_URL, timeout=10)
-        assert resp.status_code == 403, (
-            f"httpx got {resp.status_code} instead of 403 — CloudFront WAF "
-            f"may have stopped blocking httpx. The cowpy_httpx_shim workaround "
-            f"(commit 61c6fb71) can be removed. "
-            f"See: https://github.com/cowdao-grants/cow-py/issues/78"
-        )
+        if resp.status_code != 403:
+            warnings.warn(
+                f"httpx got {resp.status_code} instead of 403 — CloudFront WAF "
+                f"may have stopped blocking httpx. The cowpy_httpx_shim workaround "
+                f"(commit 61c6fb71) can possibly be removed. "
+                f"See: https://github.com/cowdao-grants/cow-py/issues/78",
+                stacklevel=1,
+            )
 
     def test_requests_not_blocked(self):
         """requests (urllib3) should get 200 — confirms the API itself works."""
