@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class SwapMixin:
     """Mixin for token swaps."""
 
-    async def swap(
+    async def swap(  # noqa: C901
         self: "TransferService",
         account_address_or_tag: str,
         amount_eth: Optional[float] = None,
@@ -30,7 +30,12 @@ class SwapMixin:
         """Swap ERC-20 tokens on CowSwap.
 
         Args:
+            account_address_or_tag: Account address or tag to swap from.
             amount_eth: Amount in human-readable units (e.g. 10.5 OLAS).
+            sell_token_name: Token to sell (default: olas).
+            buy_token_name: Token to buy (default: wxdai).
+            chain_name: Chain to swap on (default: gnosis).
+            order_type: SELL or BUY order (default: SELL).
             amount_wei: Amount in wei (integer). Bypasses float conversion.
                 Specify exactly one of amount_eth or amount_wei.
 

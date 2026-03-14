@@ -1,22 +1,17 @@
 """Tests for atomic config save and register_plugin_config safety."""
 
-import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pydantic import BaseModel, Field
 from ruamel.yaml import YAML
 
-from iwa.core.models import StorableModel
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 # Access the original Config class (unwrap singleton).
 import iwa.core.models as _models
+from iwa.core.models import StorableModel
 
 _OriginalConfig = None
 for _cell in _models.Config.__closure__ or []:
@@ -201,7 +196,6 @@ class TestRegisterPluginConfigSaveReduction:
 
         config = _fresh_config(config_path)
         save_count = 0
-        original_save = _OriginalConfig.save_config
 
         def counting_save(self_inner):
             nonlocal save_count
