@@ -157,6 +157,7 @@ def _check_availability(name, address, interface):
             },
             "min_staking_deposit": min_deposit,
             "staking_token": staking_token,
+            "balance": contract.balance,
         }
     except Exception as e:
         logger.warning(f"Failed to check availability for {name} ({address}): {e}")
@@ -189,17 +190,25 @@ def _fetch_all_contracts(contracts: dict, interface) -> list:
     return results
 
 
+MIN_CONTRACT_BALANCE_WEI = 5000 * 10**18  # 5000 OLAS
+
+
 def _filter_contracts(
     results: list, service_bond: Optional[int], service_token: Optional[str]
 ) -> list:
-    """Filter contracts based on usage and service compatibility."""
+    """Filter contracts based on usage, balance, and service compatibility."""
     filtered_results = []
     for r in results:
         # 1. Availability check
         if r["usage"] is not None and not r["usage"]["available"]:
             continue
 
-        # 2. Compatibility check (if service info is known)
+        # 2. Balance check: skip contracts with low OLAS balance
+        contract_balance = r.get("balance")
+        if contract_balance is not None and contract_balance < MIN_CONTRACT_BALANCE_WEI:
+            continue
+
+        # 3. Compatibility check (if service info is known)
         if service_bond is not None and r.get("min_staking_deposit") is not None:
             # Bond Check
             if service_bond < r["min_staking_deposit"]:

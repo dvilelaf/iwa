@@ -567,8 +567,19 @@ class OlasView(Static):
                 max_services = contract.functions.maxNumServices().call()
                 available_slots = max_services - len(service_ids)
 
-                if available_slots > 0:
-                    filtered_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
+                if available_slots <= 0:
+                    continue
+
+                # Check contract OLAS balance (skip if < 5000 OLAS)
+                min_balance_wei = 5000 * 10**18
+                try:
+                    balance_wei = contract.functions.balance().call()
+                    if balance_wei < min_balance_wei:
+                        continue
+                except Exception:
+                    pass  # If we can't check balance, include it
+
+                filtered_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
             except Exception:
                 # If we can't check, include it
                 filtered_contracts.append((name, str(addr)))
@@ -695,8 +706,19 @@ class OlasView(Static):
                     max_services = contract.functions.maxNumServices().call()
                     available_slots = max_services - len(service_ids)
 
-                    if available_slots > 0:
-                        staking_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
+                    if available_slots <= 0:
+                        continue
+
+                    # Check contract OLAS balance (skip if < 5000 OLAS)
+                    min_balance_wei = 5000 * 10**18
+                    try:
+                        balance_wei = contract.functions.balance().call()
+                        if balance_wei < min_balance_wei:
+                            continue
+                    except Exception:
+                        pass  # If we can't check balance, include it
+
+                    staking_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
                 except Exception:
                     # If we can't check, include it without slot info
                     staking_contracts.append((name, str(addr)))
