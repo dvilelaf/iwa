@@ -1,6 +1,9 @@
 """Core models"""
 
 import json
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Type, TypeVar
 
@@ -24,6 +27,35 @@ def _update_yaml_recursive(target: Dict, source: Dict) -> None:
             _update_yaml_recursive(target[key], value)
         else:
             target[key] = value
+
+
+def _atomic_yaml_write(path: Path, data: dict, ryaml: YAML) -> None:
+    """Write YAML data to path atomically using temp file + rename.
+
+    Ensures no data loss if the process is killed mid-write:
+    - Writes to a temp file in the same directory (same filesystem)
+    - Sets restrictive permissions (0o600) on the temp file
+    - Calls fsync to flush data to disk before renaming
+    - Uses os.replace for atomic rename
+    - Cleans up temp file on any failure
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=path.parent, prefix=".save_", suffix=".yaml.tmp"
+    )
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            ryaml.dump(data, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 class EncryptedData(BaseModel):
@@ -124,7 +156,10 @@ class StorableModel(BaseModel):
         self._path = path
 
     def save_yaml(self, path: Optional[Path] = None) -> None:
-        """Save to YAML file preserving comments if file exists."""
+        """Save to YAML file preserving comments if file exists.
+
+        Uses atomic write (temp file + rename) to prevent data loss.
+        """
         if path is None:
             if getattr(self, "_path", None) is None:
                 raise ValueError("Save path not specified and no previous path stored.")
@@ -143,12 +178,12 @@ class StorableModel(BaseModel):
                     target = ryaml.load(f) or {}
                     _update_yaml_recursive(target, data)
                     data = target
-                except Exception:
-                    # Fallback to overwrite if load fails
-                    pass
+                except Exception as e:
+                    from loguru import logger
 
-        with path.open("w", encoding="utf-8") as f:
-            ryaml.dump(data, f)
+                    logger.warning(f"Failed to parse existing YAML at {path}, overwriting: {e}")
+
+        _atomic_yaml_write(path, data, ryaml)
         self._storage_format = "yaml"
         self._path = path
 
@@ -289,6 +324,10 @@ class Config(StorableModel):
 
         If raw data was loaded for this plugin, it will be hydrated into the model.
         If no data exists, creates default config and persists to file.
+
+        Only persists to disk when the hydrated model introduces new default
+        fields not present in the original data, avoiding unnecessary writes
+        that could corrupt the config during crash-restart cycles.
         """
         self._plugin_models[plugin_name] = model_class
 
@@ -296,16 +335,25 @@ class Config(StorableModel):
         if plugin_name in self.plugins:
             current = self.plugins[plugin_name]
             if isinstance(current, dict):
-                self.plugins[plugin_name] = model_class(**current)
-                # Persist so that new default fields appear in the YAML
-                self.save_config()
+                hydrated = model_class(**current)
+                self.plugins[plugin_name] = hydrated
+                # Only persist if the model added new default fields
+                hydrated_keys = set(hydrated.model_dump(mode="json").keys())
+                if hydrated_keys - set(current.keys()):
+                    self.save_config()
         else:
             # Create default config for plugin and persist
             self.plugins[plugin_name] = model_class()
             self.save_config()
 
     def save_config(self) -> None:
-        """Persist current config to config.yaml preserving comments."""
+        """Persist current config to config.yaml using atomic write.
+
+        Uses write-to-temp-file + os.replace() to prevent data loss if the
+        process is killed mid-write. Creates a .bak backup before overwriting.
+        """
+        from loguru import logger
+
         from iwa.core.constants import CONFIG_PATH
 
         data = {}
@@ -330,12 +378,17 @@ class Config(StorableModel):
                     target = ryaml.load(f) or {}
                     _update_yaml_recursive(target, data)
                     data = target
-                except Exception:
-                    # Fallback to overwrite if load fails
-                    pass
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to parse existing config at {CONFIG_PATH}, overwriting: {e}"
+                    )
 
-        with CONFIG_PATH.open("w", encoding="utf-8") as f:
-            ryaml.dump(data, f)
+        # Backup existing config before overwriting
+        if CONFIG_PATH.exists() and CONFIG_PATH.stat().st_size > 0:
+            backup_path = CONFIG_PATH.with_suffix(".yaml.bak")
+            shutil.copy2(CONFIG_PATH, backup_path)
+
+        _atomic_yaml_write(CONFIG_PATH, data, ryaml)
 
         self._path = CONFIG_PATH
         self._storage_format = "yaml"

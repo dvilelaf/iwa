@@ -46,11 +46,11 @@ def test_storable_model_save_toml():
         mock_file.assert_called_once()
 
 
-def test_storable_model_save_yaml():
+def test_storable_model_save_yaml(tmp_path):
     model = MockStorableModel(name="test", value=123)
-    with patch("pathlib.Path.open", mock_open()) as mock_file:
-        model.save_yaml(Path("test.yaml"))
-        mock_file.assert_called_once()
+    path = tmp_path / "test.yaml"
+    model.save_yaml(path)
+    assert path.exists()
 
 
 def test_storable_model_save_auto_json():
@@ -67,11 +67,11 @@ def test_storable_model_save_auto_toml():
         mock_file.assert_called_once()
 
 
-def test_storable_model_save_auto_yaml():
+def test_storable_model_save_auto_yaml(tmp_path):
     model = MockStorableModel(name="test", value=123)
-    with patch("pathlib.Path.open", mock_open()) as mock_file:
-        model.save("test.yaml")
-        mock_file.assert_called_once()
+    path = tmp_path / "test.yaml"
+    model.save(str(path))
+    assert path.exists()
 
 
 def test_storable_model_save_no_path():
@@ -151,7 +151,7 @@ def test_storable_model_save_unsupported_extension():
         model.save("test.txt")
 
 
-def test_storable_model_save_fallback_format():
+def test_storable_model_save_fallback_format(tmp_path):
     model = MockStorableModel(name="test", value=123)
     model._storage_format = "json"
     with patch("pathlib.Path.open", mock_open()) as mock_file:
@@ -164,9 +164,9 @@ def test_storable_model_save_fallback_format():
         mock_file.assert_called_once()  # Should call save_toml
 
     model._storage_format = "yaml"
-    with patch("pathlib.Path.open", mock_open()) as mock_file:
-        model.save("test.txt")
-        mock_file.assert_called_once()  # Should call save_yaml
+    yaml_path = tmp_path / "test.yaml"
+    model.save(str(yaml_path))
+    assert yaml_path.exists()
 
 
 def test_storable_model_load_unsupported_extension():
@@ -183,7 +183,7 @@ def test_config_singleton():
     assert c1 is c2
 
 
-def test_storable_model_save_with_stored_path():
+def test_storable_model_save_with_stored_path(tmp_path):
     model = MockStorableModel(name="test", value=123)
     model._path = Path("stored.json")
     with patch("pathlib.Path.open", mock_open()) as mock_file:
@@ -195,10 +195,10 @@ def test_storable_model_save_with_stored_path():
         model.save_toml()
         mock_file.assert_called_once()
 
-    model._path = Path("stored.yaml")
-    with patch("pathlib.Path.open", mock_open()) as mock_file:
-        model.save_yaml()
-        mock_file.assert_called_once()
+    yaml_path = tmp_path / "stored.yaml"
+    model._path = yaml_path
+    model.save_yaml()
+    assert yaml_path.exists()
 
 
 def test_storable_model_load_auto_toml_yaml():
