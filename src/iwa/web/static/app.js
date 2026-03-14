@@ -2297,6 +2297,10 @@ document.addEventListener("DOMContentLoaded", () => {
                                 title="${isLoading ? "Loading..." : !canUnstake ? `Cannot unstake yet. Minimum staking duration (72h) ends in ${timeText}` : "Unstake service"}">
                             ${escapeHtml(unstakeLabel)}
                         </button>
+                        <button class="btn-primary btn-sm ${loadingClass}" data-action="switch-contract" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" ${unstakeDisabled}
+                                title="${isLoading ? "Loading..." : !canUnstake ? `Cannot switch yet. Minimum staking duration (72h) ends in ${timeText}` : "Unstake and restake on a different contract"}">
+                            Switch
+                        </button>
                         `;
                         })()}
                     `
@@ -2305,6 +2309,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         <button class="btn-primary btn-sm ${loadingClass}" data-action="restake" data-key="${escapeHtml(service.key)}" ${loadingDisabled}
                                 title="Unstake and restake on the same contract">
                             Restake
+                        </button>
+                        <button class="btn-primary btn-sm ${loadingClass}" data-action="switch-contract" data-key="${escapeHtml(service.key)}" data-chain="${escapeHtml(service.chain)}" ${loadingDisabled}
+                                title="Unstake and restake on a different contract">
+                            Switch
                         </button>
                     `
                           : service.state === "DEPLOYED"
@@ -2538,6 +2546,100 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  window.switchOlasContract = async (serviceKey, chain) => {
+    // Reuse the stake modal but with switch behavior
+    const modal = document.getElementById("stake-modal");
+    const select = document.getElementById("stake-contract-select");
+    const spinnerDiv = document.getElementById("stake-contract-spinner");
+    const keyInput = document.getElementById("stake-service-key");
+    const confirmBtn = document.getElementById("stake-confirm");
+    const modalTitle = modal.querySelector("h2");
+
+    keyInput.value = serviceKey;
+    modal.dataset.switchMode = "true";
+
+    // Update modal title for switch
+    if (modalTitle) modalTitle.textContent = "Switch Staking Contract";
+
+    // Show spinner, hide select, disable button
+    select.style.display = "none";
+    spinnerDiv.style.display = "block";
+    spinnerDiv.innerHTML =
+      '<span class="loading-spinner"></span> Loading contracts...';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Switch";
+    modal.classList.add("active");
+
+    try {
+      const resp = await authFetch(
+        `/api/olas/staking-contracts?chain=${chain}&service_key=${encodeURIComponent(serviceKey)}`,
+      );
+      const data = await resp.json();
+      const contracts = data.contracts || data;
+      const filterInfo = data.filter_info;
+
+      // Remove any existing help text
+      const existingHelp = select.parentNode.querySelector(".stake-help-text");
+      if (existingHelp) existingHelp.remove();
+
+      if (contracts.length === 0) {
+        select.innerHTML =
+          '<option value="">No compatible contracts available</option>';
+        confirmBtn.disabled = true;
+
+        // Show filter explanation if available
+        if (filterInfo && filterInfo.service_bond_olas !== null) {
+          const helpText = document.createElement("small");
+          helpText.className = "stake-help-text";
+          helpText.style.color = "#888";
+          helpText.style.display = "block";
+          helpText.style.marginTop = "8px";
+          helpText.style.fontSize = "12px";
+          helpText.innerHTML = `
+            <strong>Why?</strong> Your service bond (<strong>${filterInfo.service_bond_olas.toFixed(0)} OLAS</strong>)
+            is lower than what staking contracts require, or all contracts are full.
+          `;
+          select.parentNode.appendChild(helpText);
+        }
+      } else {
+        select.innerHTML = contracts
+          .map(
+            (c) =>
+              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage?.available_slots ?? "?"} slots)</option>`,
+          )
+          .join("");
+        confirmBtn.disabled = false;
+
+        // Show filter info if some contracts were hidden
+        if (
+          filterInfo &&
+          filterInfo.total_contracts > filterInfo.filtered_count
+        ) {
+          const hidden = filterInfo.total_contracts - filterInfo.filtered_count;
+          const helpText = document.createElement("small");
+          helpText.className = "stake-help-text";
+          helpText.style.color = "#888";
+          helpText.style.display = "block";
+          helpText.style.marginTop = "8px";
+          helpText.style.fontSize = "12px";
+          helpText.innerHTML = `
+            Showing <strong>${filterInfo.filtered_count}</strong> of ${filterInfo.total_contracts} contracts
+            (${hidden} hidden - require higher bond than your <strong>${filterInfo.service_bond_olas?.toFixed(0) || "?"} OLAS</strong>).
+          `;
+          select.parentNode.appendChild(helpText);
+        }
+      }
+
+      select.style.display = "";
+      spinnerDiv.classList.add("hidden");
+    } catch (err) {
+      select.innerHTML = '<option value="">Error loading contracts</option>';
+      select.style.display = "";
+      spinnerDiv.classList.add("hidden");
+      confirmBtn.disabled = false;
+    }
+  };
+
   window.checkpointOlasService = async (serviceKey) => {
     showToast("Calling checkpoint...", "info");
     try {
@@ -2673,6 +2775,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const confirmBtn = document.getElementById("stake-confirm");
 
     keyInput.value = serviceKey;
+
+    // Reset switch mode state (in case previous switch was cancelled)
+    delete modal.dataset.switchMode;
+    const modalTitle = modal.querySelector("h2");
+    if (modalTitle) modalTitle.textContent = "Stake Service";
+    confirmBtn.textContent = "Stake";
 
     // Show spinner, hide select, disable button
     select.style.display = "none";
@@ -2897,6 +3005,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (stakeCancel) {
     stakeCancel.addEventListener("click", () => {
       stakeModal.classList.remove("active");
+      // Reset switch mode
+      delete stakeModal.dataset.switchMode;
+      const title = stakeModal.querySelector("h2");
+      if (title) title.textContent = "Stake Service";
+      stakeConfirm.textContent = "Stake";
     });
   }
 
@@ -2906,6 +3019,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const contractAddress = document.getElementById(
         "stake-contract-select",
       ).value;
+      const isSwitchMode = stakeModal.dataset.switchMode === "true";
 
       if (!contractAddress) {
         showToast("Please select a staking contract", "error");
@@ -2913,25 +3027,57 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       stakeModal.classList.remove("active");
-      showToast("Staking service...", "info");
 
-      try {
-        const resp = await authFetch(
-          `/api/olas/stake/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`,
-          {
-            method: "POST",
-          },
+      if (isSwitchMode) {
+        // Reset switch mode
+        delete stakeModal.dataset.switchMode;
+        const title = stakeModal.querySelector("h2");
+        if (title) title.textContent = "Stake Service";
+        stakeConfirm.textContent = "Stake";
+
+        const removeLoadingToast = showToast(
+          "Switching staking contract (unstake + stake)... This may take a minute.",
+          "info",
+          120000,
         );
-        const result = await resp.json();
 
-        if (resp.ok) {
-          showToast("Service staked successfully!", "success");
-          refreshSingleService(serviceKey);
-        } else {
-          showToast(`Error: ${result.detail} `, "error");
+        try {
+          const resp = await authFetch(
+            `/api/olas/switch/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`,
+            { method: "POST" },
+          );
+          removeLoadingToast();
+          const result = await resp.json();
+
+          if (resp.ok) {
+            showToast("Staking contract switched successfully!", "success");
+            refreshSingleService(serviceKey);
+          } else {
+            showToast(`Error: ${result.detail}`, "error");
+          }
+        } catch (err) {
+          removeLoadingToast();
+          showToast("Error switching staking contract", "error");
         }
-      } catch (err) {
-        showToast("Error staking service", "error");
+      } else {
+        showToast("Staking service...", "info");
+
+        try {
+          const resp = await authFetch(
+            `/api/olas/stake/${serviceKey}?staking_contract=${encodeURIComponent(contractAddress)}`,
+            { method: "POST" },
+          );
+          const result = await resp.json();
+
+          if (resp.ok) {
+            showToast("Service staked successfully!", "success");
+            refreshSingleService(serviceKey);
+          } else {
+            showToast(`Error: ${result.detail} `, "error");
+          }
+        } catch (err) {
+          showToast("Error staking service", "error");
+        }
       }
     });
   }
@@ -3219,6 +3365,8 @@ document.addEventListener("DOMContentLoaded", () => {
       unstakeOlasService(key);
     } else if (action === "restake") {
       restakeOlasService(key);
+    } else if (action === "switch-contract") {
+      switchOlasContract(key, chain);
     } else if (action === "stake") {
       showStakeModal(key, chain);
     } else if (action === "deploy") {

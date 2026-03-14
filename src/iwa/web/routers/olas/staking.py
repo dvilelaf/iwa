@@ -396,6 +396,75 @@ def restake_service(
 
 
 @router.post(
+    "/switch/{service_key}",
+    summary="Switch Staking Contract",
+    description="Unstake a service from its current contract and stake it on a different one.",
+)
+@limiter.limit("3/minute")
+def switch_staking_contract(
+    request: Request,
+    service_key: str,
+    staking_contract: str,
+    auth: bool = Depends(verify_auth),
+):
+    """Switch a service from its current staking contract to a new one."""
+    try:
+        from iwa.plugins.olas.contracts.staking import StakingContract
+        from iwa.plugins.olas.service_manager import ServiceManager
+
+        config = Config()
+        olas_config = OlasConfig.model_validate(config.plugins["olas"])
+        service = olas_config.services.get(service_key)
+
+        if not service or not service.staking_contract_address:
+            raise HTTPException(status_code=404, detail="Service not found or not staked")
+
+        if not staking_contract.startswith("0x"):
+            raise HTTPException(
+                status_code=400, detail=f"Invalid staking contract address: {staking_contract}"
+            )
+
+        # Save old address before unstake clears it
+        old_address = str(service.staking_contract_address)
+
+        if old_address.lower() == staking_contract.lower():
+            raise HTTPException(
+                status_code=400, detail="New contract is the same as current. Use restake instead."
+            )
+
+        manager = ServiceManager(wallet)
+        manager.service = service
+
+        # Step 1: Unstake from current contract
+        old_sc = StakingContract(old_address, service.chain_name)
+        logger.info(f"Switch: unstaking service {service_key} from {old_address}")
+        if not manager.unstake(old_sc):
+            raise HTTPException(status_code=400, detail="Failed to unstake from current contract")
+
+        # Step 2: Stake on new contract
+        new_sc = StakingContract(staking_contract, service.chain_name)
+        logger.info(f"Switch: staking service {service_key} on {staking_contract}")
+        if not manager.stake(new_sc):
+            raise HTTPException(
+                status_code=400,
+                detail="Unstaked successfully but failed to stake on new contract. "
+                "Service is now unstaked — use Stake to retry.",
+            )
+
+        return {
+            "status": "success",
+            "old_contract": old_address,
+            "new_contract": staking_contract,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error switching staking contract: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@router.post(
     "/checkpoint/{service_key}",
     summary="Checkpoint Service",
     description="Trigger a checkpoint for a staked service to update its liveness.",
