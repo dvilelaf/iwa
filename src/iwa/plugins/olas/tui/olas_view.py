@@ -579,7 +579,9 @@ class OlasView(Static):
                 except Exception:
                     pass  # If we can't check balance, include it
 
-                filtered_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
+                used = len(service_ids)
+                bal_olas = balance_wei // 10**18 if balance_wei else 0
+                filtered_contracts.append((f"{name} ({used}/{max_services} used · {bal_olas:,} OLAS)", str(addr)))
             except Exception:
                 # If we can't check, include it
                 filtered_contracts.append((name, str(addr)))
@@ -718,7 +720,9 @@ class OlasView(Static):
                     except Exception:
                         pass  # If we can't check balance, include it
 
-                    staking_contracts.append((f"{name} ({available_slots} slots)", str(addr)))
+                    used = len(service_ids)
+                    bal_olas = balance_wei // 10**18 if balance_wei else 0
+                    staking_contracts.append((f"{name} ({used}/{max_services} used · {bal_olas:,} OLAS)", str(addr)))
                 except Exception:
                     # If we can't check, include it without slot info
                     staking_contracts.append((name, str(addr)))

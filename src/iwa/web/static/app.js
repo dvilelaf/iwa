@@ -2605,7 +2605,7 @@ document.addEventListener("DOMContentLoaded", () => {
         select.innerHTML = contracts
           .map(
             (c) =>
-              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage?.available_slots ?? "?"} slots)</option>`,
+              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage ? `${c.usage.used}/${c.usage.max} used` : "?"}${c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : ""})</option>`,
           )
           .join("");
         confirmBtn.disabled = false;
@@ -2829,7 +2829,7 @@ document.addEventListener("DOMContentLoaded", () => {
         select.innerHTML = contracts
           .map(
             (c) =>
-              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage?.available_slots ?? "?"} slots)</option>`,
+              `<option value="${escapeHtml(c.address)}">${escapeHtml(c.name)} (${c.usage ? `${c.usage.used}/${c.usage.max} used` : "?"}${c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : ""})</option>`,
           )
           .join("");
 
@@ -2963,10 +2963,11 @@ document.addEventListener("DOMContentLoaded", () => {
               const isDisabled = slots !== null && slots <= 0;
               const disabledStr = isDisabled ? "disabled" : "";
               let slotText = "Status Unknown";
-              if (slots !== null) {
-                slotText = `${slots} slots`;
+              if (usage) {
+                slotText = `${usage.used}/${usage.max} used`;
               }
-              const text = `${escapeHtml(c.name)} (${slotText})`;
+              const balanceText = c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : "";
+              const text = `${escapeHtml(c.name)} (${slotText}${balanceText})`;
               const optionClass = isDisabled ? "text-muted" : "";
               return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
             })
@@ -3109,11 +3110,11 @@ document.addEventListener("DOMContentLoaded", () => {
           const disabledStr = isDisabled ? "disabled" : "";
 
           let slotText = "Status Unknown";
-          if (slots !== null) {
-            slotText = `${slots} slots`;
+          if (usage) {
+            slotText = `${usage.used}/${usage.max} used`;
           }
-
-          const text = `${escapeHtml(c.name)} (${slotText})`;
+          const balanceText = c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : "";
+          const text = `${escapeHtml(c.name)} (${slotText}${balanceText})`;
           const optionClass = isDisabled ? "text-muted" : "";
           return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
         })
