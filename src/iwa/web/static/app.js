@@ -2966,7 +2966,10 @@ document.addEventListener("DOMContentLoaded", () => {
               if (usage) {
                 slotText = `${usage.used}/${usage.max} used`;
               }
-              const balanceText = c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : "";
+              const balanceText =
+                c.balance != null
+                  ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS`
+                  : "";
               const text = `${escapeHtml(c.name)} (${slotText}${balanceText})`;
               const optionClass = isDisabled ? "text-muted" : "";
               return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
@@ -3113,7 +3116,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (usage) {
             slotText = `${usage.used}/${usage.max} used`;
           }
-          const balanceText = c.balance != null ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS` : "";
+          const balanceText =
+            c.balance != null
+              ? ` · ${Math.floor(c.balance / 1e18).toLocaleString()} OLAS`
+              : "";
           const text = `${escapeHtml(c.name)} (${slotText}${balanceText})`;
           const optionClass = isDisabled ? "text-muted" : "";
           return `<option value="${escapeHtml(c.address)}" ${disabledStr} class="${optionClass}">${text}</option>`;
