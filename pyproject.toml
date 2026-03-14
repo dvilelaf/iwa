@@ -142,6 +142,11 @@ ignore_missing_imports = true
 ignore_errors = true
 follow_imports = "skip"
 
+[tool.pytest.ini_options]
+markers = [
+    "network: tests that require network access (deselect with '-m \"not network\"')",
+]
+
 [tool.coverage.run]
 omit = [
     "src/iwa/plugins/olas/scripts/*",  # Manual integration test scripts (Tenderly)

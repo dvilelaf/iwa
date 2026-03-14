@@ -425,3 +425,58 @@ class TestEdgeCases:
         exc = exc_info.value
         assert exc.response is shim_resp
         assert hasattr(exc, "request")
+
+
+# ---------------------------------------------------------------------------
+# Group 6: CloudFront WAF canary — detects when the upstream issue is fixed
+# ---------------------------------------------------------------------------
+
+# Canary tests that hit the REAL CowSwap API to verify that CloudFront WAF
+# still blocks httpx's TLS fingerprint (JA3). When these tests FAIL, it means
+# CloudFront or cow-py have stopped blocking httpx and the shim can be removed.
+#
+# Workaround commit: 61c6fb718a37df11a66815b5e8f414ecc5802c6c
+# Upstream issue:    https://github.com/cowdao-grants/cow-py/issues/78
+#
+# When to revert:
+#   1. test_httpx_blocked_by_cloudfront starts FAILING (httpx gets 200)
+#   2. Remove cowpy_httpx_shim.py and the sys.modules swap in cow_utils.py
+#   3. Close the upstream issue
+
+COW_API_URL = (
+    "https://api.cow.fi/mainnet/api/v1/app_data/"
+    "0x0000000000000000000000000000000000000000000000000000000000000000"
+)
+
+
+@pytest.mark.network
+class TestCloudFrontWAFCanary:
+    """Canary: these tests hit the real CowSwap API.
+
+    FAIL = upstream fixed → revert commit 61c6fb71 and remove the shim.
+    See: https://github.com/cowdao-grants/cow-py/issues/78
+    """
+
+    def test_httpx_blocked_by_cloudfront(self):
+        """httpx should get 403 from CloudFront WAF (TLS fingerprint blocked).
+
+        If this test FAILS (httpx gets 200), the workaround is no longer needed:
+        - Revert commit 61c6fb718a37df11a66815b5e8f414ecc5802c6c
+        - Remove cowpy_httpx_shim.py
+        - Remove sys.modules swap in cow_utils.py:get_cowpy_module()
+        - Close https://github.com/cowdao-grants/cow-py/issues/78
+        """
+        resp = real_httpx.get(COW_API_URL, timeout=10)
+        assert resp.status_code == 403, (
+            f"httpx got {resp.status_code} instead of 403 — CloudFront WAF "
+            f"may have stopped blocking httpx. The cowpy_httpx_shim workaround "
+            f"(commit 61c6fb71) can be removed. "
+            f"See: https://github.com/cowdao-grants/cow-py/issues/78"
+        )
+
+    def test_requests_not_blocked(self):
+        """requests (urllib3) should get 200 — confirms the API itself works."""
+        resp = requests.get(COW_API_URL, timeout=10)
+        assert resp.status_code == 200, (
+            f"requests got {resp.status_code} — CowSwap API may be down"
+        )
