@@ -1,14 +1,11 @@
 """Tests for httpx monkey-patch scoped to cowdao-cowpy modules."""
 
-import asyncio
-import importlib
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx as real_httpx
 import pytest
 import requests
-
 
 # ---------------------------------------------------------------------------
 # Group 1: Unit tests for _ShimResponse

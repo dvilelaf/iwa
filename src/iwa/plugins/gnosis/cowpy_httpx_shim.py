@@ -50,7 +50,7 @@ class _ShimResponse:
         """Raise httpx.HTTPStatusError for 4xx/5xx responses."""
         try:
             self._response.raise_for_status()
-        except _requests.HTTPError:
+        except _requests.HTTPError as e:
             req = getattr(self._response, "request", None)
             method = getattr(req, "method", "GET") if req else "GET"
             url = str(getattr(req, "url", "")) if req else ""
@@ -58,7 +58,7 @@ class _ShimResponse:
                 message=f"HTTP {self.status_code}",
                 request=_real_httpx.Request(method=method, url=url),
                 response=self,
-            )
+            ) from e
 
 
 class AsyncClient:
@@ -70,15 +70,15 @@ class AsyncClient:
     by CloudFront WAF.
     """
 
-    def __init__(self, *, headers=None, **kwargs):
+    def __init__(self, *, headers=None, **kwargs):  # noqa: D107
         self._session = _requests.Session()
         if headers:
             self._session.headers.update(headers)
 
-    async def __aenter__(self):
+    async def __aenter__(self):  # noqa: D105
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args):  # noqa: D105
         self._session.close()
 
     async def aclose(self):
