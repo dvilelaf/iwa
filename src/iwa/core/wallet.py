@@ -336,17 +336,19 @@ class Wallet:
     async def swap(
         self,
         account_address_or_tag: str,
-        amount_eth: Optional[float],
-        sell_token_name: str,
-        buy_token_name: str,
+        amount_eth: Optional[float] = None,
+        sell_token_name: str = "olas",
+        buy_token_name: str = "wxdai",
         chain_name: str = "gnosis",
         order_type: OrderType = OrderType.SELL,
+        amount_wei: Optional[int] = None,
     ) -> bool:
         """Swap ERC-20 tokens on CowSwap.
 
         Args:
             account_address_or_tag: Account address or tag initiating the swap.
-            amount_eth: Amount to swap (sell or buy amount depending on order_type).
+            amount_eth: Amount in human-readable units. Mutually exclusive with amount_wei.
+            amount_wei: Amount in wei (integer). Bypasses float conversion.
             sell_token_name: Name of the token to sell.
             buy_token_name: Name of the token to buy.
             chain_name: Blockchain name (must supports CowSwap, e.g., "gnosis").
@@ -363,6 +365,7 @@ class Wallet:
             buy_token_name,
             chain_name,
             order_type,
+            amount_wei=amount_wei,
         )
 
     def drain(

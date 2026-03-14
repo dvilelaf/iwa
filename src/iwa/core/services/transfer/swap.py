@@ -20,28 +20,38 @@ class SwapMixin:
     async def swap(
         self: "TransferService",
         account_address_or_tag: str,
-        amount_eth: Optional[float],
-        sell_token_name: str,
-        buy_token_name: str,
+        amount_eth: Optional[float] = None,
+        sell_token_name: str = "olas",
+        buy_token_name: str = "wxdai",
         chain_name: str = "gnosis",
         order_type: OrderType = OrderType.SELL,
+        amount_wei: Optional[int] = None,
     ) -> Optional[dict]:
         """Swap ERC-20 tokens on CowSwap.
+
+        Args:
+            amount_eth: Amount in human-readable units (e.g. 10.5 OLAS).
+            amount_wei: Amount in wei (integer). Bypasses float conversion.
+                Specify exactly one of amount_eth or amount_wei.
 
         Returns:
             dict | None: The executed order data if successful, None otherwise.
 
         """
-        amount_wei = self._prepare_swap_amount(
-            account_address_or_tag,
-            amount_eth,
-            sell_token_name,
-            buy_token_name,
-            chain_name,
-            order_type,
-        )
+        if amount_wei is not None and amount_eth is not None:
+            raise ValueError("Specify either amount_eth or amount_wei, not both")
+
         if amount_wei is None:
-            return None
+            amount_wei = self._prepare_swap_amount(
+                account_address_or_tag,
+                amount_eth,
+                sell_token_name,
+                buy_token_name,
+                chain_name,
+                order_type,
+            )
+            if amount_wei is None:
+                return None
 
         chain = ChainInterfaces().get(chain_name).chain
         account = self.account_service.resolve_account(account_address_or_tag)
