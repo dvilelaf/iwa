@@ -875,3 +875,28 @@ class TestCheckMechHealth:
 
         assert not result.is_healthy
         assert "RPC timeout" in result.error
+
+    def test_check_all_mechs_health(self):
+        """check_all_mechs_health returns results for all marketplaces."""
+        from iwa.plugins.olas.service_manager.mech import (
+            DEFAULT_PRIORITY_MECH,
+            DEFUNCT_MARKETPLACES,
+            check_all_mechs_health,
+        )
+
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_mp_class:
+            mock_mp = mock_mp_class.return_value
+            mock_mp.call.return_value = ADDR_MULTISIG  # healthy
+
+            results = check_all_mechs_health()
+
+        expected_count = len(DEFAULT_PRIORITY_MECH) + len(DEFUNCT_MARKETPLACES)
+        assert len(results) == expected_count
+
+        # At least one healthy (from DEFAULT_PRIORITY_MECH) and one defunct
+        healthy = [r for r in results if r.is_healthy]
+        defunct = [r for r in results if r.error == "V1 marketplace defunct"]
+        assert len(healthy) == len(DEFAULT_PRIORITY_MECH)
+        assert len(defunct) == len(DEFUNCT_MARKETPLACES)

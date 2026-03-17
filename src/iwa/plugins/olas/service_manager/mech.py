@@ -143,14 +143,19 @@ def check_mech_health(
         )
 
     except Exception as e:
-        logger.error(f"Mech health check failed: {e}")
+        # Sanitize: extract only the exception class + first line,
+        # avoiding RPC URLs that may contain API keys.
+        error_type = type(e).__name__
+        first_line = str(e).split("\n", 1)[0][:120]
+        sanitized = f"{error_type}: {first_line}"
+        logger.error(f"Mech health check failed: {sanitized}")
         return MechHealthStatus(
             marketplace_address=marketplace_address,
             mech_address=mech_address,
             mech_service_id=mech_service_id,
             is_registered=False,
             is_healthy=False,
-            error=str(e),
+            error=sanitized,
         )
 
 
