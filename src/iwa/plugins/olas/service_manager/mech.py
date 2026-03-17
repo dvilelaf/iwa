@@ -40,6 +40,7 @@ Important:
 
 """
 
+from dataclasses import dataclass
 from typing import Optional
 
 from loguru import logger
@@ -69,6 +70,101 @@ DEFAULT_PRIORITY_MECH = {
 DEFUNCT_MARKETPLACES = {
     "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # VERSION 1.0.0 — DEFUNCT
 }
+
+
+@dataclass
+class MechHealthStatus:
+    """Result of a mech health check."""
+
+    marketplace_address: str
+    mech_address: str
+    mech_service_id: int
+    is_registered: bool
+    is_healthy: bool
+    error: Optional[str] = None
+
+
+def check_mech_health(
+    marketplace_address: str,
+    chain_name: str = "gnosis",
+) -> MechHealthStatus:
+    """Check if a priority mech is healthy on its marketplace.
+
+    Returns a MechHealthStatus with is_healthy=False if the mech
+    is not registered or the marketplace is defunct.
+    """
+    # Defunct V1 marketplace
+    if marketplace_address in DEFUNCT_MARKETPLACES:
+        return MechHealthStatus(
+            marketplace_address=marketplace_address,
+            mech_address="",
+            mech_service_id=0,
+            is_registered=False,
+            is_healthy=False,
+            error="V1 marketplace defunct",
+        )
+
+    # Unknown marketplace
+    mech_info = DEFAULT_PRIORITY_MECH.get(marketplace_address)
+    if not mech_info:
+        return MechHealthStatus(
+            marketplace_address=marketplace_address,
+            mech_address="",
+            mech_service_id=0,
+            is_registered=False,
+            is_healthy=False,
+            error="Unknown marketplace",
+        )
+
+    mech_address, mech_service_id, _ = mech_info
+
+    try:
+        marketplace = MechMarketplaceContract(
+            marketplace_address, chain_name=chain_name
+        )
+        result = marketplace.call("checkMech", mech_address)
+
+        if result == ZERO_ADDRESS:
+            return MechHealthStatus(
+                marketplace_address=marketplace_address,
+                mech_address=mech_address,
+                mech_service_id=mech_service_id,
+                is_registered=False,
+                is_healthy=False,
+                error="Mech not registered",
+            )
+
+        return MechHealthStatus(
+            marketplace_address=marketplace_address,
+            mech_address=mech_address,
+            mech_service_id=mech_service_id,
+            is_registered=True,
+            is_healthy=True,
+        )
+
+    except Exception as e:
+        logger.error(f"Mech health check failed: {e}")
+        return MechHealthStatus(
+            marketplace_address=marketplace_address,
+            mech_address=mech_address,
+            mech_service_id=mech_service_id,
+            is_registered=False,
+            is_healthy=False,
+            error=str(e),
+        )
+
+
+def check_all_mechs_health(
+    chain_name: str = "gnosis",
+) -> list[MechHealthStatus]:
+    """Check health for all known marketplaces."""
+    results: list[MechHealthStatus] = []
+    all_addresses = (
+        set(DEFAULT_PRIORITY_MECH.keys()) | DEFUNCT_MARKETPLACES
+    )
+    for addr in all_addresses:
+        results.append(check_mech_health(addr, chain_name))
+    return results
 
 
 class MechManagerMixin:

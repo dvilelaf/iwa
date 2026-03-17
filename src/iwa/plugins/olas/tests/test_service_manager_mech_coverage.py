@@ -803,3 +803,75 @@ class TestPrepareMarketplaceParams:
         """max_delivery_rate defaults to value when not specified."""
         value, rate, p_type = manager._prepare_marketplace_params(12345, None, None)
         assert rate == 12345
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tests for check_mech_health / check_all_mechs_health
+# ──────────────────────────────────────────────────────────────────
+
+
+class TestCheckMechHealth:
+    """Tests for standalone mech health check functions."""
+
+    def test_defunct_marketplace_unhealthy(self):
+        """Defunct V1 marketplace returns unhealthy."""
+        from iwa.plugins.olas.service_manager.mech import check_mech_health
+
+        result = check_mech_health(ADDR_MARKETPLACE_V1)
+        assert not result.is_healthy
+        assert result.error == "V1 marketplace defunct"
+
+    def test_unknown_marketplace_unhealthy(self):
+        """Unknown marketplace returns unhealthy."""
+        from iwa.plugins.olas.service_manager.mech import check_mech_health
+
+        result = check_mech_health(ADDR_UNKNOWN_MARKETPLACE)
+        assert not result.is_healthy
+        assert result.error == "Unknown marketplace"
+
+    def test_healthy_mech(self):
+        """Registered mech returns healthy."""
+        from iwa.plugins.olas.service_manager.mech import check_mech_health
+
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_mp_class:
+            mock_mp = mock_mp_class.return_value
+            mock_mp.call.return_value = ADDR_MULTISIG  # non-zero
+
+            result = check_mech_health(ADDR_MARKETPLACE_V2)
+
+        assert result.is_healthy
+        assert result.is_registered
+        assert result.error is None
+
+    def test_unregistered_mech(self):
+        """checkMech returns zero address -> unhealthy."""
+        from iwa.plugins.olas.service_manager.mech import check_mech_health
+
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_mp_class:
+            mock_mp = mock_mp_class.return_value
+            mock_mp.call.return_value = str(ZERO_ADDRESS)
+
+            result = check_mech_health(ADDR_MARKETPLACE_V2)
+
+        assert not result.is_healthy
+        assert result.error == "Mech not registered"
+
+    def test_rpc_error_unhealthy(self):
+        """RPC exception returns unhealthy with error message."""
+        from iwa.plugins.olas.service_manager.mech import check_mech_health
+
+        with patch(
+            "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
+        ) as mock_mp_class:
+            mock_mp_class.return_value.call.side_effect = Exception(
+                "RPC timeout"
+            )
+
+            result = check_mech_health(ADDR_MARKETPLACE_V2)
+
+        assert not result.is_healthy
+        assert "RPC timeout" in result.error
