@@ -80,6 +80,11 @@ class StakingStatus(BaseModel):
     min_staking_duration: int = 0
     unstake_available_at: Optional[str] = None  # ISO format string
 
+    # Config vs on-chain sync
+    config_mismatch: bool = False
+    actual_staking_contract_address: Optional[EthereumAddress] = None
+    config_mismatch_detail: Optional[str] = None
+
 
 class OlasConfig(BaseModel):
     """OlasConfig with multi-service support."""
