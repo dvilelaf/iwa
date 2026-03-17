@@ -160,12 +160,15 @@ class StakingManagerMixin:
         is_staked = staking_state == StakingState.STAKED
 
         if not is_staked:
+            # Service not found in configured contract — scan known contracts
+            mismatch = self._detect_staking_mismatch(service_id, staking_address)
             return StakingStatus(
                 is_staked=False,
                 staking_state=staking_state.name,
                 staking_contract_address=staking_address,
                 activity_checker_address=staking.activity_checker_address,
                 liveness_ratio=staking.activity_checker.liveness_ratio,
+                **mismatch,
             )
 
         # Get detailed service info
@@ -220,6 +223,54 @@ class StakingManagerMixin:
                 if str(addr).lower() == staking_address.lower():
                     return name
         return None
+
+    def _detect_staking_mismatch(
+        self, service_id: int, config_address: str
+    ) -> dict:
+        """Check if a service is staked in a different contract than configured.
+
+        Scans all known staking contracts for the service's chain to find
+        where the service is actually staked. Returns mismatch fields for
+        StakingStatus if found, empty dict otherwise.
+
+        This method only logs a warning and reports the mismatch — it does NOT
+        auto-correct config.yaml (security: on-chain state should not drive
+        config changes without human review).
+        """
+        from iwa.plugins.olas.constants import OLAS_TRADER_STAKING_CONTRACTS
+
+        chain_contracts = OLAS_TRADER_STAKING_CONTRACTS.get(self.chain_name, {})
+        if not chain_contracts:
+            return {}
+
+        for contract_name, contract_addr in chain_contracts.items():
+            if str(contract_addr).lower() == config_address.lower():
+                continue  # Skip the contract we already checked
+
+            try:
+                sc = ContractCache().get_contract(
+                    StakingContract, contract_addr, chain_name=self.chain_name
+                )
+                state = sc.get_staking_state(service_id)
+                if state in (StakingState.STAKED, StakingState.EVICTED):
+                    config_name = self._identify_staking_contract_name(config_address) or config_address
+                    detail = (
+                        f"Service {service_id} is {state.name} in "
+                        f"'{contract_name}' ({contract_addr}) but config "
+                        f"points to '{config_name}' ({config_address})"
+                    )
+                    logger.warning(f"[STAKING MISMATCH] {detail}")
+                    return {
+                        "config_mismatch": True,
+                        "actual_staking_contract_address": EthereumAddress(contract_addr),
+                        "config_mismatch_detail": detail,
+                    }
+            except Exception as e:
+                logger.debug(
+                    f"Could not check contract {contract_name} ({contract_addr}): {e}"
+                )
+
+        return {}
 
     def _calculate_unstake_time(
         self, staking: StakingContract, info: dict
