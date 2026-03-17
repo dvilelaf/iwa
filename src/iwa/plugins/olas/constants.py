@@ -68,9 +68,7 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "OLAS_MECH_MARKETPLACE_PRIORITY": EthereumAddress(
             "0xC05e7412439bD7e91730a6880E18d5D5873F632C"
         ),
-        # Marketplace v1 (VERSION 1.0.0) - older MM contracts (e.g., "Expert 17 MM v1")
-        # Uses different request signature than v2. trader_ant uses this.
-        "OLAS_MECH_MARKETPLACE_V1": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
+        # NOTE: OLAS_MECH_MARKETPLACE_V1 removed — mech 975 retired 2026-03-17
     },
     "ethereum": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"),
@@ -79,7 +77,7 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
     "base": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress("0x3841C312061daB948332A78F042Ec61Ad09fc3D8"),
         "OLAS_SERVICE_MANAGER": EthereumAddress("0xF36183B106692DeD8b6e3B2B7347C9665f8a09B1"),
-        "OLAS_MECH_MARKETPLACE_V1": EthereumAddress("0x4554fE75c1f5576c1d7F765B2A036c199Adae329"),
+        # NOTE: OLAS_MECH_MARKETPLACE_V1 removed — mech 975 retired 2026-03-17
     },
 }
 
@@ -119,11 +117,7 @@ OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "Expert 12 Legacy (10k OLAS)": EthereumAddress(
             "0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"
         ),
-        # === MM v1 (old marketplace 0x4554fE75...) ===
-        "Expert 15 MM v1 (10k OLAS)": EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
-        "Expert 16 MM v1 (10k OLAS)": EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),
-        "Expert 17 MM v1 (10k OLAS)": EthereumAddress("0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf"),
-        "Expert 18 MM v1 (10k OLAS)": EthereumAddress("0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454"),
+        # NOTE: MM v1 contracts (Expert 15-18) removed — mech 975 retired 2026-03-17
         # === MM v2 (new marketplace 0x735FAAb1...) ===
         "Expert 3 MM v2 (1k OLAS)": EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
         "Expert 4 MM v2 (2k OLAS)": EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),

@@ -31,11 +31,11 @@ MECH CONTRACTS
 MARKETPLACE CONTRACTS
 =============================================================================
 
-1. OLD MECH MARKETPLACE (v1 / Beta)
+1. OLD MECH MARKETPLACE (v1 / Beta) — DEFUNCT
    Address: 0x4554fE75c1f5576c1d7F765B2A036c199Adae329
    Total Requests: ~1.87M
    Used by: Pearl Beta Marketplace activity checker (0x7Ec96996Cd...)
-   Status: LEGACY / DEPRECATED
+   Status: DEFUNCT — mech 975 retired on 2026-03-17. All V1 requests fail.
 
 2. NEW MECH MARKETPLACE (v2 / Current)
    Address: 0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB

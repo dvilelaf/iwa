@@ -37,8 +37,7 @@ STAKING_PROGRAM_MAP = {
     "quickstart_beta_expert_7": "0xD7A3C8b975f71030135f1a66E9e23164d54fF455",  # Expert 7 Legacy
     "quickstart_beta_expert_9": "0x17dBAe44BC5618Cc254055B386A29576b4F87015",  # Expert 9 Legacy
     "quickstart_beta_expert_11": "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7",  # Expert 11 Legacy
-    "quickstart_beta_expert_16_mech_marketplace": "0x6c65430515c70a3f5E62107CC301685B7D46f991",  # Expert 16 MM v1
-    "quickstart_beta_expert_18_mech_marketplace": "0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454",  # Expert 18 MM v1
+    # NOTE: quickstart_beta_expert_16/18_mech_marketplace removed — V1 MM defunct (2026-03-17)
 }
 
 

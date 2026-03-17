@@ -3,7 +3,7 @@
 Covers: get_marketplace_config, auto-detect marketplace flow,
 _send_legacy_mech_request edge cases, _validate_priority_mech exception paths,
 _validate_marketplace_params edge cases, _resolve_marketplace_config,
-_send_marketplace_mech_request dispatch, _send_v1_marketplace_request,
+_send_marketplace_mech_request dispatch, defunct V1 marketplace guard,
 _execute_mech_tx edge cases.
 """
 
@@ -558,19 +558,15 @@ class TestResolveMarketplaceConfig:
 class TestSendMarketplaceMechRequest:
     """Tests for _send_marketplace_mech_request."""
 
-    def test_dispatch_to_v1(self, manager):
-        """Line 438: marketplace in V1_MARKETPLACES dispatches to _send_v1_marketplace_request."""
-        with patch.object(
-            manager, "_send_v1_marketplace_request", return_value="0xV1TX"
-        ) as mock_v1:
-            result = manager._send_marketplace_mech_request(
-                data=b"test",
-                marketplace_address=ADDR_MARKETPLACE_V1,
-                priority_mech=ADDR_PRIORITY_MECH,
-            )
+    def test_defunct_v1_marketplace_returns_none(self, manager):
+        """Defunct V1 marketplace guard returns None and logs error."""
+        result = manager._send_marketplace_mech_request(
+            data=b"test",
+            marketplace_address=ADDR_MARKETPLACE_V1,
+            priority_mech=ADDR_PRIORITY_MECH,
+        )
 
-        assert result == "0xV1TX"
-        mock_v1.assert_called_once()
+        assert result is None
 
     def test_prepare_tx_returns_none(self, manager, mock_wallet):
         """Lines 473-474: prepare_request_tx returns None -> returns None."""
@@ -659,101 +655,6 @@ class TestSendMarketplaceMechRequest:
         if method == "mapPaymentTypeBalanceTrackers":
             return str(ZERO_ADDRESS)  # no balance tracker -> fails
         return MagicMock()
-
-
-# ──────────────────────────────────────────────────────────────────
-# Tests for _send_v1_marketplace_request (lines 496-547)
-# ──────────────────────────────────────────────────────────────────
-
-
-class TestSendV1MarketplaceRequest:
-    """Tests for _send_v1_marketplace_request."""
-
-    def test_no_service_returns_none(self, manager):
-        """Lines 496-498: no service -> None."""
-        manager.service = None
-        result = manager._send_v1_marketplace_request(
-            data=b"test",
-            marketplace_address=ADDR_MARKETPLACE_V1,
-            priority_mech=ADDR_PRIORITY_MECH,
-        )
-        assert result is None
-
-    def test_no_mech_info_returns_none(self, manager):
-        """Lines 502-504: marketplace not in DEFAULT_PRIORITY_MECH -> None."""
-        result = manager._send_v1_marketplace_request(
-            data=b"test",
-            marketplace_address=ADDR_UNKNOWN_MARKETPLACE,
-            priority_mech=ADDR_PRIORITY_MECH,
-        )
-        assert result is None
-
-    def test_no_mech_staking_instance_returns_none(self, manager):
-        """Lines 508-510: mech staking instance is None -> None."""
-        with patch.dict(
-            "iwa.plugins.olas.service_manager.mech.DEFAULT_PRIORITY_MECH",
-            {ADDR_UNKNOWN_MARKETPLACE: (ADDR_PRIORITY_MECH, 100, None)},
-        ):
-            result = manager._send_v1_marketplace_request(
-                data=b"test",
-                marketplace_address=ADDR_UNKNOWN_MARKETPLACE,
-                priority_mech=ADDR_PRIORITY_MECH,
-            )
-        assert result is None
-
-    def test_no_requester_staking_returns_none(self, manager):
-        """Lines 516-518: service has no staking_contract_address -> None."""
-        manager.service.staking_contract_address = None
-        result = manager._send_v1_marketplace_request(
-            data=b"test",
-            marketplace_address=ADDR_MARKETPLACE_V1,
-            priority_mech=ADDR_PRIORITY_MECH,
-        )
-        assert result is None
-
-    def test_prepare_tx_returns_none(self, manager):
-        """Lines 543-545: prepare_request_tx returns None -> None."""
-        with patch(
-            "iwa.plugins.olas.service_manager.mech.MechMarketplaceV1Contract"
-        ) as mock_v1_class:
-            mock_v1 = mock_v1_class.return_value
-            mock_v1.prepare_request_tx.return_value = None
-
-            result = manager._send_v1_marketplace_request(
-                data=b"test",
-                marketplace_address=ADDR_MARKETPLACE_V1,
-                priority_mech=ADDR_PRIORITY_MECH,
-            )
-
-        assert result is None
-
-    def test_successful_v1_request(self, manager, mock_wallet):
-        """Lines 520-552: full successful v1 request flow."""
-        from iwa.core.models import StoredSafeAccount
-
-        mock_safe = MagicMock(spec=StoredSafeAccount)
-        mock_wallet.account_service.resolve_account.return_value = mock_safe
-
-        with patch(
-            "iwa.plugins.olas.service_manager.mech.MechMarketplaceV1Contract"
-        ) as mock_v1_class:
-            mock_v1 = mock_v1_class.return_value
-            mock_v1.prepare_request_tx.return_value = {
-                "data": "0xV1Data",
-                "value": 10**16,
-            }
-            mock_v1.extract_events.return_value = [{"name": "MarketplaceRequest"}]
-
-            manager.registry.chain_interface.web3.eth.wait_for_transaction_receipt.return_value = {}
-
-            result = manager._send_v1_marketplace_request(
-                data=b"test",
-                marketplace_address=ADDR_MARKETPLACE_V1,
-                priority_mech=ADDR_PRIORITY_MECH,
-                value=10**16,
-            )
-
-        assert result == "0xMockTxHash"
 
 
 # ──────────────────────────────────────────────────────────────────

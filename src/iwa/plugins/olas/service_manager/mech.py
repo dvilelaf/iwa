@@ -1,13 +1,13 @@
 """Mech manager mixin.
 
-This module handles sending mech requests for OLAS services. There are THREE
+This module handles sending mech requests for OLAS services. There are TWO
 distinct flows for mech requests, and the correct one is automatically selected
 based on the service's staking contract configuration:
 
 Flow Selection Logic:
     1. `get_marketplace_config()` checks if staking contract's activity checker
        has a non-zero `mechMarketplace` address
-    2. If yes → marketplace request (v1 or v2 depending on address)
+    2. If yes → marketplace v2 request
     3. If no → legacy mech request
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -30,27 +30,13 @@ Flow Selection Logic:
 │ Note:        Uses payment types (PAYMENT_TYPE_NATIVE)                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ FLOW 3: Marketplace v1 (use_marketplace=True, marketplace=0x4554...)        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Contract:    MechMarketplace v1 (0x4554fE75...)  [VERSION 1.0.0]            │
-│ Used by:     Older MM contracts (e.g., "Expert 17 MM", trader_ant)          │
-│ Counting:    mechMarketplace.mapRequestCounts(multisig)                     │
-│ Method:      _send_v1_marketplace_request() → MechMarketplaceV1Contract     │
-│ Signature:   request(bytes,address,address,uint256,address,uint256,uint256) │
-│ Note:        Requires staking instance + service ID for mech AND requester  │
-│              No payment types - simpler but different parameter set         │
-└─────────────────────────────────────────────────────────────────────────────┘
+NOTE: V1 marketplace (0x4554fE75...) was removed on 2026-03-17 when mech 975
+was retired. Services on V1 MM staking contracts must migrate to V2.
 
 Important:
     If a service is staked in an MM contract but sends requests to the wrong
     marketplace (or uses legacy flow), those requests will NOT be counted by
     the activity checker, and the service will not receive staking rewards.
-
-The dispatch logic:
-    1. _send_marketplace_mech_request() checks if marketplace ∈ V1_MARKETPLACES
-    2. If v1 → dispatches to _send_v1_marketplace_request()
-    3. If v2 → continues with MechMarketplaceContract (v2 ABI)
 
 """
 
@@ -67,20 +53,10 @@ from iwa.plugins.olas.constants import (
 )
 from iwa.plugins.olas.contracts.mech import MechContract
 from iwa.plugins.olas.contracts.mech_marketplace import MechMarketplaceContract
-from iwa.plugins.olas.contracts.mech_marketplace_v1 import (
-    MechMarketplaceV1Contract,
-    V1RequestParams,
-)
 
 # Maps marketplace address to (priority_mech_address, priority_mech_service_id, mech_staking_instance)
 # Source: olas-operate-middleware profiles.py and manage.py
-# The 3rd element (staking instance) is only needed for v1 marketplaces
 DEFAULT_PRIORITY_MECH = {
-    "0x4554fE75c1f5576c1d7F765B2A036c199Adae329": (
-        "0x552cEA7Bc33CbBEb9f1D90c1D11D2C6daefFd053",
-        975,
-        "0x998dEFafD094817EF329f6dc79c703f1CF18bC90",  # Mech staking instance for v1
-    ),
     "0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB": (
         "0xC05e7412439bD7e91730a6880E18d5D5873F632C",
         2182,
@@ -88,9 +64,10 @@ DEFAULT_PRIORITY_MECH = {
     ),
 }
 
-# Marketplace v1 addresses (use different request signature)
-V1_MARKETPLACES = {
-    "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # VERSION 1.0.0
+# Defunct V1 marketplace addresses — mech 975 was retired on 2026-03-17.
+# Services on V1 MM staking contracts must migrate to V2.
+DEFUNCT_MARKETPLACES = {
+    "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # VERSION 1.0.0 — DEFUNCT
 }
 
 
@@ -433,15 +410,14 @@ class MechManagerMixin:
             logger.error(e)
             return None
 
-        # Dispatch to v1 handler if marketplace is v1
-        if marketplace_address in V1_MARKETPLACES:
-            return self._send_v1_marketplace_request(
-                data=data,
-                marketplace_address=marketplace_address,
-                priority_mech=priority_mech,
-                response_timeout=response_timeout,
-                value=value,
+        # Guard: reject defunct V1 marketplaces
+        if marketplace_address in DEFUNCT_MARKETPLACES:
+            logger.error(
+                f"[MECH] V1 marketplace {marketplace_address} is defunct — "
+                f"mech 975 was retired on 2026-03-17. "
+                f"Service must migrate to a V2 staking contract."
             )
+            return None
 
         # v2 flow
         marketplace = MechMarketplaceContract(marketplace_address, chain_name=self.chain_name)
@@ -471,77 +447,6 @@ class MechManagerMixin:
 
         if not tx_data:
             logger.error("Failed to prepare marketplace request transaction")
-            return None
-
-        return self._execute_mech_tx(
-            tx_data=tx_data,
-            to_address=str(marketplace_address),
-            contract_instance=marketplace,
-            expected_event="MarketplaceRequest",
-        )
-
-    def _send_v1_marketplace_request(
-        self,
-        data: bytes,
-        marketplace_address: str,
-        priority_mech: str,
-        response_timeout: int = 300,
-        value: Optional[int] = None,
-    ) -> Optional[str]:
-        """Send a v1 marketplace mech request.
-
-        v1 marketplace (VERSION 1.0.0) requires staking instance and service ID
-        for both the mech and the requester, unlike v2 which uses payment types.
-        """
-        if not self.service:
-            logger.error("No active service")
-            return None
-
-        # Get mech info from DEFAULT_PRIORITY_MECH (now a 3-tuple)
-        mech_info = DEFAULT_PRIORITY_MECH.get(marketplace_address)
-        if not mech_info or len(mech_info) < 3:
-            logger.error(f"No priority mech info for v1 marketplace {marketplace_address}")
-            return None
-
-        priority_mech_address, priority_mech_service_id, priority_mech_staking = mech_info
-
-        if not priority_mech_staking:
-            logger.error(f"No mech staking instance for v1 marketplace {marketplace_address}")
-            return None
-
-        # Get requester staking info from current service
-        requester_staking_instance = self.service.staking_contract_address
-        requester_service_id = self.service.service_id
-
-        if not requester_staking_instance:
-            logger.error("No staking contract for current service (required for v1)")
-            return None
-
-        # Build v1 request params
-        params = V1RequestParams(
-            data=data,
-            priority_mech=priority_mech_address,
-            priority_mech_staking_instance=priority_mech_staking,
-            priority_mech_service_id=priority_mech_service_id,
-            requester_staking_instance=requester_staking_instance,
-            requester_service_id=requester_service_id,
-            response_timeout=response_timeout,
-            value=value or 10_000_000_000_000_000,  # 0.01 xDAI default
-        )
-
-        logger.info(
-            f"[MECH-V1] Sending v1 marketplace request to {marketplace_address} "
-            f"(mech={priority_mech_address}, mech_svc={priority_mech_service_id})"
-        )
-
-        marketplace = MechMarketplaceV1Contract(marketplace_address, chain_name=self.chain_name)
-        tx_data = marketplace.prepare_request_tx(
-            from_address=self.service.multisig_address,
-            params=params,
-        )
-
-        if not tx_data:
-            logger.error("Failed to prepare v1 marketplace request transaction")
             return None
 
         return self._execute_mech_tx(
