@@ -124,7 +124,7 @@ MECH_ECOSYSTEM = {
         "legacy_mech": "0x77af31De935740567Cf4fF1986D04B2c964A786a",
         "priority_mech": "0x601024E27f1C67B28209E24272CED8A31fc8151F",
         # Marketplace contracts
-        "old_marketplace": "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # v1, deprecated
+        "old_marketplace": "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",  # v1, DEFUNCT
         "new_marketplace": "0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB",  # v2, current
         # Activity checkers
         "legacy_activity_checker": "0x87E6a97bD97D41904B1125A014B16bec50C6A89D",

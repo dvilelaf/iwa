@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Test all 3 mech request flows: Legacy, MM v1, MM v2.
+"""Test mech request flows: Legacy and MM v2.
 
 This script verifies that mech requests are correctly counted by the
 activity checker for each type of staking contract.
+
+NOTE: MM v1 was removed on 2026-03-17 when mech 975 was retired.
 """
 
 import sys
@@ -23,11 +25,7 @@ TEST_CONTRACTS = {
         "address": "0xb964e44c126410df341ae04B13aB10A985fE3513",
         "expected_marketplace": None,
     },
-    "mm_v1": {
-        "name": "Expert 17 MM v1 (trader_ant)",
-        "address": "0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf",
-        "expected_marketplace": "0x4554fE75c1f5576c1d7F765B2A036c199Adae329",
-    },
+    # NOTE: mm_v1 removed — mech 975 retired 2026-03-17
     "mm_v2": {
         "name": "Expert 5 MM v2",
         "address": "0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d",
@@ -186,7 +184,7 @@ def main():
     """Run tests for all 3 contract types."""
     print("=" * 70)
     print("  COMPREHENSIVE MECH REQUEST TEST")
-    print("  Testing: Legacy, MM v1, MM v2")
+    print("  Testing: Legacy, MM v2")
     print("=" * 70)
 
     # Initialize wallet once
@@ -196,7 +194,7 @@ def main():
 
     results = {}
 
-    for contract_type in ["legacy", "mm_v1", "mm_v2"]:
+    for contract_type in ["legacy", "mm_v2"]:
         try:
             results[contract_type] = test_staking_contract(contract_type, wallet)
         except Exception as e:

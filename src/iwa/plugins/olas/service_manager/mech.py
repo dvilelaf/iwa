@@ -356,7 +356,7 @@ class MechManagerMixin:
         if not priority_addr:
             raise ValueError("priority_mech is required for marketplace requests")
 
-        return str(resolved_mp), EthereumAddress(priority_addr)
+        return str(EthereumAddress(resolved_mp)), EthereumAddress(priority_addr)
 
     def _prepare_marketplace_params(
         self,

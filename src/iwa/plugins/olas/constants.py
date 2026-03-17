@@ -86,7 +86,7 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
 #
 # Categories (verified on-chain via activity checker's mechMarketplace):
 #   - Legacy: No marketplace, uses legacy mech (0x77af31De...). agentMech.getRequestsCount()
-#   - MM v1: Old marketplace (0x4554fE75...). mechMarketplace.mapRequestCounts()
+#   - MM v1: Old marketplace (0x4554fE75...) — DEFUNCT since 2026-03-17
 #   - MM v2: New marketplace (0x735FAAb1...). mechMarketplace.mapRequestCounts()
 #
 # IMPORTANT: Services MUST use the correct mech request type for their staking contract!
