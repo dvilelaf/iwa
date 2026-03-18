@@ -881,23 +881,23 @@ def test_normal_error_not_classified_as_insufficient_funds(executor):
 
 
 # =============================================================================
-# Test: GS013 (inner revert) aborts immediately
+# Test: GS013 (approval error) aborts immediately
 # =============================================================================
 
 
-def test_gs013_classified_as_inner_revert(executor):
-    """GS013 should be classified as inner_revert (non-retryable)."""
+def test_gs013_classified_as_approval_error(executor):
+    """GS013 should be classified as gs013_approval (non-retryable)."""
     error = ValueError("execution reverted: GS013")
     result = executor._classify_error(error)
-    assert result["is_inner_revert"] is True
+    assert result["is_gs013_approval"] is True
 
 
 def test_gs013_not_classified_for_other_errors(executor):
-    """Other Safe errors should not be classified as inner_revert."""
+    """Other Safe errors should not be classified as gs013_approval."""
     for code in ["GS020", "GS025", "GS026", "intrinsic gas too low"]:
         error = ValueError(f"execution reverted: {code}")
         result = executor._classify_error(error)
-        assert result["is_inner_revert"] is False, f"{code} should not be inner_revert"
+        assert result["is_gs013_approval"] is False, f"{code} should not be gs013_approval"
 
 
 def test_gs013_aborts_immediately(executor, mock_chain_interface, mock_safe_tx, mock_safe):
@@ -913,6 +913,7 @@ def test_gs013_aborts_immediately(executor, mock_chain_interface, mock_safe_tx, 
         assert "GS013" in error
         assert mock_safe_tx.execute.call_count == 1
         mock_sleep.assert_not_called()
+        assert SAFE_TX_STATS["gs013_approval_errors"] == 1
         assert SAFE_TX_STATS["final_failures"] == 1
 
 
