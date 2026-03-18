@@ -1081,7 +1081,7 @@ def test_max_retries_exhausted_includes_decoded_reason(
 def test_sanitize_error_strips_rpc_api_keys(executor):
     """_sanitize_error should redact API keys from RPC URLs in error messages."""
     # Realistic hex API key in URL path (32 hex chars)
-    api_key = "ab1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e"
+    api_key = "ab1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e"  # gitleaks:allow
     error = ConnectionError(
         f"HTTPSConnectionPool(host='gnosis-mainnet.rpc.blastapi.io'): "
         f"request to https://gnosis-mainnet.rpc.blastapi.io/{api_key} failed"
