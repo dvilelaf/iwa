@@ -297,6 +297,7 @@ class SafeService:
         signer_keys: List[str],
         chain_name: str,
         safe_address: str,
+        label: str = "",
     ) -> str:
         """Sign and execute a SafeTx internally (INTERNAL USE ONLY).
 
@@ -323,7 +324,7 @@ class SafeService:
                 safe_address=safe_address,
                 safe_tx=safe_tx,
                 signer_keys=signer_keys,
-                operation_name=f"safe_tx_{safe_address[:10]}",
+                operation_name=f"safe_tx_{label or safe_address[:10]}",
             )
 
             if success:
@@ -387,6 +388,7 @@ class SafeService:
             signer_keys=signer_keys,
             chain_name=chain_name,
             safe_address=safe_account.address,
+            label=safe_account.tag or "",
         )
         logger.info(f"Safe transaction executed. Tx Hash: {tx_hash}")
         return tx_hash
@@ -416,6 +418,7 @@ class SafeService:
                 signer_keys=signer_keys,
                 chain_name=chain_name,
                 safe_address=safe_account.address,
+                label=safe_account.tag or "",
             )
 
         return _sign_and_execute
