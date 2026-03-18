@@ -25,6 +25,7 @@ SAFE_TX_STATS = {
     "final_failures": 0,
     "signature_errors": 0,
     "insufficient_funds": 0,
+    "gs013_approval_errors": 0,
 }
 
 # Minimum signature length (65 bytes per signature for ECDSA)
@@ -260,6 +261,17 @@ class SafeTransactionExecutor:
             logger.error(f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): {error}")
             return safe_tx, False, is_fee_error
 
+        # GS013 ("Hash has not been approved"): the Safe's checkSignatures
+        # rejected a contract-signature approval.  This is deterministic —
+        # retrying won't make the approval appear.
+        if classification["is_gs013_approval"]:
+            SAFE_TX_STATS["gs013_approval_errors"] += 1
+            SAFE_TX_STATS["final_failures"] += 1
+            logger.error(
+                f"[{operation_name}] GS013 approval error — aborting (attempt {attempt + 1}): {error}"
+            )
+            return safe_tx, False, is_fee_error
+
         # InsufficientFunds: account can't cover value + gas.  Retrying won't
         # help — the balance won't increase by itself.
         if classification["is_insufficient_funds"]:
@@ -428,6 +440,11 @@ class SafeTransactionExecutor:
         ]
         is_insufficient_funds = any(s in err_text for s in insufficient_funds_signals)
 
+        # GS013 = "Safe transaction hash has not been approved".
+        # Raised by checkSignatures() when a contract-signature approval is
+        # missing.  This is deterministic — retrying won't help.
+        is_gs013_approval = "gs013" in err_text
+
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
             "is_fee_error": is_fee_error,
@@ -437,6 +454,7 @@ class SafeTransactionExecutor:
             "is_signature_error": self._is_signature_error(error),
             "is_timeout": is_timeout,
             "is_insufficient_funds": is_insufficient_funds,
+            "is_gs013_approval": is_gs013_approval,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:
