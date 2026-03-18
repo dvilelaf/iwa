@@ -520,8 +520,6 @@ class SafeTransactionExecutor:
         2. Exception .args — look for hex strings in positional args
         3. Regex on str(error) as fallback
         """
-        import re
-
         hex_data = self._extract_revert_hex(error)
         if hex_data:
             try:
@@ -534,7 +532,7 @@ class SafeTransactionExecutor:
         return None
 
     @staticmethod
-    def _extract_revert_hex(error: Exception) -> Optional[str]:
+    def _extract_revert_hex(error: Exception) -> Optional[str]:  # noqa: C901
         """Extract hex revert data from an exception, trying multiple sources."""
         import re
 

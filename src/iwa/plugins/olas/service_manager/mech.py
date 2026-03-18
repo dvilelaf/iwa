@@ -311,7 +311,7 @@ class MechManagerMixin:
                 use_new_abi=use_new_abi,
             )
 
-    def send_batch_mech_requests(
+    def send_batch_mech_requests(  # noqa: C901
         self,
         data_list: List[bytes],
         priority_mech: Optional[str] = None,
@@ -484,8 +484,8 @@ class MechManagerMixin:
                 )
             else:
                 logger.error(
-                    f"[MECH-BATCH] No MarketplaceRequest events found in receipt. "
-                    f"All inner calls may have failed."
+                    "[MECH-BATCH] No MarketplaceRequest events found in receipt. "
+                    "All inner calls may have failed."
                 )
                 return None
 

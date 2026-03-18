@@ -78,7 +78,7 @@ class TestBatchMechCalldata:
     def test_encode_multiple_inner_txs(self):
         """N inner transactions encode to expected byte length."""
         inner_txs = []
-        for i in range(3):
+        for _i in range(3):
             inner_txs.append({
                 "operation": SafeOperationEnum.CALL,
                 "to": ADDR_MARKETPLACE,
@@ -153,7 +153,6 @@ class TestSendBatchMechRequests:
         self, mock_ms, mock_mp, mech_manager
     ):
         """Non-Safe sender should be rejected."""
-        from iwa.core.models import StoredSafeAccount
 
         # resolve_account returns a non-Safe account
         mech_manager.wallet.account_service.resolve_account.return_value = (

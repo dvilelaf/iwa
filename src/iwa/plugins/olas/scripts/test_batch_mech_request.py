@@ -19,8 +19,9 @@ Usage:
 import os
 import sys
 
-# Ensure we're on Tenderly
-def main():
+
+def main():  # noqa: C901
+    """Test batch mech requests on Tenderly fork."""
     from iwa.core.chain import ChainInterfaces
     from iwa.core.wallet import Wallet
     from iwa.plugins.olas.service_manager import ServiceManager
@@ -74,11 +75,11 @@ def main():
         print(f"  Safe balance after funding: {safe_balance / 1e18:.4f} xDAI")
 
     # Generate test IPFS data
-    BATCH_SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 3
-    print(f"\n--- Sending {BATCH_SIZE} mech requests via multi-send ---")
+    batch_size = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    print(f"\n--- Sending {batch_size} mech requests via multi-send ---")
 
     data_payloads = []
-    for i in range(BATCH_SIZE):
+    for _i in range(batch_size):
         # Generate random IPFS-like data (32 bytes)
         data_payloads.append(os.urandom(32))
 
@@ -128,12 +129,12 @@ def main():
 
     # Verdict
     print("\n--- VERDICT ---")
-    if event_count == BATCH_SIZE:
-        print(f"PASS: {event_count}/{BATCH_SIZE} MarketplaceRequest events emitted")
+    if event_count == batch_size:
+        print(f"PASS: {event_count}/{batch_size} MarketplaceRequest events emitted")
     elif event_count > 0:
-        print(f"PARTIAL: {event_count}/{BATCH_SIZE} events (some inner calls may have failed)")
+        print(f"PARTIAL: {event_count}/{batch_size} events (some inner calls may have failed)")
     else:
-        print(f"FAIL: 0/{BATCH_SIZE} events emitted — multi-send did not work as expected")
+        print(f"FAIL: 0/{batch_size} events emitted — multi-send did not work as expected")
         sys.exit(1)
 
     print("Multi-send integration test completed successfully.")
