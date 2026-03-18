@@ -73,8 +73,8 @@ def main():
         safe_balance = chain_interface.web3.eth.get_balance(safe_addr)
         print(f"  Safe balance after funding: {safe_balance / 1e18:.4f} xDAI")
 
-    # Generate test IPFS data (3 requests — small batch to conserve blocks)
-    BATCH_SIZE = 3
+    # Generate test IPFS data
+    BATCH_SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 3
     print(f"\n--- Sending {BATCH_SIZE} mech requests via multi-send ---")
 
     data_payloads = []
