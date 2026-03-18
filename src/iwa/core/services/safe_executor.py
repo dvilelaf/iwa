@@ -254,11 +254,18 @@ class SafeTransactionExecutor:
         classification = self._classify_error(error)
         is_fee_error = classification["is_fee_error"]
 
+        # Decode revert reason once for all abort paths
+        reason = self._decode_revert_reason(error)
+        reason_suffix = f" | Decoded: {reason}" if reason else ""
+
         # Signature errors (GS020, GS026) are never recoverable — abort immediately
         if classification["is_signature_error"]:
             SAFE_TX_STATS["signature_errors"] += 1
             SAFE_TX_STATS["final_failures"] += 1
-            logger.error(f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): {error}")
+            logger.error(
+                f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): "
+                f"{error}{reason_suffix}"
+            )
             return safe_tx, False, is_fee_error
 
         # GS013 ("Hash has not been approved"): the Safe's checkSignatures
@@ -268,7 +275,8 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["gs013_approval_errors"] += 1
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
-                f"[{operation_name}] GS013 approval error — aborting (attempt {attempt + 1}): {error}"
+                f"[{operation_name}] GS013 approval error — aborting (attempt {attempt + 1}): "
+                f"{error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -278,7 +286,8 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["insufficient_funds"] += 1
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
-                f"[{operation_name}] Insufficient funds — aborting (attempt {attempt + 1}): {error}"
+                f"[{operation_name}] Insufficient funds — aborting (attempt {attempt + 1}): "
+                f"{error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -491,20 +500,59 @@ class SafeTransactionExecutor:
             return None
 
     def _decode_revert_reason(self, error: Exception) -> Optional[str]:
-        """Attempt to decode the revert reason."""
+        """Attempt to decode the revert reason from exception data.
+
+        Tries multiple extraction strategies:
+        1. Exception .data attribute (web3/safe-eth-py store revert data here)
+        2. Exception .args — look for hex strings in positional args
+        3. Regex on str(error) as fallback
+        """
         import re
 
+        hex_data = self._extract_revert_hex(error)
+        if hex_data:
+            try:
+                decoded = ErrorDecoder().decode(hex_data)
+                if decoded:
+                    _name, msg, source = decoded[0]
+                    return f"{msg} (from {source})"
+            except Exception:
+                logger.debug(f"ErrorDecoder.decode() failed for data: {hex_data[:20]}...")
+        return None
+
+    @staticmethod
+    def _extract_revert_hex(error: Exception) -> Optional[str]:
+        """Extract hex revert data from an exception, trying multiple sources."""
+        import re
+
+        # 1. Check .data attribute (web3 exceptions, safe-eth-py)
+        raw_data = getattr(error, "data", None)
+        if raw_data:
+            if isinstance(raw_data, bytes):
+                return "0x" + raw_data.hex()
+            if isinstance(raw_data, str) and re.fullmatch(r"0x[0-9a-fA-F]{8,}", raw_data):
+                return raw_data
+
+        # 2. Check .args for hex strings (some exceptions pack data in args)
+        for arg in getattr(error, "args", ()):
+            if isinstance(arg, bytes) and len(arg) >= 4:
+                return "0x" + arg.hex()
+            if isinstance(arg, str):
+                match = re.search(r"0x[0-9a-fA-F]{8,}", arg)
+                if match:
+                    return match.group(0)
+            # Some exceptions nest a dict with 'data' key in args
+            if isinstance(arg, dict):
+                nested = arg.get("data")
+                if isinstance(nested, str) and re.fullmatch(r"0x[0-9a-fA-F]{8,}", nested):
+                    return nested
+
+        # 3. Fallback: regex on the string representation
         error_text = str(error)
         hex_match = re.search(r"0x[0-9a-fA-F]{8,}", error_text)
         if hex_match:
-            try:
-                data = hex_match.group(0)
-                decoded = ErrorDecoder().decode(data)
-                if decoded:
-                    name, msg, source = decoded[0]
-                    return f"{msg} (from {source})"
-            except Exception:
-                pass
+            return hex_match.group(0)
+
         return None
 
     def _log_retry(self, attempt: int, error: Exception, strategy: str):

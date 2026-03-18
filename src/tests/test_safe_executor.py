@@ -933,3 +933,111 @@ def test_gs013_simulation_revert_no_retry(
         assert mock_safe_tx.call.call_count == 1
         assert mock_safe_tx.execute.call_count == 0
         mock_sleep.assert_not_called()
+
+
+# =============================================================================
+# Test: Revert data extraction (_extract_revert_hex)
+# =============================================================================
+
+
+def test_extract_revert_hex_from_data_attribute_str(executor):
+    """Extract hex from exception .data attribute (string)."""
+    error = ValueError("some error")
+    error.data = "0x08c379a0000000000000000000000000000000000000000000000000"
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == error.data
+
+
+def test_extract_revert_hex_from_data_attribute_bytes(executor):
+    """Extract hex from exception .data attribute (bytes)."""
+    error = ValueError("some error")
+    error.data = bytes.fromhex("08c379a0000000000000000000000000")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0x08c379a0000000000000000000000000"
+
+
+def test_extract_revert_hex_from_args_hex_string(executor):
+    """Extract hex from exception args containing hex string."""
+    error = ValueError("execution reverted", "0xdeadbeef12345678")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0xdeadbeef12345678"
+
+
+def test_extract_revert_hex_from_args_bytes(executor):
+    """Extract hex from exception args containing raw bytes."""
+    raw = bytes.fromhex("deadbeef12345678")
+    error = ValueError(raw)
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0xdeadbeef12345678"
+
+
+def test_extract_revert_hex_from_args_dict_data(executor):
+    """Extract hex from exception args containing dict with 'data' key."""
+    error = ValueError({"code": -32000, "data": "0xabcdef0012345678"})
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0xabcdef0012345678"
+
+
+def test_extract_revert_hex_fallback_str_regex(executor):
+    """Fallback: extract hex via regex on str(error)."""
+    error = ValueError("execution reverted: 0x08c379a0aabbccdd")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0x08c379a0aabbccdd"
+
+
+def test_extract_revert_hex_none_when_no_hex(executor):
+    """Return None when no hex data is available anywhere."""
+    error = ValueError("Some generic error without hex")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result is None
+
+
+def test_decode_revert_reason_uses_data_attribute(executor):
+    """_decode_revert_reason should find data in .data attribute."""
+    error = ValueError("execution reverted")
+    error.data = "0xdeadbeef12345678"
+
+    with patch("iwa.core.services.safe_executor.ErrorDecoder") as mock_decoder:
+        mock_decoder.return_value.decode.return_value = [
+            ("ServiceNotStaked", "ServiceNotStaked()", "staking.json")
+        ]
+        result = executor._decode_revert_reason(error)
+
+    assert result == "ServiceNotStaked() (from staking.json)"
+    mock_decoder.return_value.decode.assert_called_once_with("0xdeadbeef12345678")
+
+
+def test_decode_revert_reason_logs_on_decoder_failure(executor):
+    """_decode_revert_reason should log at debug level when decoder raises."""
+    error = ValueError("execution reverted")
+    error.data = "0xdeadbeef12345678"
+
+    with patch("iwa.core.services.safe_executor.ErrorDecoder") as mock_decoder:
+        mock_decoder.return_value.decode.side_effect = RuntimeError("decode boom")
+        result = executor._decode_revert_reason(error)
+
+    assert result is None
+
+
+def test_handle_failure_includes_decoded_reason_in_log(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 abort log should include decoded revert reason when available."""
+    error = ValueError("execution reverted: GS013")
+    error.data = "0xdeadbeef12345678"
+
+    with (
+        patch.object(
+            executor,
+            "_decode_revert_reason",
+            return_value="ServiceNotStaked() (from staking.json)",
+        ) as mock_decode,
+        patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
+    ):
+        updated_tx, should_retry, _is_fee = executor._handle_execution_failure(
+            error, "0xSafe", mock_safe_tx, ["key1"], 0, "test_op"
+        )
+
+    assert should_retry is False
+    mock_decode.assert_called_once_with(error)
+    assert SAFE_TX_STATS["gs013_approval_errors"] == 1
