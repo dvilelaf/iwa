@@ -464,8 +464,10 @@ class MechManagerMixin:
 
         # Verify events: expect N MarketplaceRequest events
         try:
-            receipt = self.registry.chain_interface.web3.eth.wait_for_transaction_receipt(
-                tx_hash
+            receipt = self.registry.chain_interface.with_retry(
+                lambda: self.registry.chain_interface.web3.eth.wait_for_transaction_receipt(
+                    tx_hash
+                ),
             )
             events = marketplace.extract_events(receipt)
             request_events = [e for e in events if e["name"] == "MarketplaceRequest"]
