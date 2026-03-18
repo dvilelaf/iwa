@@ -37,6 +37,7 @@ def test_execute_safe_transaction_success(safe_service, mock_deps):
     mock_account.address = safe_address
     mock_account.signers = ["0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"]
     mock_account.threshold = 1
+    mock_account.tag = "test_safe"
     mock_deps["key_storage"].find_stored_account.return_value = mock_account
 
     # Mock Private Keys
@@ -90,6 +91,7 @@ def test_get_sign_and_execute_callback(safe_service, mock_deps):
     mock_account.address = safe_address
     mock_account.signers = ["0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"]
     mock_account.threshold = 1
+    mock_account.tag = "test_safe"
     mock_deps["key_storage"].find_stored_account.return_value = mock_account
     mock_deps["key_storage"]._get_private_key.return_value = "0xPrivKey"
 
