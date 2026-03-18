@@ -1041,3 +1041,35 @@ def test_handle_failure_includes_decoded_reason_in_log(
     assert should_retry is False
     mock_decode.assert_called_once_with(error)
     assert SAFE_TX_STATS["gs013_approval_errors"] == 1
+
+
+def test_extract_revert_hex_from_data_attribute_dict(executor):
+    """Extract hex from exception .data attribute when it's a dict with nested 'data' key."""
+    error = ValueError("some error")
+    error.data = {"code": -32000, "data": "0x08c379a0000000000000000000000000"}
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0x08c379a0000000000000000000000000"
+
+
+def test_max_retries_exhausted_includes_decoded_reason(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """Max-retries-exhausted log should include decoded revert reason."""
+    error = ValueError("execution reverted: some unknown error")
+    error.data = "0xdeadbeef12345678"
+
+    with (
+        patch.object(
+            executor,
+            "_decode_revert_reason",
+            return_value="CustomError() (from contract.json)",
+        ) as mock_decode,
+        patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
+    ):
+        # Set attempt = max_retries to trigger the exhausted path
+        updated_tx, should_retry, _is_fee = executor._handle_execution_failure(
+            error, "0xSafe", mock_safe_tx, ["key1"], executor.max_retries, "test_op"
+        )
+
+    assert should_retry is False
+    mock_decode.assert_called_once_with(error)

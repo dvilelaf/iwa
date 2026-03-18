@@ -293,7 +293,10 @@ class SafeTransactionExecutor:
 
         if attempt >= self.max_retries:
             SAFE_TX_STATS["final_failures"] += 1
-            logger.error(f"[{operation_name}] Failed after {attempt + 1} attempts: {error}")
+            logger.error(
+                f"[{operation_name}] Failed after {attempt + 1} attempts: "
+                f"{error}{reason_suffix}"
+            )
             return safe_tx, False, is_fee_error
 
         strategy = "retry"
@@ -532,6 +535,10 @@ class SafeTransactionExecutor:
                 return "0x" + raw_data.hex()
             if isinstance(raw_data, str) and re.fullmatch(r"0x[0-9a-fA-F]{8,}", raw_data):
                 return raw_data
+            if isinstance(raw_data, dict):
+                nested = raw_data.get("data")
+                if isinstance(nested, str) and re.fullmatch(r"0x[0-9a-fA-F]{8,}", nested):
+                    return nested
 
         # 2. Check .args for hex strings (some exceptions pack data in args)
         for arg in getattr(error, "args", ()):
