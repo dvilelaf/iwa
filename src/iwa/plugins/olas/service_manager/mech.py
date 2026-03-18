@@ -811,7 +811,11 @@ class MechManagerMixin:
 
         # Verify event emission
         try:
-            receipt = self.registry.chain_interface.web3.eth.wait_for_transaction_receipt(tx_hash)
+            receipt = self.registry.chain_interface.with_retry(
+                lambda: self.registry.chain_interface.web3.eth.wait_for_transaction_receipt(
+                    tx_hash
+                ),
+            )
             events = contract_instance.extract_events(receipt)
             event_found = next((e for e in events if e["name"] == expected_event), None)
 
