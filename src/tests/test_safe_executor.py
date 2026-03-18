@@ -1073,3 +1073,47 @@ def test_max_retries_exhausted_includes_decoded_reason(
 
     assert should_retry is False
     mock_decode.assert_called_once_with(error)
+
+
+# --- Security: _sanitize_error and _extract_revert_hex URL protection ---
+
+
+def test_sanitize_error_strips_rpc_api_keys(executor):
+    """_sanitize_error should redact API keys from RPC URLs in error messages."""
+    # Realistic hex API key in URL path (32 hex chars)
+    api_key = "ab1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e"
+    error = ConnectionError(
+        f"HTTPSConnectionPool(host='gnosis-mainnet.rpc.blastapi.io'): "
+        f"request to https://gnosis-mainnet.rpc.blastapi.io/{api_key} failed"
+    )
+    result = executor._sanitize_error(error)
+    # The 32+ hex-char path segment should be redacted
+    assert api_key not in result
+    assert "***" in result
+
+
+def test_sanitize_error_preserves_safe_error_codes(executor):
+    """_sanitize_error should preserve Safe error codes like GS013."""
+    error = ValueError("execution reverted: GS013")
+    result = executor._sanitize_error(error)
+    assert "GS013" in result
+
+
+def test_extract_revert_hex_skips_url_path_hex(executor):
+    """_extract_revert_hex should NOT match hex segments in URLs."""
+    # Error message containing a hex API key in URL path
+    error = ValueError(
+        "Connection failed: https://rpc.example.com/0xABCDEF1234567890ABCDEF1234567890"
+    )
+    # Clear other extraction paths
+    assert not hasattr(error, "data")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    # Should NOT match the hex in the URL path (preceded by '/')
+    assert result is None
+
+
+def test_extract_revert_hex_matches_standalone_hex(executor):
+    """_extract_revert_hex should match standalone 0x hex data in error messages."""
+    error = ValueError("execution reverted 0x08c379a0deadbeef")
+    result = SafeTransactionExecutor._extract_revert_hex(error)
+    assert result == "0x08c379a0deadbeef"

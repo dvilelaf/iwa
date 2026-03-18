@@ -8,6 +8,7 @@ from safe_eth.eth import TxSpeed
 from safe_eth.safe import Safe
 from safe_eth.safe.safe_tx import SafeTx
 
+from iwa.core.chain.errors import sanitize_rpc_url
 from iwa.core.contracts.decoder import ErrorDecoder
 from iwa.core.models import Config
 
@@ -170,11 +171,17 @@ class SafeTransactionExecutor:
             if classification["is_signature_error"]:
                 SAFE_TX_STATS["signature_errors"] += 1
                 reason = self._decode_revert_reason(e)
-                logger.error(f"[{operation_name}] Signature error (not retryable): {reason or e}")
+                logger.error(
+                    f"[{operation_name}] Signature error (not retryable): "
+                    f"{reason or self._sanitize_error(e)}"
+                )
                 raise e
             if classification["is_revert"] and not classification["is_nonce_error"]:
                 reason = self._decode_revert_reason(e)
-                logger.error(f"[{operation_name}] Simulation reverted: {reason or e}")
+                logger.error(
+                    f"[{operation_name}] Simulation reverted: "
+                    f"{reason or self._sanitize_error(e)}"
+                )
                 raise e
             raise
 
@@ -258,13 +265,16 @@ class SafeTransactionExecutor:
         reason = self._decode_revert_reason(error)
         reason_suffix = f" | Decoded: {reason}" if reason else ""
 
+        # Sanitize error text to prevent RPC API key leakage in logs
+        safe_error = self._sanitize_error(error)
+
         # Signature errors (GS020, GS026) are never recoverable — abort immediately
         if classification["is_signature_error"]:
             SAFE_TX_STATS["signature_errors"] += 1
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
                 f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): "
-                f"{error}{reason_suffix}"
+                f"{safe_error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -276,7 +286,7 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
                 f"[{operation_name}] GS013 approval error — aborting (attempt {attempt + 1}): "
-                f"{error}{reason_suffix}"
+                f"{safe_error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -287,7 +297,7 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
                 f"[{operation_name}] Insufficient funds — aborting (attempt {attempt + 1}): "
-                f"{error}{reason_suffix}"
+                f"{safe_error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -295,7 +305,7 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["final_failures"] += 1
             logger.error(
                 f"[{operation_name}] Failed after {attempt + 1} attempts: "
-                f"{error}{reason_suffix}"
+                f"{safe_error}{reason_suffix}"
             )
             return safe_tx, False, is_fee_error
 
@@ -545,7 +555,8 @@ class SafeTransactionExecutor:
             if isinstance(arg, bytes) and len(arg) >= 4:
                 return "0x" + arg.hex()
             if isinstance(arg, str):
-                match = re.search(r"0x[0-9a-fA-F]{8,}", arg)
+                # Negative lookbehind for '/' avoids matching hex in URL paths
+                match = re.search(r"(?<!/)\b0x[0-9a-fA-F]{8,}", arg)
                 if match:
                     return match.group(0)
             # Some exceptions nest a dict with 'data' key in args
@@ -554,14 +565,33 @@ class SafeTransactionExecutor:
                 if isinstance(nested, str) and re.fullmatch(r"0x[0-9a-fA-F]{8,}", nested):
                     return nested
 
-        # 3. Fallback: regex on the string representation
+        # 3. Fallback: regex on the string representation.
+        # Use negative lookbehind for '/' to avoid matching hex API keys
+        # embedded in RPC URLs (e.g., https://rpc.example.com/0xABCDEF...).
         error_text = str(error)
-        hex_match = re.search(r"0x[0-9a-fA-F]{8,}", error_text)
+        hex_match = re.search(r"(?<!/)\b0x[0-9a-fA-F]{8,}", error_text)
         if hex_match:
             return hex_match.group(0)
 
         return None
 
+    @staticmethod
+    def _sanitize_error(error: Exception) -> str:
+        """Sanitize error message to prevent RPC API key leakage in logs."""
+        import re
+
+        text = str(error)
+        # Sanitize any embedded URLs (may contain API keys in path/query)
+        text = re.sub(
+            r"https?://[^\s\"')\]]+",
+            lambda m: sanitize_rpc_url(m.group(0)),
+            text,
+        )
+        return text
+
     def _log_retry(self, attempt: int, error: Exception, strategy: str):
         """Log a retry attempt."""
-        logger.warning(f"Safe TX attempt {attempt} failed, strategy: {strategy}. Error: {error}")
+        logger.warning(
+            f"Safe TX attempt {attempt} failed, strategy: {strategy}. "
+            f"Error: {self._sanitize_error(error)}"
+        )
