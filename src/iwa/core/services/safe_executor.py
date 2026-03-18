@@ -260,6 +260,15 @@ class SafeTransactionExecutor:
             logger.error(f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): {error}")
             return safe_tx, False, is_fee_error
 
+        # GS013 (inner revert): the inner call is fundamentally broken (e.g.,
+        # target contract rejects the call).  Retrying won't help.
+        if classification["is_inner_revert"]:
+            SAFE_TX_STATS["final_failures"] += 1
+            logger.error(
+                f"[{operation_name}] Inner call revert (GS013) — aborting (attempt {attempt + 1}): {error}"
+            )
+            return safe_tx, False, is_fee_error
+
         # InsufficientFunds: account can't cover value + gas.  Retrying won't
         # help — the balance won't increase by itself.
         if classification["is_insufficient_funds"]:
@@ -428,6 +437,13 @@ class SafeTransactionExecutor:
         ]
         is_insufficient_funds = any(s in err_text for s in insufficient_funds_signals)
 
+        # GS013 = "Safe transaction hash has not been approved".
+        # When it appears during simulation (safe_tx.call()), it means the
+        # inner call reverted (e.g., target contract rejects the call).
+        # The Safe wraps the inner revert as GS013.  Retrying won't help
+        # because the inner call is fundamentally broken.
+        is_inner_revert = "gs013" in err_text
+
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
             "is_fee_error": is_fee_error,
@@ -437,6 +453,7 @@ class SafeTransactionExecutor:
             "is_signature_error": self._is_signature_error(error),
             "is_timeout": is_timeout,
             "is_insufficient_funds": is_insufficient_funds,
+            "is_inner_revert": is_inner_revert,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:

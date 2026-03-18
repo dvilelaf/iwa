@@ -878,3 +878,57 @@ def test_normal_error_not_classified_as_insufficient_funds(executor):
     error = ValueError("execution reverted: GS026")
     result = executor._classify_error(error)
     assert result["is_insufficient_funds"] is False
+
+
+# =============================================================================
+# Test: GS013 (inner revert) aborts immediately
+# =============================================================================
+
+
+def test_gs013_classified_as_inner_revert(executor):
+    """GS013 should be classified as inner_revert (non-retryable)."""
+    error = ValueError("execution reverted: GS013")
+    result = executor._classify_error(error)
+    assert result["is_inner_revert"] is True
+
+
+def test_gs013_not_classified_for_other_errors(executor):
+    """Other Safe errors should not be classified as inner_revert."""
+    for code in ["GS020", "GS025", "GS026", "intrinsic gas too low"]:
+        error = ValueError(f"execution reverted: {code}")
+        result = executor._classify_error(error)
+        assert result["is_inner_revert"] is False, f"{code} should not be inner_revert"
+
+
+def test_gs013_aborts_immediately(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS013 raised during execute should abort after exactly 1 attempt."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation passes, but execute raises GS013
+        mock_safe_tx.execute.side_effect = ValueError("execution reverted: GS013")
+
+        with patch("time.sleep") as mock_sleep:
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS013" in error
+        assert mock_safe_tx.execute.call_count == 1
+        mock_sleep.assert_not_called()
+        assert SAFE_TX_STATS["final_failures"] == 1
+
+
+def test_gs013_simulation_revert_no_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 in simulation should fail fast without retrying."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS013")
+
+        with patch("time.sleep") as mock_sleep:
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is False
+        assert "GS013" in error
+        # Simulation failed on first attempt, should not retry
+        assert mock_safe_tx.call.call_count == 1
+        assert mock_safe_tx.execute.call_count == 0
+        mock_sleep.assert_not_called()
