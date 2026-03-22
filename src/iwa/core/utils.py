@@ -69,23 +69,14 @@ def configure_logger():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     import sys
-    import time
 
-    # File logger with retry for container restart race conditions
-    for _attempt in range(5):
-        try:
-            logger.add(
-                DATA_DIR / "iwa.log",
-                rotation="10 MB",
-                level="INFO",
-                format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-            )
-            break
-        except PermissionError:
-            if _attempt < 4:
-                time.sleep(1)
-            else:
-                logger.warning(f"Cannot open {DATA_DIR / 'iwa.log'}, file logging disabled")
+    logger.add(
+        DATA_DIR / "iwa.log",
+        rotation="10 MB",
+        level="INFO",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+
     # Restore console logging (stderr) so logs are visible in docker/systemd/frontend streams
     logger.add(sys.stderr, level="INFO")
     # Also keep stderr for console if needed, but Textual captures it?
