@@ -743,7 +743,7 @@ class TestExecuteMechTx:
 
         mock_safe = MagicMock(spec=StoredSafeAccount)
         mock_wallet.account_service.resolve_account.return_value = mock_safe
-        mock_wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash"
+        mock_wallet.safe_service.execute_safe_transaction.return_value = TX_HASH_MOCK
 
         mock_contract = MagicMock()
         mock_contract.extract_events.return_value = [{"name": "SomeOtherEvent"}]
@@ -764,7 +764,7 @@ class TestExecuteMechTx:
 
         mock_safe = MagicMock(spec=StoredSafeAccount)
         mock_wallet.account_service.resolve_account.return_value = mock_safe
-        mock_wallet.safe_service.execute_safe_transaction.return_value = "0xTxHash"
+        mock_wallet.safe_service.execute_safe_transaction.return_value = TX_HASH_MOCK
 
         manager.registry.chain_interface.web3.eth.wait_for_transaction_receipt.side_effect = (
             Exception("receipt timeout")

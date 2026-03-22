@@ -499,7 +499,13 @@ class TestCallCheckpointEdgeCases:
 
 
 class TestCheckpointGraceBoundary:
-    """Parametrized tests for checkpoint grace period at exact boundaries."""
+    """Parametrized tests for checkpoint grace period at exact boundaries.
+
+    Uses a frozen 'now' to eliminate timing flakiness and ensure the
+    boundary condition (< vs <=) is tested deterministically.
+    """
+
+    FROZEN_NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -512,39 +518,50 @@ class TestCheckpointGraceBoundary:
     def test_checkpoint_grace_boundary(self, seconds_ago, expected):
         """Test is_checkpoint_needed at exact grace period boundary.
 
-        With grace_period_seconds=300:
+        With grace_period_seconds=300 and frozen now:
         - 299s ago: 299 < 300 → still in grace → False
         - 300s ago: 300 < 300 is False → grace passed → True
         - 301s ago: 301 < 300 is False → grace passed → True
         """
         mock_staking = MagicMock(spec=StakingContract)
-        epoch_end = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+        epoch_end = self.FROZEN_NOW - timedelta(seconds=seconds_ago)
         mock_staking.get_next_epoch_start.return_value = epoch_end
 
-        # Call the real method
-        result = StakingContract.is_checkpoint_needed(
-            mock_staking, grace_period_seconds=300
-        )
+        with patch(
+            "iwa.plugins.olas.contracts.staking.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = self.FROZEN_NOW
+            result = StakingContract.is_checkpoint_needed(
+                mock_staking, grace_period_seconds=300
+            )
         assert result is expected
 
     def test_checkpoint_epoch_not_ended(self):
         """Epoch in the future → checkpoint not needed."""
         mock_staking = MagicMock(spec=StakingContract)
-        epoch_end = datetime.now(timezone.utc) + timedelta(hours=1)
+        epoch_end = self.FROZEN_NOW + timedelta(hours=1)
         mock_staking.get_next_epoch_start.return_value = epoch_end
 
-        result = StakingContract.is_checkpoint_needed(
-            mock_staking, grace_period_seconds=300
-        )
+        with patch(
+            "iwa.plugins.olas.contracts.staking.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = self.FROZEN_NOW
+            result = StakingContract.is_checkpoint_needed(
+                mock_staking, grace_period_seconds=300
+            )
         assert result is False
 
     def test_checkpoint_zero_grace_period(self):
         """Zero grace period → needed as soon as epoch ends."""
         mock_staking = MagicMock(spec=StakingContract)
-        epoch_end = datetime.now(timezone.utc) - timedelta(seconds=1)
+        epoch_end = self.FROZEN_NOW - timedelta(seconds=1)
         mock_staking.get_next_epoch_start.return_value = epoch_end
 
-        result = StakingContract.is_checkpoint_needed(
-            mock_staking, grace_period_seconds=0
-        )
+        with patch(
+            "iwa.plugins.olas.contracts.staking.datetime"
+        ) as mock_dt:
+            mock_dt.now.return_value = self.FROZEN_NOW
+            result = StakingContract.is_checkpoint_needed(
+                mock_staking, grace_period_seconds=0
+            )
         assert result is True
