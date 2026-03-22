@@ -107,7 +107,12 @@ def test_get_summary(client):
         ),
     ]
 
-    with patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs):
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=mock_txs),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(0.0, {})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.0),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=0.0),
+    ):
         response = client.get("/api/rewards/summary?year=2026")
 
     assert response.status_code == 200
@@ -196,7 +201,12 @@ def test_export_csv_with_month(client):
 
 
 def test_get_summary_empty_year(client):
-    with patch("iwa.web.routers.rewards._query_claims", return_value=[]):
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=[]),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(0.0, {})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.0),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=0.0),
+    ):
         response = client.get("/api/rewards/summary?year=2026")
 
     assert response.status_code == 200
