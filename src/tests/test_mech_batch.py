@@ -13,6 +13,11 @@ ADDR_MARKETPLACE = "0x2222222222222222222222222222222222222222"
 ADDR_PRIORITY_MECH = "0x3333333333333333333333333333333333333333"
 ADDR_MULTISEND = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
 
+# Realistic tx hashes (66 chars: 0x + 64 hex digits)
+TX_HASH_SUCCESS = "0x" + "a1b2c3d4e5f6" * 10 + "a1b2c3d4"
+TX_HASH_PARTIAL = "0x" + "f0e1d2c3b4a5" * 10 + "f0e1d2c3"
+TX_HASH_FAIL = "0x" + "00" * 32
+
 
 class FakeMechManager:
     """Minimal stub that inherits MechManagerMixin for testing."""
@@ -154,9 +159,11 @@ class TestSendBatchMechRequests:
     ):
         """Non-Safe sender should be rejected."""
 
-        # resolve_account returns a non-Safe account
+        from iwa.core.models import StoredAccount
+
+        # resolve_account returns a non-Safe account (EOA, not a Safe)
         mech_manager.wallet.account_service.resolve_account.return_value = (
-            MagicMock()  # Not a StoredSafeAccount
+            MagicMock(spec=StoredAccount)
         )
         result = mech_manager.send_batch_mech_requests(
             data_list=[b"\x01" * 32]
@@ -194,7 +201,7 @@ class TestSendBatchMechRequests:
 
         # Mock Safe execution
         mech_manager.wallet.safe_service.execute_safe_transaction.return_value = (
-            "0xdeadbeef"
+            TX_HASH_SUCCESS
         )
 
         # Mock event verification
@@ -203,15 +210,15 @@ class TestSendBatchMechRequests:
             mock_receipt
         )
         mock_mp.extract_events.return_value = [
-            {"name": "MarketplaceRequest", "args": {}},
-            {"name": "MarketplaceRequest", "args": {}},
-            {"name": "MarketplaceRequest", "args": {}},
+            {"name": "MarketplaceRequest", "args": {"requestId": 1, "sender": ADDR_MULTISIG}},
+            {"name": "MarketplaceRequest", "args": {"requestId": 2, "sender": ADDR_MULTISIG}},
+            {"name": "MarketplaceRequest", "args": {"requestId": 3, "sender": ADDR_MULTISIG}},
         ]
 
         data_list = [b"\x01" * 32, b"\x02" * 32, b"\x03" * 32]
         result = mech_manager.send_batch_mech_requests(data_list=data_list)
 
-        assert result == "0xdeadbeef"
+        assert result == TX_HASH_SUCCESS
 
         # Verify 3 inner transactions were prepared
         assert mock_mp.prepare_request_tx.call_count == 3
@@ -249,7 +256,7 @@ class TestSendBatchMechRequests:
         mock_ms.address = ADDR_MULTISEND
 
         mech_manager.wallet.safe_service.execute_safe_transaction.return_value = (
-            "0xabc123"
+            TX_HASH_PARTIAL
         )
 
         mock_receipt = MagicMock()
@@ -258,14 +265,14 @@ class TestSendBatchMechRequests:
         )
         # Only 1 of 2 events
         mock_mp.extract_events.return_value = [
-            {"name": "MarketplaceRequest", "args": {}},
+            {"name": "MarketplaceRequest", "args": {"requestId": 1, "sender": ADDR_MULTISIG}},
         ]
 
         data_list = [b"\x01" * 32, b"\x02" * 32]
         result = mech_manager.send_batch_mech_requests(data_list=data_list)
 
         # Should still return tx hash (partial success)
-        assert result == "0xabc123"
+        assert result == TX_HASH_PARTIAL
 
     @patch(
         "iwa.plugins.olas.service_manager.mech.MechMarketplaceContract"
@@ -294,7 +301,7 @@ class TestSendBatchMechRequests:
         mock_ms.address = ADDR_MULTISEND
 
         mech_manager.wallet.safe_service.execute_safe_transaction.return_value = (
-            "0xfail"
+            TX_HASH_FAIL
         )
 
         mock_receipt = MagicMock()

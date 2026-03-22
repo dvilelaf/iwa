@@ -17,13 +17,13 @@ Targets uncovered lines:
 - 751-752: call_checkpoint() inactivity warnings
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from iwa.plugins.olas.contracts.service import ServiceState
-from iwa.plugins.olas.contracts.staking import StakingState
+from iwa.plugins.olas.contracts.staking import StakingContract, StakingState
 from iwa.plugins.olas.models import Service
 from iwa.plugins.olas.service_manager import ServiceManager
 from iwa.plugins.olas.service_manager.staking import StakingManagerMixin
@@ -32,17 +32,22 @@ VALID_ADDR = "0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB"
 VALID_ADDR_2 = "0x1111111111111111111111111111111111111111"
 VALID_ADDR_3 = "0x2222222222222222222222222222222222222222"
 
+# Realistic tx hashes (66 chars: 0x + 64 hex digits)
+TX_HASH_OK = "0x" + "ab" * 32
+TX_HASH_FAIL = "0x" + "00" * 32
+TX_HASH_DRAIN = "0x" + "cd" * 32
+
 
 @pytest.fixture
 def mock_wallet():
     """Mock wallet for ServiceManager."""
     w = MagicMock()
     w.master_account.address = VALID_ADDR
-    w.sign_and_send_transaction.return_value = (True, {"status": 1, "transactionHash": "0xabc"})
+    w.sign_and_send_transaction.return_value = (True, {"status": 1, "transactionHash": TX_HASH_OK})
     w.key_storage = MagicMock()
     w.key_storage._password = "pass"
     w.balance_service = MagicMock()
-    w.drain.return_value = {"tx": "0x123"}
+    w.drain.return_value = {"tx": TX_HASH_DRAIN}
     w.account_service = MagicMock()
     return w
 
@@ -347,7 +352,7 @@ class TestExecuteStakeTransactionReverted:
         # Transaction fails with status 0 in receipt
         mock_wallet.sign_and_send_transaction.return_value = (
             False,
-            {"status": 0, "transactionHash": "0xfail"},
+            {"status": 0, "transactionHash": TX_HASH_FAIL},
         )
 
         result = sm._execute_stake_transaction(mock_staking)
@@ -417,7 +422,7 @@ class TestUnstakeEdgeCases:
 
         mock_wallet.sign_and_send_transaction.return_value = (
             True,
-            {"status": 1, "transactionHash": "0xabc"},
+            {"status": 1, "transactionHash": TX_HASH_OK},
         )
 
         result = sm.unstake(mock_staking)
@@ -456,7 +461,7 @@ class TestCallCheckpointEdgeCases:
 
         mock_wallet.sign_and_send_transaction.return_value = (
             True,
-            {"status": 1, "transactionHash": "0xabc"},
+            {"status": 1, "transactionHash": TX_HASH_OK},
         )
 
         result = sm.call_checkpoint(staking_contract=mock_staking)
@@ -481,8 +486,65 @@ class TestCallCheckpointEdgeCases:
 
         mock_wallet.sign_and_send_transaction.return_value = (
             True,
-            {"status": 1, "transactionHash": "0xabc"},
+            {"status": 1, "transactionHash": TX_HASH_OK},
         )
 
         result = sm.call_checkpoint(staking_contract=mock_staking)
+        assert result is True
+
+
+# ============================================================================
+# Checkpoint grace period boundary tests
+# ============================================================================
+
+
+class TestCheckpointGraceBoundary:
+    """Parametrized tests for checkpoint grace period at exact boundaries."""
+
+    @pytest.mark.parametrize(
+        "seconds_ago,expected",
+        [
+            (299, False),  # within grace period → not needed
+            (300, True),   # exactly at boundary (300 < 300 is False) → needed
+            (301, True),   # past grace period → needed
+        ],
+    )
+    def test_checkpoint_grace_boundary(self, seconds_ago, expected):
+        """Test is_checkpoint_needed at exact grace period boundary.
+
+        With grace_period_seconds=300:
+        - 299s ago: 299 < 300 → still in grace → False
+        - 300s ago: 300 < 300 is False → grace passed → True
+        - 301s ago: 301 < 300 is False → grace passed → True
+        """
+        mock_staking = MagicMock(spec=StakingContract)
+        epoch_end = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+        mock_staking.get_next_epoch_start.return_value = epoch_end
+
+        # Call the real method
+        result = StakingContract.is_checkpoint_needed(
+            mock_staking, grace_period_seconds=300
+        )
+        assert result is expected
+
+    def test_checkpoint_epoch_not_ended(self):
+        """Epoch in the future → checkpoint not needed."""
+        mock_staking = MagicMock(spec=StakingContract)
+        epoch_end = datetime.now(timezone.utc) + timedelta(hours=1)
+        mock_staking.get_next_epoch_start.return_value = epoch_end
+
+        result = StakingContract.is_checkpoint_needed(
+            mock_staking, grace_period_seconds=300
+        )
+        assert result is False
+
+    def test_checkpoint_zero_grace_period(self):
+        """Zero grace period → needed as soon as epoch ends."""
+        mock_staking = MagicMock(spec=StakingContract)
+        epoch_end = datetime.now(timezone.utc) - timedelta(seconds=1)
+        mock_staking.get_next_epoch_start.return_value = epoch_end
+
+        result = StakingContract.is_checkpoint_needed(
+            mock_staking, grace_period_seconds=0
+        )
         assert result is True

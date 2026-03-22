@@ -26,13 +26,16 @@ ADDR_MARKETPLACE_V1 = "0x4554fE75c1f5576c1d7F765B2A036c199Adae329"
 ADDR_UNKNOWN_MARKETPLACE = "0x0000000000000000000000000000000000000077"
 ADDR_FACTORY = "0x0000000000000000000000000000000000000088"
 
+# Realistic tx hash (66 chars: 0x + 64 hex digits)
+TX_HASH_MOCK = "0x" + "ab" * 32
+
 
 @pytest.fixture
 def mock_wallet():
     """Mock wallet fixture."""
     wallet = MagicMock()
     wallet.safe_service = MagicMock()
-    wallet.safe_service.execute_safe_transaction.return_value = "0xMockTxHash"
+    wallet.safe_service.execute_safe_transaction.return_value = TX_HASH_MOCK
     wallet.account_service = MagicMock()
     wallet.sign_and_send_transaction = MagicMock()
     return wallet
@@ -290,7 +293,7 @@ class TestSendLegacyMechRequest:
                 data=b"test_data",
             )
 
-        assert result == "0xMockTxHash"
+        assert result == TX_HASH_MOCK
 
     def test_prepare_tx_returns_none(self, manager):
         """Lines 264-266: prepare_request_tx returns None."""
