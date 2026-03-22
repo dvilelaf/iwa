@@ -155,7 +155,8 @@ class TestGasErrorDetection:
 
 
 class TestTransferLoggerLogTransfers:
-    def test_log_transfers_with_native_value(self):
+    @patch("iwa.core.services.transaction.log_transaction")
+    def test_log_transfers_with_native_value(self, mock_log_tx):
         """log_transfers logs native value from transaction."""
         account_service = MagicMock()
         account_service.get_tag_by_address.return_value = None
@@ -163,11 +164,12 @@ class TestTransferLoggerLogTransfers:
         chain_interface.chain.native_currency = "xDAI"
         chain_interface.chain.get_token_name.return_value = None
 
-        # Mock tx object
+        # Mock tx as a non-dict with explicit "from" attribute.
+        # "from" is a Python keyword so we must use configure_mock.
         tx_obj = MagicMock()
         tx_obj.value = 10**18
-        tx_obj.__getitem__ = lambda self, key: "0xFrom" if key == "from" else ""
         tx_obj.to = "0xTo"
+        tx_obj.configure_mock(**{"from": "0xFrom"})
         chain_interface.web3.eth.get_transaction.return_value = tx_obj
 
         receipt = {
@@ -176,8 +178,11 @@ class TestTransferLoggerLogTransfers:
         }
 
         logger = TransferLogger(account_service, chain_interface)
-        # Should not raise
         logger.log_transfers(receipt)
+
+        # Verify _log_native_transfer was reached: it logs via
+        # logger.info so we check the transaction was fetched
+        chain_interface.web3.eth.get_transaction.assert_called_once()
 
     def test_log_transfers_with_erc20_events(self):
         """log_transfers processes ERC20 Transfer events from logs."""
@@ -189,7 +194,9 @@ class TestTransferLoggerLogTransfers:
         chain_interface.chain.native_currency = "xDAI"
         chain_interface.chain.get_token_name.return_value = None
         chain_interface.get_token_decimals.return_value = 18
-        chain_interface.web3.eth.get_transaction.side_effect = Exception("skip")
+        chain_interface.web3.eth.get_transaction.side_effect = (
+            Exception("skip")
+        )
 
         from_topic = "0x" + "0" * 24 + "aa" * 20
         to_topic = "0x" + "0" * 24 + "bb" * 20
@@ -198,22 +205,37 @@ class TestTransferLoggerLogTransfers:
         receipt = {
             "transactionHash": b"\xab" * 32,
             "logs": [{
-                "topics": [TRANSFER_EVENT_TOPIC, from_topic, to_topic],
+                "topics": [
+                    TRANSFER_EVENT_TOPIC, from_topic, to_topic,
+                ],
                 "data": data,
                 "address": "0xTokenContract",
             }],
         }
 
-        logger = TransferLogger(account_service, chain_interface)
-        logger.log_transfers(receipt)
+        transfer_logger = TransferLogger(
+            account_service, chain_interface,
+        )
+        transfer_logger.log_transfers(receipt)
+
+        # Verify the ERC20 Transfer event was processed:
+        # _log_erc20_transfer calls get_token_decimals
+        chain_interface.get_token_decimals.assert_called_once_with(
+            "0xTokenContract", fallback_to_18=False,
+        )
 
     def test_log_transfers_no_tx_hash(self):
-        """log_transfers handles receipt with no transactionHash gracefully."""
+        """log_transfers skips native transfer when no transactionHash."""
         account_service = MagicMock()
         chain_interface = MagicMock()
         chain_interface.chain.native_currency = "xDAI"
 
         receipt = {"logs": []}
 
-        logger = TransferLogger(account_service, chain_interface)
-        logger.log_transfers(receipt)  # Should not raise
+        transfer_logger = TransferLogger(
+            account_service, chain_interface,
+        )
+        transfer_logger.log_transfers(receipt)
+
+        # Without tx hash, get_transaction should NOT be called
+        chain_interface.web3.eth.get_transaction.assert_not_called()

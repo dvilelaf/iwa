@@ -122,8 +122,12 @@ class TestSendERC20ViaEOA:
             token_symbol="OLAS",
         )
 
-        assert result is not None
+        assert result == "ab" * 32
         mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["token"] == "OLAS"
+        assert call_kwargs["amount_wei"] == 1000
+        assert call_kwargs["tags"] == ["erc20-transfer"]
 
     @patch("iwa.core.services.transfer.erc20.log_transaction")
     def test_failure_returns_none(self, mock_log, svc):

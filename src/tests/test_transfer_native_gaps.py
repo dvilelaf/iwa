@@ -121,8 +121,12 @@ class TestSendNativeViaEOA:
             token_symbol="xDAI",
         )
 
-        assert result is not None
+        assert result == "ab" * 32
         mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["token"] == "xDAI"
+        assert call_kwargs["amount_wei"] == 1000
+        assert "native-transfer" in call_kwargs["tags"]
 
     @patch("iwa.core.services.transfer.native.log_transaction")
     def test_failure_returns_none(self, mock_log, svc):
