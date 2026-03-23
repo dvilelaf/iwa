@@ -189,9 +189,8 @@ class SafeTransactionExecutor:
                 raise e
             # GS013 = inner call reverted (safeTxGas=0, gasPrice=0).
             # May be transient (RPC stale state, marketplace hiccup).
-            # Diagnose inner reason, then let it fall through to retry.
+            # Let it fall through to retry; diagnosis happens in _handle_execution_failure.
             if classification["is_gs013_inner_revert"]:
-                self._diagnose_inner_revert(safe_tx, operation_name)
                 logger.warning(
                     f"[{operation_name}] GS013 inner call revert in simulation "
                     f"(attempt {attempt + 1}), will retry: "
@@ -535,15 +534,16 @@ class SafeTransactionExecutor:
         we can capture the actual contract revert reason.
         """
         try:
-            web3 = self.chain_interface.web3
-            web3.eth.call(
-                {
-                    "from": safe_tx.safe_address,
-                    "to": safe_tx.to,
-                    "data": safe_tx.data.hex() if safe_tx.data else "0x",
-                    "value": safe_tx.value,
-                },
-                "latest",
+            self.chain_interface.with_retry(
+                lambda: self.chain_interface.web3.eth.call(
+                    {
+                        "from": safe_tx.safe_address,
+                        "to": safe_tx.to,
+                        "data": safe_tx.data.hex() if safe_tx.data else "0x",
+                        "value": safe_tx.value,
+                    },
+                    "latest",
+                )
             )
             # If it succeeds here, the issue was truly transient
             logger.info(

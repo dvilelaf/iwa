@@ -1077,7 +1077,10 @@ class LifecycleManagerMixin:
         if staking_contract:
             logger.info(f"[SPIN-UP] Step {step}: Staking service...")
             if not self._retry_operation(
-                lambda: self.stake(staking_contract), "Staking", step
+                lambda: self.stake(staking_contract),
+                "Staking",
+                step,
+                success_check=lambda: self._is_service_staked(staking_contract),
             ):
                 return False
             logger.info(f"[SPIN-UP] Step {step} OK: Service staked successfully")
@@ -1088,6 +1091,17 @@ class LifecycleManagerMixin:
         return True
 
     _SPIN_UP_MAX_RETRIES = 3
+
+    def _is_service_staked(self, staking_contract) -> bool:
+        """Check on-chain whether the service is already staked."""
+        try:
+            from iwa.plugins.olas.contracts.staking import StakingState
+
+            state = staking_contract.get_staking_state(self.service.service_id)
+            return state == StakingState.STAKED
+        except Exception as e:
+            logger.debug(f"[SPIN-UP] _is_service_staked check failed: {e}")
+            return False
 
     def _retry_spin_up_step(
         self,
@@ -1124,8 +1138,19 @@ class LifecycleManagerMixin:
         )
         return False
 
-    def _retry_operation(self, operation, name: str, step: int) -> bool:
-        """Retry a generic operation with backoff."""
+    def _retry_operation(
+        self, operation, name: str, step: int, success_check=None
+    ) -> bool:
+        """Retry a generic operation with backoff.
+
+        Args:
+            operation: Callable that returns True on success.
+            name: Human-readable name for logging.
+            step: Current spin-up step number.
+            success_check: Optional callable that returns True if the operation
+                already succeeded (e.g., tx landed despite error).
+
+        """
         for retry in range(self._SPIN_UP_MAX_RETRIES):
             if operation():
                 return True
@@ -1136,6 +1161,18 @@ class LifecycleManagerMixin:
                     f"{self._SPIN_UP_MAX_RETRIES}), retrying in {delay}s..."
                 )
                 time.sleep(delay)
+                # Check if the operation actually succeeded despite the error
+                if success_check and success_check():
+                    logger.info(
+                        f"[SPIN-UP] {name} succeeded despite error (verified on-chain)"
+                    )
+                    return True
+        # Final check: the last attempt may have succeeded on-chain despite error
+        if success_check and success_check():
+            logger.info(
+                f"[SPIN-UP] {name} succeeded despite error (verified on-chain)"
+            )
+            return True
         logger.error(
             f"[SPIN-UP] {name} FAILED after {self._SPIN_UP_MAX_RETRIES} attempts"
         )
