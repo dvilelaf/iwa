@@ -108,30 +108,26 @@ def test_call_checkpoint_success(sm):
 
 
 def test_spin_up_intermediate_failure(sm):
-    """Test spin_up stops at first failure."""
-    # Mock sequential calls using ServiceState enum on the registry mock
-    with patch.object(
-        sm.registry,
-        "get_service",
-        side_effect=[
-            {"state": ServiceState.PRE_REGISTRATION},
-            {"state": ServiceState.ACTIVE_REGISTRATION},
-            {"state": ServiceState.ACTIVE_REGISTRATION},  # Verification after activate
-            {"state": ServiceState.ACTIVE_REGISTRATION},  # Final verification (if it reached there)
-            {"state": ServiceState.ACTIVE_REGISTRATION},  # One more just in case
-        ],
-    ):
-        with (
-            patch.object(sm, "activate_registration", return_value=True) as m1,
-            patch.object(sm, "register_agent", return_value=False) as m2,
-            patch.object(sm, "deploy") as m3,
-        ):
-            success = sm.spin_up()
+    """Test spin_up stops after retrying a failing step."""
+    # After activate succeeds, register_agent always fails (3 retry attempts).
+    states = [
+        {"state": ServiceState.PRE_REGISTRATION},  # initial
+        {"state": ServiceState.ACTIVE_REGISTRATION},  # after activate
+    ] + [{"state": ServiceState.ACTIVE_REGISTRATION}] * 10  # retries
 
-            assert success is False
-            m1.assert_called_once()
-            m2.assert_called_once()
-            m3.assert_not_called()
+    with (
+        patch.object(sm.registry, "get_service", side_effect=states),
+        patch.object(sm, "activate_registration", return_value=True) as m1,
+        patch.object(sm, "register_agent", return_value=False) as m2,
+        patch.object(sm, "deploy") as m3,
+        patch("iwa.plugins.olas.service_manager.lifecycle.time.sleep"),
+    ):
+        success = sm.spin_up()
+
+        assert success is False
+        m1.assert_called_once()
+        assert m2.call_count == 3  # retried 3 times
+        m3.assert_not_called()
 
 
 def test_service_manager_no_service_error_handling(mock_wallet):
