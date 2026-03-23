@@ -544,22 +544,13 @@ def test_spin_up_with_staking(service_manager, mock_wallet):
 
 
 def test_spin_up_activate_fails(service_manager, mock_wallet):
-    """Test spin_up fails when activate_registration fails."""
-    state_sequence = [
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up initial
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # activate_registration check
-        {
-            "state": ServiceState.PRE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # activate_registration internal (get security deposit)
-    ]
-    service_manager.registry.get_service.side_effect = state_sequence
+    """Test spin_up fails when activate_registration fails after retries."""
+    pre_reg = {
+        "state": ServiceState.PRE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
+    # Enough entries for 3 retries (each retry reads state multiple times)
+    service_manager.registry.get_service.return_value = pre_reg
 
     # Mock balance/allowance for activate_registration behavior
     mock_wallet.balance_service = MagicMock()
@@ -568,46 +559,35 @@ def test_spin_up_activate_fails(service_manager, mock_wallet):
 
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
 
-    assert service_manager.spin_up() is False
+    with patch("iwa.plugins.olas.service_manager.lifecycle.time.sleep"):
+        assert service_manager.spin_up() is False
 
 
 def test_spin_up_register_fails(service_manager, mock_wallet):
-    """Test spin_up fails when register_agent fails."""
-    state_sequence = [
-        {
-            "state": ServiceState.ACTIVE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up initial
-        {
-            "state": ServiceState.ACTIVE_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # register_agent check
-    ]
-    service_manager.registry.get_service.side_effect = state_sequence
+    """Test spin_up fails when register_agent fails after retries."""
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.ACTIVE_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     # Funding fails
     mock_wallet.send.return_value = None  # wallet.send returns None on failure
 
-    assert service_manager.spin_up() is False
+    with patch("iwa.plugins.olas.service_manager.lifecycle.time.sleep"):
+        assert service_manager.spin_up() is False
 
 
 def test_spin_up_deploy_fails(service_manager, mock_wallet):
-    """Test spin_up fails when deploy fails."""
-    state_sequence = [
-        {
-            "state": ServiceState.FINISHED_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # spin_up initial
-        {
-            "state": ServiceState.FINISHED_REGISTRATION,
-            "security_deposit": 50000000000000000000,
-        },  # deploy check
-    ]
-    service_manager.registry.get_service.side_effect = state_sequence
+    """Test spin_up fails when deploy fails after retries."""
+    service_manager.registry.get_service.return_value = {
+        "state": ServiceState.FINISHED_REGISTRATION,
+        "security_deposit": 50000000000000000000,
+    }
 
     mock_wallet.sign_and_send_transaction.return_value = (False, {})
 
-    assert service_manager.spin_up() is False
+    with patch("iwa.plugins.olas.service_manager.lifecycle.time.sleep"):
+        assert service_manager.spin_up() is False
 
 
 def test_spin_up_with_existing_agent(service_manager, mock_wallet):

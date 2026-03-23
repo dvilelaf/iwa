@@ -58,6 +58,7 @@ Token Utility Contract:
 """
 
 import datetime
+import time
 from typing import List, Optional, Union
 
 from loguru import logger
@@ -1054,13 +1055,11 @@ class LifecycleManagerMixin:
             logger.info(f"[SPIN-UP] Step {step}: Processing {current_state.name}...")
 
             should_fund = staking_contract is not None
-            if not self._process_spin_up_state(
-                current_state, agent_address, bond_amount_wei, fund_multisig=should_fund
+            if not self._retry_spin_up_step(
+                service_id, current_state, agent_address, bond_amount_wei, should_fund, step
             ):
-                logger.error(f"[SPIN-UP] Step {step} FAILED at state {current_state.name}")
                 return False
 
-            # Refresh state
             current_state = self._get_service_state_safe(service_id)
             if not current_state:
                 return False
@@ -1077,8 +1076,9 @@ class LifecycleManagerMixin:
         # Stake if requested
         if staking_contract:
             logger.info(f"[SPIN-UP] Step {step}: Staking service...")
-            if not self.stake(staking_contract):
-                logger.error("[SPIN-UP] Staking FAILED")
+            if not self._retry_operation(
+                lambda: self.stake(staking_contract), "Staking", step
+            ):
                 return False
             logger.info(f"[SPIN-UP] Step {step} OK: Service staked successfully")
 
@@ -1086,6 +1086,60 @@ class LifecycleManagerMixin:
         logger.info(f"[SPIN-UP] COMPLETE - Service {service_id} is deployed and ready")
         logger.info("=" * 50)
         return True
+
+    _SPIN_UP_MAX_RETRIES = 3
+
+    def _retry_spin_up_step(
+        self,
+        service_id: int,
+        current_state: "ServiceState",
+        agent_address: Optional[str],
+        bond_amount_wei: Optional[Wei],
+        fund_multisig: bool,
+        step: int,
+    ) -> bool:
+        """Retry a spin-up state transition with backoff."""
+        for retry in range(self._SPIN_UP_MAX_RETRIES):
+            if self._process_spin_up_state(
+                current_state, agent_address, bond_amount_wei, fund_multisig=fund_multisig
+            ):
+                return True
+            if retry < self._SPIN_UP_MAX_RETRIES - 1:
+                delay = 10 * (2**retry)
+                logger.warning(
+                    f"[SPIN-UP] Step {step} failed (attempt {retry + 1}/"
+                    f"{self._SPIN_UP_MAX_RETRIES}), retrying in {delay}s..."
+                )
+                time.sleep(delay)
+                # Re-check state in case the tx actually went through
+                refreshed = self._get_service_state_safe(service_id)
+                if refreshed and refreshed != current_state:
+                    logger.info(
+                        f"[SPIN-UP] State advanced to {refreshed.name} despite error"
+                    )
+                    return True
+        logger.error(
+            f"[SPIN-UP] Step {step} FAILED at state {current_state.name} "
+            f"after {self._SPIN_UP_MAX_RETRIES} attempts"
+        )
+        return False
+
+    def _retry_operation(self, operation, name: str, step: int) -> bool:
+        """Retry a generic operation with backoff."""
+        for retry in range(self._SPIN_UP_MAX_RETRIES):
+            if operation():
+                return True
+            if retry < self._SPIN_UP_MAX_RETRIES - 1:
+                delay = 10 * (2**retry)
+                logger.warning(
+                    f"[SPIN-UP] {name} failed (attempt {retry + 1}/"
+                    f"{self._SPIN_UP_MAX_RETRIES}), retrying in {delay}s..."
+                )
+                time.sleep(delay)
+        logger.error(
+            f"[SPIN-UP] {name} FAILED after {self._SPIN_UP_MAX_RETRIES} attempts"
+        )
+        return False
 
     def _process_spin_up_state(
         self,

@@ -21,10 +21,14 @@ def _update_yaml_recursive(target: Dict, source: Dict) -> None:
     """Recursively update a ruamel.yaml CommentedMap with data from a dict.
 
     This preserves comments and structure in the target map.
+    Skips None values in source when target already has a non-None value,
+    preventing fields (e.g. addresses) from being overwritten with None.
     """
     for key, value in source.items():
         if isinstance(value, dict) and key in target and isinstance(target[key], dict):
             _update_yaml_recursive(target[key], value)
+        elif value is None and key in target and target[key] is not None:
+            continue  # don't overwrite non-None with None
         else:
             target[key] = value
 

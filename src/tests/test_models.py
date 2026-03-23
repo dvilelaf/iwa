@@ -270,3 +270,63 @@ def test_service_rejects_invalid_address():
             service_id=1,
             multisig_address="not_an_address",
         )
+
+
+# --- _update_yaml_recursive tests ---
+
+from iwa.core.models import _update_yaml_recursive
+
+
+def test_update_yaml_recursive_none_does_not_overwrite():
+    """None in source must NOT overwrite a non-None value in target."""
+    target = {"address": "0xABCD", "name": "svc"}
+    source = {"address": None, "name": "svc"}
+    _update_yaml_recursive(target, source)
+    assert target["address"] == "0xABCD"
+
+
+def test_update_yaml_recursive_non_none_overwrites():
+    """A non-None source value MUST overwrite a non-None target value."""
+    target = {"address": "0xOLD", "count": 1}
+    source = {"address": "0xNEW", "count": 2}
+    _update_yaml_recursive(target, source)
+    assert target["address"] == "0xNEW"
+    assert target["count"] == 2
+
+
+def test_update_yaml_recursive_empty_string_vs_none():
+    """Empty string is a valid value and should overwrite; None should not."""
+    target = {"field_a": "keep_me", "field_b": "keep_me_too"}
+    source = {"field_a": "", "field_b": None}
+    _update_yaml_recursive(target, source)
+    # Empty string overwrites
+    assert target["field_a"] == ""
+    # None does NOT overwrite
+    assert target["field_b"] == "keep_me_too"
+
+
+def test_update_yaml_recursive_none_sets_new_key():
+    """None in source for a key absent from target should still be set."""
+    target = {"existing": 1}
+    source = {"new_key": None}
+    _update_yaml_recursive(target, source)
+    assert target["new_key"] is None
+
+
+def test_update_yaml_recursive_nested_none_protection():
+    """None protection must work recursively in nested dicts."""
+    target = {
+        "service": {
+            "address": "0xABCD",
+            "multisig": "0x1234",
+        }
+    }
+    source = {
+        "service": {
+            "address": None,
+            "multisig": "0xNEW",
+        }
+    }
+    _update_yaml_recursive(target, source)
+    assert target["service"]["address"] == "0xABCD"
+    assert target["service"]["multisig"] == "0xNEW"
