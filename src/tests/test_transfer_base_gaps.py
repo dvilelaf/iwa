@@ -1,6 +1,6 @@
 """Tests for TransferService.send() dispatching logic and base helpers."""
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

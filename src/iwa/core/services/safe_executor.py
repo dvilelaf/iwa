@@ -26,7 +26,7 @@ SAFE_TX_STATS = {
     "final_failures": 0,
     "signature_errors": 0,
     "insufficient_funds": 0,
-    "gs013_approval_errors": 0,
+    "gs013_inner_revert_retries": 0,
 }
 
 # Minimum signature length (65 bytes per signature for ECDSA)
@@ -176,13 +176,28 @@ class SafeTransactionExecutor:
                     f"{reason or self._sanitize_error(e)}"
                 )
                 raise e
-            if classification["is_revert"] and not classification["is_nonce_error"]:
+            if (
+                classification["is_revert"]
+                and not classification["is_nonce_error"]
+                and not classification["is_gs013_inner_revert"]
+            ):
                 reason = self._decode_revert_reason(e)
                 logger.error(
                     f"[{operation_name}] Simulation reverted: "
                     f"{reason or self._sanitize_error(e)}"
                 )
                 raise e
+            # GS013 = inner call reverted (safeTxGas=0, gasPrice=0).
+            # May be transient (RPC stale state, marketplace hiccup).
+            # Diagnose inner reason, then let it fall through to retry.
+            if classification["is_gs013_inner_revert"]:
+                self._diagnose_inner_revert(safe_tx, operation_name)
+                logger.warning(
+                    f"[{operation_name}] GS013 inner call revert in simulation "
+                    f"(attempt {attempt + 1}), will retry: "
+                    f"{self._sanitize_error(e)}"
+                )
+                raise
             raise
 
         # 4. Execute
@@ -278,17 +293,17 @@ class SafeTransactionExecutor:
             )
             return safe_tx, False, is_fee_error
 
-        # GS013 ("Hash has not been approved"): the Safe's checkSignatures
-        # rejected a contract-signature approval.  This is deterministic —
-        # retrying won't make the approval appear.
-        if classification["is_gs013_approval"]:
-            SAFE_TX_STATS["gs013_approval_errors"] += 1
-            SAFE_TX_STATS["final_failures"] += 1
-            logger.error(
-                f"[{operation_name}] GS013 approval error — aborting (attempt {attempt + 1}): "
-                f"{safe_error}{reason_suffix}"
+        # GS013 = inner call reverted while safeTxGas=0 and gasPrice=0.
+        # This can be transient (RPC returning stale chain state, marketplace
+        # contract in a temporary state).  Allow retry with backoff.
+        if classification["is_gs013_inner_revert"]:
+            SAFE_TX_STATS["gs013_inner_revert_retries"] += 1
+            self._diagnose_inner_revert(safe_tx, operation_name)
+            logger.warning(
+                f"[{operation_name}] GS013 inner call revert (attempt {attempt + 1}), "
+                f"retrying: {safe_error}{reason_suffix}"
             )
-            return safe_tx, False, is_fee_error
+            return safe_tx, True, is_fee_error
 
         # InsufficientFunds: account can't cover value + gas.  Retrying won't
         # help — the balance won't increase by itself.
@@ -462,10 +477,10 @@ class SafeTransactionExecutor:
         ]
         is_insufficient_funds = any(s in err_text for s in insufficient_funds_signals)
 
-        # GS013 = "Safe transaction hash has not been approved".
-        # Raised by checkSignatures() when a contract-signature approval is
-        # missing.  This is deterministic — retrying won't help.
-        is_gs013_approval = "gs013" in err_text
+        # GS013 = inner call reverted while safeTxGas=0 and gasPrice=0.
+        # The Safe contract wraps ANY inner revert as GS013 in this mode.
+        # May be transient (stale RPC state, marketplace hiccup).
+        is_gs013_inner_revert = "gs013" in err_text
 
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
@@ -476,7 +491,7 @@ class SafeTransactionExecutor:
             "is_signature_error": self._is_signature_error(error),
             "is_timeout": is_timeout,
             "is_insufficient_funds": is_insufficient_funds,
-            "is_gs013_approval": is_gs013_approval,
+            "is_gs013_inner_revert": is_gs013_inner_revert,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:
@@ -511,6 +526,37 @@ class SafeTransactionExecutor:
         except Exception as e:
             logger.debug(f"Failed to calculate bumped gas price: {e}")
             return None
+
+    def _diagnose_inner_revert(self, safe_tx: "SafeTx", operation_name: str) -> None:
+        """When GS013 occurs, call the inner tx directly to get the real reason.
+
+        GS013 hides the inner revert reason behind the Safe wrapper.
+        By calling safe_tx.to with safe_tx.data directly (bypassing the Safe),
+        we can capture the actual contract revert reason.
+        """
+        try:
+            web3 = self.chain_interface.web3
+            web3.eth.call(
+                {
+                    "from": safe_tx.safe_address,
+                    "to": safe_tx.to,
+                    "data": safe_tx.data.hex() if safe_tx.data else "0x",
+                    "value": safe_tx.value,
+                },
+                "latest",
+            )
+            # If it succeeds here, the issue was truly transient
+            logger.info(
+                f"[{operation_name}] GS013 diagnosis: inner call succeeds now "
+                "(transient RPC state issue)"
+            )
+        except Exception as inner_err:
+            reason = self._decode_revert_reason(inner_err)
+            sanitized = self._sanitize_error(inner_err)
+            logger.warning(
+                f"[{operation_name}] GS013 diagnosis: inner call reverts with: "
+                f"{reason or sanitized}"
+            )
 
     def _decode_revert_reason(self, error: Exception) -> Optional[str]:
         """Attempt to decode the revert reason from exception data.

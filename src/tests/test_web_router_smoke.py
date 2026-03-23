@@ -93,7 +93,6 @@ def test_accounts_endpoint(client):
 
 def test_transactions_endpoint(client):
     """GET /api/transactions returns 200."""
-    import datetime
 
     with patch("iwa.web.routers.transactions.SentTransaction") as mock_tx:
         # Peewee fields use operator overloading — mock timestamp

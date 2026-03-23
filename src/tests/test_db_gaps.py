@@ -3,8 +3,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from iwa.core.db import (
     _merge_transaction_extra_data,
     _merge_transaction_tags,
@@ -12,7 +10,6 @@ from iwa.core.db import (
     _resolve_final_token_and_amount,
     log_transaction,
 )
-
 
 # ---- Tag merging ----
 

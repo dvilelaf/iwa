@@ -90,7 +90,7 @@ class TestBalanceTolerance:
         mock_cow_cls.return_value = cow_instance
         cow_instance.swap.return_value = {"txHash": "0x1", "executedSellAmount": "0", "executedBuyAmount": "0", "quote": {}}
 
-        result = await svc.swap(
+        await svc.swap(
             account_address_or_tag="user",
             amount_wei=requested,
             sell_token_name="olas",

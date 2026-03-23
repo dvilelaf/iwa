@@ -1,12 +1,10 @@
 """Tests for CoW Protocol gaps: swap order creation/signing/submission, quotes."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from iwa.plugins.gnosis.cow.types import OrderType
-
 
 # ---- CowSwap.swap() tests ----
 

@@ -881,58 +881,181 @@ def test_normal_error_not_classified_as_insufficient_funds(executor):
 
 
 # =============================================================================
-# Test: GS013 (approval error) aborts immediately
+# Test: GS013 (inner call revert) is retryable
 # =============================================================================
 
 
-def test_gs013_classified_as_approval_error(executor):
-    """GS013 should be classified as gs013_approval (non-retryable)."""
+def test_gs013_classified_as_inner_revert(executor):
+    """GS013 should be classified as gs013_inner_revert (retryable)."""
     error = ValueError("execution reverted: GS013")
     result = executor._classify_error(error)
-    assert result["is_gs013_approval"] is True
+    assert result["is_gs013_inner_revert"] is True
 
 
 def test_gs013_not_classified_for_other_errors(executor):
-    """Other Safe errors should not be classified as gs013_approval."""
+    """Other Safe errors should not be classified as gs013_inner_revert."""
     for code in ["GS020", "GS025", "GS026", "intrinsic gas too low"]:
         error = ValueError(f"execution reverted: {code}")
         result = executor._classify_error(error)
-        assert result["is_gs013_approval"] is False, f"{code} should not be gs013_approval"
+        assert result["is_gs013_inner_revert"] is False, (
+            f"{code} should not be gs013_inner_revert"
+        )
 
 
-def test_gs013_aborts_immediately(executor, mock_chain_interface, mock_safe_tx, mock_safe):
-    """GS013 raised during execute should abort after exactly 1 attempt."""
+def test_gs013_is_retried(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS013 raised during execute should be retried (not abort immediately)."""
     with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
-        # Simulation passes, but execute raises GS013
+        # Simulation passes, but execute raises GS013 every time
         mock_safe_tx.execute.side_effect = ValueError("execution reverted: GS013")
 
-        with patch("time.sleep") as mock_sleep:
+        with patch("time.sleep"):
             success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert success is False
         assert "GS013" in error
-        assert mock_safe_tx.execute.call_count == 1
-        mock_sleep.assert_not_called()
-        assert SAFE_TX_STATS["gs013_approval_errors"] == 1
-        assert SAFE_TX_STATS["final_failures"] == 1
+        # Should have retried multiple times (not just 1)
+        assert mock_safe_tx.execute.call_count > 1
+        assert SAFE_TX_STATS["gs013_inner_revert_retries"] > 0
 
 
-def test_gs013_simulation_revert_no_retry(
+def test_gs013_simulation_is_retried(
     executor, mock_chain_interface, mock_safe_tx, mock_safe
 ):
-    """GS013 in simulation should fail fast without retrying."""
+    """GS013 in simulation should be retried, not fail fast."""
     with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
         mock_safe_tx.call.side_effect = ValueError("execution reverted: GS013")
 
-        with patch("time.sleep") as mock_sleep:
+        with patch("time.sleep"):
             success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
 
         assert success is False
         assert "GS013" in error
-        # Simulation failed on first attempt, should not retry
-        assert mock_safe_tx.call.call_count == 1
-        assert mock_safe_tx.execute.call_count == 0
-        mock_sleep.assert_not_called()
+        # Should have retried simulation multiple times
+        assert mock_safe_tx.call.call_count > 1
+
+
+def test_gs013_transient_succeeds_on_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 that resolves after a few retries should succeed."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation fails twice with GS013, then succeeds
+        mock_safe_tx.call.side_effect = [
+            ValueError("execution reverted: GS013"),
+            ValueError("execution reverted: GS013"),
+            None,  # success
+        ]
+        mock_safe_tx.execute.return_value = {"transactionHash": b"\x01" * 32}
+        mock_safe_tx.tx_hash = b"\x01" * 32
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
+            MagicMock(status=1)
+        )
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+        assert success is True
+        assert mock_safe_tx.call.call_count == 3
+
+
+def test_gs013_execution_transient_succeeds_on_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 during execution (not simulation) that resolves on retry should succeed."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation always passes
+        mock_safe_tx.call.return_value = None
+        # Execute fails twice with GS013, then succeeds
+        mock_safe_tx.execute.side_effect = [
+            ValueError("execution reverted: GS013"),
+            ValueError("execution reverted: GS013"),
+            (b"\x02" * 32, None),
+        ]
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
+            MagicMock(status=1)
+        )
+
+        with patch("time.sleep"):
+            success, tx_hash, receipt = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is True
+        assert mock_safe_tx.execute.call_count == 3
+        assert SAFE_TX_STATS["gs013_inner_revert_retries"] == 2
+
+
+def test_gs013_followed_by_different_error(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 followed by a non-retryable error should abort on the second error."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # Simulation: GS013 first, then a signature error (non-retryable)
+        mock_safe_tx.call.side_effect = [
+            ValueError("execution reverted: GS013"),
+            ValueError("execution reverted: GS026"),
+        ]
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        assert "GS026" in error
+        assert mock_safe_tx.call.call_count == 2
+        assert SAFE_TX_STATS["signature_errors"] >= 1
+
+
+def test_gs013_stats_counter_increments_each_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """gs013_inner_revert_retries counter should increment exactly once per GS013 retry."""
+    executor.max_retries = 4
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.return_value = None
+        # Execute always raises GS013
+        mock_safe_tx.execute.side_effect = ValueError("execution reverted: GS013")
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        # 5 attempts total (0..4), _handle_execution_failure called each time.
+        # The last attempt also goes through _handle_execution_failure but
+        # GS013 branch returns should_retry=True before the max-retries check,
+        # so all 5 are counted.
+        assert SAFE_TX_STATS["gs013_inner_revert_retries"] == 5
+
+
+def test_gs013_classification_does_not_set_signature_error(executor):
+    """GS013 must not be classified as a signature error."""
+    error = ValueError("execution reverted: GS013")
+    result = executor._classify_error(error)
+    assert result["is_gs013_inner_revert"] is True
+    assert result["is_signature_error"] is False
+    assert result["is_insufficient_funds"] is False
+
+
+def test_gs013_permanent_simulation_exhausts_all_retries(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """Permanent GS013 in simulation should exhaust max_retries+1 attempts."""
+    executor.max_retries = 3
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS013")
+
+        with patch("time.sleep"):
+            success, error, _ = executor.execute_with_retry(
+                "0xSafe", mock_safe_tx, ["key1"]
+            )
+
+        assert success is False
+        assert "GS013" in error
+        # Should attempt exactly max_retries + 1 times
+        assert mock_safe_tx.call.call_count == 4
 
 
 # =============================================================================
@@ -1019,10 +1142,10 @@ def test_decode_revert_reason_logs_on_decoder_failure(executor):
     assert result is None
 
 
-def test_handle_failure_includes_decoded_reason_in_log(
+def test_handle_failure_gs013_retries_with_decoded_reason(
     executor, mock_chain_interface, mock_safe_tx, mock_safe
 ):
-    """GS013 abort log should include decoded revert reason when available."""
+    """GS013 retry log should include decoded revert reason when available."""
     error = ValueError("execution reverted: GS013")
     error.data = "0xdeadbeef12345678"
 
@@ -1033,14 +1156,15 @@ def test_handle_failure_includes_decoded_reason_in_log(
             return_value="ServiceNotStaked() (from staking.json)",
         ) as mock_decode,
         patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
+        patch.object(executor, "_diagnose_inner_revert"),
     ):
         updated_tx, should_retry, _is_fee = executor._handle_execution_failure(
             error, "0xSafe", mock_safe_tx, ["key1"], 0, "test_op"
         )
 
-    assert should_retry is False
+    assert should_retry is True
     mock_decode.assert_called_once_with(error)
-    assert SAFE_TX_STATS["gs013_approval_errors"] == 1
+    assert SAFE_TX_STATS["gs013_inner_revert_retries"] == 1
 
 
 def test_extract_revert_hex_from_data_attribute_dict(executor):
