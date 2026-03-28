@@ -1,7 +1,8 @@
 """OLAS protocol constants."""
 
-from enum import IntEnum
-from typing import Dict
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
+from typing import Dict, List, Optional, Sequence
 
 from iwa.core.models import EthereumAddress
 
@@ -10,14 +11,599 @@ class AgentType(IntEnum):
     """Supported OLAS agent types."""
 
     TRADER = 25
+    PEARL = 14
+    MEME = 43
+
+
+class MarketplaceType(StrEnum):
+    """Type of mech marketplace used by the staking contract's activity checker."""
+
+    LEGACY = "legacy"  # No marketplace, legacy mech agentMech.getRequestsCount()
+    MM_V2 = "mm_v2"  # New marketplace 0x735FAAb1...
+    PEARL = "pearl"  # Pearl-specific activity checker
+    PEARL_MM = "pearl_mm"  # Pearl with marketplace
+    MM_V1_DEFUNCT = "mm_v1_defunct"  # Old marketplace V1 (mech 975 retired 2026-03-17)
+    SUPPLY = "supply"  # Mech supply side (deliveries, not requests)
+    DEMAND = "demand"  # Marketplace demand side
+    UNKNOWN = "unknown"  # Unclassified activity checker
+
+
+class ContractStatus(StrEnum):
+    """Operational status of a staking contract."""
+
+    ACTIVE = "active"  # Accepting stakes, rewards flowing
+    DEPLETED = "depleted"  # No rewards left but contract still running
+    FULL = "full"  # All slots occupied
+    DEFUNCT = "defunct"  # Retired/broken, do not use
+
+
+@dataclass(frozen=True)
+class StakingContractInfo:
+    """Metadata for an OLAS staking contract."""
+
+    name: str
+    address: EthereumAddress
+    chain: str
+    agent_id: Optional[int]  # None for supply/demand contracts
+    marketplace: MarketplaceType
+    status: ContractStatus
+    bond_olas: int  # Total bond required in OLAS
+
+
+# ---------------------------------------------------------------------------
+# Master registry of ALL known OLAS staking contracts
+# Source: https://govern.olas.network/contracts
+# Source: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
+# Verified on-chain 2026-03-28
+# ---------------------------------------------------------------------------
+STAKING_CONTRACTS: List[StakingContractInfo] = [
+    # =====================================================================
+    # GNOSIS — Agent ID 25 (Trader) — Legacy mech
+    # =====================================================================
+    StakingContractInfo(
+        name="Hobbyist 1 Legacy (100 OLAS)",
+        address=EthereumAddress("0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Hobbyist 2 Legacy (500 OLAS)",
+        address=EthereumAddress("0x238EB6993b90A978ec6AAD7530D6429c949C08DA"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=500,
+    ),
+    StakingContractInfo(
+        name="Expert Legacy (1k OLAS)",
+        address=EthereumAddress("0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    StakingContractInfo(
+        name="Expert 2 Legacy (1k OLAS)",
+        address=EthereumAddress("0xb964e44c126410df341ae04B13aB10A985fE3513"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    StakingContractInfo(
+        name="Expert 3 Legacy (2k OLAS)",
+        address=EthereumAddress("0x80faD33Cadb5F53f9D29F02Db97D682E8B101618"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=2000,
+    ),
+    StakingContractInfo(
+        name="Expert 4 Legacy (10k OLAS)",
+        address=EthereumAddress("0xaD9d891134443B443D7F30013c7e14Fe27F2E029"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 5 Legacy (10k OLAS)",
+        address=EthereumAddress("0xE56dF1E563De1B10715cB313D514af350D207212"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 6 Legacy (1k OLAS)",
+        address=EthereumAddress("0x2546214aEE7eEa4bEE7689C81231017CA231Dc93"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    StakingContractInfo(
+        name="Expert 7 Legacy (10k OLAS)",
+        address=EthereumAddress("0xD7A3C8b975f71030135f1a66E9e23164d54fF455"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 8 Legacy (2k OLAS)",
+        address=EthereumAddress("0x356C108D49C5eebd21c84c04E9162de41933030c"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=2000,
+    ),
+    StakingContractInfo(
+        name="Expert 9 Legacy (10k OLAS)",
+        address=EthereumAddress("0x17dBAe44BC5618Cc254055B386A29576b4F87015"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.FULL,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 10 Legacy (10k OLAS)",
+        address=EthereumAddress("0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.FULL,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 11 Legacy (10k OLAS)",
+        address=EthereumAddress("0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.FULL,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 12 Legacy (10k OLAS)",
+        address=EthereumAddress("0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.LEGACY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    # =====================================================================
+    # GNOSIS — Agent ID 25 (Trader) — Marketplace V2
+    # =====================================================================
+    StakingContractInfo(
+        name="Expert 3 MM v2 (1k OLAS)",
+        address=EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    StakingContractInfo(
+        name="Expert 4 MM v2 (2k OLAS)",
+        address=EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=2000,
+    ),
+    StakingContractInfo(
+        name="Expert 5 MM v2 (10k OLAS)",
+        address=EthereumAddress("0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 6 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x22d6cd3d587d8391c3aae83a783f26c67ab54a85"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 7 MM v2 (10k OLAS)",
+        address=EthereumAddress("0xaaecdf4d0cbd6ca0622892ac6044472f3912a5f3"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 8 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x168aed532a0cd8868c22fc77937af78b363652b1"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 9 MM v2 (10k OLAS)",
+        address=EthereumAddress("0xdda9cd214f12e7c2d58e871404a0a3b1177065c8"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 10 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x53a38655b4e659ef4c7f88a26fbf5c67932c7156"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 11 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x1eaDe40561C61fa7AcC5D816b1FC55a8d9B58519"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 12 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x99Fe6B5C9980Fc3A44b1Dc32A76Db6aDfcf4c75e"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 13 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x1F81cF353051dAA8919d1777c58b667025794dDc"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    # =====================================================================
+    # GNOSIS — Agent ID 25 (Trader) — MM v2 (new, large reward pools)
+    # =====================================================================
+    StakingContractInfo(
+        name="QS Expert 1 MM v2 (10k OLAS)",
+        address=EthereumAddress("0xdB9E2713c3dA3C403F2eA6E570eB978b00304e9E"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="QS Expert 2 MM v2 (10k OLAS)",
+        address=EthereumAddress("0x1E90522b45c771DCF5f79645B9e96551d2ECaF62"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V2,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    # =====================================================================
+    # GNOSIS — Agent ID 25 — Pearl variants
+    # =====================================================================
+    StakingContractInfo(
+        name="Pearl Beta (40 OLAS)",
+        address=EthereumAddress("0xeF44Fb0842DDeF59D37f85D61A1eF492bbA6135d"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.ACTIVE,
+        bond_olas=40,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta 2 (100 OLAS)",
+        address=EthereumAddress("0x1c2F82413666d2a3fD8bC337b0268e62dDF67434"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta 3 (100 OLAS)",
+        address=EthereumAddress("0xBd59Ff0522aA773cB6074ce83cD1e4a05A457bc1"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta 4 (100 OLAS)",
+        address=EthereumAddress("0x3052451e1eAee78e62E169AfdF6288F8791F2918"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta 5 (10 OLAS)",
+        address=EthereumAddress("0x4Abe376Fda28c2F43b84884E5f822eA775DeA9F4"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta 6 (5k OLAS)",
+        address=EthereumAddress("0x6C6D01e8eA8f806eF0c22F0ef7ed81D868C1aB39"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.FULL,
+        bond_olas=5000,
+    ),
+    StakingContractInfo(
+        name="Pearl Beta MM (40 OLAS)",
+        address=EthereumAddress("0xDaF34eC46298b53a3d24CBCb431E84eBd23927dA"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL_MM,
+        status=ContractStatus.ACTIVE,
+        bond_olas=40,
+    ),
+    StakingContractInfo(
+        name="Pearl MM 1 (5k OLAS)",
+        address=EthereumAddress("0xAb10188207Ea030555f53C8A84339A92f473aa5e"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL_MM,
+        status=ContractStatus.FULL,
+        bond_olas=5000,
+    ),
+    StakingContractInfo(
+        name="Pearl MM 2 (5k OLAS)",
+        address=EthereumAddress("0x8d7bE092d154b01d404f1aCCFA22Cef98C613B5D"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL_MM,
+        status=ContractStatus.ACTIVE,
+        bond_olas=5000,
+    ),
+    StakingContractInfo(
+        name="Pearl MM 3 (40 OLAS)",
+        address=EthereumAddress("0x9D00A0551F20979080d3762005C9B74D7Aa77b85"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL_MM,
+        status=ContractStatus.ACTIVE,
+        bond_olas=40,
+    ),
+    StakingContractInfo(
+        name="Pearl MM 4 (100 OLAS)",
+        address=EthereumAddress("0xE2f80659dB1069f3B6a08af1A62064190c119543"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.PEARL_MM,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    # =====================================================================
+    # GNOSIS — Agent ID 14 (Pearl Alpha) — Depleted
+    # =====================================================================
+    StakingContractInfo(
+        name="Pearl Alpha (20 OLAS)",
+        address=EthereumAddress("0xEE9F19b5DF06c7E8Bfc7B28745dcf944C504198A"),
+        chain="gnosis",
+        agent_id=14,
+        marketplace=MarketplaceType.PEARL,
+        status=ContractStatus.DEPLETED,
+        bond_olas=20,
+    ),
+    # =====================================================================
+    # GNOSIS — Supply/Demand marketplace contracts (no fixed agent_id)
+    # =====================================================================
+    StakingContractInfo(
+        name="Marketplace Supply Alpha (10k OLAS)",
+        address=EthereumAddress("0xCAbD0C941E54147D40644CF7DA7e36d70DF46f44"),
+        chain="gnosis",
+        agent_id=None,
+        marketplace=MarketplaceType.SUPPLY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Marketplace Demand Alpha 1 (100 OLAS)",
+        address=EthereumAddress("0x9d6e7aB0B5B48aE5c146936147C639fEf4575231"),
+        chain="gnosis",
+        agent_id=None,
+        marketplace=MarketplaceType.DEMAND,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Marketplace Demand Alpha 2 (1k OLAS)",
+        address=EthereumAddress("0x9fb17E549FefcCA630dd92Ea143703CeE4Ea4340"),
+        chain="gnosis",
+        agent_id=None,
+        marketplace=MarketplaceType.DEMAND,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    # =====================================================================
+    # GNOSIS — Agent ID 25 — MM v1 DEFUNCT (mech 975 retired 2026-03-17)
+    # =====================================================================
+    StakingContractInfo(
+        name="Expert 15 MM v1 (10k OLAS)",
+        address=EthereumAddress("0x88eB38FF79fBa8C19943C0e5Acfa67D5876AdCC1"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V1_DEFUNCT,
+        status=ContractStatus.DEPLETED,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 16 MM v1 (10k OLAS)",
+        address=EthereumAddress("0x6c65430515c70a3f5E62107CC301685B7D46f991"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V1_DEFUNCT,
+        status=ContractStatus.DEPLETED,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 17 MM v1 (10k OLAS)",
+        address=EthereumAddress("0x1430107A785C3A36a0C1FC0ee09B9631e2E72aFf"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V1_DEFUNCT,
+        status=ContractStatus.FULL,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Expert 18 MM v1 (10k OLAS)",
+        address=EthereumAddress("0x041e679d04Fc0D4f75Eb937Dea729Df09a58e454"),
+        chain="gnosis",
+        agent_id=25,
+        marketplace=MarketplaceType.MM_V1_DEFUNCT,
+        status=ContractStatus.DEPLETED,
+        bond_olas=10000,
+    ),
+    # =====================================================================
+    # BASE — Agent ID 43 (Meme)
+    # =====================================================================
+    StakingContractInfo(
+        name="Meme Base Alpha 2 (100 OLAS)",
+        address=EthereumAddress("0xc653622FD75026a020995a1d8c8651316cBBc4dA"),
+        chain="base",
+        agent_id=43,
+        marketplace=MarketplaceType.UNKNOWN,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+    StakingContractInfo(
+        name="Meme Base Beta 2 (1k OLAS)",
+        address=EthereumAddress("0xfb7669c3AdF673b3A545Fa5acd987dbfdA805e22"),
+        chain="base",
+        agent_id=43,
+        marketplace=MarketplaceType.UNKNOWN,
+        status=ContractStatus.ACTIVE,
+        bond_olas=1000,
+    ),
+    # =====================================================================
+    # BASE — Supply/Demand marketplace contracts
+    # =====================================================================
+    StakingContractInfo(
+        name="Marketplace Supply Alpha Base (10k OLAS)",
+        address=EthereumAddress("0xB14Cd66c6c601230EA79fa7Cc072E5E0C2F3A756"),
+        chain="base",
+        agent_id=None,
+        marketplace=MarketplaceType.SUPPLY,
+        status=ContractStatus.ACTIVE,
+        bond_olas=10000,
+    ),
+    StakingContractInfo(
+        name="Marketplace Demand Alpha 1 Base (100 OLAS)",
+        address=EthereumAddress("0x38Eb3838Dab06932E7E1E965c6F922aDfE494b88"),
+        chain="base",
+        agent_id=None,
+        marketplace=MarketplaceType.DEMAND,
+        status=ContractStatus.ACTIVE,
+        bond_olas=100,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Query function
+# ---------------------------------------------------------------------------
+def get_staking_contracts(
+    chain: Optional[str] = None,
+    agent_id: Optional[int] = None,
+    marketplace: Optional[MarketplaceType | Sequence[MarketplaceType]] = None,
+    status: Optional[ContractStatus | Sequence[ContractStatus]] = None,
+) -> List[StakingContractInfo]:
+    """Filter staking contracts. All parameters are optional (AND logic)."""
+    results = STAKING_CONTRACTS
+    if chain is not None:
+        results = [c for c in results if c.chain == chain]
+    if agent_id is not None:
+        results = [c for c in results if c.agent_id == agent_id]
+    if marketplace is not None:
+        if isinstance(marketplace, MarketplaceType):
+            mp_set = {marketplace}
+        else:
+            mp_set = set(marketplace)
+        results = [c for c in results if c.marketplace in mp_set]
+    if status is not None:
+        if isinstance(status, ContractStatus):
+            st_set = {status}
+        else:
+            st_set = set(status)
+        results = [c for c in results if c.status in st_set]
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatibility shim
+# ---------------------------------------------------------------------------
+def _build_trader_staking_compat() -> Dict[str, Dict[str, EthereumAddress]]:
+    """Build the legacy OLAS_TRADER_STAKING_CONTRACTS dict from the registry.
+
+    Excludes contracts whose marketplace is defunct (MM_V1_DEFUNCT) — the
+    contracts themselves may be active on-chain, but their mech dependency
+    no longer exists so triton cannot use them.
+    """
+    result: Dict[str, Dict[str, EthereumAddress]] = {}
+    for c in get_staking_contracts(agent_id=25):
+        if c.marketplace == MarketplaceType.MM_V1_DEFUNCT:
+            continue
+        result.setdefault(c.chain, {})[c.name] = c.address
+    return result
+
+
+OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = (
+    _build_trader_staking_compat()
+)
 
 
 # Mech Marketplace Payment Types (bytes32 hex strings, without 0x prefix)
 # From mech-client/marketplace_interact.py
-PAYMENT_TYPE_NATIVE = "ba699a34be8fe0e7725e93dcbce1701b0211a8ca61330aaeb8a05bf2ec7abed1"
-PAYMENT_TYPE_TOKEN = "3679d66ef546e66ce9057c4a052f317b135bc8e8c509638f7966edfd4fcf45e9"
-PAYMENT_TYPE_NATIVE_NVM = "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"
-PAYMENT_TYPE_TOKEN_NVM_USDC = "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"
+PAYMENT_TYPE_NATIVE = (
+    "ba699a34be8fe0e7725e93dcbce1701b0211a8ca61330aaeb8a05bf2ec7abed1"
+)
+PAYMENT_TYPE_TOKEN = (
+    "3679d66ef546e66ce9057c4a052f317b135bc8e8c509638f7966edfd4fcf45e9"
+)
+PAYMENT_TYPE_NATIVE_NVM = (
+    "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"
+)
+PAYMENT_TYPE_TOKEN_NVM_USDC = (
+    "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"
+)
 
 # Mech Factory to Mech Type mappings by chain
 # From mech-client/mech_marketplace_subgraph.py
@@ -38,96 +624,53 @@ MECH_FACTORY_TO_TYPE: Dict[str, Dict[str, str]] = {
 # Grace period after epoch end before calling checkpoint (seconds)
 CHECKPOINT_GRACE_PERIOD = 0
 
-TRADER_CONFIG_HASH = "108e90795119d6015274ef03af1a669c6d13ab6acc9e2b2978be01ee9ea2ec93"
+TRADER_CONFIG_HASH = (
+    "108e90795119d6015274ef03af1a669c6d13ab6acc9e2b2978be01ee9ea2ec93"
+)
 DEFAULT_DEPLOY_PAYLOAD = "0x0000000000000000000000000000000000000000{fallback_handler}000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
 # OLAS Token address on Gnosis chain
-OLAS_TOKEN_ADDRESS_GNOSIS = EthereumAddress("0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f")
-
+OLAS_TOKEN_ADDRESS_GNOSIS = EthereumAddress(
+    "0xcE11e14225575945b8E6Dc0D4F2dD4C570f79d9f"
+)
 
 # OLAS Protocol Contracts categorized by chain
 # See mech_reference.py for comprehensive documentation of the mech ecosystem
 OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
     "gnosis": {
-        "OLAS_SERVICE_REGISTRY": EthereumAddress("0x9338b5153AE39BB89f50468E608eD9d764B755fD"),
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0x9338b5153AE39BB89f50468E608eD9d764B755fD"
+        ),
         "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
             "0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"
         ),
-        "OLAS_SERVICE_MANAGER": EthereumAddress("0x068a4f0946cF8c7f9C1B58a3b5243Ac8843bf473"),
-        # Legacy mech - used by NON-MM TRADER staking contracts (e.g., "Expert X (Yk OLAS)")
-        # Activity checker calls agentMech.getRequestsCount(multisig) to count requests.
-        "OLAS_MECH": EthereumAddress("0x77af31De935740567Cf4fF1986D04B2c964A786a"),
-        # Marketplace v2 - used by newer MM staking contracts (e.g., "Expert X MM v2 (Yk OLAS)")
-        # Services staked in MM v2 contracts MUST use marketplace requests.
-        # Legacy mech requests will NOT be counted by the activity checker.
-        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress("0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"),
-        # Default priority mech for marketplace requests (from olas-operate-middleware)
-        # This is the mech that will process requests sent via the marketplace.
-        # Source: https://github.com/valory-xyz/olas-operate-middleware/blob/main/operate/ledger/profiles.py
-        # DEFAULT_PRIORITY_MECH["0x735FAAb1c..."] = ("0xC05e7412...", 2182)
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0x068a4f0946cF8c7f9C1B58a3b5243Ac8843bf473"
+        ),
+        "OLAS_MECH": EthereumAddress(
+            "0x77af31De935740567Cf4fF1986D04B2c964A786a"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0x735FAAb1c4Ec41128c367AFb5c3baC73509f70bB"
+        ),
         "OLAS_MECH_MARKETPLACE_PRIORITY": EthereumAddress(
             "0xC05e7412439bD7e91730a6880E18d5D5873F632C"
         ),
-        # NOTE: OLAS_MECH_MARKETPLACE_V1 removed — mech 975 retired 2026-03-17
     },
     "ethereum": {
-        "OLAS_SERVICE_REGISTRY": EthereumAddress("0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"),
-        "OLAS_SERVICE_MANAGER": EthereumAddress("0x9C14948a39a9c1A58e3f94639908F0076FA715C6"),
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0x9C14948a39a9c1A58e3f94639908F0076FA715C6"
+        ),
     },
     "base": {
-        "OLAS_SERVICE_REGISTRY": EthereumAddress("0x3841C312061daB948332A78F042Ec61Ad09fc3D8"),
-        "OLAS_SERVICE_MANAGER": EthereumAddress("0xF36183B106692DeD8b6e3B2B7347C9665f8a09B1"),
-        # NOTE: OLAS_MECH_MARKETPLACE_V1 removed — mech 975 retired 2026-03-17
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0x3841C312061daB948332A78F042Ec61Ad09fc3D8"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0xF36183B106692DeD8b6e3B2B7347C9665f8a09B1"
+        ),
     },
-}
-
-# TRADER-compatible staking contracts categorized by chain
-# See https://govern.olas.network/contracts
-#
-# Categories (verified on-chain via activity checker's mechMarketplace):
-#   - Legacy: No marketplace, uses legacy mech (0x77af31De...). agentMech.getRequestsCount()
-#   - MM v1: Old marketplace (0x4554fE75...) — DEFUNCT since 2026-03-17
-#   - MM v2: New marketplace (0x735FAAb1...). mechMarketplace.mapRequestCounts()
-#
-# IMPORTANT: Services MUST use the correct mech request type for their staking contract!
-OLAS_TRADER_STAKING_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
-    "gnosis": {
-        # === LEGACY (no marketplace) ===
-        "Hobbyist 1 Legacy (100 OLAS)": EthereumAddress(
-            "0x389B46C259631Acd6a69Bde8B6cEe218230bAE8C"
-        ),
-        "Hobbyist 2 Legacy (500 OLAS)": EthereumAddress(
-            "0x238EB6993b90A978ec6AAD7530D6429c949C08DA"
-        ),
-        "Expert Legacy (1k OLAS)": EthereumAddress("0x5344B7DD311e5d3DdDd46A4f71481Bd7b05AAA3e"),
-        "Expert 2 Legacy (1k OLAS)": EthereumAddress("0xb964e44c126410df341ae04B13aB10A985fE3513"),
-        "Expert 3 Legacy (2k OLAS)": EthereumAddress("0x80faD33Cadb5F53f9D29F02Db97D682E8B101618"),
-        "Expert 4 Legacy (10k OLAS)": EthereumAddress("0xaD9d891134443B443D7F30013c7e14Fe27F2E029"),
-        "Expert 5 Legacy (10k OLAS)": EthereumAddress("0xE56dF1E563De1B10715cB313D514af350D207212"),
-        "Expert 6 Legacy (1k OLAS)": EthereumAddress("0x2546214aEE7eEa4bEE7689C81231017CA231Dc93"),
-        "Expert 7 Legacy (10k OLAS)": EthereumAddress("0xD7A3C8b975f71030135f1a66E9e23164d54fF455"),
-        "Expert 8 Legacy (2k OLAS)": EthereumAddress("0x356C108D49C5eebd21c84c04E9162de41933030c"),
-        "Expert 9 Legacy (10k OLAS)": EthereumAddress("0x17dBAe44BC5618Cc254055B386A29576b4F87015"),
-        "Expert 10 Legacy (10k OLAS)": EthereumAddress(
-            "0xB0ef657b8302bd2c74B6E6D9B2b4b39145b19c6f"
-        ),
-        "Expert 11 Legacy (10k OLAS)": EthereumAddress(
-            "0x3112c1613eAC3dBAE3D4E38CeF023eb9E2C91CF7"
-        ),
-        "Expert 12 Legacy (10k OLAS)": EthereumAddress(
-            "0xF4a75F476801B3fBB2e7093aCDcc3576593Cc1fc"
-        ),
-        # NOTE: MM v1 contracts (Expert 15-18) removed — mech 975 retired 2026-03-17
-        # === MM v2 (new marketplace 0x735FAAb1...) ===
-        "Expert 3 MM v2 (1k OLAS)": EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
-        "Expert 4 MM v2 (2k OLAS)": EthereumAddress("0x9c7f6103e3a72e4d1805b9c683ea5b370ec1a99f"),
-        "Expert 5 MM v2 (10k OLAS)": EthereumAddress("0xcdC603e0Ee55Aae92519f9770f214b2Be4967f7d"),
-        "Expert 6 MM v2 (10k OLAS)": EthereumAddress("0x22d6cd3d587d8391c3aae83a783f26c67ab54a85"),
-        "Expert 7 MM v2 (10k OLAS)": EthereumAddress("0xaaecdf4d0cbd6ca0622892ac6044472f3912a5f3"),
-        "Expert 8 MM v2 (10k OLAS)": EthereumAddress("0x168aed532a0cd8868c22fc77937af78b363652b1"),
-        "Expert 9 MM v2 (10k OLAS)": EthereumAddress("0xdda9cd214f12e7c2d58e871404a0a3b1177065c8"),
-        "Expert 10 MM v2 (10k OLAS)": EthereumAddress("0x53a38655b4e659ef4c7f88a26fbf5c67932c7156"),
-    },
-    "ethereum": {},
-    "base": {},
 }
