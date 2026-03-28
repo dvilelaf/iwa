@@ -39,7 +39,14 @@ class ContractStatus(StrEnum):
 
 @dataclass(frozen=True)
 class StakingContractInfo:
-    """Metadata for an OLAS staking contract."""
+    """Metadata for an OLAS staking contract.
+
+    required_requests: min actions per epoch to earn rewards.
+      For demand/trader contracts: mech requests sent (0.01 xDAI each on Gnosis).
+      For supply contracts: mech deliveries (responses processed).
+      For pearl contracts: multisig nonce increments (any tx counts).
+    epoch_hours: epoch duration in hours (all are 24h currently).
+    """
 
     name: str
     address: EthereumAddress
@@ -48,6 +55,8 @@ class StakingContractInfo:
     marketplace: MarketplaceType
     status: ContractStatus
     bond_olas: int  # Total bond required in OLAS
+    required_requests: int = 0  # Min actions per epoch (from livenessRatio)
+    epoch_hours: int = 24  # Epoch duration
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +77,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Hobbyist 2 Legacy (500 OLAS)",
@@ -77,6 +87,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=500,
+        required_requests=20,
     ),
     StakingContractInfo(
         name="Expert Legacy (1k OLAS)",
@@ -86,6 +97,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 2 Legacy (1k OLAS)",
@@ -95,6 +107,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 3 Legacy (2k OLAS)",
@@ -104,6 +117,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=2000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 4 Legacy (10k OLAS)",
@@ -113,6 +127,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 5 Legacy (10k OLAS)",
@@ -122,6 +137,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 6 Legacy (1k OLAS)",
@@ -131,6 +147,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 7 Legacy (10k OLAS)",
@@ -140,6 +157,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 8 Legacy (2k OLAS)",
@@ -149,6 +167,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=2000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 9 Legacy (10k OLAS)",
@@ -158,6 +177,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.FULL,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 10 Legacy (10k OLAS)",
@@ -167,6 +187,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.FULL,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 11 Legacy (10k OLAS)",
@@ -176,6 +197,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.FULL,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 12 Legacy (10k OLAS)",
@@ -185,6 +207,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.LEGACY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     # =====================================================================
     # GNOSIS — Agent ID 25 (Trader) — Marketplace V2
@@ -197,6 +220,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 4 MM v2 (2k OLAS)",
@@ -206,6 +230,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=2000,
+        required_requests=40,
     ),
     StakingContractInfo(
         name="Expert 5 MM v2 (10k OLAS)",
@@ -215,6 +240,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 6 MM v2 (10k OLAS)",
@@ -224,6 +250,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 7 MM v2 (10k OLAS)",
@@ -233,6 +260,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 8 MM v2 (10k OLAS)",
@@ -242,6 +270,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 9 MM v2 (10k OLAS)",
@@ -251,6 +280,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 10 MM v2 (10k OLAS)",
@@ -260,6 +290,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 11 MM v2 (10k OLAS)",
@@ -269,6 +300,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=16,
     ),
     StakingContractInfo(
         name="Expert 12 MM v2 (10k OLAS)",
@@ -278,6 +310,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=16,
     ),
     StakingContractInfo(
         name="Expert 13 MM v2 (10k OLAS)",
@@ -287,6 +320,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=16,
     ),
     # =====================================================================
     # GNOSIS — Agent ID 25 (Trader) — MM v2 (new, large reward pools)
@@ -299,6 +333,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="QS Expert 2 MM v2 (10k OLAS)",
@@ -308,6 +343,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V2,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=60,
     ),
     # =====================================================================
     # GNOSIS — Agent ID 25 — Pearl variants
@@ -320,6 +356,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.ACTIVE,
         bond_olas=40,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl Beta 2 (100 OLAS)",
@@ -329,6 +366,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl Beta 3 (100 OLAS)",
@@ -338,6 +376,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl Beta 4 (100 OLAS)",
@@ -347,6 +386,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl Beta 5 (10 OLAS)",
@@ -356,6 +396,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.ACTIVE,
         bond_olas=10,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl Beta 6 (5k OLAS)",
@@ -365,6 +406,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.FULL,
         bond_olas=5000,
+        required_requests=7,
     ),
     StakingContractInfo(
         name="Pearl Beta MM (40 OLAS)",
@@ -374,6 +416,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL_MM,
         status=ContractStatus.ACTIVE,
         bond_olas=40,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl MM 1 (5k OLAS)",
@@ -383,6 +426,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL_MM,
         status=ContractStatus.FULL,
         bond_olas=5000,
+        required_requests=7,
     ),
     StakingContractInfo(
         name="Pearl MM 2 (5k OLAS)",
@@ -392,6 +436,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL_MM,
         status=ContractStatus.ACTIVE,
         bond_olas=5000,
+        required_requests=7,
     ),
     StakingContractInfo(
         name="Pearl MM 3 (40 OLAS)",
@@ -401,6 +446,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL_MM,
         status=ContractStatus.ACTIVE,
         bond_olas=40,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Pearl MM 4 (100 OLAS)",
@@ -410,6 +456,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL_MM,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
     # =====================================================================
     # GNOSIS — Agent ID 14 (Pearl Alpha) — Depleted
@@ -422,6 +469,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.PEARL,
         status=ContractStatus.DEPLETED,
         bond_olas=20,
+        required_requests=5,
     ),
     # =====================================================================
     # GNOSIS — Supply/Demand marketplace contracts (no fixed agent_id)
@@ -434,6 +482,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.SUPPLY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=20,
     ),
     StakingContractInfo(
         name="Marketplace Demand Alpha 1 (100 OLAS)",
@@ -443,6 +492,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.DEMAND,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
     StakingContractInfo(
         name="Marketplace Demand Alpha 2 (1k OLAS)",
@@ -452,6 +502,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.DEMAND,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=5,
     ),
     # =====================================================================
     # GNOSIS — Agent ID 25 — MM v1 DEFUNCT (mech 975 retired 2026-03-17)
@@ -464,6 +515,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V1_DEFUNCT,
         status=ContractStatus.DEPLETED,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 16 MM v1 (10k OLAS)",
@@ -473,6 +525,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V1_DEFUNCT,
         status=ContractStatus.DEPLETED,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 17 MM v1 (10k OLAS)",
@@ -482,6 +535,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V1_DEFUNCT,
         status=ContractStatus.FULL,
         bond_olas=10000,
+        required_requests=60,
     ),
     StakingContractInfo(
         name="Expert 18 MM v1 (10k OLAS)",
@@ -491,6 +545,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.MM_V1_DEFUNCT,
         status=ContractStatus.DEPLETED,
         bond_olas=10000,
+        required_requests=60,
     ),
     # =====================================================================
     # BASE — Agent ID 43 (Meme)
@@ -503,6 +558,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.UNKNOWN,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=2,
     ),
     StakingContractInfo(
         name="Meme Base Beta 2 (1k OLAS)",
@@ -512,6 +568,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.UNKNOWN,
         status=ContractStatus.ACTIVE,
         bond_olas=1000,
+        required_requests=2,
     ),
     # =====================================================================
     # BASE — Supply/Demand marketplace contracts
@@ -524,6 +581,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.SUPPLY,
         status=ContractStatus.ACTIVE,
         bond_olas=10000,
+        required_requests=20,
     ),
     StakingContractInfo(
         name="Marketplace Demand Alpha 1 Base (100 OLAS)",
@@ -533,6 +591,7 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
         marketplace=MarketplaceType.DEMAND,
         status=ContractStatus.ACTIVE,
         bond_olas=100,
+        required_requests=5,
     ),
 ]
 
