@@ -720,16 +720,84 @@ OLAS_CONTRACTS: Dict[str, Dict[str, EthereumAddress]] = {
         "OLAS_SERVICE_REGISTRY": EthereumAddress(
             "0x48b6F34dDAf31f94086BFB45e69e0618DDe3677b"
         ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0x3Fb926116D454b95c669B6Bf2E7c3bad8d19affA"
+        ),
         "OLAS_SERVICE_MANAGER": EthereumAddress(
-            "0x9C14948a39a9c1A58e3f94639908F0076FA715C6"
+            "0x4443ddD8EC67CbCf7E291ee3198f81dD0326b3A1"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0x3d6494CE09a9f40c0B5a92BdBD7c7A9b0e3912b1"
         ),
     },
     "base": {
         "OLAS_SERVICE_REGISTRY": EthereumAddress(
-            "0x3841C312061daB948332A78F042Ec61Ad09fc3D8"
+            "0x3C1fF68f5aa342D296d4DEe4Bb1cACCA912D95fE"
+        ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0x34C895f302D0b5cf52ec0Edd3945321EB0f83dd5"
         ),
         "OLAS_SERVICE_MANAGER": EthereumAddress(
-            "0xF36183B106692DeD8b6e3B2B7347C9665f8a09B1"
+            "0x1eAccD29c86fFc52Bd7cC0117C03D089306Cbc29"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0xf24eE42edA0fc9b33B7D41B06Ee8ccD2Ef7C5020"
+        ),
+    },
+    "polygon": {
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0xE3607b00E75f6405248323A9417ff6b39B244b50"
+        ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0xC720f1Ada2a882a4B375dCCd0aAc3F3B3e58bc84"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0x343F2B005cF6D70bA610CD9F1F1927049414B582"
+        ),
+    },
+    "optimism": {
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0x3d77596beb0f130a4415df3D2D8232B3d3D31e44"
+        ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0xBb7e1D6Cb6F243D6bdE81CE92a9f2aFF7Fbe7eac"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0xA749f605D93B3efcc207C54270d83C6E8fa70fF8"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"
+        ),
+    },
+    "arbitrum": {
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0xE3607b00E75f6405248323A9417ff6b39B244b50"
+        ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0x3d77596beb0f130a4415df3D2D8232B3d3D31e44"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0x1c80bDBeD23dBb4ACEdCA136382bEa0162550515"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0xf76953444C35F1FcE2F6CA1b167173357d3F5C17"
+        ),
+    },
+    "celo": {
+        "OLAS_SERVICE_REGISTRY": EthereumAddress(
+            "0xE3607b00E75f6405248323A9417ff6b39B244b50"
+        ),
+        "OLAS_SERVICE_REGISTRY_TOKEN_UTILITY": EthereumAddress(
+            "0x3d77596beb0f130a4415df3D2D8232B3d3D31e44"
+        ),
+        "OLAS_SERVICE_MANAGER": EthereumAddress(
+            "0x46C0D07F55d4F9B5Eed2Fc9680B5953e5fd7b461"
+        ),
+        "OLAS_MECH_MARKETPLACE_V2": EthereumAddress(
+            "0x17d96ba4532fe91809326092fE4D5606A7B7a0d8"
         ),
     },
 }
