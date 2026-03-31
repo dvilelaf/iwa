@@ -838,3 +838,143 @@ class MechManagerMixin:
         except Exception as e:
             logger.error(f"Error verifying event emission: {e}")
             return None
+
+
+class MechSupplyMixin:
+    """Mixin for mech supply-side operations: create mech, update metadata.
+
+    Used by micromech and any other OLAS tool that manages mechs.
+    Requires self.wallet and self.service to be set (from ServiceManager).
+    """
+
+    def create_mech_on_marketplace(
+        self,
+        chain_name: str,
+        factory_address: str,
+        delivery_rate: int,
+        marketplace_address: Optional[str] = None,
+    ) -> Optional[str]:
+        """Create a mech on the MechMarketplace.
+
+        Calls marketplace.create(serviceId, factory, deliveryRate).
+        Returns the mech contract address or None.
+        """
+        from iwa.plugins.olas.constants import MECH_CONTRACTS
+
+        if not marketplace_address:
+            chain_contracts = MECH_CONTRACTS.get(chain_name, {})
+            marketplace_address = chain_contracts.get("marketplace")
+        if not marketplace_address:
+            logger.error(f"No marketplace address for chain {chain_name}")
+            return None
+
+        try:
+            ci = self.wallet.chain_interfaces.get(chain_name)
+            web3 = ci.web3
+
+            # Load marketplace ABI
+            import json
+
+            from iwa.plugins.olas.contracts.base import OLAS_ABI_PATH
+            abi = json.loads((OLAS_ABI_PATH / "mech_marketplace.json").read_text())
+
+            marketplace = web3.eth.contract(
+                address=web3.to_checksum_address(marketplace_address),
+                abi=abi,
+            )
+
+            service_id = self.service.service_id if self.service else None
+            if not service_id:
+                logger.error("No service ID found")
+                return None
+
+            tx = marketplace.functions.create(
+                service_id,
+                web3.to_checksum_address(factory_address),
+                delivery_rate,
+            ).transact({
+                "from": web3.to_checksum_address(str(self.service.owner_address)),
+                "gas": 10_000_000,
+            })
+            receipt = web3.eth.wait_for_transaction_receipt(tx)
+            if receipt["status"] != 1:
+                logger.error("Mech creation TX reverted")
+                return None
+
+            logs = receipt.get("logs", [])
+            for log_entry in logs:
+                if len(log_entry.get("topics", [])) >= 2:
+                    mech_addr = "0x" + log_entry["topics"][1].hex()[-40:]
+                    logger.info(f"Mech created on {chain_name}: {mech_addr}")
+                    return mech_addr
+
+            logger.warning("Mech created but address not found in logs")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to create mech on {chain_name}: {e}")
+            return None
+
+    def update_mech_metadata(
+        self,
+        chain_name: str,
+        metadata_hash: str,
+    ) -> Optional[str]:
+        """Update mech metadata hash on-chain via changeHash().
+
+        Returns tx hash or None.
+        """
+        from iwa.plugins.olas.constants import COMPLEMENTARY_SERVICE_METADATA
+
+        contract_addr = COMPLEMENTARY_SERVICE_METADATA.get(chain_name)
+        if not contract_addr:
+            logger.error(f"No metadata contract for chain {chain_name}")
+            return None
+
+        try:
+            ci = self.wallet.chain_interfaces.get(chain_name)
+            web3 = ci.web3
+
+            abi = [
+                {
+                    "inputs": [
+                        {"name": "serviceId", "type": "uint256"},
+                        {"name": "hash", "type": "bytes32"},
+                    ],
+                    "name": "changeHash",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function",
+                },
+            ]
+            contract = web3.eth.contract(
+                address=web3.to_checksum_address(contract_addr),
+                abi=abi,
+            )
+
+            service_id = self.service.service_id if self.service else None
+            if not service_id:
+                logger.error("No service ID")
+                return None
+
+            hash_bytes = (
+                bytes.fromhex(metadata_hash[2:])
+                if metadata_hash.startswith("0x")
+                else bytes.fromhex(metadata_hash)
+            )
+
+            tx_hash = self.wallet.safe_service.execute_safe_transaction(
+                safe_address_or_tag=str(self.service.multisig_address),
+                to=contract_addr,
+                value=0,
+                chain_name=chain_name,
+                data=contract.functions.changeHash(
+                    service_id, hash_bytes
+                ).build_transaction(
+                    {"from": str(self.service.multisig_address)}
+                )["data"],
+            )
+            logger.info(f"Metadata updated on {chain_name}: {tx_hash}")
+            return tx_hash
+        except Exception as e:
+            logger.error(f"Failed to update metadata on {chain_name}: {e}")
+            return None

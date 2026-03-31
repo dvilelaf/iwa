@@ -187,6 +187,7 @@ class Polygon(SupportedChain):
     }
 
     def __init__(self, **data):
+        """Initialize with RPCs from settings."""
         super().__init__(**data)
         if not self.rpcs and secrets.polygon_rpc:
             self.rpcs = secrets.polygon_rpc.get_secret_value().split(",")
@@ -218,6 +219,7 @@ class Optimism(SupportedChain):
     }
 
     def __init__(self, **data):
+        """Initialize with RPCs from settings."""
         super().__init__(**data)
         if not self.rpcs and secrets.optimism_rpc:
             self.rpcs = secrets.optimism_rpc.get_secret_value().split(",")
@@ -249,6 +251,7 @@ class Arbitrum(SupportedChain):
     }
 
     def __init__(self, **data):
+        """Initialize with RPCs from settings."""
         super().__init__(**data)
         if not self.rpcs and secrets.arbitrum_rpc:
             self.rpcs = secrets.arbitrum_rpc.get_secret_value().split(",")
@@ -280,6 +283,7 @@ class Celo(SupportedChain):
     }
 
     def __init__(self, **data):
+        """Initialize with RPCs from settings."""
         super().__init__(**data)
         if not self.rpcs and secrets.celo_rpc:
             self.rpcs = secrets.celo_rpc.get_secret_value().split(",")
