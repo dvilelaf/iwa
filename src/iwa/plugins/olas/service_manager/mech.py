@@ -879,7 +879,7 @@ class MechSupplyMixin:
             abi = json.loads((OLAS_ABI_PATH / "mech_marketplace.json").read_text())
 
             marketplace = web3.eth.contract(
-                address=web3.to_checksum_address(marketplace_address),
+                address=EthereumAddress(marketplace_address),
                 abi=abi,
             )
 
@@ -890,10 +890,10 @@ class MechSupplyMixin:
 
             tx = marketplace.functions.create(
                 service_id,
-                web3.to_checksum_address(factory_address),
+                EthereumAddress(factory_address),
                 delivery_rate,
             ).transact({
-                "from": web3.to_checksum_address(str(self.service.owner_address)),
+                "from": EthereumAddress(str(self.service.owner_address)),
                 "gas": 10_000_000,
             })
             receipt = web3.eth.wait_for_transaction_receipt(tx)
@@ -947,7 +947,7 @@ class MechSupplyMixin:
                 },
             ]
             contract = web3.eth.contract(
-                address=web3.to_checksum_address(contract_addr),
+                address=EthereumAddress(contract_addr),
                 abi=abi,
             )
 
