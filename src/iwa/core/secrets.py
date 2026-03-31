@@ -33,11 +33,19 @@ class Secrets(BaseSettings):
     gnosis_rpc: Optional[SecretStr] = None
     base_rpc: Optional[SecretStr] = None
     ethereum_rpc: Optional[SecretStr] = None
+    polygon_rpc: Optional[SecretStr] = None
+    optimism_rpc: Optional[SecretStr] = None
+    arbitrum_rpc: Optional[SecretStr] = None
+    celo_rpc: Optional[SecretStr] = None
 
     # Test RPCs (Tenderly)
     gnosis_test_rpc: Optional[SecretStr] = None
     ethereum_test_rpc: Optional[SecretStr] = None
     base_test_rpc: Optional[SecretStr] = None
+    polygon_test_rpc: Optional[SecretStr] = None
+    optimism_test_rpc: Optional[SecretStr] = None
+    arbitrum_test_rpc: Optional[SecretStr] = None
+    celo_test_rpc: Optional[SecretStr] = None
 
     coingecko_api_key: Optional[SecretStr] = None
     subgraph_api_key: Optional[SecretStr] = None
@@ -66,6 +74,14 @@ class Secrets(BaseSettings):
                 self.ethereum_rpc = self.ethereum_test_rpc
             if self.base_test_rpc:
                 self.base_rpc = self.base_test_rpc
+            if self.polygon_test_rpc:
+                self.polygon_rpc = self.polygon_test_rpc
+            if self.optimism_test_rpc:
+                self.optimism_rpc = self.optimism_test_rpc
+            if self.arbitrum_test_rpc:
+                self.arbitrum_rpc = self.arbitrum_test_rpc
+            if self.celo_test_rpc:
+                self.celo_rpc = self.celo_test_rpc
 
         # Convert empty webui_password to None (no auth required)
         if self.webui_password and not self.webui_password.get_secret_value():
