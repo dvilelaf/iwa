@@ -184,6 +184,10 @@ def test_sm_get_staking_status_with_full_info(mock_wallet):
             "accrued_reward_wei": 1000000,
             "epoch_end_utc": None,
             "remaining_epoch_seconds": 3600,
+            "current_safe_nonce": 100,
+            "last_checkpoint_safe_nonce": 97,
+            "current_mech_requests": 50,
+            "last_checkpoint_mech_requests": 47,
         }
 
         with (
@@ -197,6 +201,10 @@ def test_sm_get_staking_status_with_full_info(mock_wallet):
             status = sm.get_staking_status(force_refresh=True)
             assert status.is_staked is True
             assert status.epoch_number == 5
+            assert status.current_safe_nonce == 100
+            assert status.last_checkpoint_safe_nonce == 97
+            assert status.current_mech_requests == 50
+            assert status.last_checkpoint_mech_requests == 47
 
 
 # === SERVICE MANAGER CLAIM/WITHDRAW (lines 936-979) ===

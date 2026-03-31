@@ -71,6 +71,15 @@ class StakingStatus(BaseModel):
     epoch_end_utc: Optional[str] = None  # ISO format string
     remaining_epoch_seconds: float = 0
 
+    # Activity checker nonces — for full liveness verification.
+    # The on-chain isRatioPass checks: diff_requests <= diff_safe AND
+    # (diff_requests * 1e18) / ts_diff >= livenessRatio.
+    # These fields allow callers to replicate both checks locally.
+    current_safe_nonce: Optional[int] = None
+    last_checkpoint_safe_nonce: Optional[int] = None
+    current_mech_requests: Optional[int] = None
+    last_checkpoint_mech_requests: Optional[int] = None
+
     # Activity checker info
     activity_checker_address: Optional[EthereumAddress] = None
     liveness_ratio: int = 0  # Requests per second * 1e18
