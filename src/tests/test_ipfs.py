@@ -417,6 +417,22 @@ class TestPushMetadataToIpfs:
             assert posted_data["prompt"] == "hello"
             assert posted_data["tool"] == "test"
 
+    def test_preserves_existing_nonce(self, mock_config, mock_cid_decode):
+        """push_metadata_to_ipfs does not overwrite a nonce already in metadata."""
+        with patch("iwa.core.ipfs.create_retry_session") as mock_create:
+            mock_session = MagicMock()
+            mock_create.return_value = mock_session
+
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"Hash": "bafkreitest"}
+            mock_session.post.return_value = mock_response
+
+            push_metadata_to_ipfs({"prompt": "hi", "tool": "t", "nonce": "my-nonce"})
+
+            call_kwargs = mock_session.post.call_args[1]
+            posted_data = json.loads(call_kwargs["files"]["file"][1])
+            assert posted_data["nonce"] == "my-nonce"
+
     def test_includes_extra_attributes(self, mock_config, mock_cid_decode):
         """push_metadata_to_ipfs merges extra_attributes into the data."""
         with patch("iwa.core.ipfs.create_retry_session") as mock_create:
@@ -486,8 +502,8 @@ class TestPushMetadataToIpfs:
             assert truncated_hash == "0x" + fake_cid_hex[9:]
             assert cid_hex == fake_cid_hex
 
-    def test_json_serialization_compact(self, mock_config, mock_cid_decode):
-        """push_metadata_to_ipfs serializes JSON with compact separators."""
+    def test_json_serialization_valory_format(self, mock_config, mock_cid_decode):
+        """push_metadata_to_ipfs serializes JSON matching Valory agent format."""
         with patch("iwa.core.ipfs.create_retry_session") as mock_create:
             mock_session = MagicMock()
             mock_create.return_value = mock_session
@@ -501,12 +517,19 @@ class TestPushMetadataToIpfs:
 
             call_kwargs = mock_session.post.call_args[1]
             posted_bytes = call_kwargs["files"]["file"][1]
-            # Compact JSON should not have spaces after separators
-            assert b" " not in posted_bytes or b": " not in posted_bytes
-            # Verify it parses correctly
-            parsed = json.loads(posted_bytes)
-            assert parsed["key"] == "value"
-            assert parsed["nonce"] == "nonce-val"
+
+            # Must be byte-identical to Valory's serialization:
+            # json.dumps(obj, ensure_ascii=False, indent=4).encode("utf-8")
+            expected = json.dumps(
+                {"key": "value", "nonce": "nonce-val"},
+                ensure_ascii=False,
+                indent=4,
+            ).encode("utf-8")
+            assert posted_bytes == expected, (
+                f"IPFS bytes differ from Valory format.\n"
+                f"Got:      {posted_bytes!r}\n"
+                f"Expected: {expected!r}"
+            )
 
     def test_passes_api_url_through(self, mock_cid_decode):
         """push_metadata_to_ipfs passes api_url to push_to_ipfs_sync."""

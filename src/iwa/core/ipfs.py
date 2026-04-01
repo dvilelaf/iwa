@@ -134,11 +134,14 @@ def push_metadata_to_ipfs(
     :param api_url: Optional IPFS API URL.
     :return: Tuple of (truncated hash with 0x prefix for contract calls, full CID hex).
     """
-    data = {**metadata, "nonce": str(uuid.uuid4())}
+    data = {**metadata}
+    if "nonce" not in data:
+        data["nonce"] = str(uuid.uuid4())
     if extra_attributes:
         data.update(extra_attributes)
 
-    json_bytes = json.dumps(data, separators=(",", ":")).encode("utf-8")
+    # Match Valory agent serialization: indent=4, ensure_ascii=False
+    json_bytes = json.dumps(data, ensure_ascii=False, indent=4).encode("utf-8")
     _, cid_hex = push_to_ipfs_sync(json_bytes, api_url)
 
     # The truncated hash format expected by mech contracts: 0x + hex after the f01 prefix
