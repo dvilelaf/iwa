@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Type, TypeVar
 
 import tomli
 import tomli_w
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from pydantic_core import core_schema
 from ruamel.yaml import YAML
 
@@ -117,7 +117,17 @@ class CoreConfig(BaseModel):
 
     # ChainList enrichment - when False, skip adding public RPCs from ChainList.
     # Useful for Anvil/local fork testing where only the configured RPC should be used.
+    # Override via env var: CHAINLIST_ENRICHMENT=false
     chainlist_enrichment: bool = Field(default=True, description="Enrich RPCs from ChainList")
+
+    @model_validator(mode="after")
+    def _override_from_env(self) -> "CoreConfig":
+        """Allow env var override for chainlist_enrichment."""
+        import os
+        val = os.environ.get("CHAINLIST_ENRICHMENT", "").lower()
+        if val in ("false", "0", "no"):
+            self.chainlist_enrichment = False
+        return self
 
     # Safe Transaction Retry System
     safe_tx_max_retries: int = Field(default=6, description="Maximum retries for Safe transactions")

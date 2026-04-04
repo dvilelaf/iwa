@@ -324,6 +324,65 @@ class TestChainlistEnrichmentConfigFlag:
         mock_cl_cls.assert_called_once()
 
 
+    def test_env_var_overrides_to_false(self):
+        """CHAINLIST_ENRICHMENT=false env var sets the flag to False."""
+        import os
+        from iwa.core.models import CoreConfig
+
+        old = os.environ.get("CHAINLIST_ENRICHMENT")
+        try:
+            os.environ["CHAINLIST_ENRICHMENT"] = "false"
+            cfg = CoreConfig()
+            assert cfg.chainlist_enrichment is False
+        finally:
+            if old is None:
+                os.environ.pop("CHAINLIST_ENRICHMENT", None)
+            else:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+
+    def test_env_var_absent_keeps_default_true(self):
+        """Without env var, chainlist_enrichment stays True."""
+        import os
+        from iwa.core.models import CoreConfig
+
+        old = os.environ.pop("CHAINLIST_ENRICHMENT", None)
+        try:
+            cfg = CoreConfig()
+            assert cfg.chainlist_enrichment is True
+        finally:
+            if old is not None:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+
+    @patch("iwa.core.chain.interface.Web3")
+    def test_env_var_false_prevents_enrichment_e2e(self, mock_web3):
+        """End-to-end: env var → CoreConfig → ChainInterface skips enrichment."""
+        import os
+        from iwa.core.chain.interface import ChainInterface
+        from iwa.core.chain.models import SupportedChain
+
+        chain = MagicMock(spec=SupportedChain)
+        chain.name = "TestChain"
+        chain.rpcs = ["https://rpc1.example.com"]
+        chain.rpc = "https://rpc1.example.com"
+        chain.chain_id = 100
+
+        old = os.environ.get("CHAINLIST_ENRICHMENT")
+        try:
+            os.environ["CHAINLIST_ENRICHMENT"] = "false"
+            # Config() may be cached — force fresh read
+            with patch("iwa.core.chain.interface.Config") as mock_cfg:
+                from iwa.core.models import CoreConfig
+                mock_cfg.return_value.core = CoreConfig()
+                with patch("iwa.core.chainlist.ChainlistRPC") as mock_cl:
+                    ChainInterface(chain)
+            mock_cl.assert_not_called()
+        finally:
+            if old is None:
+                os.environ.pop("CHAINLIST_ENRICHMENT", None)
+            else:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+
+
 class TestEnrichFromChainlist:
     """Test ChainInterface._enrich_rpcs_from_chainlist().
 
