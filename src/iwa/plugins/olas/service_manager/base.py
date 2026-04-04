@@ -70,6 +70,21 @@ class ServiceManagerBase:
         self.registry = ContractCache().get_contract(
             ServiceRegistryContract, registry_address, chain_name=chain_name
         )
+
+        # On some chains (Base, etc.), the ServiceRegistry's manager is the
+        # ContractManager (a proxy), not the ServiceManager directly.
+        # Query on-chain to use the correct address.
+        try:
+            actual_manager = self.registry.call("manager")
+            if actual_manager and actual_manager.lower() != manager_address.lower():
+                logger.info(
+                    f"[SM-INIT] Registry manager is {actual_manager} "
+                    f"(not {manager_address}). Using on-chain manager."
+                )
+                manager_address = actual_manager
+        except Exception:
+            logger.debug("[SM-INIT] Could not query registry.manager(), using config")
+
         self.manager = ContractCache().get_contract(
             ServiceManagerContract, manager_address, chain_name=chain_name
         )
