@@ -76,7 +76,11 @@ class ServiceManagerBase:
         # Query on-chain to use the correct address.
         try:
             actual_manager = self.registry.call("manager")
-            if actual_manager and actual_manager.lower() != manager_address.lower():
+            if (
+                isinstance(actual_manager, str)
+                and actual_manager.startswith("0x")
+                and actual_manager.lower() != manager_address.lower()
+            ):
                 logger.info(
                     f"[SM-INIT] Registry manager is {actual_manager} "
                     f"(not {manager_address}). Using on-chain manager."
