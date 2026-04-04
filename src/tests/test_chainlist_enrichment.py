@@ -268,6 +268,62 @@ class TestGetValidatedRpcs:
         assert result == []
 
 
+class TestChainlistEnrichmentConfigFlag:
+    """Test CoreConfig.chainlist_enrichment flag controls enrichment."""
+
+    def test_core_config_defaults_to_true(self):
+        from iwa.core.models import CoreConfig
+
+        cfg = CoreConfig()
+        assert cfg.chainlist_enrichment is True
+
+    @patch("iwa.core.chain.interface.Web3")
+    def test_enrichment_skipped_when_flag_false(self, mock_web3):
+        from iwa.core.chain.interface import ChainInterface
+        from iwa.core.chain.models import SupportedChain
+
+        chain = MagicMock(spec=SupportedChain)
+        chain.name = "TestChain"
+        chain.rpcs = ["https://rpc1.example.com"]
+        chain.rpc = "https://rpc1.example.com"
+        chain.chain_id = 100
+
+        mock_core = MagicMock()
+        mock_core.chainlist_enrichment = False
+
+        with patch("iwa.core.chain.interface.Config") as mock_config_cls:
+            mock_config_cls.return_value.core = mock_core
+            with patch("iwa.core.chainlist.ChainlistRPC") as mock_cl_cls:
+                ChainInterface(chain)
+
+        # chainlist_enrichment=False → ChainlistRPC never instantiated
+        mock_cl_cls.assert_not_called()
+
+    @patch("iwa.core.chain.interface.Web3")
+    def test_enrichment_called_when_flag_true(self, mock_web3):
+        from iwa.core.chain.interface import ChainInterface
+        from iwa.core.chain.models import SupportedChain
+
+        chain = MagicMock(spec=SupportedChain)
+        chain.name = "TestChain"
+        chain.rpcs = ["https://rpc1.example.com"]
+        chain.rpc = "https://rpc1.example.com"
+        chain.chain_id = 100
+
+        mock_core = MagicMock()
+        mock_core.chainlist_enrichment = True
+
+        with patch("iwa.core.chain.interface.Config") as mock_config_cls:
+            mock_config_cls.return_value.core = mock_core
+            with patch("iwa.core.chainlist.ChainlistRPC") as mock_cl_cls:
+                mock_cl = mock_cl_cls.return_value
+                mock_cl.get_validated_rpcs.return_value = ["https://extra.example.com"]
+                ChainInterface(chain)
+
+        # chainlist_enrichment=True → ChainlistRPC was called
+        mock_cl_cls.assert_called_once()
+
+
 class TestEnrichFromChainlist:
     """Test ChainInterface._enrich_rpcs_from_chainlist().
 

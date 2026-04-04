@@ -57,8 +57,11 @@ class ChainInterface:
         self._rotation_lock = threading.Lock()
         self._session = self._create_session()
 
-        # Enrich with public RPCs from ChainList (skip for Tenderly vNets)
-        if not self.is_tenderly:
+        core_config = Config().core
+
+        # Enrich with public RPCs from ChainList (skip for Tenderly vNets and
+        # when chainlist_enrichment is disabled, e.g. Anvil local fork testing)
+        if not self.is_tenderly and core_config.chainlist_enrichment:
             self._enrich_rpcs_from_chainlist()
 
         self._init_web3()
@@ -121,7 +124,7 @@ class ChainInterface:
             from iwa.core.constants import get_tenderly_config_path
             from iwa.core.models import TenderlyConfig
 
-            profile = Config().core.tenderly_profile
+            profile = core_config.tenderly_profile
             config_path = get_tenderly_config_path(profile)
 
             if not config_path.exists():

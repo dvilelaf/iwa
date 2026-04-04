@@ -115,6 +115,10 @@ class CoreConfig(BaseModel):
     )
     tenderly_olas_funds: float = Field(default=100000.0, description="OLAS amount for vNet funding")
 
+    # ChainList enrichment - when False, skip adding public RPCs from ChainList.
+    # Useful for Anvil/local fork testing where only the configured RPC should be used.
+    chainlist_enrichment: bool = Field(default=True, description="Enrich RPCs from ChainList")
+
     # Safe Transaction Retry System
     safe_tx_max_retries: int = Field(default=6, description="Maximum retries for Safe transactions")
     safe_tx_gas_buffer: float = Field(
