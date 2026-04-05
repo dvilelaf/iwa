@@ -277,6 +277,58 @@ class TestChainlistEnrichmentConfigFlag:
         cfg = CoreConfig()
         assert cfg.chainlist_enrichment is True
 
+    def test_env_var_uppercase(self):
+        """CHAINLIST_ENRICHMENT=false (uppercase) overrides to False."""
+        import os
+
+        from iwa.core.models import CoreConfig
+
+        old = os.environ.pop("CHAINLIST_ENRICHMENT", None)
+        old_lower = os.environ.pop("chainlist_enrichment", None)
+        try:
+            os.environ["CHAINLIST_ENRICHMENT"] = "false"
+            assert CoreConfig().chainlist_enrichment is False
+        finally:
+            os.environ.pop("CHAINLIST_ENRICHMENT", None)
+            if old:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+            if old_lower:
+                os.environ["chainlist_enrichment"] = old_lower
+
+    def test_env_var_lowercase(self):
+        """chainlist_enrichment=false (lowercase, as in Justfile) overrides."""
+        import os
+
+        from iwa.core.models import CoreConfig
+
+        old = os.environ.pop("CHAINLIST_ENRICHMENT", None)
+        old_lower = os.environ.pop("chainlist_enrichment", None)
+        try:
+            os.environ["chainlist_enrichment"] = "false"
+            assert CoreConfig().chainlist_enrichment is False
+        finally:
+            os.environ.pop("chainlist_enrichment", None)
+            if old:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+            if old_lower:
+                os.environ["chainlist_enrichment"] = old_lower
+
+    def test_env_var_absent_keeps_true(self):
+        """Without env var, defaults to True."""
+        import os
+
+        from iwa.core.models import CoreConfig
+
+        old = os.environ.pop("CHAINLIST_ENRICHMENT", None)
+        old_lower = os.environ.pop("chainlist_enrichment", None)
+        try:
+            assert CoreConfig().chainlist_enrichment is True
+        finally:
+            if old:
+                os.environ["CHAINLIST_ENRICHMENT"] = old
+            if old_lower:
+                os.environ["chainlist_enrichment"] = old_lower
+
     @patch("iwa.core.chain.interface.Web3")
     def test_enrichment_skipped_when_flag_false(self, mock_web3):
         from iwa.core.chain.interface import ChainInterface
@@ -327,6 +379,7 @@ class TestChainlistEnrichmentConfigFlag:
     def test_env_var_overrides_to_false(self):
         """CHAINLIST_ENRICHMENT=false env var sets the flag to False."""
         import os
+
         from iwa.core.models import CoreConfig
 
         old = os.environ.get("CHAINLIST_ENRICHMENT")
@@ -343,6 +396,7 @@ class TestChainlistEnrichmentConfigFlag:
     def test_env_var_absent_keeps_default_true(self):
         """Without env var, chainlist_enrichment stays True."""
         import os
+
         from iwa.core.models import CoreConfig
 
         old = os.environ.pop("CHAINLIST_ENRICHMENT", None)
@@ -357,6 +411,7 @@ class TestChainlistEnrichmentConfigFlag:
     def test_env_var_false_prevents_enrichment_e2e(self, mock_web3):
         """End-to-end: env var → CoreConfig → ChainInterface skips enrichment."""
         import os
+
         from iwa.core.chain.interface import ChainInterface
         from iwa.core.chain.models import SupportedChain
 

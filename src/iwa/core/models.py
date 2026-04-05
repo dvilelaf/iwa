@@ -122,9 +122,13 @@ class CoreConfig(BaseModel):
 
     @model_validator(mode="after")
     def _override_from_env(self) -> "CoreConfig":
-        """Allow env var override for chainlist_enrichment."""
+        """Allow env var override for chainlist_enrichment (case-insensitive)."""
         import os
-        val = os.environ.get("CHAINLIST_ENRICHMENT", "").lower()
+        val = (
+            os.environ.get("CHAINLIST_ENRICHMENT")
+            or os.environ.get("chainlist_enrichment")
+            or ""
+        ).lower()
         if val in ("false", "0", "no"):
             self.chainlist_enrichment = False
         return self
