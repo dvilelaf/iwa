@@ -639,12 +639,13 @@ class LifecycleManagerMixin:
 
             # Fund the agent account with some native currency for gas
             # This is needed for the agent to approve the token utility
-            logger.info(f"Funding agent account {agent_account_address} with 0.1 xDAI")
+            logger.info(f"Funding agent account {agent_account_address} with 0.1 native on {self.chain_name}")
             tx_hash = self.wallet.send(
                 from_address_or_tag=self.wallet.master_account.address,
                 to_address_or_tag=agent_account_address,
                 token_address_or_name="native",
-                amount_wei=Web3.to_wei(0.1, "ether"),  # 0.1 xDAI
+                amount_wei=Web3.to_wei(0.1, "ether"),
+                chain_name=self.chain_name,
             )
             if not tx_hash:
                 logger.error("Failed to fund agent account")
