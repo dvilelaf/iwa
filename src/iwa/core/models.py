@@ -347,13 +347,18 @@ class Config(StorableModel):
         If raw data was loaded for this plugin, it will be hydrated into the model.
         If no data exists, creates default config and persists to file.
 
+        IMPORTANT: Never overwrites existing non-None values with defaults.
+        When hydrating from raw YAML data, the YAML values take priority.
+        When creating defaults for a new plugin, existing YAML data on disk
+        is preserved via _update_yaml_recursive (None never overwrites non-None).
+
         Only persists to disk when the hydrated model introduces new default
         fields not present in the original data, avoiding unnecessary writes
         that could corrupt the config during crash-restart cycles.
         """
         self._plugin_models[plugin_name] = model_class
 
-        # Hydrate any raw data that was loaded
+        # Hydrate any raw data that was loaded from YAML
         if plugin_name in self.plugins:
             current = self.plugins[plugin_name]
             if isinstance(current, dict):
@@ -364,9 +369,28 @@ class Config(StorableModel):
                 if hydrated_keys - set(current.keys()):
                     self.save_config()
         else:
-            # Create default config for plugin and persist
-            self.plugins[plugin_name] = model_class()
-            self.save_config()
+            # No existing data — check if YAML on disk has data for this plugin
+            # (could happen if _try_load ran before plugin was registered and
+            # the YAML section was added by another process/deploy)
+            from iwa.core.constants import CONFIG_PATH
+
+            disk_data = None
+            if CONFIG_PATH.exists():
+                try:
+                    ryaml = YAML()
+                    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+                        raw = ryaml.load(f) or {}
+                    disk_data = (raw.get("plugins") or {}).get(plugin_name)
+                except Exception:
+                    pass
+
+            if disk_data and isinstance(disk_data, dict):
+                # YAML has data for this plugin — hydrate from disk, not defaults
+                self.plugins[plugin_name] = model_class(**disk_data)
+            else:
+                # Truly new plugin — create default config and persist
+                self.plugins[plugin_name] = model_class()
+                self.save_config()
 
     def save_config(self) -> None:
         """Persist current config to config.yaml using atomic write.
