@@ -190,7 +190,7 @@ def test_export_csv(client):
     assert "# EURe withdrawn" in content
     assert "# MONTHLY COST BREAKDOWN" in content
     # EUR Value must be consistent: 10.0 OLAS * 1.5000 EUR = 15.00
-    lines = [l for l in content.splitlines() if not l.startswith("#") and l.strip()]
+    lines = [ln for ln in content.splitlines() if not ln.startswith("#") and ln.strip()]
     data_line = lines[1]  # first data row after header
     parts = data_line.split(",")
     olas_val = float(parts[5])
