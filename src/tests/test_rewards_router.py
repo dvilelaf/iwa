@@ -183,11 +183,20 @@ def test_export_csv(client):
     assert "0xExport1" in content
     assert "gnosisscan.io" in content
     assert "10.000000" in content  # OLAS amount
-    assert "TAX SUMMARY" in content
-    assert "Gross rewards" in content
-    assert "Net taxable income" in content
-    assert "EURe withdrawn" in content
-    assert "MONTHLY COST BREAKDOWN" in content
+    # Summary sections are CSV comments (# prefix)
+    assert "# TAX SUMMARY" in content
+    assert "# Gross rewards" in content
+    assert "# Net taxable income" in content
+    assert "# EURe withdrawn" in content
+    assert "# MONTHLY COST BREAKDOWN" in content
+    # EUR Value must be consistent: 10.0 OLAS * 1.5000 EUR = 15.00
+    lines = [l for l in content.splitlines() if not l.startswith("#") and l.strip()]
+    data_line = lines[1]  # first data row after header
+    parts = data_line.split(",")
+    olas_val = float(parts[5])
+    price_val = float(parts[6])
+    eur_val = float(parts[7])
+    assert abs(olas_val * price_val - eur_val) < 0.01
 
 
 def test_export_csv_with_month(client):
