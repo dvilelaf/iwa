@@ -843,6 +843,13 @@ MECH_CONTRACTS: Dict[str, Dict[str, str]] = {
 }
 
 # ComplementaryServiceMetadata contract addresses per chain
+# Source: valory-xyz/autonolas-registries globals_*_mainnet.json
 COMPLEMENTARY_SERVICE_METADATA: Dict[str, str] = {
     "gnosis": "0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69",
+    "base": "0x28C1edC7CEd549F7f80B732fDC19f0370160707d",
+    "ethereum": "0x0561cE39A1ab785B02DE0D9903125702559993A1",
+    "arbitrum": "0x02C26437B292D86c5F4F21bbCcE0771948274f84",
+    "optimism": "0x11949cBC85d8793B360029E26b18ae759708e28b",
+    "polygon": "0xDC175E77d11246c79B23D7088750eb59160DD6b7",
+    "celo": "0xc096362fa6f4A4B1a9ea68b1043416f3381ce300",
 }
