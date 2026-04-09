@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "bip-utils>=2.9.3",
-    "cryptography>=46.0.2",
+    "cryptography>=46.0.7",
     "eth-account>=0.13.7",
     "loguru>=0.7.3",
     "pydantic>=2.12.0",
