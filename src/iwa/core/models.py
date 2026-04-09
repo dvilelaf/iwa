@@ -109,7 +109,7 @@ class CoreConfig(BaseModel):
     ipfs_api_url: str = Field(default="https://registry.autonolas.tech", description="IPFS API URL")
 
     # Tenderly Configuration
-    tenderly_profile: int = Field(default=1, description="Tenderly profile ID (1, 2, 3)")
+    tenderly_profile: int = Field(default=0, description="Tenderly profile ID (1, 2, 3). 0 = disabled.")
     tenderly_native_funds: float = Field(
         default=1000.0, description="Native ETH amount for vNet funding"
     )
