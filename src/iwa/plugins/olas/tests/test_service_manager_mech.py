@@ -133,3 +133,59 @@ class TestServiceManagerMech:
                 payment_data=b"",
                 value=value,
             )
+
+
+class TestLegacyFlowIgnoresPriorityMech:
+    """Verify legacy flow ignores priority_mech and emits a warning.
+
+    Verified on-chain (2026-04-09): legacy ActivityChecker 0xE73C4e90...
+    has agentMech=0x77af31De... hardcoded. Requests to any other mech
+    would NOT be counted by the ActivityChecker, and staking rewards would
+    be lost. iwa warns loudly when priority_mech is set but ignored.
+    """
+
+    def test_warning_when_priority_mech_ignored_by_legacy_flow(self, service_manager):
+        """Warning emitted when priority_mech is set but legacy flow is used."""
+        with (
+            patch.object(
+                service_manager,
+                "get_marketplace_config",
+                return_value=(False, None, None),
+            ),
+            patch.object(
+                service_manager,
+                "_send_legacy_mech_request",
+                return_value="0xLegacyTx",
+            ),
+            patch("iwa.plugins.olas.service_manager.mech.logger") as mock_logger,
+        ):
+            result = service_manager.send_mech_request(
+                data=b"data",
+                priority_mech=VALID_PRIORITY_MECH,
+            )
+
+        assert result == "0xLegacyTx"
+        mock_logger.warning.assert_called_once()
+        msg = mock_logger.warning.call_args[0][0]
+        assert "priority_mech" in msg
+        assert "legacy" in msg
+        assert "ignored" in msg
+
+    def test_no_warning_without_priority_mech_on_legacy(self, service_manager):
+        """No warning emitted for normal legacy flow (priority_mech=None)."""
+        with (
+            patch.object(
+                service_manager,
+                "get_marketplace_config",
+                return_value=(False, None, None),
+            ),
+            patch.object(
+                service_manager,
+                "_send_legacy_mech_request",
+                return_value="0xLegacyTx",
+            ),
+            patch("iwa.plugins.olas.service_manager.mech.logger") as mock_logger,
+        ):
+            service_manager.send_mech_request(data=b"data", priority_mech=None)
+
+        mock_logger.warning.assert_not_called()

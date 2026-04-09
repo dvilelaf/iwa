@@ -304,6 +304,13 @@ class MechManagerMixin:
                 response_timeout=response_timeout,
             )
         else:
+            if priority_mech is not None:
+                logger.warning(
+                    f"[MECH] priority_mech={priority_mech} was specified but this service "
+                    f"uses legacy flow — priority_mech is ignored. Requests go to the "
+                    f"hard-coded agentMech tracked by the legacy ActivityChecker. "
+                    f"Custom mech routing requires a marketplace v2 staking contract."
+                )
             return self._send_legacy_mech_request(
                 data=data,
                 value=value,
