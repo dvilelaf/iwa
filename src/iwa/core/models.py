@@ -64,14 +64,24 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
     # on overlayfs/NFS (overlayfs inherits lower-layer mtime on copy-up; NFS has 1s
     # granularity). The timestamp embedded in the filename is monotonic and
     # filesystem-independent.
-    prefix = f"{path.name}."
-    backups = sorted(
-        (p for p in backup_dir.iterdir() if p.name.startswith(prefix) and p.name.endswith(".bak")),
-        key=lambda p: p.name,
-        reverse=True,
-    )
-    for old in backups[keep:]:
-        old.unlink(missing_ok=True)
+    # Wrap in try/except so a prune failure (ENOSPC, permission) does NOT abort
+    # the main save — the backup was already taken; losing old backups is preferable
+    # to losing the current write.
+    try:
+        prefix = f"{path.name}."
+        backups = sorted(
+            (
+                p
+                for p in backup_dir.iterdir()
+                if p.name.startswith(prefix) and p.name.endswith(".bak")
+            ),
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        for old in backups[keep:]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        pass  # prune failure is non-fatal; do not abort the main save
 
     # Audit log: append one JSONL line per write.
     # Simple size-based rotation: keep at most 2 files (audit.log + audit.log.1)
@@ -103,6 +113,11 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         fd = os.open(str(audit_path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as af:
             af.write(json.dumps(audit_entry) + "\n")
+        # Also emit to docker logs — audit.log lives in data/ (wipeable volume);
+        # docker logs survive outside the volume so this gives forensic evidence
+        # even when data/ is lost.
+        from loguru import logger as _logger
+        _logger.info(f"[audit] {json.dumps(audit_entry)}")
     except OSError as _e:
         from loguru import logger as _logger
         _logger.warning(f"audit.log write failed (tamper or disk issue?): {_e}")
@@ -130,10 +145,9 @@ def _atomic_yaml_write(path: Path, data: dict, ryaml: YAML) -> None:
             os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except BaseException:
-        try:
+        import contextlib
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
 
 

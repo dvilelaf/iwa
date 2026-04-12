@@ -505,3 +505,91 @@ class TestKeyStorageSave:
 
         assert _fcntl.LOCK_EX in flock_calls, "LOCK_EX must be acquired"
         assert _fcntl.LOCK_UN in flock_calls, "LOCK_UN must be released"
+
+    def test_corrupted_wallet_raises(self, tmp_path):
+        """JSONDecodeError must raise RuntimeError instead of silently resetting accounts."""
+        from unittest.mock import patch as _patch
+        from iwa.core.keys import KeyStorage
+
+        wallet_path = tmp_path / "wallet.json"
+        wallet_path.write_text("{invalid json!!")
+
+        with _patch("iwa.core.secrets.secrets") as mock_sec:
+            mock_sec.wallet_password.get_secret_value.return_value = "test_password"
+            mock_sec.wallet_path = wallet_path
+            with pytest.raises(RuntimeError, match="corrupted"):
+                KeyStorage(wallet_path, password="test_password")
+
+
+# ---------------------------------------------------------------------------
+# Test: _rotate_backup prune failures do not abort main save
+# ---------------------------------------------------------------------------
+
+
+class TestRotateBackupPruneSafety:
+    """Prune failures inside _rotate_backup must not propagate to the caller."""
+
+    def test_prune_enospc_does_not_abort_backup(self, tmp_path, monkeypatch):
+        """If iterdir() raises during prune, the backup file must already be present."""
+        from iwa.core.models import _rotate_backup
+
+        target = tmp_path / "config.yaml"
+        target.write_text("key: value\n")
+
+        original_iterdir = (tmp_path / "backups").parent.__class__.iterdir
+
+        call_count = {"n": 0}
+
+        def flaky_iterdir(self):
+            call_count["n"] += 1
+            if call_count["n"] > 1:
+                raise OSError("Simulated ENOSPC during prune")
+            return original_iterdir(self)
+
+        monkeypatch.setattr(
+            "pathlib.Path.iterdir",
+            flaky_iterdir,
+        )
+
+        # Must not raise even though prune fails
+        _rotate_backup(target, keep=5)
+
+        # Backup file was still created before the failed prune
+        backups = list((tmp_path / "backups").glob("*.bak"))
+        assert len(backups) == 1, "Backup must exist despite prune error"
+
+
+# ---------------------------------------------------------------------------
+# Test: audit log emits to loguru (docker logs)
+# ---------------------------------------------------------------------------
+
+
+class TestAuditEmitsToLogger:
+    """audit entries must also go to loguru so they land in docker logs."""
+
+    def test_audit_entry_emitted_via_logger_info(self, tmp_path):
+        """_rotate_backup must emit audit entry via logger.info for docker logs."""
+        from loguru import logger as _loguru_logger
+        from iwa.core.models import _rotate_backup
+
+        target = tmp_path / "config.yaml"
+        target.write_text("key: value\n")
+
+        captured = []
+
+        def sink(msg):
+            captured.append(str(msg))
+
+        handler_id = _loguru_logger.add(sink, level="INFO")
+        try:
+            _rotate_backup(target, keep=5)
+        finally:
+            _loguru_logger.remove(handler_id)
+
+        audit_logs = [m for m in captured if "[audit]" in m]
+        assert len(audit_logs) >= 1, "At least one [audit] entry must appear in logger output"
+
+
+# ---------------------------------------------------------------------------
+# Test: SUPPORTED_SCHEMA_VERSION is the field default (single source of truth)
+# ---------------------------------------------------------------------------

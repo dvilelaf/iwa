@@ -181,16 +181,17 @@ def test_keystorage_init_existing(tmp_path, mock_secrets):
 def test_keystorage_init_corrupted(
     tmp_path, mock_secrets, mock_account, mock_aesgcm, mock_scrypt, mock_bip_utils
 ):
-    """Test handling of corrupted wallet file."""
+    """Corrupted wallet.json must raise RuntimeError instead of silently resetting.
+
+    Silently resetting to {} then auto-creating a new master was a data-loss path:
+    the corrupted-but-recoverable file would be overwritten on the next save.
+    Raising forces operator intervention from backups/ before any data is destroyed.
+    """
     wallet_path = tmp_path / "wallet.json"
     wallet_path.write_text("{invalid json")
 
-    with patch("iwa.core.keys.logger") as mock_logger:
-        storage = KeyStorage(wallet_path, password="test_password")
-        # Corrupted file -> empty accounts -> auto create master
-        assert len(storage.accounts) == 1
-        assert storage.get_account("master") is not None
-        mock_logger.error.assert_called()
+    with pytest.raises(RuntimeError, match="corrupted"):
+        KeyStorage(wallet_path, password="test_password")
 
 
 def test_keystorage_save(

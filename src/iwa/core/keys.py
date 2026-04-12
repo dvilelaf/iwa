@@ -206,9 +206,15 @@ class KeyStorage(BaseModel):
                         for k, v in data.get("accounts", {}).items()
                     }
                     self.encrypted_mnemonic = data.get("encrypted_mnemonic")
-            except json.JSONDecodeError:
-                logger.error(f"Failed to load wallet from {path}: File is corrupted.")
-                self.accounts = {}
+            except json.JSONDecodeError as _e:
+                # Do NOT silently reset to {} — that leads to creating a new master account
+                # which overwrites the corrupted-but-recoverable wallet on the next save.
+                # Raise so the operator is forced to restore from backups/; preflight in
+                # __main__.py will catch this at startup and abort with a Telegram alert.
+                raise RuntimeError(
+                    f"wallet.json at {path} is corrupted and cannot be loaded. "
+                    f"Restore from data/backups/ before restarting. Error: {_e}"
+                ) from _e
         else:
             self.accounts = {}
 
