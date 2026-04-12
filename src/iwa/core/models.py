@@ -88,8 +88,9 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         )
         for old in backups[keep:]:
             old.unlink(missing_ok=True)
-    except OSError:
-        pass  # prune failure is non-fatal; do not abort the main save
+    except OSError as _prune_e:
+        from loguru import logger as _logger
+        _logger.warning(f"_rotate_backup: prune failed for {path.name}: {_prune_e} — old backups may accumulate")
 
     # Audit log: append one JSONL line per write.
     # Simple size-based rotation: keep at most 2 files (audit.log + audit.log.1)
