@@ -53,7 +53,15 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         pass
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_path = backup_dir / f"{path.name}.{ts}.bak"
-    shutil.copy2(path, backup_path)
+    # Wrap backup copy in try/except so copy failures (ENOSPC, EACCES on backups/)
+    # do NOT abort the main save — losing the backup is bad, but losing the write is
+    # worse. This is symmetric with the prune section below.
+    try:
+        shutil.copy2(path, backup_path)
+    except OSError as _e:
+        from loguru import logger as _logger
+        _logger.warning(f"_rotate_backup: could not write backup {backup_path}: {_e} — skipping backup, proceeding with save")
+        return
     # Preserve restrictive permissions on the backup (min 0o600)
     try:
         os.chmod(backup_path, path.stat().st_mode & 0o600)

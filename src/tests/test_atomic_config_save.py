@@ -558,6 +558,26 @@ class TestRotateBackupPruneSafety:
         backups = list((tmp_path / "backups").glob("*.bak"))
         assert len(backups) == 1, "Backup must exist despite prune error"
 
+    def test_copy_failure_does_not_crash_caller(self, tmp_path, monkeypatch):
+        """If shutil.copy2 fails, _rotate_backup must return cleanly (warning only)."""
+        import shutil
+        from iwa.core.models import _rotate_backup
+
+        target = tmp_path / "config.yaml"
+        target.write_text("key: value\n")
+
+        def failing_copy2(src, dst):
+            raise OSError("Simulated ENOSPC during backup copy")
+
+        monkeypatch.setattr(shutil, "copy2", failing_copy2)
+
+        # Must not raise — backup failure is non-fatal
+        _rotate_backup(target, keep=5)
+
+        # No backup file should exist (copy failed)
+        backups = list((tmp_path / "backups").glob("*.bak")) if (tmp_path / "backups").exists() else []
+        assert len(backups) == 0, "No backup should exist when copy2 failed"
+
 
 # ---------------------------------------------------------------------------
 # Test: audit log emits to loguru (docker logs)
