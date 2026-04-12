@@ -364,6 +364,7 @@ class TestRotateBackup:
         """
         from datetime import datetime, timezone
         from unittest.mock import patch as _patch
+
         from iwa.core.models import _rotate_backup
 
         target = tmp_path / "config.yaml"
@@ -473,7 +474,6 @@ class TestKeyStorageSave:
 
     def test_wallet_backup_goes_to_backups_plural(self, tmp_path):
         """Backup directory must be named 'backups' (plural), not 'backup'."""
-        from unittest.mock import patch as _patch
         from iwa.core.keys import KeyStorage
 
         wallet_path = tmp_path / "wallet.json"
@@ -488,8 +488,9 @@ class TestKeyStorageSave:
 
     def test_wallet_flock_acquired(self, tmp_path):
         """fcntl.flock must be called with LOCK_EX during save."""
-        from unittest.mock import patch as _patch
         import fcntl as _fcntl
+        from unittest.mock import patch as _patch
+
         from iwa.core.keys import KeyStorage
 
         wallet_path = tmp_path / "wallet.json"
@@ -509,6 +510,7 @@ class TestKeyStorageSave:
     def test_corrupted_wallet_raises(self, tmp_path):
         """JSONDecodeError must raise RuntimeError instead of silently resetting accounts."""
         from unittest.mock import patch as _patch
+
         from iwa.core.keys import KeyStorage
 
         wallet_path = tmp_path / "wallet.json"
@@ -561,6 +563,7 @@ class TestRotateBackupPruneSafety:
     def test_copy_failure_does_not_crash_caller(self, tmp_path, monkeypatch):
         """If shutil.copy2 fails, _rotate_backup must return cleanly (warning only)."""
         import shutil
+
         from iwa.core.models import _rotate_backup
 
         target = tmp_path / "config.yaml"
@@ -590,6 +593,7 @@ class TestAuditEmitsToLogger:
     def test_audit_entry_emitted_via_logger_info(self, tmp_path):
         """_rotate_backup must emit audit entry via logger.info for docker logs."""
         from loguru import logger as _loguru_logger
+
         from iwa.core.models import _rotate_backup
 
         target = tmp_path / "config.yaml"
