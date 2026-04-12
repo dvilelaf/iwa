@@ -15,33 +15,48 @@ logger = configure_logger()
 
 
 def _check_accounts(storage: KeyStorage) -> bool:
-    """Verify that all EOAs in the wallet can be decrypted.
+    """Verify all accounts in the wallet.
+
+    For EOAs: decrypt private key, derive address, verify it matches.
+    For Safes: verify at least one signer is present in the wallet.
 
     Args:
         storage: The KeyStorage instance.
 
     Returns:
-        bool: True if all EOAs were verified successfully.
+        bool: True if all accounts were verified successfully.
 
     """
     if not storage.accounts:
         print("⚠️  No accounts found in wallet.json.")
         return True
 
-    success_count = 0
-    fail_count = 0
-    safe_count = 0
+    eoa_ok = 0
+    eoa_fail = 0
+    safe_ok = 0
+    safe_fail = 0
+
+    wallet_addrs = {addr.lower() for addr in storage.accounts}
 
     # Ensure we sort by tag for consistent output
     sorted_accounts = sorted(storage.accounts.values(), key=lambda x: x.tag if x.tag else "")
 
     for account in sorted_accounts:
         if isinstance(account, StoredSafeAccount):
-            print(
-                f"🔹 [Safe]  {account.address} (tag: {account.tag or 'none'}) "
-                "- Skipped (Contract Wallet)"
-            )
-            safe_count += 1
+            signers = account.signers or []
+            controlled = [s for s in signers if s.lower() in wallet_addrs]
+            if controlled:
+                print(
+                    f"✅ [Safe]  {account.address} (tag: {account.tag or 'none'}) "
+                    f"- signer controlled: {controlled[0]}"
+                )
+                safe_ok += 1
+            else:
+                print(
+                    f"❌ [Safe]  {account.address} (tag: {account.tag or 'none'}) "
+                    f"- NO CONTROLLED SIGNER! signers={signers}"
+                )
+                safe_fail += 1
             continue
 
         try:
@@ -53,7 +68,7 @@ def _check_accounts(storage: KeyStorage) -> bool:
 
             if derived_acct.address.lower() == account.address.lower():
                 print(f"✅ [EOA]   {account.address} (tag: {account.tag or 'none'}) - OK")
-                success_count += 1
+                eoa_ok += 1
             else:
                 print(
                     f"❌ [EOA]   {account.address} (tag: {account.tag or 'none'}) "
@@ -61,21 +76,21 @@ def _check_accounts(storage: KeyStorage) -> bool:
                 )
                 print(f"    Expected: {account.address}")
                 print(f"    Derived:  {derived_acct.address}")
-                fail_count += 1
+                eoa_fail += 1
         except Exception as e:
             print(
                 f"❌ [EOA]   {account.address} (tag: {account.tag or 'none'}) - DECRYPTION FAILED!"
             )
             print(f"    Error: {e}")
-            fail_count += 1
+            eoa_fail += 1
 
     print("\n" + "-" * 40)
-    print(f"Accounts Verified: {success_count}")
-    print(f"Accounts Failed:   {fail_count}")
-    if safe_count:
-        print(f"Safes Skipped:     {safe_count}")
+    print(f"EOAs  Verified: {eoa_ok}")
+    print(f"EOAs  Failed:   {eoa_fail}")
+    print(f"Safes Verified: {safe_ok}")
+    print(f"Safes Failed:   {safe_fail}")
 
-    return fail_count == 0
+    return eoa_fail == 0 and safe_fail == 0
 
 
 def _check_mnemonic(storage: KeyStorage) -> bool:
@@ -121,9 +136,14 @@ def _check_mnemonic(storage: KeyStorage) -> bool:
 
 
 def check_wallet() -> None:
-    """Verify that all EOAs in the wallet can be decrypted and mnemonic is valid."""
+    """Verify all accounts in the wallet and the mnemonic.
+
+    EOAs: decrypted and address verified.
+    Safes: at least one signer must be present in the wallet.
+    Mnemonic: decrypted and word count validated.
+    """
     print("🔍 Verifying wallet integrity...")
-    print("This process checks if the WALLET_PASSWORD in secrets.env can decrypt all accounts.")
+    print("This process checks EOAs (decrypt+address), Safes (controlled signer), and mnemonic.")
     print()
 
     try:
