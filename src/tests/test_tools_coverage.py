@@ -60,7 +60,7 @@ class TestCheckAccounts:
         assert result is True
         captured = capsys.readouterr()
         assert "OK" in captured.out
-        assert "Accounts Verified: 1" in captured.out
+        assert "EOAs  Verified: 1" in captured.out
 
     def test_eoa_address_mismatch(self, capsys):
         """Test EOA with address mismatch."""
@@ -85,7 +85,7 @@ class TestCheckAccounts:
         assert result is False
         captured = capsys.readouterr()
         assert "ADDRESS MISMATCH" in captured.out
-        assert "Accounts Failed:   1" in captured.out
+        assert "EOAs  Failed:   1" in captured.out
 
     def test_eoa_decrypt_failure(self, capsys):
         """Test EOA decryption failure."""
@@ -106,28 +106,61 @@ class TestCheckAccounts:
         captured = capsys.readouterr()
         assert "DECRYPTION FAILED" in captured.out
 
-    def test_safe_account_skipped(self, capsys):
-        """Test that Safe accounts are skipped."""
+    def test_safe_account_controlled_signer(self, capsys):
+        """Safe accounts are verified: controlled signer in wallet → Safes Verified."""
         from iwa.core.models import StoredSafeAccount
         from iwa.tools.wallet_check import _check_accounts
 
         mock_safe = MagicMock(spec=StoredSafeAccount)
         mock_safe.tag = "MySafe"
         mock_safe.address = ADDR_SAFE
+        mock_safe.signers = [ADDR_EOA1]  # EOA1 is both a signer and in wallet
+
+        # EOA in the wallet that is also a Safe signer
+        eoa_mock = MagicMock()
+        eoa_mock.tag = "EOA1"
+        eoa_mock.address = ADDR_EOA1
+        eoa_mock.decrypt_private_key.return_value = "0xprivatekey"
+        eoa_mock.__class__ = type("EncryptedAccount", (), {})
+
+        storage = MagicMock()
+        storage.accounts = {ADDR_SAFE: mock_safe, ADDR_EOA1: eoa_mock}
+
+        with patch("iwa.tools.wallet_check.Account") as mock_eth_account:
+            derived = MagicMock()
+            derived.address = ADDR_EOA1
+            mock_eth_account.from_key.return_value = derived
+
+            result = _check_accounts(storage)
+
+        assert result is True
+        captured = capsys.readouterr()
+        assert "Safe" in captured.out
+        assert "signer controlled" in captured.out
+        assert "Safes Verified: 1" in captured.out
+
+    def test_safe_account_no_controlled_signer(self, capsys):
+        """Safe with no signer in wallet → Safes Failed (returns False)."""
+        from iwa.core.models import StoredSafeAccount
+        from iwa.tools.wallet_check import _check_accounts
+
+        mock_safe = MagicMock(spec=StoredSafeAccount)
+        mock_safe.tag = "OrphanSafe"
+        mock_safe.address = ADDR_SAFE
+        mock_safe.signers = []  # No signers
 
         storage = MagicMock()
         storage.accounts = {ADDR_SAFE: mock_safe}
 
         result = _check_accounts(storage)
 
-        assert result is True
+        assert result is False
         captured = capsys.readouterr()
-        assert "Safe" in captured.out
-        assert "Skipped" in captured.out
-        assert "Safes Skipped:     1" in captured.out
+        assert "NO CONTROLLED SIGNER" in captured.out
+        assert "Safes Failed:   1" in captured.out
 
     def test_mixed_accounts(self, capsys):
-        """Test with mix of EOA (ok), EOA (bad), and Safe."""
+        """Test with mix of EOA (ok), EOA (bad), and Safe (with controlled signer)."""
         from iwa.core.models import StoredSafeAccount
         from iwa.tools.wallet_check import _check_accounts
 
@@ -145,10 +178,11 @@ class TestCheckAccounts:
         bad_eoa.decrypt_private_key.side_effect = Exception("fail")
         bad_eoa.__class__ = type("EncryptedAccount", (), {})
 
-        # Safe
+        # Safe with a controlled signer (EOA1 is in the wallet)
         safe_acct = MagicMock(spec=StoredSafeAccount)
         safe_acct.tag = "MySafe"
         safe_acct.address = ADDR_SAFE
+        safe_acct.signers = [ADDR_EOA1]
 
         storage = MagicMock()
         storage.accounts = {
@@ -164,11 +198,11 @@ class TestCheckAccounts:
 
             result = _check_accounts(storage)
 
-        assert result is False
+        assert result is False  # bad_eoa still fails
         captured = capsys.readouterr()
-        assert "Accounts Verified: 1" in captured.out
-        assert "Accounts Failed:   1" in captured.out
-        assert "Safes Skipped:     1" in captured.out
+        assert "EOAs  Verified: 1" in captured.out
+        assert "EOAs  Failed:   1" in captured.out
+        assert "Safes Verified: 1" in captured.out
 
 
 class TestCheckMnemonic:

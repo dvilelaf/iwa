@@ -1,11 +1,11 @@
 """Wallet management"""
 
 import base64
+import fcntl
 import json
 import os
-import shutil
 import sys
-from datetime import datetime
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -24,7 +24,13 @@ from eth_account.signers.local import LocalAccount
 from pydantic import BaseModel, PrivateAttr, model_validator
 
 from iwa.core.constants import WALLET_PATH
-from iwa.core.models import EncryptedData, EthereumAddress, StoredAccount, StoredSafeAccount
+from iwa.core.models import (
+    EncryptedData,
+    EthereumAddress,
+    StoredAccount,
+    StoredSafeAccount,
+    _rotate_backup,
+)
 from iwa.core.secrets import secrets
 from iwa.core.utils import (
     configure_logger,
@@ -225,33 +231,50 @@ class KeyStorage(BaseModel):
         return master_account
 
     def save(self):
-        """Save with automatic backup."""
-        # Backup existing file before overwriting
-        if self._path.exists():
-            # Use backup directory relative to wallet path (supports tests with tmp_path)
-            backup_dir = self._path.parent / "backup"
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                os.chmod(backup_dir, 0o700)
-            except OSError as e:
-                logger.debug(f"Could not chmod backup dir (expected in some Docker setups): {e}")
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = backup_dir / f"wallet.json.{timestamp}.bkp"
-            shutil.copy2(self._path, backup_path)
-            try:
-                os.chmod(backup_path, 0o600)
-            except OSError as e:
-                logger.debug(f"Could not chmod backup file: {e}")
-            logger.debug(f"Backed up wallet to {backup_path}")
+        """Save with automatic backup, exclusive lock, and atomic write.
 
+        Uses fcntl.flock on .wallet.lock (symmetric with save_config's .config.lock)
+        to prevent concurrent writers from racing. Backup directory is named 'backups/'
+        (matching the config backup convention) rather than the old 'backup/' (singular).
+        NOTE: fcntl.flock is advisory and local; NFS mounts may not respect it.
+        """
         # Ensure directory exists
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self._path, "w", encoding="utf-8") as f:
-            # Use mode='json' to ensure all types (EthereumAddress) are correctly serialized
-            json.dump(self.model_dump(mode="json"), f, indent=4)
-            f.flush()
-            os.fsync(f.fileno())  # Force write to disk (critical for Docker volumes)
+        # Exclusive lock — symmetric with save_config() in iwa/core/models.py
+        lock_path = self._path.parent / ".wallet.lock"
+        with open(lock_path, "w") as _lock_file:
+            fcntl.flock(_lock_file, fcntl.LOCK_EX)
+            try:
+                os.chmod(lock_path, 0o600)
+            except OSError:
+                pass
+            try:
+                # Backup existing file via _rotate_backup — unifies suffix (.bak),
+                # pruning (30 copies), audit log, and backups/ permissions with
+                # save_config(). This replaces the inline ad-hoc backup logic.
+                _rotate_backup(self._path, keep=30)
+
+                # Atomic write: temp file + fsync + os.replace to prevent partial writes
+                fd, tmp_path = tempfile.mkstemp(
+                    dir=self._path.parent, prefix=".save_", suffix=".wallet.tmp"
+                )
+                try:
+                    os.fchmod(fd, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        # Use mode='json' to ensure all types (EthereumAddress) are correctly serialized
+                        json.dump(self.model_dump(mode="json"), f, indent=4)
+                        f.flush()
+                        os.fsync(f.fileno())  # Force write to disk (critical for Docker volumes)
+                    os.replace(tmp_path, self._path)
+                except BaseException:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            finally:
+                fcntl.flock(_lock_file, fcntl.LOCK_UN)
 
         try:
             os.chmod(self._path, 0o600)

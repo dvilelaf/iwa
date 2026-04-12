@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Type, TypeVar
 
@@ -31,6 +32,80 @@ def _update_yaml_recursive(target: Dict, source: Dict) -> None:
             continue  # don't overwrite non-None with None
         else:
             target[key] = value
+
+
+def _rotate_backup(path: Path, keep: int = 30) -> None:
+    """Snapshot path to a timestamped backup file before overwriting. Prunes oldest.
+
+    Also appends a JSONL audit entry to data/audit.log so every config/wallet
+    write can be reconstructed post-incident without diffing backup files.
+    """
+    if not path.exists():
+        return
+    backup_dir = path.parent / "backups"
+    backup_dir.mkdir(exist_ok=True)
+    # Ensure the backups/ directory is not world-traversable (both code paths
+    # — config saves and wallet saves — must agree on 0o700 so whichever path
+    # creates the dir first doesn't leave it world-readable).
+    try:
+        os.chmod(backup_dir, 0o700)
+    except OSError:
+        pass
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_path = backup_dir / f"{path.name}.{ts}.bak"
+    shutil.copy2(path, backup_path)
+    # Preserve restrictive permissions on the backup (min 0o600)
+    try:
+        os.chmod(backup_path, path.stat().st_mode & 0o600)
+    except OSError:
+        pass
+
+    # Prune beyond `keep` — sort by filename (not mtime) because mtime is unreliable
+    # on overlayfs/NFS (overlayfs inherits lower-layer mtime on copy-up; NFS has 1s
+    # granularity). The timestamp embedded in the filename is monotonic and
+    # filesystem-independent.
+    prefix = f"{path.name}."
+    backups = sorted(
+        (p for p in backup_dir.iterdir() if p.name.startswith(prefix) and p.name.endswith(".bak")),
+        key=lambda p: p.name,
+        reverse=True,
+    )
+    for old in backups[keep:]:
+        old.unlink(missing_ok=True)
+
+    # Audit log: append one JSONL line per write.
+    # Simple size-based rotation: keep at most 2 files (audit.log + audit.log.1)
+    # so the log never exceeds ~2 MB regardless of save frequency.
+    try:
+        audit_path = path.parent / "audit.log"
+        _AUDIT_MAX_BYTES = 1_048_576  # 1 MB
+        if audit_path.exists() and audit_path.stat().st_size > _AUDIT_MAX_BYTES:
+            rotated = path.parent / "audit.log.1"
+            try:
+                rotated.unlink(missing_ok=True)
+                audit_path.rename(rotated)
+            except OSError:
+                pass  # rotation failure is non-fatal
+        try:
+            from iwa.core.utils import get_version as _get_version
+            _iwa_ver = _get_version("iwa")
+        except Exception:
+            _iwa_ver = "unknown"
+        audit_entry = {
+            "ts": ts,
+            "action": "save",
+            "file": path.name,
+            "backup": str(backup_path),
+            "pid": os.getpid(),
+            "iwa_version": _iwa_ver,
+        }
+        # Open with mode 0o600 so audit.log is never world-readable.
+        fd = os.open(str(audit_path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as af:
+            af.write(json.dumps(audit_entry) + "\n")
+    except OSError as _e:
+        from loguru import logger as _logger
+        _logger.warning(f"audit.log write failed (tamper or disk issue?): {_e}")
 
 
 def _atomic_yaml_write(path: Path, data: dict, ryaml: YAML) -> None:
@@ -396,8 +471,12 @@ class Config(StorableModel):
         """Persist current config to config.yaml using atomic write.
 
         Uses write-to-temp-file + os.replace() to prevent data loss if the
-        process is killed mid-write. Creates a .bak backup before overwriting.
+        process is killed mid-write. Takes a rotating timestamped backup before
+        overwriting. Holds an exclusive fcntl.flock for the duration of the
+        backup+write to prevent concurrent writers from racing.
         """
+        import fcntl
+
         from loguru import logger
 
         from iwa.core.constants import CONFIG_PATH
@@ -429,12 +508,23 @@ class Config(StorableModel):
                         f"Failed to parse existing config at {CONFIG_PATH}, overwriting: {e}"
                     )
 
-        # Backup existing config before overwriting
-        if CONFIG_PATH.exists() and CONFIG_PATH.stat().st_size > 0:
-            backup_path = CONFIG_PATH.with_suffix(".yaml.bak")
-            shutil.copy2(CONFIG_PATH, backup_path)
-
-        _atomic_yaml_write(CONFIG_PATH, data, ryaml)
+        # Exclusive lock to prevent concurrent writers from racing on backup+write.
+        # mkdir parents=True: on fresh install CONFIG_PATH.parent may not exist yet;
+        # _atomic_yaml_write also does this but the lock open runs FIRST.
+        lock_path = CONFIG_PATH.parent / ".config.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_path, "w") as _lock_file:
+            try:
+                os.chmod(lock_path, 0o600)
+            except OSError:
+                pass
+            fcntl.flock(_lock_file, fcntl.LOCK_EX)
+            try:
+                # Rotating timestamped backup before overwriting (30 snapshots kept)
+                _rotate_backup(CONFIG_PATH, keep=30)
+                _atomic_yaml_write(CONFIG_PATH, data, ryaml)
+            finally:
+                fcntl.flock(_lock_file, fcntl.LOCK_UN)
 
         self._path = CONFIG_PATH
         self._storage_format = "yaml"
