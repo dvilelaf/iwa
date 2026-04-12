@@ -62,9 +62,10 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         from loguru import logger as _logger
         _logger.warning(f"_rotate_backup: could not write backup {backup_path}: {_e} — skipping backup, proceeding with save")
         return
-    # Preserve restrictive permissions on the backup (min 0o600)
+    # Ensure backup has at least 0o600 (owner rw). Use | not & — bitwise AND
+    # would strip bits and could produce 0o400 or 0o000 if source lacks owner-write.
     try:
-        os.chmod(backup_path, path.stat().st_mode & 0o600)
+        os.chmod(backup_path, 0o600)
     except OSError:
         pass
 
