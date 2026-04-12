@@ -120,7 +120,13 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
             "iwa_version": _iwa_ver,
         }
         # Open with mode 0o600 so audit.log is never world-readable.
+        # The mode argument only applies on creation; fchmod ensures 0o600 even
+        # on existing files that may have been created with a looser umask.
         fd = os.open(str(audit_path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        except OSError:
+            pass
         with os.fdopen(fd, "a", encoding="utf-8") as af:
             af.write(json.dumps(audit_entry) + "\n")
         # Also emit to docker logs — audit.log lives in data/ (wipeable volume);
