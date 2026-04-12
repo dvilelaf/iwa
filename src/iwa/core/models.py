@@ -34,6 +34,43 @@ def _update_yaml_recursive(target: Dict, source: Dict) -> None:
             target[key] = value
 
 
+_AUDIT_MAX_BYTES = 1_048_576  # 1 MB
+
+
+def _write_audit_log(data_dir: Path, ts: str, entry: dict) -> None:
+    """Append a JSONL audit entry to data/audit.log with size-based rotation.
+
+    Failures are logged at WARNING but never propagate — audit is non-fatal.
+    """
+    try:
+        audit_path = data_dir / "audit.log"
+        if audit_path.exists() and audit_path.stat().st_size > _AUDIT_MAX_BYTES:
+            rotated = data_dir / "audit.log.1"
+            try:
+                rotated.unlink(missing_ok=True)
+                audit_path.rename(rotated)
+            except OSError:
+                pass  # rotation failure is non-fatal
+        # Open with mode 0o600 so audit.log is never world-readable.
+        # The mode argument only applies on creation; fchmod ensures 0o600 even
+        # on existing files that may have been created with a looser umask.
+        fd = os.open(str(audit_path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        except OSError:
+            pass
+        with os.fdopen(fd, "a", encoding="utf-8") as af:
+            af.write(json.dumps(entry) + "\n")
+        # Also emit to docker logs — audit.log lives in data/ (wipeable volume);
+        # docker logs survive outside the volume so this gives forensic evidence
+        # even when data/ is lost.
+        from loguru import logger as _logger
+        _logger.info(f"[audit] {json.dumps(entry)}")
+    except OSError as _e:
+        from loguru import logger as _logger
+        _logger.warning(f"audit.log write failed (tamper or disk issue?): {_e}")
+
+
 def _rotate_backup(path: Path, keep: int = 30) -> None:
     """Snapshot path to a timestamped backup file before overwriting. Prunes oldest.
 
@@ -93,50 +130,20 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         from loguru import logger as _logger
         _logger.warning(f"_rotate_backup: prune failed for {path.name}: {_prune_e} — old backups may accumulate")
 
-    # Audit log: append one JSONL line per write.
-    # Simple size-based rotation: keep at most 2 files (audit.log + audit.log.1)
-    # so the log never exceeds ~2 MB regardless of save frequency.
     try:
-        audit_path = path.parent / "audit.log"
-        _AUDIT_MAX_BYTES = 1_048_576  # 1 MB
-        if audit_path.exists() and audit_path.stat().st_size > _AUDIT_MAX_BYTES:
-            rotated = path.parent / "audit.log.1"
-            try:
-                rotated.unlink(missing_ok=True)
-                audit_path.rename(rotated)
-            except OSError:
-                pass  # rotation failure is non-fatal
-        try:
-            from iwa.core.utils import get_version as _get_version
-            _iwa_ver = _get_version("iwa")
-        except Exception:
-            _iwa_ver = "unknown"
-        audit_entry = {
-            "ts": ts,
-            "action": "save",
-            "file": path.name,
-            "backup": str(backup_path),
-            "pid": os.getpid(),
-            "iwa_version": _iwa_ver,
-        }
-        # Open with mode 0o600 so audit.log is never world-readable.
-        # The mode argument only applies on creation; fchmod ensures 0o600 even
-        # on existing files that may have been created with a looser umask.
-        fd = os.open(str(audit_path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
-        try:
-            os.fchmod(fd, 0o600)
-        except OSError:
-            pass
-        with os.fdopen(fd, "a", encoding="utf-8") as af:
-            af.write(json.dumps(audit_entry) + "\n")
-        # Also emit to docker logs — audit.log lives in data/ (wipeable volume);
-        # docker logs survive outside the volume so this gives forensic evidence
-        # even when data/ is lost.
-        from loguru import logger as _logger
-        _logger.info(f"[audit] {json.dumps(audit_entry)}")
-    except OSError as _e:
-        from loguru import logger as _logger
-        _logger.warning(f"audit.log write failed (tamper or disk issue?): {_e}")
+        from iwa.core.utils import get_version as _get_version
+        _iwa_ver = _get_version("iwa")
+    except Exception:
+        _iwa_ver = "unknown"
+    audit_entry = {
+        "ts": ts,
+        "action": "save",
+        "file": path.name,
+        "backup": str(backup_path),
+        "pid": os.getpid(),
+        "iwa_version": _iwa_ver,
+    }
+    _write_audit_log(path.parent, ts, audit_entry)
 
 
 def _atomic_yaml_write(path: Path, data: dict, ryaml: YAML) -> None:
