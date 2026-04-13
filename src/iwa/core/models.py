@@ -80,7 +80,9 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
     if not path.exists():
         return
     backup_dir = path.parent / "backups"
-    backup_dir.mkdir(exist_ok=True)
+    # mode=0o700 on creation closes the TOCTOU window between mkdir and chmod.
+    # The explicit chmod below still runs to fix dirs created by older versions.
+    backup_dir.mkdir(mode=0o700, exist_ok=True)
     # Ensure the backups/ directory is not world-traversable (both code paths
     # — config saves and wallet saves — must agree on 0o700 so whichever path
     # creates the dir first doesn't leave it world-readable).
