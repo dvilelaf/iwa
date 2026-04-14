@@ -615,11 +615,54 @@ def test_fee_error_classification(executor):
         "transaction underpriced",
         "maxFeePerGas too low",
         "fee too low for mempool",
+        # Gnosis-specific: RPC sends "FeeTooLow" (no space) and
+        # "EffectivePriorityFeePerGas too low 0 < 1" — must be classified as
+        # fee error so fee_bump_factor gets incremented on retry.
+        "FeeTooLow, EffectivePriorityFeePerGas too low 0 < 1, BaseFee: 413",
+        "{'code': -32010, 'message': 'FeeTooLow, EffectivePriorityFeePerGas too low 0 < 1'}",
     ]
     for error_msg in fee_errors:
         error = ValueError(error_msg)
         result = executor._classify_error(error)
         assert result["is_fee_error"] is True, f"Should detect fee error: {error_msg}"
+
+
+def test_execute_with_gas_pricing_always_forces_priority_fee(executor, mock_chain_interface):
+    """First attempt must not rely on safe-eth-py's eip1559_speed=FAST.
+
+    Gnosis RPC returns max_priority_fee=0; letting safe-eth-py set the fee
+    produces maxPriorityFeePerGas=0 which is rejected with FeeTooLow.
+    _execute_with_gas_pricing must always use _calculate_bumped_gas_price.
+    """
+    mock_chain_interface.web3.eth.get_block.return_value = {"baseFeePerGas": 413}
+    mock_chain_interface.web3.eth.max_priority_fee = 0  # Gnosis returns 0
+
+    mock_safe_tx = MagicMock()
+    mock_safe_tx.execute.return_value = b"\xab" * 32
+
+    # fee_bump_factor=1.0 (first attempt) must still calculate bumped price
+    executor._execute_with_gas_pricing(mock_safe_tx, "0xkey", 1.0, "test")
+
+    # Must call execute with tx_gas_price, NOT with eip1559_speed
+    call_kwargs = mock_safe_tx.execute.call_args
+    assert "tx_gas_price" in call_kwargs.kwargs or (
+        len(call_kwargs.args) >= 2 and call_kwargs.args[1] is not None
+    ), "Should pass tx_gas_price explicitly, not rely on eip1559_speed"
+    # eip1559_speed must NOT be set (would bypass our priority fee floor)
+    assert "eip1559_speed" not in call_kwargs.kwargs
+
+
+def test_calculate_bumped_gas_price_zero_priority_fee_floor(executor, mock_chain_interface):
+    """When RPC returns max_priority_fee=0, bumped price must include >= 1 wei priority."""
+    mock_chain_interface.web3.eth.get_block.return_value = {"baseFeePerGas": 413}
+    mock_chain_interface.web3.eth.max_priority_fee = 0  # Gnosis
+
+    result = executor._calculate_bumped_gas_price(1.0)
+
+    assert result is not None
+    # base_fee * 1.0 * 1.5 + 1 (floor) = 619 + 1 = 620
+    expected = int(413 * 1.0 * 1.5) + 1
+    assert result == expected, f"Expected {expected}, got {result}"
 
 
 def test_calculate_bumped_gas_price_eip1559(executor, mock_chain_interface):

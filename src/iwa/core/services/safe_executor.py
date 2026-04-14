@@ -222,20 +222,20 @@ class SafeTransactionExecutor:
     ):
         """Execute transaction with appropriate gas pricing strategy.
 
-        If fee_bump_factor > 1.0, calculates a bumped gas price to overcome
-        base fee volatility. Otherwise uses EIP-1559 FAST speed.
+        Always uses _calculate_bumped_gas_price (even on the first attempt with
+        factor=1.0) to guarantee maxPriorityFeePerGas >= 1 wei.  Gnosis RPC
+        returns max_priority_fee=0 which causes instant FeeTooLow rejection —
+        letting safe-eth-py set the fee via eip1559_speed=FAST is not safe.
+        Falls back to FAST only if the gas price calculation itself fails.
         """
-        if fee_bump_factor > 1.0:
-            bumped_gas_price = self._calculate_bumped_gas_price(fee_bump_factor)
-            if bumped_gas_price:
-                logger.debug(
-                    f"[{operation_name}] Using bumped gas price: {bumped_gas_price} wei "
-                    f"(factor: {fee_bump_factor:.2f}x)"
-                )
-                return safe_tx.execute(signer_key, tx_gas_price=bumped_gas_price)
-            # Fallback to FAST if calculation fails
-            return safe_tx.execute(signer_key, eip1559_speed=TxSpeed.FAST)
-        # Default: use EIP-1559 'FAST' speed
+        bumped_gas_price = self._calculate_bumped_gas_price(max(fee_bump_factor, 1.0))
+        if bumped_gas_price:
+            logger.debug(
+                f"[{operation_name}] Using gas price: {bumped_gas_price} wei "
+                f"(factor: {fee_bump_factor:.2f}x)"
+            )
+            return safe_tx.execute(signer_key, tx_gas_price=bumped_gas_price)
+        # Fallback: let safe-eth-py pick the fee (may be 0 on Gnosis)
         return safe_tx.execute(signer_key, eip1559_speed=TxSpeed.FAST)
 
     def _extract_tx_hash(self, result) -> str:
@@ -450,11 +450,15 @@ class SafeTransactionExecutor:
             error
         ) or self.chain_interface._is_connection_error(error)
 
-        # Fee-specific errors: base fee jumped above our max fee
+        # Fee-specific errors: base fee jumped above our max fee.
+        # NOTE: Gnosis RPC sends "FeeTooLow" (no space) and
+        # "EffectivePriorityFeePerGas too low" — both must be matched.
         fee_error_signals = [
             "max fee per gas less than block base fee",
             "maxfeepergas",
             "fee too low",
+            "feetoolow",
+            "effectivepriorityfeepergas",
             "underpriced",
         ]
         is_fee_error = any(signal in err_text for signal in fee_error_signals)
