@@ -22,12 +22,33 @@ from iwa.core.wallet import init_db
 # Pre-load cowdao_cowpy modules BEFORE async loop starts
 # This is required because cowdao_cowpy uses asyncio.run() at import time
 # which fails if called from an already running event loop
-from iwa.plugins.gnosis.cow_utils import get_cowpy_module
+from iwa.plugins.gnosis.cow_utils import CowApiUnavailableError, get_cowpy_module
 
 # Import routers
 from iwa.web.routers import accounts, olas, rewards, state, subgraph, swap, transactions
 
-get_cowpy_module("DEFAULT_APP_DATA_HASH")  # Forces import now, not during async
+def _preload_cow_modules() -> None:
+    """Pre-load cowdao_cowpy before the async loop starts.
+
+    cowdao_cowpy uses asyncio.run() at import time, which fails if called from
+    an already-running event loop. We trigger the import here (synchronous
+    context) so it's cached for later async calls.
+
+    If api.cow.fi is unreachable at startup (DNS hijack, outage, etc.) we log a
+    warning and continue — CoW swaps will be unavailable but the server must NOT
+    crash. Individual swap calls will raise CowApiUnavailableError on demand.
+    """
+    try:
+        get_cowpy_module("DEFAULT_APP_DATA_HASH")
+    except CowApiUnavailableError as exc:
+        logger.warning(
+            "CoW Protocol API unreachable at startup (%s). "
+            "CoW swaps disabled until the API recovers.",
+            exc,
+        )
+
+
+_preload_cow_modules()
 
 # Configure logging (writes to iwa.log for frontend visibility)
 configure_logger()

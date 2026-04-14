@@ -1,8 +1,19 @@
 """Utilities for CowSwap plugin."""
 
 import importlib
+import logging
 import sys
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+class CowApiUnavailableError(RuntimeError):
+    """Raised when the CoW Protocol API is unreachable.
+
+    Callers should treat this as a transient failure and retry later,
+    rather than letting it propagate as an unhandled exception.
+    """
 
 # Lazy import cache for cowdao_cowpy modules to avoid asyncio.run() conflict
 _cowpy_cache: dict[str, Any] = {}
@@ -55,6 +66,21 @@ def get_cowpy_module(name: str) -> Any:
             module_path, attr_name = _COWPY_IMPORTS[name]
             module = importlib.import_module(module_path)
             _cowpy_cache[name] = getattr(module, attr_name)
+        except Exception as exc:
+            if name == "DEFAULT_APP_DATA_HASH":
+                # cowdao_cowpy.app_data.utils runs build_all_app_codes() at module
+                # level, which contacts api.cow.fi. If the API is unreachable (DNS
+                # hijack, outage, maintenance), the import raises. We convert this to
+                # a controlled error so callers can fail the swap gracefully instead
+                # of crashing the whole process.
+                logger.warning(
+                    "CoW Protocol API unreachable — could not fetch DEFAULT_APP_DATA_HASH "
+                    f"({exc}). CoW swaps will be unavailable until the API recovers."
+                )
+                raise CowApiUnavailableError(
+                    f"CoW Protocol API unreachable: {exc}"
+                ) from exc
+            raise
         finally:
             # Always restore real httpx, even if import fails
             if real_httpx is not None:
