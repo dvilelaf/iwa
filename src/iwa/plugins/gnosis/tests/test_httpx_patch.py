@@ -465,10 +465,16 @@ class TestCloudFrontWAFCanary:
         - Remove cowpy_httpx_shim.py
         - Remove sys.modules swap in cow_utils.py:get_cowpy_module()
         - Close https://github.com/cowdao-grants/cow-py/issues/78
+
+        Skipped automatically when api.cow.fi is unreachable (outage/DNS hijack).
         """
         import warnings
 
-        resp = real_httpx.get(COW_API_URL, timeout=10)
+        try:
+            resp = real_httpx.get(COW_API_URL, timeout=10)
+        except Exception as exc:
+            pytest.skip(f"api.cow.fi unreachable (outage or DNS hijack): {exc}")
+
         if resp.status_code != 403:
             warnings.warn(
                 f"httpx got {resp.status_code} instead of 403 — CloudFront WAF "
@@ -479,8 +485,15 @@ class TestCloudFrontWAFCanary:
             )
 
     def test_requests_not_blocked(self):
-        """requests (urllib3) should get 200 — confirms the API itself works."""
-        resp = requests.get(COW_API_URL, timeout=10)
+        """requests (urllib3) should get 200 — confirms the API itself works.
+
+        Skipped automatically when api.cow.fi is unreachable (outage/DNS hijack).
+        """
+        try:
+            resp = requests.get(COW_API_URL, timeout=10)
+        except Exception as exc:
+            pytest.skip(f"api.cow.fi unreachable (outage or DNS hijack): {exc}")
+
         assert resp.status_code == 200, (
             f"requests got {resp.status_code} — CowSwap API may be down"
         )
