@@ -41,17 +41,12 @@ Important:
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 from loguru import logger
-from safe_eth.safe import SafeOperationEnum
 from web3 import Web3
 
 from iwa.core.constants import ZERO_ADDRESS
-from iwa.core.contracts.multisend import (
-    MULTISEND_ADDRESS,
-    MultiSendContract,
-)
 from iwa.core.types import EthereumAddress
 from iwa.plugins.olas.constants import (
     OLAS_CONTRACTS,

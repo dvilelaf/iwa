@@ -27,6 +27,7 @@ from iwa.plugins.gnosis.cow_utils import CowApiUnavailableError, get_cowpy_modul
 # Import routers
 from iwa.web.routers import accounts, olas, rewards, state, subgraph, swap, transactions
 
+
 def _preload_cow_modules() -> None:
     """Pre-load cowdao_cowpy before the async loop starts.
 
