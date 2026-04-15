@@ -800,11 +800,15 @@ class StakingManagerMixin:
             f"Available rewards: {rewards_olas:.2f} OLAS"
         )
 
-        # Log any inactivity warnings
+        # Log any inactivity warnings. These events are emitted for ALL services
+        # in the staking contract (including third-party operators), not only ours.
         inactivity_warnings = [e for e in events if e["name"] == "ServiceInactivityWarning"]
         if inactivity_warnings:
             service_ids = [e["args"]["serviceId"] for e in inactivity_warnings]
-            logger.warning(f"Services with inactivity warnings: {service_ids}")
+            logger.info(
+                f"Inactivity warnings emitted in this checkpoint "
+                f"(contract-wide, may include third-party services): {service_ids}"
+            )
 
         # Invalidate staking status cache - epoch info changed
         if self.service:
