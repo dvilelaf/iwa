@@ -312,6 +312,7 @@ class ChainInterface:
             "quota usage",
             "quota exceeded",
             "allowance exceeded",
+            "usage limit",  # 1rpc.io: "You've reached the usage limit for your current plan"
             "401 client error",
             "unauthorized",
             "403 client error",

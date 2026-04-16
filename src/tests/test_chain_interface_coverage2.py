@@ -395,6 +395,25 @@ class TestHandleRpcErrorQuotaExceeded:
         assert result["should_retry"]
         assert result["rotated"]
 
+    def test_1rpc_usage_limit_triggers_rotation(self, mock_web3):
+        """1rpc.io 'usage limit' message is recognized as quota exceeded and triggers rotation."""
+        ci = _make_ci(mock_web3, rpcs=["https://rpc1", "https://rpc2"])
+        ci._current_rpc_index = 0
+        ci._last_rotation_time = 0
+
+        error = Exception(
+            "{'code': -32001, 'message': \"You've reached the usage limit for your "
+            "current plan. To continue with higher limits and uninterrupted access, "
+            "please upgrade here: https://www.1rpc.io/#pricing\"}"
+        )
+        result = ci._handle_rpc_error(error)
+
+        assert result["is_quota_exceeded"]
+        assert result["should_retry"]
+        assert result["rotated"]
+        assert not ci._is_rpc_healthy(0)
+        assert ci._current_rpc_index == 1
+
 
 # ===========================================================================
 # Lines 448-449: _handle_rpc_error gas error
