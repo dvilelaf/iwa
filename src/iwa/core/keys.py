@@ -668,3 +668,20 @@ class KeyStorage(BaseModel):
             if account.tag == tag:
                 return EthereumAddress(account.address)
         return None
+
+    def export_addresses(self) -> list[dict[str, str]]:
+        """Export all account tags, addresses, and types as a list of dicts.
+
+        Returns a list of {"tag": ..., "address": ..., "type": "EOA"|"Safe"}
+        sorted by tag. No private keys or encrypted data are included.
+        """
+        rows = []
+        for account in sorted(self.accounts.values(), key=lambda a: a.tag):
+            rows.append(
+                {
+                    "tag": account.tag,
+                    "address": str(account.address),
+                    "type": "Safe" if isinstance(account, StoredSafeAccount) else "EOA",
+                }
+            )
+        return rows
