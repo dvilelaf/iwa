@@ -1,6 +1,6 @@
 """Tests for DrainManagerMixin coverage."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from web3 import exceptions as web3_exceptions
