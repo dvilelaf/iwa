@@ -1,8 +1,9 @@
 """Tests for DrainManagerMixin coverage."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
+from web3 import exceptions as web3_exceptions
 
 from iwa.plugins.olas.contracts.staking import StakingState
 
@@ -65,6 +66,7 @@ def test_claim_rewards_send_fails(mock_drain_manager):
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.calculate_staking_reward.return_value = 1000000000000000000
         mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
+        mock_staking.chain_interface.with_retry.side_effect = lambda fn, **kw: fn()
         mock_drain_manager.wallet.sign_and_send_transaction.return_value = (False, None)
 
         success, amount = mock_drain_manager.claim_rewards()
@@ -83,6 +85,7 @@ def test_claim_rewards_success_no_event(mock_drain_manager):
         mock_staking.get_staking_state.return_value = StakingState.STAKED
         mock_staking.calculate_staking_reward.return_value = 1000000000000000000
         mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
+        mock_staking.chain_interface.with_retry.side_effect = lambda fn, **kw: fn()
         mock_staking.extract_events.return_value = []  # No RewardClaimed event
         mock_drain_manager.wallet.sign_and_send_transaction.return_value = (
             True,
@@ -107,6 +110,7 @@ def test_claim_rewards_fallback_to_accrued(mock_drain_manager):
         mock_staking.calculate_staking_reward.side_effect = Exception("RPC error")
         mock_staking.get_accrued_rewards.return_value = 2000000000000000000  # 2 OLAS
         mock_staking.prepare_claim_tx.return_value = {"to": "0x", "data": "0x"}
+        mock_staking.chain_interface.with_retry.side_effect = lambda fn, **kw: fn()
         mock_staking.extract_events.return_value = []
         mock_drain_manager.wallet.sign_and_send_transaction.return_value = (
             True,
@@ -135,6 +139,65 @@ def test_withdraw_rewards_fallback_to_master(mock_drain_manager):
         # If balance is 0, it logs info and returns (False, 0) in drain.py
         assert not success
         assert amount == 0
+
+
+# ---------------------------------------------------------------------------
+# Claim simulation tests (eth.call gate in claim_rewards)
+# ---------------------------------------------------------------------------
+
+def _make_staking_mock_for_claim():
+    """Return a configured StakingContract mock ready for claim_rewards tests."""
+    mock_staking = MagicMock()
+    mock_staking.get_staking_state.return_value = StakingState.STAKED
+    mock_staking.calculate_staking_reward.return_value = int(76e18)  # 2 epochs (76 OLAS)
+    mock_staking.prepare_claim_tx.return_value = {"to": "0xStaking", "data": "0x", "gas": 108_782}  # ~98,893 * 1.1
+    mock_staking.extract_events.return_value = []
+    # with_retry passes the lambda through synchronously
+    mock_staking.chain_interface.with_retry.side_effect = lambda fn, **kw: fn()
+    mock_staking.chain_interface.web3.eth.get_block.return_value = {"gasLimit": 17_016_600}
+    return mock_staking
+
+
+def test_claim_gas_limit_exceeded_skips(mock_drain_manager):
+    """eth.call fails with 'Block gas limit exceeded' — claim is skipped."""
+    mock_drain_manager.service.staking_contract_address = "0xStaking"
+    mock_drain_manager.service.service_id = 1
+    mock_drain_manager.service.service_owner_address = "0xOwner"
+
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_cls:
+        mock_staking = _make_staking_mock_for_claim()
+        mock_cls.return_value = mock_staking
+
+        gas_error = web3_exceptions.Web3RPCError("Block gas limit exceeded")
+        mock_staking.chain_interface.web3.eth.call.side_effect = gas_error
+
+        success, amount = mock_drain_manager.claim_rewards()
+
+        assert not success
+        assert amount == 0
+        mock_drain_manager.wallet.sign_and_send_transaction.assert_not_called()
+
+
+def test_claim_non_gas_revert_skips_immediately(mock_drain_manager):
+    """eth.call fails with a non-gas revert — no retry, claim is skipped immediately."""
+    mock_drain_manager.service.staking_contract_address = "0xStaking"
+    mock_drain_manager.service.service_id = 1
+    mock_drain_manager.service.service_owner_address = "0xOwner"
+
+    with patch("iwa.plugins.olas.service_manager.drain.StakingContract") as mock_cls:
+        mock_staking = _make_staking_mock_for_claim()
+        mock_cls.return_value = mock_staking
+
+        revert_error = web3_exceptions.Web3RPCError("execution reverted: NotEligible")
+        mock_staking.chain_interface.web3.eth.call.side_effect = revert_error
+
+        success, amount = mock_drain_manager.claim_rewards()
+
+        assert not success
+        assert amount == 0
+        # Only one call — no retry attempt
+        assert mock_staking.chain_interface.web3.eth.call.call_count == 1
+        mock_drain_manager.wallet.sign_and_send_transaction.assert_not_called()
 
 
 def test_drain_service_no_service(mock_drain_manager):

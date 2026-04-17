@@ -136,13 +136,12 @@ def test_estimate_gas(mock_web3):
     built_method = MagicMock()
     built_method.estimate_gas.return_value = 1000
 
-    # Not a contract
-    ci.web3.eth.get_code.return_value = b""
+    # Any caller (EOA or contract): returns estimated gas with 10% buffer
     assert ci.estimate_gas(built_method, {"from": "0xSender"}) == 1100
 
-    # Is a contract
-    ci.web3.eth.get_code.return_value = b"code"
-    assert ci.estimate_gas(built_method, {"from": "0xSender"}) == 0
+    # Estimation failure → fallback to 500_000
+    built_method.estimate_gas.side_effect = Exception("RPC error")
+    assert ci.estimate_gas(built_method, {"from": "0xSender"}) == 500_000
 
 
 def test_calculate_transaction_params(mock_web3):

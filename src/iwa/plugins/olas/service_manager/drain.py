@@ -89,7 +89,9 @@ class DrainManagerMixin:
 
         # Simulate transaction to catch revert before sending
         try:
-            staking_contract.chain_interface.web3.eth.call(claim_tx)
+            staking_contract.chain_interface.with_retry(
+                lambda: staking_contract.chain_interface.web3.eth.call(claim_tx)
+            )
         except Exception as e:
             logger.warning(f"Claim would revert, skipping: {e}")
             return False, 0

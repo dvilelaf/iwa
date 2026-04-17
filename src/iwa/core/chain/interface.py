@@ -17,6 +17,7 @@ logger = configure_logger()
 
 T = TypeVar("T")
 DEFAULT_RPC_TIMEOUT = 10
+DEFAULT_GAS_FALLBACK = 500_000  # Safe upper bound for most Gnosis chain contract calls
 
 
 class ChainInterface:
@@ -648,16 +649,12 @@ class ChainInterface:
         from_address = tx_params["from"]
         value = int(tx_params.get("value", 0))
 
-        if self.is_contract(str(from_address)):
-            logger.debug(f"Skipping gas estimation for contract caller {str(from_address)[:10]}...")
-            return 0
-
         try:
             estimated_gas = built_method.estimate_gas({"from": from_address, "value": value})
             return int(estimated_gas * 1.1)
         except Exception as e:
             logger.warning(f"Gas estimation failed: {e}")
-            return 500_000
+            return DEFAULT_GAS_FALLBACK
 
     def calculate_transaction_params(
         self, built_method: Optional[Callable], tx_params: Dict[str, Union[str, int]]
