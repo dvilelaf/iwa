@@ -292,15 +292,19 @@ class SafeTransactionExecutor:
             )
             return safe_tx, False, is_fee_error
 
-        # GS013 = inner call reverted while safeTxGas=0 and gasPrice=0.
-        # This can be transient (RPC returning stale chain state, marketplace
-        # contract in a temporary state).  Allow retry with backoff.
+        # GS013 = RPC provider returning stale state that makes the Safe
+        # simulation fail.  The diagnosis eth.call always succeeds because
+        # with_retry() may already use a different node.  Fix: rotate RPC
+        # immediately so the next _execute_attempt hits a fresh node instead
+        # of waiting through exponential backoff against the same stale node.
         if classification["is_gs013_inner_revert"]:
             SAFE_TX_STATS["gs013_inner_revert_retries"] += 1
+            SAFE_TX_STATS["rpc_rotations"] += 1
             self._diagnose_inner_revert(safe_tx, operation_name)
+            self.chain_interface._handle_rpc_error(error)
             logger.warning(
                 f"[{operation_name}] GS013 inner call revert (attempt {attempt + 1}), "
-                f"retrying: {safe_error}{reason_suffix}"
+                f"rotating RPC and retrying: {safe_error}{reason_suffix}"
             )
             return safe_tx, True, is_fee_error
 
