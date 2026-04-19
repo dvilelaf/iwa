@@ -1284,3 +1284,43 @@ def test_extract_revert_hex_matches_standalone_hex(executor):
     error = ValueError("execution reverted 0x08c379a0deadbeef")
     result = SafeTransactionExecutor._extract_revert_hex(error)
     assert result == "0x08c379a0deadbeef"
+
+
+def test_gs013_triggers_rpc_rotation(executor, mock_chain_interface, mock_safe_tx, mock_safe):
+    """GS013 must call _handle_rpc_error to rotate away from the stale node.
+
+    Root cause: GS013 from Gnosis RPC is a stale-state error from the provider,
+    not a real contract failure.  Rotating immediately lets the next attempt hit
+    a fresh node instead of waiting through exponential backoff (up to 63s).
+    """
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("execution reverted: GS013")
+
+        with patch("time.sleep"):
+            executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+    # _handle_rpc_error must have been called at least once to rotate the RPC
+    assert mock_chain_interface._handle_rpc_error.call_count >= 1
+    assert SAFE_TX_STATS["rpc_rotations"] >= 1
+
+
+def test_gs013_rpc_rotation_counted_separately_from_plain_rpc_errors(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """GS013 rotations are tracked in rpc_rotations counter, not only on is_rpc_error."""
+    initial_rotations = SAFE_TX_STATS["rpc_rotations"]
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = [
+            ValueError("execution reverted: GS013"),
+            None,  # succeeds on next attempt
+        ]
+        mock_safe_tx.execute.return_value = {"transactionHash": b"\x01" * 32}
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
+            MagicMock(status=1)
+        )
+
+        with patch("time.sleep"):
+            success, _, _ = executor.execute_with_retry("0xSafe", mock_safe_tx, ["key1"])
+
+    assert success is True
+    assert SAFE_TX_STATS["rpc_rotations"] > initial_rotations
