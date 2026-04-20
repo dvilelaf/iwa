@@ -216,6 +216,7 @@ def test_nonce_allocator_invalidate_triggers_refetch():
 def test_nonce_allocator_concurrent():
     """5 concurrent allocate() calls from threads return unique nonces."""
     import threading
+
     from iwa.core.services.safe import NonceAllocator
     svc = _make_safe_service_with_nonce(0)
     alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
@@ -232,7 +233,6 @@ def test_nonce_allocator_refetch_failure_propagates():
     """If refetch raises, allocate() propagates the exception."""
     from iwa.core.services.safe import NonceAllocator
     svc = MagicMock()
-    from iwa.core.models import StoredSafeAccount
     svc.get_safe_nonce.side_effect = ConnectionError("RPC down")
     alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
     with pytest.raises(ConnectionError):
@@ -328,22 +328,6 @@ def test_signer_keys_sharing_raises():
     """Concurrent use of the same signer_keys list object raises RuntimeError."""
     import threading
     svc, _ = _make_safe_service_for_execute()
-    shared_keys = ["0x" + "ab" * 32]
-    results = []
-    barrier = threading.Barrier(2)
-
-    def try_sign():
-        try:
-            # Patch executor to block until both threads are inside _sign_and_execute
-            with patch("iwa.core.services.safe_executor.SafeTransactionExecutor.execute_with_retry",
-                       side_effect=lambda **kw: barrier.wait() or ("ok", "0xtx", None)):
-                svc._sign_and_execute_safe_tx(
-                    MagicMock(), shared_keys[:], "gnosis", SAFE_ADDR
-                )
-        except (RuntimeError, Exception) as e:
-            results.append(e)
-
-    # Two threads with SAME list object — should trigger the assertion
     same_list = ["0x" + "ab" * 32]
     errors = []
 

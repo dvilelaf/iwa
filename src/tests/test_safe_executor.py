@@ -1375,3 +1375,24 @@ def test_allow_nonce_refresh_true_refreshes_on_nonce_error(
             )
 
     assert mock_safe.retrieve_nonce.call_count >= 1
+
+
+def test_allow_nonce_refresh_false_aborts_on_nonce_error_in_execute(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """allow_nonce_refresh=False aborts on GS025 raised during execute(), not call()."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.return_value = None  # simulation passes
+        mock_safe_tx.execute.side_effect = ValueError("GS025: Invalid nonce")
+
+        with patch("time.sleep"):
+            success, error_msg, _ = executor.execute_with_retry(
+                "0xSafe",
+                mock_safe_tx,
+                ["key1"],
+                allow_nonce_refresh=False,
+            )
+
+    assert not success
+    assert "GS025" in error_msg or "nonce" in error_msg.lower()
+    assert mock_safe.retrieve_nonce.call_count == 0

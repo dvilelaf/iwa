@@ -55,7 +55,6 @@ class NonceAllocator:
         self._lock = threading.Lock()
         self._next: int | None = None
         self._invalidated = True
-        self._in_flight_nonces: set[int] = set()
         self._last_advance_ts: float = 0.0
         # Counters for observability
         self._allocate_count = 0
@@ -77,7 +76,7 @@ class NonceAllocator:
             # INVARIANT: no await/yield between here and the increment below.
             n = self._next
             self._next = n + 1
-            self._in_flight_nonces.add(n)
+            self._last_advance_ts = time.monotonic()
             self._allocate_count += 1
         return n
 
@@ -93,12 +92,6 @@ class NonceAllocator:
             self._safe_address[:10],
             reason,
         )
-
-    def on_confirmed(self, nonce: int) -> None:
-        """Notify that a TX with this nonce was confirmed on-chain."""
-        with self._lock:
-            self._in_flight_nonces.discard(nonce)
-            self._last_advance_ts = time.monotonic()
 
     def check_stuck(self, pending_count: int) -> None:
         """Log ERROR if nonce has not advanced for >NONCE_STUCK_ALERT_SECONDS with pending TXs."""
@@ -120,7 +113,6 @@ class NonceAllocator:
         self._refetch_count += 1
         try:
             nonce = self._safe_service.get_safe_nonce(self._safe_address, self._chain_name)
-            self._last_advance_ts = time.monotonic()
             return nonce
         except Exception:
             self._refetch_failed_count += 1
