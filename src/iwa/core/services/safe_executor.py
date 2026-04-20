@@ -1,7 +1,7 @@
 """Safe transaction executor with retry logic and gas handling."""
 
 import time
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from safe_eth.eth import TxSpeed
@@ -49,8 +49,8 @@ class SafeTransactionExecutor:
     def __init__(
         self,
         chain_interface: "ChainInterface",
-        max_retries: Optional[int] = None,
-        gas_buffer: Optional[float] = None,
+        max_retries: int | None = None,
+        gas_buffer: float | None = None,
     ):
         """Initialize the executor."""
         self.chain_interface = chain_interface
@@ -64,9 +64,10 @@ class SafeTransactionExecutor:
         self,
         safe_address: str,
         safe_tx: SafeTx,
-        signer_keys: List[str],
+        signer_keys: list[str],
         operation_name: str = "safe_tx",
-    ) -> Tuple[bool, str, Optional[dict]]:
+        allow_nonce_refresh: bool = True,
+    ) -> tuple[bool, str, dict | None]:
         """Execute SafeTx with full retry mechanism.
 
         Args:
@@ -74,6 +75,10 @@ class SafeTransactionExecutor:
             safe_tx: The Safe transaction object.
             signer_keys: List of private keys for signing.
             operation_name: Name for logging purposes.
+            allow_nonce_refresh: If False, nonce errors abort immediately instead of
+                refreshing.  Set to False when the caller pre-assigns nonces via
+                NonceAllocator to prevent _refresh_nonce from clobbering other workers'
+                already-assigned nonce slots.
 
         Returns:
             Tuple of (success, tx_hash_or_error, receipt)
@@ -115,7 +120,8 @@ class SafeTransactionExecutor:
 
             except Exception as e:
                 updated_tx, should_retry, is_fee_error = self._handle_execution_failure(
-                    e, safe_address, safe_tx, signer_keys, attempt, operation_name
+                    e, safe_address, safe_tx, signer_keys, attempt, operation_name,
+                    allow_nonce_refresh=allow_nonce_refresh,
                 )
                 last_error = e
                 if not should_retry:
@@ -257,15 +263,16 @@ class SafeTransactionExecutor:
             status = receipt.get("status")
         return status == 1
 
-    def _handle_execution_failure(
+    def _handle_execution_failure(  # noqa: C901
         self,
         error: Exception,
         safe_address: str,
         safe_tx: SafeTx,
-        signer_keys: List[str],
+        signer_keys: list[str],
         attempt: int,
         operation_name: str,
-    ) -> Tuple[SafeTx, bool, bool]:
+        allow_nonce_refresh: bool = True,
+    ) -> tuple[SafeTx, bool, bool]:
         """Handle execution failure and determine next steps.
 
         Returns:
@@ -331,6 +338,15 @@ class SafeTransactionExecutor:
         safe = self._recreate_safe_client(safe_address)
 
         if classification["is_nonce_error"] or classification["is_timeout"]:
+            if classification["is_nonce_error"] and not allow_nonce_refresh:
+                # Caller pre-assigned a nonce via NonceAllocator; refreshing would
+                # clobber other workers' already-assigned slots.  Abort and let the
+                # allocator invalidate + refetch on the next tick.
+                logger.warning(
+                    f"[{operation_name}] Nonce error with allow_nonce_refresh=False — "
+                    "aborting (allocator will invalidate)"
+                )
+                return safe_tx, False, is_fee_error
             strategy = "nonce refresh" if classification["is_nonce_error"] else "timeout + nonce refresh"
             SAFE_TX_STATS["nonce_retries"] += 1
             safe_tx = self._refresh_nonce(safe, safe_tx, signer_keys)
@@ -418,7 +434,7 @@ class SafeTransactionExecutor:
         )
 
     def _refresh_nonce(
-        self, safe: Safe, safe_tx: SafeTx, signer_keys: List[str]
+        self, safe: Safe, safe_tx: SafeTx, signer_keys: list[str]
     ) -> SafeTx:
         """Re-fetch nonce, rebuild transaction, and re-sign.
 
@@ -501,7 +517,7 @@ class SafeTransactionExecutor:
             "is_gs013_inner_revert": is_gs013_inner_revert,
         }
 
-    def _calculate_bumped_gas_price(self, bump_factor: float) -> Optional[int]:
+    def _calculate_bumped_gas_price(self, bump_factor: float) -> int | None:
         """Calculate a bumped gas price based on current base fee.
 
         Uses legacy gas price (not EIP-1559) for compatibility with safe-eth-py's
@@ -566,7 +582,7 @@ class SafeTransactionExecutor:
                 f"{reason or sanitized}"
             )
 
-    def _decode_revert_reason(self, error: Exception) -> Optional[str]:
+    def _decode_revert_reason(self, error: Exception) -> str | None:
         """Attempt to decode the revert reason from exception data.
 
         Tries multiple extraction strategies:
@@ -586,7 +602,7 @@ class SafeTransactionExecutor:
         return None
 
     @staticmethod
-    def _extract_revert_hex(error: Exception) -> Optional[str]:  # noqa: C901
+    def _extract_revert_hex(error: Exception) -> str | None:  # noqa: C901
         """Extract hex revert data from an exception, trying multiple sources."""
         import re
 

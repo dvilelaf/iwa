@@ -166,3 +166,208 @@ def test_create_safe_invalid_deployer(mock_key_storage, mock_account_service):
 
     with pytest.raises(ValueError, match="Deployer account .* not found"):
         service.create_safe("invalid", [], 1, "gnosis")
+
+
+# ---------------------------------------------------------------------------
+# NonceAllocator tests
+# ---------------------------------------------------------------------------
+
+SAFE_ADDR = "0xbEC49fa140ACaa83533f900357DCD37866d50618"
+CHAIN = "gnosis"
+
+
+def _make_safe_service_with_nonce(nonce: int):
+    """Return a SafeService whose get_safe_nonce returns nonce."""
+    mock_ks = MagicMock()
+    from iwa.core.models import StoredSafeAccount
+    safe_acc = MagicMock(spec=StoredSafeAccount)
+    safe_acc.address = SAFE_ADDR
+    mock_ks.find_stored_account.return_value = safe_acc
+
+    svc = SafeService(mock_ks, MagicMock())
+    svc.get_safe_nonce = MagicMock(return_value=nonce)
+    return svc
+
+
+def test_nonce_allocator_sequential():
+    """allocate() returns monotonically increasing nonces."""
+    from iwa.core.services.safe import NonceAllocator
+    svc = _make_safe_service_with_nonce(10)
+    alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
+    assert alloc.allocate() == 10
+    assert alloc.allocate() == 11
+    assert alloc.allocate() == 12
+    # Refetch called only once (on first allocate after invalidate)
+    assert svc.get_safe_nonce.call_count == 1
+
+
+def test_nonce_allocator_invalidate_triggers_refetch():
+    """After invalidate(), next allocate() refetches the on-chain nonce."""
+    from iwa.core.services.safe import NonceAllocator
+    svc = _make_safe_service_with_nonce(5)
+    alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
+    alloc.allocate()  # fetches → 5
+    svc.get_safe_nonce.return_value = 7  # chain advanced externally
+    alloc.invalidate("test")
+    assert alloc.allocate() == 7
+    assert svc.get_safe_nonce.call_count == 2
+
+
+def test_nonce_allocator_concurrent():
+    """5 concurrent allocate() calls from threads return unique nonces."""
+    import threading
+    from iwa.core.services.safe import NonceAllocator
+    svc = _make_safe_service_with_nonce(0)
+    alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(alloc.allocate())) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(results) == list(range(5))
+
+
+def test_nonce_allocator_refetch_failure_propagates():
+    """If refetch raises, allocate() propagates the exception."""
+    from iwa.core.services.safe import NonceAllocator
+    svc = MagicMock()
+    from iwa.core.models import StoredSafeAccount
+    svc.get_safe_nonce.side_effect = ConnectionError("RPC down")
+    alloc = NonceAllocator(svc, SAFE_ADDR, CHAIN)
+    with pytest.raises(ConnectionError):
+        alloc.allocate()
+    assert alloc._refetch_failed_count == 1
+
+
+# ---------------------------------------------------------------------------
+# SafeService.get_allocator tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_allocator_returns_same_instance():
+    """get_allocator called twice for same (safe, chain) returns same object."""
+    svc = _make_safe_service_with_nonce(0)
+    a1 = svc.get_allocator(SAFE_ADDR, CHAIN)
+    a2 = svc.get_allocator(SAFE_ADDR, CHAIN)
+    assert a1 is a2
+
+
+def test_get_allocator_different_chains_are_isolated():
+    """Allocators for different chains are independent instances."""
+    svc = _make_safe_service_with_nonce(0)
+    a_gnosis = svc.get_allocator(SAFE_ADDR, "gnosis")
+    a_base = svc.get_allocator(SAFE_ADDR, "base")
+    assert a_gnosis is not a_base
+
+
+def test_allocators_isolated_between_safe_service_instances():
+    """Two SafeService instances have independent allocator registries (S1)."""
+    svc1 = _make_safe_service_with_nonce(0)
+    svc2 = _make_safe_service_with_nonce(0)
+    a1 = svc1.get_allocator(SAFE_ADDR, CHAIN)
+    a2 = svc2.get_allocator(SAFE_ADDR, CHAIN)
+    assert a1 is not a2
+
+
+# ---------------------------------------------------------------------------
+# execute_safe_transaction: safe_nonce + allow_nonce_refresh propagation
+# ---------------------------------------------------------------------------
+
+
+def _make_safe_service_for_execute():
+    """SafeService with all chain/Safe dependencies mocked out."""
+    from iwa.core.models import StoredSafeAccount
+    mock_ks = MagicMock()
+    safe_acc = MagicMock(spec=StoredSafeAccount)
+    safe_acc.address = SAFE_ADDR
+    safe_acc.tag = "mech"
+    safe_acc.signers = ["0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"]
+    safe_acc.threshold = 1
+    mock_ks.find_stored_account.return_value = safe_acc
+    mock_ks._get_private_key.return_value = "0x" + "ab" * 32
+    svc = SafeService(mock_ks, MagicMock())
+    return svc, safe_acc
+
+
+def test_execute_safe_transaction_passes_safe_nonce():
+    """safe_nonce is forwarded to build_tx."""
+    svc, safe_acc = _make_safe_service_for_execute()
+    with (
+        patch("iwa.core.services.safe.SafeService._get_ethereum_client"),
+        patch("iwa.plugins.gnosis.safe.SafeMultisig") as mock_sm,
+        patch("iwa.core.services.safe.SafeService._sign_and_execute_safe_tx", return_value="0xtx"),
+    ):
+        mock_instance = MagicMock()
+        mock_sm.return_value = mock_instance
+        svc.execute_safe_transaction(SAFE_ADDR, "0x1234" + "0" * 36, 0, CHAIN, safe_nonce=42)
+        mock_instance.build_tx.assert_called_once()
+        _, kwargs = mock_instance.build_tx.call_args
+        assert kwargs["safe_nonce"] == 42
+
+
+def test_execute_safe_transaction_passes_allow_nonce_refresh_false():
+    """allow_nonce_refresh=False is forwarded to _sign_and_execute_safe_tx."""
+    svc, safe_acc = _make_safe_service_for_execute()
+    with (
+        patch("iwa.core.services.safe.SafeService._get_ethereum_client"),
+        patch("iwa.plugins.gnosis.safe.SafeMultisig"),
+        patch("iwa.core.services.safe.SafeService._sign_and_execute_safe_tx", return_value="0xtx") as mock_sign,
+    ):
+        svc.execute_safe_transaction(SAFE_ADDR, "0x1234" + "0" * 36, 0, CHAIN, allow_nonce_refresh=False)
+        _, kwargs = mock_sign.call_args
+        assert kwargs["allow_nonce_refresh"] is False
+
+
+# ---------------------------------------------------------------------------
+# Signer key isolation assertion (S4 / R1)
+# ---------------------------------------------------------------------------
+
+
+def test_signer_keys_sharing_raises():
+    """Concurrent use of the same signer_keys list object raises RuntimeError."""
+    import threading
+    svc, _ = _make_safe_service_for_execute()
+    shared_keys = ["0x" + "ab" * 32]
+    results = []
+    barrier = threading.Barrier(2)
+
+    def try_sign():
+        try:
+            # Patch executor to block until both threads are inside _sign_and_execute
+            with patch("iwa.core.services.safe_executor.SafeTransactionExecutor.execute_with_retry",
+                       side_effect=lambda **kw: barrier.wait() or ("ok", "0xtx", None)):
+                svc._sign_and_execute_safe_tx(
+                    MagicMock(), shared_keys[:], "gnosis", SAFE_ADDR
+                )
+        except (RuntimeError, Exception) as e:
+            results.append(e)
+
+    # Two threads with SAME list object — should trigger the assertion
+    same_list = ["0x" + "ab" * 32]
+    errors = []
+
+    def first():
+        list_id = id(same_list)
+        with svc._active_signer_lists_lock:
+            svc._active_signer_lists.add(list_id)
+        errors.append(None)
+
+    def second():
+        import time
+        time.sleep(0.01)
+        try:
+            with patch("iwa.core.services.safe.SafeService._get_signer_keys", return_value=same_list):
+                with patch("iwa.core.services.safe_executor.SafeTransactionExecutor.execute_with_retry",
+                           return_value=(True, "0xtx", None)):
+                    svc._sign_and_execute_safe_tx(MagicMock(), same_list, "gnosis", SAFE_ADDR)
+        except RuntimeError as e:
+            errors.append(e)
+
+    t1 = threading.Thread(target=first)
+    t2 = threading.Thread(target=second)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    assert any(isinstance(e, RuntimeError) for e in errors), "Expected RuntimeError for shared signer_keys"

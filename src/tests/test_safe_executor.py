@@ -43,6 +43,8 @@ def mock_safe_tx():
     tx.safe_tx_gas = 100000
     tx.base_gas = 0
     tx.gas_price = 1000000000
+    tx.gas_token = "0x0000000000000000000000000000000000000000"
+    tx.refund_receiver = "0x0000000000000000000000000000000000000000"
     tx.to = "0xTo"
     tx.value = 0
     tx.data = b""
@@ -1324,3 +1326,52 @@ def test_gs013_rpc_rotation_counted_separately_from_plain_rpc_errors(
 
     assert success is True
     assert SAFE_TX_STATS["rpc_rotations"] > initial_rotations
+
+
+def test_allow_nonce_refresh_false_aborts_on_nonce_error(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """With allow_nonce_refresh=False, a GS025 nonce error aborts immediately."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = ValueError("GS025: Invalid nonce")
+
+        with patch("time.sleep"):
+            success, error_msg, _ = executor.execute_with_retry(
+                "0xSafe",
+                mock_safe_tx,
+                ["key1"],
+                allow_nonce_refresh=False,
+            )
+
+    assert not success
+    assert "GS025" in error_msg or "nonce" in error_msg.lower()
+    # _refresh_nonce must NOT have been called
+    assert mock_safe.retrieve_nonce.call_count == 0
+
+
+def test_allow_nonce_refresh_true_refreshes_on_nonce_error(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """With allow_nonce_refresh=True (default), a nonce error triggers _refresh_nonce."""
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        # First call: GS025 nonce error; second: success
+        mock_safe_tx.call.side_effect = [
+            ValueError("GS025: Invalid nonce"),
+            None,
+        ]
+        mock_safe.retrieve_nonce.return_value = 5
+        mock_safe.build_multisig_tx.return_value = mock_safe_tx
+        mock_safe_tx.execute.return_value = {"transactionHash": b"\x01" * 32}
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
+            MagicMock(status=1)
+        )
+
+        with patch("time.sleep"):
+            success, _, _ = executor.execute_with_retry(
+                "0xSafe",
+                mock_safe_tx,
+                ["key1"],
+                allow_nonce_refresh=True,
+            )
+
+    assert mock_safe.retrieve_nonce.call_count >= 1
