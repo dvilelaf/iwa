@@ -266,7 +266,8 @@ class NonceAllocator:
             )
             gap = pending - confirmed
             if gap > self._gap_alert_threshold:
-                self._blocked_until_gap_resolved = True
+                with self._lock:
+                    self._blocked_until_gap_resolved = True
                 logger.error(
                     "safe_eoa_gap: Safe {} chain={} EOA confirmed={} pending={}"
                     " gap={} > threshold={} — blocking allocator until gap resolves."
@@ -301,7 +302,8 @@ class NonceAllocator:
         NonceAllocatorBlockedError if still blocked.
         """
         if not self._gap_alert_threshold:
-            self._blocked_until_gap_resolved = False
+            with self._lock:
+                self._blocked_until_gap_resolved = False
             return
         try:
             confirmed, pending = self._safe_service.get_eoa_nonce_pair(
@@ -309,7 +311,8 @@ class NonceAllocator:
             )
             gap = pending - confirmed
             if gap <= self._gap_alert_threshold:
-                self._blocked_until_gap_resolved = False
+                with self._lock:
+                    self._blocked_until_gap_resolved = False
                 logger.info(
                     "safe_eoa_gap resolved: Safe {} chain={} gap={} <= threshold={}",
                     self._safe_address[:10],

@@ -67,6 +67,10 @@ If the stuck TX has insufficient gas, replace it with a higher-gas version:
 
 If the stuck TX can be safely dropped (zero-value self-transfer to replace it):
 
+> **WARNING**: Run this only when the micromech process is stopped, or when you are certain no
+> other process is using the NonceAllocator for this Safe. Concurrent use can cause nonce
+> collisions. To stop micromech: `ssh triton "cd /opt/micromech && docker compose stop micromech"`
+
 ```bash
 iwa gnosis send-noop <SAFE_ADDRESS> --chain gnosis
 ```
