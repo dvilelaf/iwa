@@ -32,6 +32,14 @@ except ImportError:
 _NONCE_STUCK_ALERT_SECONDS = 120
 
 
+class NonceAllocatorBlockedError(RuntimeError):
+    """Raised by NonceAllocator.allocate() when the EOA mempool gap exceeds the threshold.
+
+    Signals that too many pending (unconfirmed) TXs are queued for the signer EOA,
+    indicating a stuck TX. Callers should pause and retry after the gap resolves.
+    """
+
+
 class NonceAllocator:
     """Pre-assigns Safe nonces monotonically for concurrent delivery workers.
 
@@ -47,15 +55,37 @@ class NonceAllocator:
     allocate() call corresponds to exactly one Safe TX (batch_size=1).
     """
 
-    def __init__(self, safe_service: "SafeService", safe_address: str, chain_name: str):
-        """Initialize allocator for the given Safe on chain_name."""
+    def __init__(
+        self,
+        safe_service: "SafeService",
+        safe_address: str,
+        chain_name: str,
+        gap_alert_threshold: int = 0,
+    ):
+        """Initialize allocator for the given Safe on chain_name.
+
+        Args:
+            safe_service: SafeService instance for on-chain nonce queries.
+            safe_address: Checksummed address of the Safe.
+            chain_name: Chain identifier (e.g. "gnosis").
+            gap_alert_threshold: If > 0, blocks allocation when the signer EOA
+                has more than this many unconfirmed TXs in the mempool (gap
+                between pending_nonce and confirmed_nonce). 0 = disabled.
+
+        """
         self._safe_service = safe_service
         self._safe_address = safe_address
         self._chain_name = chain_name
+        self._gap_alert_threshold = gap_alert_threshold
         self._lock = threading.Lock()
         self._next: int | None = None
         self._invalidated = True
         self._last_advance_ts: float = 0.0
+        # EOA gap blocking
+        self._blocked_until_gap_resolved: bool = False
+        # In-flight tracking: nonces allocated but not yet released
+        self._in_flight_nonces: set[int] = set()
+        self._in_flight_txs: dict[int, str] = {}
         # Counters for observability
         self._allocate_count = 0
         self._invalidate_count = 0
@@ -68,8 +98,30 @@ class NonceAllocator:
         If the allocator is invalidated (startup or after any failure), fetches
         the current on-chain nonce first.  All reads and increments of _next
         happen under _lock with zero awaits between them.
+
+        EOA gap checks run OUTSIDE the lock: each check is an RPC round-trip
+        (10–500 ms) and holding the lock during I/O would block all other
+        workers on allocation, defeating the purpose of parallel dispatch.
+
+        Raises:
+            NonceAllocatorBlockedError: if the signer EOA mempool gap exceeds
+                gap_alert_threshold. Caller should pause and retry.
+
         """
+        # Run expensive RPC gap checks before acquiring the lock.
+        if self._gap_alert_threshold:
+            if self._blocked_until_gap_resolved:
+                self._recheck_eoa_gap()
+            elif self._invalidated:
+                self._check_eoa_gap()  # may raise NonceAllocatorBlockedError
+
         with self._lock:
+            # Re-check under lock in case another thread changed state concurrently.
+            if self._blocked_until_gap_resolved:
+                raise NonceAllocatorBlockedError(
+                    f"EOA mempool gap exceeds threshold {self._gap_alert_threshold}"
+                    f" for Safe {self._safe_address[:10]} on {self._chain_name}"
+                )
             if self._invalidated:
                 self._next = self._refetch()
                 self._invalidated = False
@@ -78,20 +130,105 @@ class NonceAllocator:
             self._next = n + 1
             self._last_advance_ts = time.monotonic()
             self._allocate_count += 1
+            self._in_flight_nonces.add(n)
         return n
+
+    def register_broadcast(self, nonce: int, tx_hash: str) -> None:
+        """Record that a TX with the given nonce has been broadcast to the mempool.
+
+        Called after a Safe TX is submitted but before receipt confirmation.
+        Enables invalidate_and_wait() to correlate in-flight nonces with TX hashes.
+        """
+        with self._lock:
+            if nonce in self._in_flight_nonces:
+                self._in_flight_txs[nonce] = tx_hash
+            else:
+                logger.debug(
+                    "NonceAllocator({}) register_broadcast: nonce {} not in-flight"
+                    " — possible out-of-order call or double release",
+                    self._safe_address[:10],
+                    nonce,
+                )
+
+    def release(self, nonce: int) -> None:
+        """Mark a nonce as finalized (TX confirmed or failed).
+
+        Must be called from the finally block of every allocation consumer to
+        prevent invalidate_and_wait() from blocking indefinitely.
+        """
+        with self._lock:
+            self._in_flight_nonces.discard(nonce)
+            self._in_flight_txs.pop(nonce, None)
+
+    def invalidate_and_wait(self, timeout: float = 60.0, reason: str = "manual") -> None:
+        """Wait for all in-flight TXs to drain, then force a nonce refetch.
+
+        Blocks the calling thread (polling every 100 ms) until all allocated
+        nonces have been released via release(). If the timeout expires before
+        the nonces drain, forces invalidation with a warning log.
+
+        Must be called from a non-async context (or via asyncio.to_thread).
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with self._lock:
+                if not self._in_flight_nonces:
+                    self._invalidated = True
+                    self._invalidate_count += 1
+                    logger.info(
+                        "NonceAllocator({}) invalidated after draining {} in-flight TXs: {}",
+                        self._safe_address[:10],
+                        len(self._in_flight_txs),
+                        reason,
+                    )
+                    return
+            time.sleep(0.1)
+        # Timeout: clear orphan nonces atomically so future invalidate_and_wait()
+        # calls are not permanently stuck waiting on nonces that will never be released.
+        with self._lock:
+            n_stuck = len(self._in_flight_nonces)
+            self._in_flight_nonces.clear()
+            self._in_flight_txs.clear()
+            self._invalidated = True
+            self._invalidate_count += 1
+        logger.warning(
+            "NonceAllocator({}) invalidate_and_wait timeout after {:.0f}s"
+            " with {} in-flight nonce(s) — forcing invalidation and clearing orphan nonces",
+            self._safe_address[:10],
+            timeout,
+            n_stuck,
+        )
+        logger.debug(
+            "NonceAllocator({}) invalidated: wait_timeout_{}",
+            self._safe_address[:10],
+            reason,
+        )
 
     def invalidate(self, reason: str = "unspecified") -> None:
         """Mark allocator as needing refetch on next allocation.
 
-        Idempotent and safe to call from any thread without holding the lock.
+        Idempotent and thread-safe.
         """
-        self._invalidated = True
-        self._invalidate_count += 1
+        with self._lock:
+            self._invalidated = True
+            self._invalidate_count += 1
         logger.debug(
             "NonceAllocator({}) invalidated: {}",
             self._safe_address[:10],
             reason,
         )
+
+    def stats(self) -> dict:
+        """Return a snapshot of allocator counters for observability."""
+        with self._lock:
+            return {
+                "allocate_count": self._allocate_count,
+                "invalidate_count": self._invalidate_count,
+                "refetch_count": self._refetch_count,
+                "refetch_failed_count": self._refetch_failed_count,
+                "in_flight_count": len(self._in_flight_nonces),
+                "blocked_until_gap_resolved": self._blocked_until_gap_resolved,
+            }
 
     def check_stuck(self, pending_count: int) -> None:
         """Log ERROR if nonce has not advanced for >NONCE_STUCK_ALERT_SECONDS with pending TXs."""
@@ -108,12 +245,95 @@ class NonceAllocator:
                 pending_count,
             )
 
+    def _check_eoa_gap(self) -> None:
+        """Check signer EOA mempool gap; blocks allocator if gap exceeds threshold.
+
+        Called OUTSIDE self._lock to avoid holding lock during RPC round-trip.
+        Only invoked during refetch (when _invalidated is True). An allocator that
+        runs for hours without being invalidated will not detect a newly formed gap
+        until its next refetch cycle — see docs/runbook_safe_nonce_stuck.md for the
+        recommended recovery procedure.
+
+        Sets _blocked_until_gap_resolved and raises NonceAllocatorBlockedError if
+        the gap is too large. Silently continues if gap_alert_threshold == 0
+        or the RPC call fails (to avoid blocking on monitoring failures).
+        """
+        if not self._gap_alert_threshold:
+            return
+        try:
+            confirmed, pending = self._safe_service.get_eoa_nonce_pair(
+                self._safe_address, self._chain_name
+            )
+            gap = pending - confirmed
+            if gap > self._gap_alert_threshold:
+                self._blocked_until_gap_resolved = True
+                logger.error(
+                    "safe_eoa_gap: Safe {} chain={} EOA confirmed={} pending={}"
+                    " gap={} > threshold={} — blocking allocator until gap resolves."
+                    " Run 'iwa gnosis nonce-check' for details.",
+                    self._safe_address[:10],
+                    self._chain_name,
+                    confirmed,
+                    pending,
+                    gap,
+                    self._gap_alert_threshold,
+                )
+                raise NonceAllocatorBlockedError(
+                    f"EOA gap {gap} > threshold {self._gap_alert_threshold}"
+                    f" for Safe {self._safe_address[:10]} on {self._chain_name}"
+                )
+        except NonceAllocatorBlockedError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "EOA gap check failed for Safe {} ({}): {} — continuing without gap check",
+                self._safe_address[:10],
+                type(exc).__name__,
+                exc,
+            )
+
+    def _recheck_eoa_gap(self) -> None:
+        """Re-check EOA mempool gap; clears block flag if gap has resolved.
+
+        Called OUTSIDE self._lock. Invoked at the start of allocate() when
+        _blocked_until_gap_resolved is True, to allow recovery after a gap clears.
+        Does not raise — the caller re-checks the flag inside the lock and raises
+        NonceAllocatorBlockedError if still blocked.
+        """
+        if not self._gap_alert_threshold:
+            self._blocked_until_gap_resolved = False
+            return
+        try:
+            confirmed, pending = self._safe_service.get_eoa_nonce_pair(
+                self._safe_address, self._chain_name
+            )
+            gap = pending - confirmed
+            if gap <= self._gap_alert_threshold:
+                self._blocked_until_gap_resolved = False
+                logger.info(
+                    "safe_eoa_gap resolved: Safe {} chain={} gap={} <= threshold={}",
+                    self._safe_address[:10],
+                    self._chain_name,
+                    gap,
+                    self._gap_alert_threshold,
+                )
+        except Exception as exc:
+            logger.warning(
+                "EOA gap recheck failed for Safe {} ({}): {} — remaining blocked",
+                self._safe_address[:10],
+                type(exc).__name__,
+                exc,
+            )
+
     def _refetch(self) -> int:
-        """Fetch current on-chain nonce. Called under self._lock."""
+        """Fetch current on-chain nonce. Called under self._lock.
+
+        Gap check is NOT performed here — it runs in allocate() BEFORE acquiring
+        the lock to avoid holding lock during RPC I/O.
+        """
         self._refetch_count += 1
         try:
-            nonce = self._safe_service.get_safe_nonce(self._safe_address, self._chain_name)
-            return nonce
+            return self._safe_service.get_safe_nonce(self._safe_address, self._chain_name)
         except Exception:
             self._refetch_failed_count += 1
             raise
@@ -477,12 +697,65 @@ class SafeService:
         chain_interface = ChainInterfaces().get(chain_name)
         return chain_interface.with_retry(lambda: safe.get_nonce())
 
-    def get_allocator(self, safe_address_or_tag: str, chain_name: str) -> NonceAllocator:
+    def get_eoa_nonce_pair(
+        self, safe_address_or_tag: str, chain_name: str
+    ) -> tuple[int, int]:
+        """Return (confirmed_nonce, pending_nonce) for the Safe's primary signer EOA.
+
+        Used by NonceAllocator to detect mempool gaps (F2 EOA gap check).
+        Makes two RPC calls via chain_interface.with_retry().
+
+        Returns:
+            (confirmed_nonce, pending_nonce) for the first signer in the Safe's
+            signers list.  confirmed = latest mined nonce; pending = highest
+            queued nonce in the mempool.
+
+        """
+        from iwa.core.chain import ChainInterfaces
+
+        safe_account = self.key_storage.find_stored_account(safe_address_or_tag)
+        if not safe_account or not isinstance(safe_account, StoredSafeAccount):
+            raise ValueError(f"Safe account '{safe_address_or_tag}' not found.")
+
+        if not safe_account.signers:
+            raise ValueError(
+                f"Safe {safe_address_or_tag} has no signers — cannot check EOA nonce."
+            )
+
+        signer_address = safe_account.signers[0]
+        chain_interface = ChainInterfaces().get(chain_name)
+        ethereum_client = self._get_ethereum_client(chain_name)
+
+        confirmed = chain_interface.with_retry(
+            lambda: ethereum_client.w3.eth.get_transaction_count(
+                signer_address, "latest"
+            )
+        )
+        pending = chain_interface.with_retry(
+            lambda: ethereum_client.w3.eth.get_transaction_count(
+                signer_address, "pending"
+            )
+        )
+        return int(confirmed), int(pending)
+
+    def get_allocator(
+        self,
+        safe_address_or_tag: str,
+        chain_name: str,
+        gap_alert_threshold: int = 0,
+    ) -> NonceAllocator:
         """Get or create the NonceAllocator for this (Safe, chain) pair.
 
         All consumers of a given Safe (delivery, payment_withdraw, olas tasks)
         must obtain their nonces through this allocator to prevent collisions.
         The allocator is the single authoritative source of nonces per Safe.
+
+        Args:
+            safe_address_or_tag: Safe address or wallet tag.
+            chain_name: Chain identifier (e.g. "gnosis").
+            gap_alert_threshold: Passed to NonceAllocator on creation only.
+                Ignored if the allocator already exists (first caller wins).
+
         """
         from iwa.core.types import EthereumAddress
 
@@ -494,7 +767,23 @@ class SafeService:
         key = (EthereumAddress(safe_account.address), chain_name)
         with self._allocators_lock:
             if key not in self._allocators:
-                self._allocators[key] = NonceAllocator(self, safe_account.address, chain_name)
+                self._allocators[key] = NonceAllocator(
+                    self,
+                    safe_account.address,
+                    chain_name,
+                    gap_alert_threshold=gap_alert_threshold,
+                )
+            else:
+                existing = self._allocators[key]
+                if existing._gap_alert_threshold != gap_alert_threshold:
+                    logger.warning(
+                        "get_allocator: gap_alert_threshold mismatch for Safe {} on {}"
+                        " (existing={}, requested={}) — first caller's value is used.",
+                        safe_account.address[:10],
+                        chain_name,
+                        existing._gap_alert_threshold,
+                        gap_alert_threshold,
+                    )
             return self._allocators[key]
 
     def execute_safe_transaction(
