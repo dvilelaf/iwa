@@ -500,7 +500,11 @@ class Config(StorableModel):
 
             if disk_data and isinstance(disk_data, dict):
                 # YAML has data for this plugin — hydrate from disk, not defaults
-                self.plugins[plugin_name] = model_class(**disk_data)
+                hydrated = model_class(**disk_data)
+                self.plugins[plugin_name] = hydrated
+                hydrated_keys = set(hydrated.model_dump(mode="json").keys())
+                if hydrated_keys - set(disk_data.keys()):
+                    self.save_config()
             else:
                 # Truly new plugin — create default config and persist
                 self.plugins[plugin_name] = model_class()

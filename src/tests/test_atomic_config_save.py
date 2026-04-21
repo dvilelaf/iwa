@@ -283,6 +283,105 @@ class TestRegisterPluginConfigSaveReduction:
         assert plugin.services == {"svc1": "data"}
         assert plugin.enabled is False
 
+    def test_else_branch_saves_when_disk_has_old_fields_only(self, tmp_path):
+        """Bug: else branch (plugin not in self.plugins) must save when disk data
+        lacks new model fields — the same check the if branch already does.
+
+        Scenario: _try_load ran on YAML without a plugin section. A deploy later
+        added new_field to the model AND wrote the plugin section to disk with the
+        old fields only. register_plugin_config must detect the gap and persist.
+        """
+        config_path = tmp_path / "config.yaml"
+        ryaml = YAML()
+
+        # _try_load runs on YAML with no plugin section → plugin not in self.plugins
+        with config_path.open("w") as f:
+            ryaml.dump({"core": {"whitelist": {}}, "plugins": {}}, f)
+
+        config = _fresh_config(config_path)
+        assert "test" not in config.plugins
+
+        # Disk is updated with old fields only (e.g., by a prior deploy/migration)
+        with config_path.open("w") as f:
+            ryaml.dump(
+                {"core": {"whitelist": {}}, "plugins": {"test": {"services": {}, "enabled": True}}},
+                f,
+            )
+
+        save_count = 0
+
+        def counting_save(self_inner):
+            nonlocal save_count
+            save_count += 1
+
+        with patch("iwa.core.constants.CONFIG_PATH", config_path):
+            with patch.object(_OriginalConfig, "save_config", counting_save):
+                config.register_plugin_config("test", ExtendedPluginConfig)
+
+        assert save_count == 1, "must save when else-branch disk data lacks new_field"
+
+    def test_else_branch_no_save_when_all_fields_present_on_disk(self, tmp_path):
+        """else branch must NOT save when disk already has every model field."""
+        config_path = tmp_path / "config.yaml"
+        ryaml = YAML()
+
+        with config_path.open("w") as f:
+            ryaml.dump({"core": {"whitelist": {}}, "plugins": {}}, f)
+
+        config = _fresh_config(config_path)
+
+        # Disk has all fields including new_field
+        with config_path.open("w") as f:
+            ryaml.dump(
+                {
+                    "core": {"whitelist": {}},
+                    "plugins": {
+                        "test": {"services": {}, "enabled": True, "new_field": "custom"}
+                    },
+                },
+                f,
+            )
+
+        save_count = 0
+
+        def counting_save(self_inner):
+            nonlocal save_count
+            save_count += 1
+
+        with patch("iwa.core.constants.CONFIG_PATH", config_path):
+            with patch.object(_OriginalConfig, "save_config", counting_save):
+                config.register_plugin_config("test", ExtendedPluginConfig)
+
+        assert save_count == 0
+
+    def test_else_branch_preserves_disk_values(self, tmp_path):
+        """else branch must use disk values for existing fields, not model defaults."""
+        config_path = tmp_path / "config.yaml"
+        ryaml = YAML()
+
+        with config_path.open("w") as f:
+            ryaml.dump({"core": {"whitelist": {}}, "plugins": {}}, f)
+
+        config = _fresh_config(config_path)
+
+        # Disk has enabled=False (non-default), new_field absent
+        with config_path.open("w") as f:
+            ryaml.dump(
+                {
+                    "core": {"whitelist": {}},
+                    "plugins": {"test": {"services": {}, "enabled": False}},
+                },
+                f,
+            )
+
+        with patch("iwa.core.constants.CONFIG_PATH", config_path):
+            config.register_plugin_config("test", ExtendedPluginConfig)
+
+        plugin = config.get_plugin_config("test")
+        assert isinstance(plugin, ExtendedPluginConfig)
+        assert plugin.enabled is False  # disk value preserved
+        assert plugin.new_field == "default_value"  # new field gets model default
+
 
 # ---------------------------------------------------------------------------
 # Test: StorableModel.save_yaml atomic write
