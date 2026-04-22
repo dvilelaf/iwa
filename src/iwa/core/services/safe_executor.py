@@ -549,6 +549,16 @@ class SafeTransactionExecutor:
                 doesn't match the pre-assigned one and the Safe reports it as
                 an invalid-owner signature check failure.
 
+        INVARIANT: ``allow_nonce_refresh=False`` MUST mean the caller has
+        pre-assigned a nonce via NonceAllocator (the only current call site is
+        ``micromech/runtime/delivery.py`` with ``allow_nonce_refresh=safe_nonce is None``).
+        The ``is_parallel_nonce_race`` flag relies on this invariant — passing
+        ``False`` for any other reason (e.g. "I manage the nonce myself but it
+        is not pre-assigned") will mis-classify real GS026 signature failures as
+        transient races and retry them instead of aborting.
+
+        The returned dict guarantees mutual exclusivity:
+        ``is_parallel_nonce_race=True`` implies ``is_signature_error=False``.
         """
         err_text = str(error).lower()
         decoded = (self._decode_revert_reason(error) or "").lower()

@@ -477,3 +477,42 @@ def test_gs026_fast_retry_real_time(
     assert success is True
     # Fast path sleeps exactly 1s.  Add generous slack for CI jitter.
     assert elapsed < 1.8, f"Expected <1.8s wall clock, got {elapsed:.2f}s"
+
+
+# =============================================================================
+# Test 10: race path never calls _refresh_nonce (regression guard)
+# =============================================================================
+
+
+def test_gs026_parallel_race_does_not_refresh_nonce(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """Race retry must never call _refresh_nonce — pre-assigned nonces must not be clobbered.
+
+    Regression guard: a future refactor of _handle_execution_failure might
+    accidentally reach the _refresh_nonce branch when retrying a race.  This
+    test makes that impossible to miss.
+    """
+    with (
+        patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
+        patch.object(executor, "_refresh_nonce") as mock_refresh,
+    ):
+        mock_safe_tx.call.side_effect = [
+            _make_hex_revert_error(GS026_HEX),
+            None,
+        ]
+        mock_safe_tx.execute.return_value = b"tx_hash"
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
+            MagicMock(status=1)
+        )
+
+        with patch("time.sleep"):
+            success, _, _ = executor.execute_with_retry(
+                "0xSafe",
+                mock_safe_tx,
+                ["key1"],
+                allow_nonce_refresh=False,
+            )
+
+    assert success is True
+    mock_refresh.assert_not_called()
