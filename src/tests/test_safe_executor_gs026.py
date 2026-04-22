@@ -163,8 +163,8 @@ def test_gs026_with_pre_assigned_nonce_uses_fast_retry(
             None,
         ]
         mock_safe_tx.execute.return_value = b"tx_hash"
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
-            MagicMock(status=1)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
         )
 
         with patch("time.sleep", side_effect=record_sleep):
@@ -206,8 +206,8 @@ def test_gs026_parallel_nonce_uses_fast_retry_on_later_attempt(
             None,
         ]
         mock_safe_tx.execute.return_value = b"tx_hash"
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
-            MagicMock(status=1)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
         )
 
         with patch("time.sleep", side_effect=recorded_delays.append):
@@ -300,8 +300,8 @@ def test_parallel_nonce_race_stats_incremented(
             None,
         ]
         mock_safe_tx.execute.return_value = b"tx_hash"
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
-            MagicMock(status=1)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
         )
 
         with patch("time.sleep"):
@@ -446,9 +446,7 @@ def test_gs024_hex_with_pre_assigned_nonce_aborts(
 
 
 @pytest.mark.slow
-def test_gs026_fast_retry_real_time(
-    executor, mock_chain_interface, mock_safe_tx, mock_safe
-):
+def test_gs026_fast_retry_real_time(executor, mock_chain_interface, mock_safe_tx, mock_safe):
     """Real-time wall-clock sanity check: fast retry path does not wait >= 2s.
 
     Uses real time.sleep but caps the simulated race to 1 retry so the test
@@ -461,8 +459,8 @@ def test_gs026_fast_retry_real_time(
             None,
         ]
         mock_safe_tx.execute.return_value = b"tx_hash"
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
-            MagicMock(status=1)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
         )
 
         start = time.monotonic()
@@ -502,8 +500,8 @@ def test_gs026_parallel_race_does_not_refresh_nonce(
             None,
         ]
         mock_safe_tx.execute.return_value = b"tx_hash"
-        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = (
-            MagicMock(status=1)
+        mock_chain_interface.web3.eth.wait_for_transaction_receipt.return_value = MagicMock(
+            status=1
         )
 
         with patch("time.sleep"):
@@ -516,3 +514,67 @@ def test_gs026_parallel_race_does_not_refresh_nonce(
 
     assert success is True
     mock_refresh.assert_not_called()
+
+
+# =============================================================================
+# False negative guard: GS026 as plain text (not hex) must also trigger race
+# =============================================================================
+
+
+def test_gs026_plain_text_with_pre_assigned_nonce_triggers_race(executor):
+    """Plain-text GS026 with pre-assigned nonce must be classified as race.
+
+    False-negative guard: the fix must work for BOTH hex-encoded payloads
+    (the new path) and plain-text errors (the original path).  If only hex
+    is handled, a future RPC that returns decoded text would fall back to the
+    exponential backoff silently.
+    """
+    error = ValueError("execution reverted: GS026")
+    c = executor._classify_error(error, allow_nonce_refresh=False)
+    assert c["is_parallel_nonce_race"] is True
+    assert c["is_signature_error"] is False  # mutually exclusive
+
+
+# =============================================================================
+# False positive guards: errors that must NOT be classified as nonce race
+# =============================================================================
+
+
+def test_gs025_hex_with_pre_assigned_nonce_is_not_a_race(executor):
+    """GS025 (wrong nonce) hex + pre-assigned nonce must NOT be a race.
+
+    False-positive guard: GS025 is a nonce error, not a signature error.
+    _is_signature_error returns False for it, so is_parallel_nonce_race
+    must also be False.  If this were mis-classified as a race the executor
+    would fast-retry instead of triggering nonce refresh logic.
+    """
+    error = _make_hex_revert_error(GS025_HEX)
+    c = executor._classify_error(error, allow_nonce_refresh=False)
+    assert c["is_parallel_nonce_race"] is False
+    assert c["is_nonce_error"] is True
+
+
+def test_rpc_error_with_pre_assigned_nonce_is_not_a_race(executor, mock_chain_interface):
+    """RPC/connection error with pre-assigned nonce must NOT be a race.
+
+    False-positive guard: a rate-limit or connection error has nothing to do
+    with parallel nonces.  It must stay on the RPC rotation path.
+    """
+    mock_chain_interface._is_rate_limit_error.return_value = True
+    mock_chain_interface._is_connection_error.return_value = False
+    error = ValueError("429 Too Many Requests")
+    c = executor._classify_error(error, allow_nonce_refresh=False)
+    assert c["is_parallel_nonce_race"] is False
+    assert c["is_rpc_error"] is True
+
+
+def test_fee_error_with_pre_assigned_nonce_is_not_a_race(executor):
+    """Fee error with pre-assigned nonce must NOT be a race.
+
+    False-positive guard: "max fee per gas less than block base fee" is a
+    gas-pricing issue, not a nonce race.  Must go through the fee-bump path.
+    """
+    error = ValueError("max fee per gas less than block base fee")
+    c = executor._classify_error(error, allow_nonce_refresh=False)
+    assert c["is_parallel_nonce_race"] is False
+    assert c["is_fee_error"] is True
