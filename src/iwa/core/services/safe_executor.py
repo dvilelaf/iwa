@@ -320,6 +320,7 @@ class SafeTransactionExecutor:
             nonce race (GS026 with pre-assigned nonce).  The caller uses this
             to choose between fast fixed delay and exponential backoff without
             re-classifying the error a second time.
+
         """
         classification = self._classify_error(error, allow_nonce_refresh=allow_nonce_refresh)
         is_fee_error = classification["is_fee_error"]
@@ -559,6 +560,7 @@ class SafeTransactionExecutor:
 
         The returned dict guarantees mutual exclusivity:
         ``is_parallel_nonce_race=True`` implies ``is_signature_error=False``.
+
         """
         err_text = str(error).lower()
         decoded = (self._decode_revert_reason(error) or "").lower()
