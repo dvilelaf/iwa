@@ -27,7 +27,17 @@ SAFE_TX_STATS = {
     "signature_errors": 0,
     "insufficient_funds": 0,
     "gs013_inner_revert_retries": 0,
+    "parallel_nonce_races": 0,
+    "parallel_nonce_race_retries": 0,
+    "parallel_nonce_races_exhausted": 0,
 }
+
+# Fast retry delay for parallel nonce races (predecessor TX mines in ~1 block on Gnosis)
+PARALLEL_NONCE_RACE_RETRY_DELAY = 1.0
+
+# Sentinel for _decode_revert_reason memoisation (distinguishes "not yet
+# computed" from "computed as None").
+_UNSET = object()
 
 # Minimum signature length (65 bytes per signature for ECDSA)
 MIN_SIGNATURE_LENGTH = 65
@@ -85,6 +95,7 @@ class SafeTransactionExecutor:
 
         """
         last_error = None
+        last_was_nonce_race = False
         current_gas = safe_tx.safe_tx_gas
         base_estimate = current_gas if current_gas > 0 else 0
         fee_bump_factor = 1.0  # Multiplier for EIP-1559 fees, increases on fee errors
@@ -102,6 +113,7 @@ class SafeTransactionExecutor:
                     current_gas,
                     base_estimate,
                     fee_bump_factor,
+                    allow_nonce_refresh=allow_nonce_refresh,
                 )
 
                 # Check receipt
@@ -119,11 +131,14 @@ class SafeTransactionExecutor:
                 raise ValueError("Transaction reverted on-chain")
 
             except Exception as e:
-                updated_tx, should_retry, is_fee_error = self._handle_execution_failure(
-                    e, safe_address, safe_tx, signer_keys, attempt, operation_name,
-                    allow_nonce_refresh=allow_nonce_refresh,
+                updated_tx, should_retry, is_fee_error, is_nonce_race = (
+                    self._handle_execution_failure(
+                        e, safe_address, safe_tx, signer_keys, attempt, operation_name,
+                        allow_nonce_refresh=allow_nonce_refresh,
+                    )
                 )
                 last_error = e
+                last_was_nonce_race = is_nonce_race
                 if not should_retry:
                     break
 
@@ -136,8 +151,18 @@ class SafeTransactionExecutor:
                     fee_bump_factor = min(fee_bump_factor, self.MAX_FEE_BUMP_FACTOR)
                     logger.info(f"[{operation_name}] Fee bump factor increased to {fee_bump_factor:.2f}x")
 
-                delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
+                # Parallel nonce race: predecessor TX mines in ~1 block (~5s on
+                # Gnosis).  Use a short fixed delay instead of exponential
+                # backoff, which would waste most of the window waiting.
+                if is_nonce_race:
+                    delay = PARALLEL_NONCE_RACE_RETRY_DELAY
+                else:
+                    delay = self.DEFAULT_RETRY_DELAY * (2**attempt)
                 time.sleep(delay)
+
+        # If we exhausted retries on a parallel nonce race, track it
+        if last_error is not None and last_was_nonce_race:
+            SAFE_TX_STATS["parallel_nonce_races_exhausted"] += 1
 
         return False, str(last_error), None
 
@@ -151,6 +176,7 @@ class SafeTransactionExecutor:
         current_gas,
         base_estimate,
         fee_bump_factor: float = 1.0,
+        allow_nonce_refresh: bool = True,
     ) -> str:
         """Prepare client, estimate gas, simulate, and execute."""
         # 1. (Re)Create Safe client
@@ -172,7 +198,19 @@ class SafeTransactionExecutor:
         try:
             safe_tx.call()
         except Exception as e:
-            classification = self._classify_error(e)
+            classification = self._classify_error(e, allow_nonce_refresh=allow_nonce_refresh)
+            # Parallel nonce race: GS026 during simulation with a pre-assigned
+            # nonce.  Not a genuine signature failure — the predecessor TX
+            # hasn't mined yet.  Let it propagate to _handle_execution_failure,
+            # which uses a short fixed retry delay instead of aborting.
+            if classification["is_parallel_nonce_race"]:
+                SAFE_TX_STATS["parallel_nonce_races"] += 1
+                logger.warning(
+                    f"[{operation_name}] Parallel nonce race in simulation "
+                    f"(attempt {attempt + 1}): nonce not yet on-chain, "
+                    "predecessor TX still pending"
+                )
+                raise
             # Signature errors (GS020, GS026) are not recoverable - fail immediately
             if classification["is_signature_error"]:
                 SAFE_TX_STATS["signature_errors"] += 1
@@ -272,14 +310,18 @@ class SafeTransactionExecutor:
         attempt: int,
         operation_name: str,
         allow_nonce_refresh: bool = True,
-    ) -> tuple[SafeTx, bool, bool]:
+    ) -> tuple[SafeTx, bool, bool, bool]:
         """Handle execution failure and determine next steps.
 
         Returns:
-            Tuple of (updated_safe_tx, should_retry, is_fee_error)
+            Tuple of (updated_safe_tx, should_retry, is_fee_error, is_nonce_race)
 
+            is_nonce_race: True when this failure was classified as a parallel
+            nonce race (GS026 with pre-assigned nonce).  The caller uses this
+            to choose between fast fixed delay and exponential backoff without
+            re-classifying the error a second time.
         """
-        classification = self._classify_error(error)
+        classification = self._classify_error(error, allow_nonce_refresh=allow_nonce_refresh)
         is_fee_error = classification["is_fee_error"]
 
         # Decode revert reason once for all abort paths
@@ -289,6 +331,25 @@ class SafeTransactionExecutor:
         # Sanitize error text to prevent RPC API key leakage in logs
         safe_error = self._sanitize_error(error)
 
+        # Parallel nonce race: GS026 with a pre-assigned nonce.  Not a genuine
+        # signature failure — the predecessor TX with nonce N-1 hasn't mined
+        # yet.  Retry quickly (predecessor mines in ~1 block on Gnosis) rather
+        # than aborting on what looks like a signature error.
+        if classification["is_parallel_nonce_race"]:
+            if attempt >= self.max_retries:
+                SAFE_TX_STATS["final_failures"] += 1
+                logger.error(
+                    f"[{operation_name}] Parallel nonce race — budget exhausted "
+                    f"after {attempt + 1} attempts: {safe_error}{reason_suffix}"
+                )
+                return safe_tx, False, is_fee_error, True
+            SAFE_TX_STATS["parallel_nonce_race_retries"] += 1
+            logger.debug(
+                f"[{operation_name}] Parallel nonce race retry "
+                f"{attempt + 1}/{self.max_retries}"
+            )
+            return safe_tx, True, False, True
+
         # Signature errors (GS020, GS026) are never recoverable — abort immediately
         if classification["is_signature_error"]:
             SAFE_TX_STATS["signature_errors"] += 1
@@ -297,7 +358,7 @@ class SafeTransactionExecutor:
                 f"[{operation_name}] Signature error — aborting (attempt {attempt + 1}): "
                 f"{safe_error}{reason_suffix}"
             )
-            return safe_tx, False, is_fee_error
+            return safe_tx, False, is_fee_error, False
 
         # GS013 = RPC provider returning stale state that makes the Safe
         # simulation fail.  The diagnosis eth.call always succeeds because
@@ -313,7 +374,7 @@ class SafeTransactionExecutor:
                 f"[{operation_name}] GS013 inner call revert (attempt {attempt + 1}), "
                 f"rotating RPC and retrying: {safe_error}{reason_suffix}"
             )
-            return safe_tx, True, is_fee_error
+            return safe_tx, True, is_fee_error, False
 
         # InsufficientFunds: account can't cover value + gas.  Retrying won't
         # help — the balance won't increase by itself.
@@ -324,7 +385,7 @@ class SafeTransactionExecutor:
                 f"[{operation_name}] Insufficient funds — aborting (attempt {attempt + 1}): "
                 f"{safe_error}{reason_suffix}"
             )
-            return safe_tx, False, is_fee_error
+            return safe_tx, False, is_fee_error, False
 
         if attempt >= self.max_retries:
             SAFE_TX_STATS["final_failures"] += 1
@@ -332,7 +393,7 @@ class SafeTransactionExecutor:
                 f"[{operation_name}] Failed after {attempt + 1} attempts: "
                 f"{safe_error}{reason_suffix}"
             )
-            return safe_tx, False, is_fee_error
+            return safe_tx, False, is_fee_error, False
 
         strategy = "retry"
         safe = self._recreate_safe_client(safe_address)
@@ -346,7 +407,7 @@ class SafeTransactionExecutor:
                     f"[{operation_name}] Nonce error with allow_nonce_refresh=False — "
                     "aborting (allocator will invalidate)"
                 )
-                return safe_tx, False, is_fee_error
+                return safe_tx, False, is_fee_error, False
             strategy = "nonce refresh" if classification["is_nonce_error"] else "timeout + nonce refresh"
             SAFE_TX_STATS["nonce_retries"] += 1
             safe_tx = self._refresh_nonce(safe, safe_tx, signer_keys)
@@ -355,7 +416,7 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["rpc_rotations"] += 1
             result = self.chain_interface._handle_rpc_error(error)
             if not result["should_retry"]:
-                return safe_tx, False, is_fee_error
+                return safe_tx, False, is_fee_error, False
         elif is_fee_error:
             strategy = "fee bump"
             SAFE_TX_STATS["gas_retries"] += 1
@@ -364,7 +425,7 @@ class SafeTransactionExecutor:
             SAFE_TX_STATS["gas_retries"] += 1
 
         self._log_retry(attempt + 1, error, strategy)
-        return safe_tx, True, is_fee_error
+        return safe_tx, True, is_fee_error, False
 
     def _estimate_safe_tx_gas(self, safe: Safe, safe_tx: SafeTx, base_estimate: int = 0) -> int:
         """Estimate gas for a Safe transaction with buffer and hard cap."""
@@ -397,11 +458,18 @@ class SafeTransactionExecutor:
         return Safe(safe_address, ethereum_client)
 
     def _is_nonce_error(self, error: Exception) -> bool:
-        """Check if error is due to Safe nonce conflict."""
+        """Check if error is due to Safe nonce conflict.
+
+        Matches both plain-text error messages and hex-encoded revert reasons
+        (e.g. `0x...4753303235` for GS025), which some RPC providers return
+        without a decoded string.
+        """
         error_text = str(error).lower()
+        decoded = (self._decode_revert_reason(error) or "").lower()
+        combined = error_text + " " + decoded
         # GS025 = Invalid nonce (NOT GS026 which is invalid signatures)
         return any(
-            x in error_text
+            x in combined
             for x in [
                 "nonce",
                 "gs025",
@@ -419,10 +487,16 @@ class SafeTransactionExecutor:
         GS021 = Invalid signature data pointer
         GS024 = Invalid contract signature
         GS026 = Invalid owner (signature from non-owner)
+
+        Matches both plain-text error messages and hex-encoded revert reasons
+        (e.g. `0x...4753303236` for GS026), which some RPC providers return
+        without a decoded string.
         """
         error_text = str(error).lower()
+        decoded = (self._decode_revert_reason(error) or "").lower()
+        combined = error_text + " " + decoded
         return any(
-            x in error_text
+            x in combined
             for x in [
                 "gs020",
                 "gs021",
@@ -463,9 +537,22 @@ class SafeTransactionExecutor:
 
         return new_tx
 
-    def _classify_error(self, error: Exception) -> dict:
-        """Classify Safe transaction errors for retry decisions."""
+    def _classify_error(self, error: Exception, allow_nonce_refresh: bool = True) -> dict:
+        """Classify Safe transaction errors for retry decisions.
+
+        Args:
+            error: The exception to classify.
+            allow_nonce_refresh: Whether the caller permits nonce refresh.  When
+                False (caller pre-assigned nonces via NonceAllocator), a GS026
+                revert in simulation is treated as a "parallel nonce race" —
+                the predecessor TX hasn't mined yet, so the nonce slot on-chain
+                doesn't match the pre-assigned one and the Safe reports it as
+                an invalid-owner signature check failure.
+
+        """
         err_text = str(error).lower()
+        decoded = (self._decode_revert_reason(error) or "").lower()
+        combined = err_text + " " + decoded
         is_rpc = self.chain_interface._is_rate_limit_error(
             error
         ) or self.chain_interface._is_connection_error(error)
@@ -503,18 +590,46 @@ class SafeTransactionExecutor:
         # GS013 = inner call reverted while safeTxGas=0 and gasPrice=0.
         # The Safe contract wraps ANY inner revert as GS013 in this mode.
         # May be transient (stale RPC state, marketplace hiccup).
-        is_gs013_inner_revert = "gs013" in err_text
+        is_gs013_inner_revert = "gs013" in combined
+
+        is_revert = "revert" in err_text or "execution reverted" in err_text
+        is_signature_error = self._is_signature_error(error)
+
+        # Parallel nonce race: GS026 in simulation when the caller pre-assigned
+        # a nonce via NonceAllocator.  The predecessor TX (with nonce N-1) is
+        # still pending, so on-chain nonce hasn't advanced — the Safe's
+        # signature check reads the wrong hash and reports GS026.  Not a real
+        # signature failure; retry quickly rather than aborting.
+        # allow_nonce_refresh=False signals that the caller pre-assigned this
+        # nonce via NonceAllocator.  When that flag is set AND the error is a
+        # GS026 revert, it is almost certainly a parallel nonce race (the
+        # predecessor TX hasn't mined yet) rather than a real signature failure.
+        # We treat it as a transient race and retry quickly instead of aborting.
+        # NOTE: is_parallel_nonce_race takes precedence; is_signature_error is
+        # set to False when the race is detected so branches never overlap.
+        is_parallel_nonce_race = (
+            not allow_nonce_refresh
+            and is_signature_error
+            and is_revert
+            and "gs026" in combined
+        )
+        # Mutual exclusivity: a race is NOT a permanent signature error.
+        # Keeping both True would require callers to enforce branch order by
+        # convention; making them exclusive encodes the invariant in the data.
+        if is_parallel_nonce_race:
+            is_signature_error = False
 
         return {
             "is_gas_error": any(x in err_text for x in ["gas", "out of gas", "intrinsic"]),
             "is_fee_error": is_fee_error,
             "is_nonce_error": self._is_nonce_error(error),
             "is_rpc_error": is_rpc,
-            "is_revert": "revert" in err_text or "execution reverted" in err_text,
-            "is_signature_error": self._is_signature_error(error),
+            "is_revert": is_revert,
+            "is_signature_error": is_signature_error,
             "is_timeout": is_timeout,
             "is_insufficient_funds": is_insufficient_funds,
             "is_gs013_inner_revert": is_gs013_inner_revert,
+            "is_parallel_nonce_race": is_parallel_nonce_race,
         }
 
     def _calculate_bumped_gas_price(self, bump_factor: float) -> int | None:
@@ -582,6 +697,8 @@ class SafeTransactionExecutor:
                 f"{reason or sanitized}"
             )
 
+    _DECODED_REASON_ATTR = "_iwa_decoded_revert_reason"
+
     def _decode_revert_reason(self, error: Exception) -> str | None:
         """Attempt to decode the revert reason from exception data.
 
@@ -589,17 +706,32 @@ class SafeTransactionExecutor:
         1. Exception .data attribute (web3/safe-eth-py store revert data here)
         2. Exception .args — look for hex strings in positional args
         3. Regex on str(error) as fallback
+
+        Result is memoised on the exception object so repeated classification
+        passes (_is_signature_error, _is_nonce_error, _classify_error etc. all
+        within one retry) don't re-instantiate ErrorDecoder or re-run regex.
         """
+        cached = getattr(error, self._DECODED_REASON_ATTR, _UNSET)
+        if cached is not _UNSET:
+            return cached
+
+        result: str | None = None
         hex_data = self._extract_revert_hex(error)
         if hex_data:
             try:
                 decoded = ErrorDecoder().decode(hex_data)
                 if decoded:
                     _name, msg, source = decoded[0]
-                    return f"{msg} (from {source})"
+                    result = f"{msg} (from {source})"
             except Exception:
                 logger.debug(f"ErrorDecoder.decode() failed for data: {hex_data[:20]}...")
-        return None
+
+        try:
+            object.__setattr__(error, self._DECODED_REASON_ATTR, result)
+        except (AttributeError, TypeError):
+            # Some exception types reject dynamic attrs; skip caching for those.
+            pass
+        return result
 
     @staticmethod
     def _extract_revert_hex(error: Exception) -> str | None:  # noqa: C901
