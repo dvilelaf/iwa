@@ -578,3 +578,70 @@ def test_fee_error_with_pre_assigned_nonce_is_not_a_race(executor):
     c = executor._classify_error(error, allow_nonce_refresh=False)
     assert c["is_parallel_nonce_race"] is False
     assert c["is_fee_error"] is True
+
+
+# =============================================================================
+# High-2a: _handle_execution_failure at attempt==max_retries returns
+# (_, False, _, True) — should_retry=False, is_nonce_race=True
+# =============================================================================
+
+
+def test_handle_execution_failure_race_at_max_retries_returns_no_retry(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """_handle_execution_failure at attempt==max_retries must return should_retry=False.
+
+    Verifies that the 4-tuple (updated_tx, should_retry, is_fee, is_nonce_race)
+    carries should_retry=False and is_nonce_race=True when the budget is
+    exhausted — so execute_with_retry terminates instead of looping forever.
+    """
+    error = _make_hex_revert_error(GS026_HEX)
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        _, should_retry, _, is_nonce_race = executor._handle_execution_failure(
+            error,
+            "0xSafe",
+            mock_safe_tx,
+            ["key1"],
+            executor.max_retries,  # final attempt → exhausted
+            "test_op",
+            allow_nonce_refresh=False,
+        )
+
+    assert should_retry is False
+    assert is_nonce_race is True
+    # parallel_nonce_races_exhausted is incremented by execute_with_retry (the
+    # caller), not by _handle_execution_failure itself — only the 4-tuple
+    # contract is verified here.
+
+
+# =============================================================================
+# High-2b: max_retries=0 — race on first (and only) attempt aborts without sleep
+# =============================================================================
+
+
+def test_gs026_race_with_max_retries_zero_aborts_without_sleep(
+    executor, mock_chain_interface, mock_safe_tx, mock_safe
+):
+    """With max_retries=0, a race on attempt=0 must abort without sleeping.
+
+    Edge case: no retry budget at all.  The executor must not hang or sleep;
+    it aborts immediately and increments parallel_nonce_races_exhausted.
+    """
+    executor.max_retries = 0
+
+    with patch.object(executor, "_recreate_safe_client", return_value=mock_safe):
+        mock_safe_tx.call.side_effect = _make_hex_revert_error(GS026_HEX)
+
+        with patch("time.sleep") as mock_sleep:
+            success, _, _ = executor.execute_with_retry(
+                "0xSafe",
+                mock_safe_tx,
+                ["key1"],
+                allow_nonce_refresh=False,
+            )
+
+    assert success is False
+    mock_sleep.assert_not_called()
+    assert SAFE_TX_STATS["parallel_nonce_races"] == 1
+    assert SAFE_TX_STATS["parallel_nonce_races_exhausted"] == 1
+    assert SAFE_TX_STATS["parallel_nonce_race_retries"] == 0
