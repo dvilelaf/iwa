@@ -1203,12 +1203,21 @@ def test_handle_failure_gs013_retries_with_decoded_reason(
         patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
         patch.object(executor, "_diagnose_inner_revert"),
     ):
-        updated_tx, should_retry, _is_fee = executor._handle_execution_failure(
+        updated_tx, should_retry, _is_fee, _is_race = executor._handle_execution_failure(
             error, "0xSafe", mock_safe_tx, ["key1"], 0, "test_op"
         )
 
     assert should_retry is True
-    mock_decode.assert_called_once_with(error)
+    # _decode_revert_reason is invoked from several classification paths in a
+    # single retry cycle (hex-aware signature/nonce checks, the reason-suffix
+    # log line, etc.).  Assert the last call used the right error and that it
+    # was consulted at least once (cardinalidad ≥ 1 is intentional here
+    # because memoization makes repeated calls free and the exact count is
+    # an implementation detail we don't want to tie tests to).
+    from unittest.mock import call as mock_call
+
+    assert mock_decode.call_args_list[-1] == mock_call(error)
+    assert mock_decode.call_count >= 1
     assert SAFE_TX_STATS["gs013_inner_revert_retries"] == 1
 
 
@@ -1236,12 +1245,18 @@ def test_max_retries_exhausted_includes_decoded_reason(
         patch.object(executor, "_recreate_safe_client", return_value=mock_safe),
     ):
         # Set attempt = max_retries to trigger the exhausted path
-        updated_tx, should_retry, _is_fee = executor._handle_execution_failure(
+        updated_tx, should_retry, _is_fee, _is_race = executor._handle_execution_failure(
             error, "0xSafe", mock_safe_tx, ["key1"], executor.max_retries, "test_op"
         )
 
     assert should_retry is False
-    mock_decode.assert_called_once_with(error)
+    # Classification runs it multiple times (hex-aware signature/nonce detection
+    # + the exhaustion log line); assert last call used correct error and
+    # it was invoked at least once (exact count is an implementation detail).
+    from unittest.mock import call as mock_call
+
+    assert mock_decode.call_args_list[-1] == mock_call(error)
+    assert mock_decode.call_count >= 1
 
 
 # --- Security: _sanitize_error and _extract_revert_hex URL protection ---
