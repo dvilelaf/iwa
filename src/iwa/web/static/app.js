@@ -3542,7 +3542,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       </div>
       <div class="rewards-summary-group estimated">
-        <div class="group-label">Estimado &middot; modelo te&oacute;rico</div>
+        <div class="group-label">Estimated &middot; theoretical model</div>
         <div class="group-cards">
           <div class="rewards-card">
             <div class="card-label">Pre-tax Profit</div>
@@ -3559,18 +3559,18 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       </div>
       <div class="rewards-summary-group actual">
-        <div class="group-label">Real &middot; cash flow efectivo</div>
+        <div class="group-label">Actual &middot; effective cash flow</div>
         <div class="group-cards">
           <div class="rewards-card">
             <div class="card-label">EURe Withdrawn</div>
             <div class="card-value" style="color:#9b59b6">\u20AC${eureWithdrawn.toFixed(2)}</div>
           </div>
           <div class="rewards-card">
-            <div class="card-label">IRPF sobre EURe (${eureTaxRate.toFixed(1)}%)</div>
+            <div class="card-label">IRPF on EURe (${eureTaxRate.toFixed(1)}%)</div>
             <div class="card-value" style="color:#e67e22">\u2212\u20AC${eureIrpf.toFixed(2)}</div>
           </div>
           <div class="rewards-card">
-            <div class="card-label">Neto EURe</div>
+            <div class="card-label">Net EURe</div>
             <div class="card-value" style="color:${eureNet >= 0 ? "#2ecc71" : "#e74c3c"}">\u20AC${eureNet.toFixed(2)}</div>
           </div>
         </div>
