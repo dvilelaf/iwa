@@ -248,7 +248,7 @@ class CoreConfig(BaseModel):
         return self
 
     # Safe Transaction Retry System
-    safe_tx_max_retries: int = Field(default=6, description="Maximum retries for Safe transactions")
+    safe_tx_max_retries: int = Field(default=15, description="Maximum retries for Safe transactions")
     safe_tx_gas_buffer: float = Field(
         default=1.5, description="Gas buffer multiplier for Safe transactions"
     )
