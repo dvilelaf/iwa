@@ -1534,10 +1534,54 @@ textarea:focus {
 }
 
 .rewards-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.rewards-summary-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
-  margin-bottom: 1.5rem;
+}
+
+.rewards-summary-group {
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 1rem 1rem 0.75rem;
+}
+
+.rewards-summary-group .group-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.rewards-summary-group .group-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.rewards-summary-group.estimated {
+  background: rgba(52, 152, 219, 0.04);
+  border-color: rgba(52, 152, 219, 0.25);
+}
+
+.rewards-summary-group.estimated .group-label {
+  color: rgba(52, 152, 219, 0.8);
+}
+
+.rewards-summary-group.actual {
+  background: rgba(155, 89, 182, 0.04);
+  border-color: rgba(155, 89, 182, 0.25);
+}
+
+.rewards-summary-group.actual .group-label {
+  color: rgba(155, 89, 182, 0.8);
 }
 
 .rewards-card {

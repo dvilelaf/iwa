@@ -511,3 +511,42 @@ def test_get_summary_with_eure_withdrawn(client):
     assert pre_tax == pytest.approx(39.5, abs=0.01)
     # EURe withdrawn should be close to pre-tax
     assert data["total_eure_withdrawn"] == pytest.approx(38.75, abs=0.01)
+    # EURe tax fields: 38.75 is below first bracket (6000), so 19%
+    assert data["eure_irpf"] == pytest.approx(38.75 * 0.19, abs=0.01)
+    assert data["eure_net"] == pytest.approx(38.75 * 0.81, abs=0.01)
+    assert data["eure_effective_tax_rate"] == pytest.approx(19.0, abs=0.1)
+
+
+def test_get_summary_eure_irpf_fields_present(client):
+    """Test that eure_irpf, eure_net and eure_effective_tax_rate are always in the response."""
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=[]),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(0.0, {})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.0),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=0.0),
+    ):
+        response = client.get("/api/rewards/summary?year=2026")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["eure_irpf"] == 0.0
+    assert data["eure_net"] == 0.0
+    assert data["eure_effective_tax_rate"] == 0.0
+
+
+def test_get_summary_eure_irpf_progressive_brackets(client):
+    """Test eure_irpf uses progressive IRPF brackets (crosses into 21% bracket)."""
+    # 10000 EUR withdrawn: 6000*19% + 4000*21% = 1140 + 840 = 1980
+    with (
+        patch("iwa.web.routers.rewards._query_claims", return_value=[]),
+        patch("iwa.web.routers.rewards._calculate_mech_costs", return_value=(0.0, {})),
+        patch("iwa.web.routers.rewards._query_gas_costs", return_value=0.0),
+        patch("iwa.web.routers.rewards._query_eure_withdrawn", return_value=10000.0),
+    ):
+        response = client.get("/api/rewards/summary?year=2026")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["eure_irpf"] == pytest.approx(1980.0, abs=0.01)
+    assert data["eure_net"] == pytest.approx(8020.0, abs=0.01)
+    assert data["eure_effective_tax_rate"] == pytest.approx(19.8, abs=0.1)

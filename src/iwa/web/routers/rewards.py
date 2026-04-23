@@ -427,6 +427,8 @@ def get_summary(
 
     # EURe actually withdrawn (sent from master to external wallet)
     eure_withdrawn = _query_eure_withdrawn(year, month)
+    eure_tax, eure_tax_rate = _calculate_savings_tax(eure_withdrawn)
+    eure_net = eure_withdrawn - eure_tax
 
     # IRPF tax estimate (annualized from year-to-date)
     annual_gross = total_eur
@@ -464,6 +466,9 @@ def get_summary(
         "effective_tax_rate": round(effective_tax_rate * 100, 1),
         "total_claims": total_claims,
         "total_eure_withdrawn": round(eure_withdrawn, EUR_VALUE_DECIMALS),
+        "eure_irpf": round(eure_tax, EUR_VALUE_DECIMALS),
+        "eure_net": round(eure_net, EUR_VALUE_DECIMALS),
+        "eure_effective_tax_rate": round(eure_tax_rate * 100, 1),
         "months": months,
     }
 
