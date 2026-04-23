@@ -3464,7 +3464,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .getElementById("rewards-month")
         .addEventListener("change", (e) => {
           state.rewardsMonth = e.target.value ? parseInt(e.target.value) : null;
-          loadRewards();
+          loadRewards(false);
         });
 
       document
@@ -3475,7 +3475,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadRewards();
   }
 
-  async function loadRewards() {
+  async function loadRewards(updateChart = true) {
     const year = state.rewardsYear;
     const month = state.rewardsMonth;
     const monthParam = month ? `&month=${month}` : "";
@@ -3497,7 +3497,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const byTrader = await byTraderRes.json();
 
       renderRewardsSummary(summary);
-      renderRewardsChart(summary);
+      if (updateChart) {
+        let chartSummary = summary;
+        if (month) {
+          const res = await authFetch(`/api/rewards/summary?year=${year}`);
+          if (res.ok) chartSummary = await res.json();
+        }
+        renderRewardsChart(chartSummary);
+      }
       renderCumulativeChart(byTrader.cumulative);
       renderTraderCards(byTrader.traders);
       renderPriceChart(claims);
