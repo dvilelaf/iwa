@@ -1,8 +1,12 @@
 """Utility functions"""
 
+import threading
+
 from loguru import logger
 from safe_eth.eth import EthereumNetwork
 from safe_eth.safe.addresses import MASTER_COPIES, PROXY_FACTORIES
+
+_logger_lock = threading.Lock()
 
 
 def singleton(cls):
@@ -54,37 +58,40 @@ def configure_logger():
     if hasattr(configure_logger, "configured"):
         return logger
 
-    import logging
+    with _logger_lock:
+        if hasattr(configure_logger, "configured"):  # double-checked locking
+            return logger
 
-    from iwa.core.constants import DATA_DIR
+        import logging
+        import sys
 
-    # Silence noisy third-party loggers (these use stdlib logging, not loguru)
-    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+        from iwa.core.constants import DATA_DIR
 
-    logger.remove()
+        # Silence noisy third-party loggers (these use stdlib logging, not loguru)
+        logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
+        logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    # Ensure data directory exists
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+        logger.remove()
 
-    import sys
+        # Restore console logging (stderr) so logs are visible in docker/systemd/frontend streams
+        logger.add(sys.stderr, level="INFO")
 
-    logger.add(
-        DATA_DIR / "iwa.log",
-        rotation="10 MB",
-        level="INFO",
-        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-    )
+        # Attempt file logging; silently skip if the data dir isn't writable (e.g. read-only mounts)
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            logger.add(
+                DATA_DIR / "iwa.log",
+                rotation="10 MB",
+                level="INFO",
+                format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+            )
+        except (PermissionError, OSError) as exc:
+            # Log only the exception type to avoid exposing system paths in warnings
+            logger.warning("iwa log file unavailable ({}), falling back to console-only logging", type(exc).__name__)
 
-    # Restore console logging (stderr) so logs are visible in docker/systemd/frontend streams
-    logger.add(sys.stderr, level="INFO")
-    # Also keep stderr for console if needed, but Textual captures it?
-    # Textual usually captures stderr. Writing to file is safer for debugging.
-    # Users previous logs show stdout format?
-
-    configure_logger.configured = True
-    return logger
+        configure_logger.configured = True
+        return logger
 
 
 def get_version(package_name: str) -> str:
