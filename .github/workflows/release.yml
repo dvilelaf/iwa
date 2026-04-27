@@ -23,7 +23,8 @@ jobs:
 
       - name: Install just
         uses: extractions/setup-just@v2
-
+        with:
+          just-version: "*"
 
       - name: Install dependencies
         run: just install
@@ -60,6 +61,8 @@ jobs:
 
       - name: Install just
         uses: extractions/setup-just@v2
+        with:
+          just-version: "*"
 
       - name: Set version from tag
         run: |
