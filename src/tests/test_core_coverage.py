@@ -596,9 +596,8 @@ class TestKeysSaveBackup:
         # First save happens during init. Now save again to trigger backup.
         storage.save()
 
-        backup_dir = tmp_path / "backups"  # 'backups/' (plural) — see P0.2 postmortem fix
+        backup_dir = tmp_path / "backup"
         assert backup_dir.exists()
-        # .bak suffix (unified via _rotate_backup — was .bkp in the old inline backup)
         backups = list(backup_dir.glob("wallet.json.*.bak"))
         assert len(backups) >= 1
 

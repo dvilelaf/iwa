@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from pydantic_core import core_schema
 from ruamel.yaml import YAML
 
+from iwa.core.constants import BACKUP_DIR
 from iwa.core.types import EthereumAddress  # noqa: F401 - re-exported for backwards compatibility
 from iwa.core.utils import singleton
 
@@ -79,11 +80,11 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
     """
     if not path.exists():
         return
-    backup_dir = path.parent / "backups"
+    backup_dir = path.parent / BACKUP_DIR.name
     # mode=0o700 on creation closes the TOCTOU window between mkdir and chmod.
     # The explicit chmod below still runs to fix dirs created by older versions.
     backup_dir.mkdir(mode=0o700, exist_ok=True)
-    # Ensure the backups/ directory is not world-traversable (both code paths
+    # Ensure the backup/ directory is not world-traversable (both code paths
     # — config saves and wallet saves — must agree on 0o700 so whichever path
     # creates the dir first doesn't leave it world-readable).
     try:
@@ -92,7 +93,7 @@ def _rotate_backup(path: Path, keep: int = 30) -> None:
         pass
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_path = backup_dir / f"{path.name}.{ts}.bak"
-    # Wrap backup copy in try/except so copy failures (ENOSPC, EACCES on backups/)
+    # Wrap backup copy in try/except so copy failures (ENOSPC, EACCES on backup/)
     # do NOT abort the main save — losing the backup is bad, but losing the write is
     # worse. This is symmetric with the prune section below.
     try:

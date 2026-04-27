@@ -185,7 +185,7 @@ def test_keystorage_init_corrupted(
 
     Silently resetting to {} then auto-creating a new master was a data-loss path:
     the corrupted-but-recoverable file would be overwritten on the next save.
-    Raising forces operator intervention from backups/ before any data is destroyed.
+    Raising forces operator intervention from backup/ before any data is destroyed.
     """
     wallet_path = tmp_path / "wallet.json"
     wallet_path.write_text("{invalid json")

@@ -108,7 +108,7 @@ web port="8080" host="0.0.0.0":
 
 # List wallet backups
 list-backups:
-    @ls -la data/backup/*.bkp 2>/dev/null || echo "No backups found"
+    @ls -la data/backup/*.bak 2>/dev/null || echo "No backups found"
 
 # Restore wallet from backup (use just list-backups to see available backups)
 restore-wallet backup:

@@ -98,8 +98,7 @@ class TestAtomicSaveConfig:
 
     def test_save_config_creates_backup(self, tmp_path):
         config_path = tmp_path / "config.yaml"
-        # Rotating backups now go to <config_dir>/backups/ with a timestamp suffix.
-        backup_dir = tmp_path / "backups"
+        backup_dir = tmp_path / "backup"
 
         ryaml = YAML()
         with config_path.open("w") as f:
@@ -112,27 +111,24 @@ class TestAtomicSaveConfig:
         with patch("iwa.core.constants.CONFIG_PATH", config_path):
             config.save_config()
 
-        # A timestamped backup must exist in the backups/ subdirectory.
-        assert backup_dir.exists(), "backups/ directory was not created"
+        assert backup_dir.exists(), "backup/ directory was not created"
         backups = list(backup_dir.iterdir())
-        assert backups, "No backup file found in backups/"
+        assert backups, "No backup file found in backup/"
         backup_path = backups[0]
         with backup_path.open() as f:
             backup_data = ryaml.load(f)
         assert "plugins" in backup_data
 
     def test_save_config_backup_dir_created_on_save(self, tmp_path):
-        """Each save_config() call creates a rotating backup in backups/."""
+        """Each save_config() call creates a rotating backup in backup/."""
         config_path = tmp_path / "config.yaml"
-        backup_dir = tmp_path / "backups"
+        backup_dir = tmp_path / "backup"
 
-        # _fresh_config creates a default config.yaml; save_config then backs it up.
         config = _fresh_config(config_path)
         with patch("iwa.core.constants.CONFIG_PATH", config_path):
             config.save_config()
 
         assert config_path.exists()
-        # backups/ should exist and contain exactly one timestamped backup
         assert backup_dir.exists()
         backups = list(backup_dir.iterdir())
         assert len(backups) == 1
@@ -429,10 +425,10 @@ class TestStorableModelAtomicYaml:
 
 
 class TestRotateBackup:
-    """_rotate_backup must create backups in backups/ (plural) with timestamp names."""
+    """_rotate_backup must create backups in backup/ with timestamp names."""
 
-    def test_backup_created_in_backups_dir(self, tmp_path):
-        """Backup goes to <parent>/backups/<name>.<ts>.bak."""
+    def test_backup_created_in_backup_dir(self, tmp_path):
+        """Backup goes to <parent>/backup/<name>.<ts>.bak."""
         from iwa.core.models import _rotate_backup
 
         target = tmp_path / "config.yaml"
@@ -440,7 +436,7 @@ class TestRotateBackup:
 
         _rotate_backup(target, keep=5)
 
-        backup_dir = tmp_path / "backups"
+        backup_dir = tmp_path / "backup"
         assert backup_dir.exists()
         backups = list(backup_dir.iterdir())
         assert len(backups) == 1
@@ -452,7 +448,7 @@ class TestRotateBackup:
         from iwa.core.models import _rotate_backup
 
         _rotate_backup(tmp_path / "nonexistent.yaml", keep=5)
-        assert not (tmp_path / "backups").exists()
+        assert not (tmp_path / "backup").exists()
 
     def test_pruning_keeps_at_most_n_backups(self, tmp_path):
         """After keep+2 calls, only `keep` backups remain.
@@ -483,7 +479,7 @@ class TestRotateBackup:
                 target.write_text(f"version: {i}\n")
                 _rotate_backup(target, keep=keep)
 
-        backups = sorted((tmp_path / "backups").iterdir())
+        backups = sorted((tmp_path / "backup").iterdir())
         assert len(backups) == keep
 
     def test_lock_file_parent_created_if_missing(self, tmp_path):
@@ -548,8 +544,8 @@ class TestRotateBackup:
         mode = audit_path.stat().st_mode & 0o777
         assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
 
-    def test_backups_dir_created_with_0o700(self, tmp_path):
-        """backups/ directory must be set to 0o700 so it is not world-traversable."""
+    def test_backup_dir_created_with_0o700(self, tmp_path):
+        """backup/ directory must be set to 0o700 so it is not world-traversable."""
         from iwa.core.models import _rotate_backup
 
         target = tmp_path / "config.yaml"
@@ -557,22 +553,22 @@ class TestRotateBackup:
 
         _rotate_backup(target, keep=5)
 
-        backup_dir = tmp_path / "backups"
+        backup_dir = tmp_path / "backup"
         assert backup_dir.exists()
         mode = backup_dir.stat().st_mode & 0o777
         assert mode == 0o700, f"Expected 0o700, got {oct(mode)}"
 
 
 # ---------------------------------------------------------------------------
-# Test: KeyStorage.save uses backups/ (plural) and flock
+# Test: KeyStorage.save uses backup/ and flock
 # ---------------------------------------------------------------------------
 
 
 class TestKeyStorageSave:
-    """KeyStorage.save() must use backups/ directory and acquire flock."""
+    """KeyStorage.save() must use backup/ directory and acquire flock."""
 
-    def test_wallet_backup_goes_to_backups_plural(self, tmp_path):
-        """Backup directory must be named 'backups' (plural), not 'backup'."""
+    def test_wallet_backup_goes_to_backup_dir(self, tmp_path):
+        """Backup directory must be named 'backup' (singular)."""
         from iwa.core.keys import KeyStorage
 
         wallet_path = tmp_path / "wallet.json"
@@ -582,8 +578,8 @@ class TestKeyStorageSave:
         ks.save()
         ks.save()
 
-        assert (tmp_path / "backups").exists(), "Should use 'backups' (plural)"
-        assert not (tmp_path / "backup").exists(), "Should NOT use 'backup' (singular)"
+        assert (tmp_path / "backup").exists(), "Should use 'backup' (singular)"
+        assert not (tmp_path / "backups").exists(), "Should NOT use 'backups' (plural)"
 
     def test_wallet_flock_acquired(self, tmp_path):
         """fcntl.flock must be called with LOCK_EX during save."""
@@ -637,7 +633,7 @@ class TestRotateBackupPruneSafety:
         target = tmp_path / "config.yaml"
         target.write_text("key: value\n")
 
-        original_iterdir = (tmp_path / "backups").parent.__class__.iterdir
+        original_iterdir = (tmp_path / "backup").parent.__class__.iterdir
 
         call_count = {"n": 0}
 
@@ -656,7 +652,7 @@ class TestRotateBackupPruneSafety:
         _rotate_backup(target, keep=5)
 
         # Backup file was still created before the failed prune
-        backups = list((tmp_path / "backups").glob("*.bak"))
+        backups = list((tmp_path / "backup").glob("*.bak"))
         assert len(backups) == 1, "Backup must exist despite prune error"
 
     def test_copy_failure_does_not_crash_caller(self, tmp_path, monkeypatch):
@@ -677,7 +673,7 @@ class TestRotateBackupPruneSafety:
         _rotate_backup(target, keep=5)
 
         # No backup file should exist (copy failed)
-        backups = list((tmp_path / "backups").glob("*.bak")) if (tmp_path / "backups").exists() else []
+        backups = list((tmp_path / "backup").glob("*.bak")) if (tmp_path / "backup").exists() else []
         assert len(backups) == 0, "No backup should exist when copy2 failed"
 
 

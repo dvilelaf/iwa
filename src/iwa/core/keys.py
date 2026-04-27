@@ -209,11 +209,11 @@ class KeyStorage(BaseModel):
             except json.JSONDecodeError as _e:
                 # Do NOT silently reset to {} — that leads to creating a new master account
                 # which overwrites the corrupted-but-recoverable wallet on the next save.
-                # Raise so the operator is forced to restore from backups/; preflight in
+                # Raise so the operator is forced to restore from backup/; preflight in
                 # __main__.py will catch this at startup and abort with a Telegram alert.
                 raise RuntimeError(
                     f"wallet.json at {path} is corrupted and cannot be loaded. "
-                    f"Restore from data/backups/ before restarting. Error: {_e}"
+                    f"Restore from data/backup/ before restarting. Error: {_e}"
                 ) from _e
         else:
             self.accounts = {}
@@ -240,8 +240,7 @@ class KeyStorage(BaseModel):
         """Save with automatic backup, exclusive lock, and atomic write.
 
         Uses fcntl.flock on .wallet.lock (symmetric with save_config's .config.lock)
-        to prevent concurrent writers from racing. Backup directory is named 'backups/'
-        (matching the config backup convention) rather than the old 'backup/' (singular).
+        to prevent concurrent writers from racing. Backups go to data/backup/ via _rotate_backup.
         NOTE: fcntl.flock is advisory and local; NFS mounts may not respect it.
         """
         # Ensure directory exists
@@ -257,7 +256,7 @@ class KeyStorage(BaseModel):
                 pass
             try:
                 # Backup existing file via _rotate_backup — unifies suffix (.bak),
-                # pruning (30 copies), audit log, and backups/ permissions with
+                # pruning (30 copies), audit log, and backup/ permissions with
                 # save_config(). This replaces the inline ad-hoc backup logic.
                 _rotate_backup(self._path, keep=30)
 

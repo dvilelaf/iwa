@@ -6,10 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-WALLET_PATH = DATA_DIR / "wallet.json"
-BACKUP_DIR = DATA_DIR / "backup"
+from iwa.core.constants import BACKUP_DIR, WALLET_PATH
 
 
 def validate_wallet_backup(backup_path: Path) -> tuple[bool, str, int]:
@@ -76,7 +73,7 @@ def restore_backup(backup_name: str) -> int:
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: restore_backup.py <backup_filename>")
-        print("Example: restore_backup.py wallet.json.20260102_101400.bkp")
+        print("Example: restore_backup.py wallet.json.20260102T101400Z.bak")
         sys.exit(1)
 
     sys.exit(restore_backup(sys.argv[1]))
