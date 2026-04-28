@@ -64,6 +64,13 @@ class ServiceRegistryContract(ContractInstance):
         """Get the token address for a service."""
         return self.call("token", service_id)
 
+    def get_token_raw(self, service_id: int) -> str:
+        """Get the token address without retry/logging wrappers."""
+        # Native-bond services may revert on token(service_id). Some callers
+        # intentionally treat that as "native", so avoid the retry layer's
+        # error log here and let the caller decide how to handle the failure.
+        return self.contract.functions.token(service_id).call()
+
     def get_agent_params(self, service_id: int) -> list:
         """Get agent params (slots, bond) for all agents in a service."""
         num_ids, params = self.call("getAgentParams", service_id)

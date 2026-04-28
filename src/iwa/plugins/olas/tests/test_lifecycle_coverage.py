@@ -261,6 +261,82 @@ class TestGetServiceToken:
         result = sm._get_service_token(1)
         assert result == ZERO_ADDRESS
 
+    def test_token_address_none_and_raw_registry_fails(self, sm):
+        """Service registry raw token failures fall back to native without using get_token."""
+
+        class Registry:
+            def __init__(self):
+                self.raw_call = MagicMock(side_effect=Exception("contract call failed"))
+                self.retry_call = MagicMock(side_effect=AssertionError("should not call get_token"))
+
+            def get_token_raw(self, service_id):
+                return self.raw_call(service_id)
+
+            def get_token(self, service_id):
+                return self.retry_call(service_id)
+
+        sm.service = _make_service(token_address=None)
+        sm.registry = Registry()
+
+        result = sm._get_service_token(1)
+
+        assert result == ZERO_ADDRESS
+        sm.registry.raw_call.assert_called_once_with(1)
+        sm.registry.retry_call.assert_not_called()
+
+    def test_token_address_none_and_raw_registry_retryable_error_uses_get_token(self, sm):
+        """Retryable raw token lookup failures keep the retrying get_token path."""
+
+        class Registry:
+            def __init__(self):
+                self.raw_call = MagicMock(side_effect=Exception("connection failed"))
+                self.retry_call = MagicMock(return_value=ADDR_TOKEN)
+                self.chain_interface = MagicMock()
+                self.chain_interface._handle_rpc_error.return_value = {"should_retry": True}
+
+            def get_token_raw(self, service_id):
+                return self.raw_call(service_id)
+
+            def get_token(self, service_id):
+                return self.retry_call(service_id)
+
+        sm.service = _make_service(token_address=None)
+        sm.registry = Registry()
+
+        result = sm._get_service_token(1)
+
+        assert result == ADDR_TOKEN
+        sm.registry.raw_call.assert_called_once_with(1)
+        sm.registry.retry_call.assert_called_once_with(1)
+
+    def test_token_address_none_and_raw_registry_revert_does_not_retry_get_token(self, sm):
+        """Wrapped contract reverts still fall back to native without logging via get_token."""
+
+        class Registry:
+            def __init__(self):
+                self.raw_call = MagicMock(
+                    side_effect=Exception("400 Client Error: execution reverted: revert")
+                )
+                self.retry_call = MagicMock(side_effect=AssertionError("should not call get_token"))
+                self.chain_interface = MagicMock()
+                self.chain_interface._handle_rpc_error.return_value = {"should_retry": True}
+
+            def get_token_raw(self, service_id):
+                return self.raw_call(service_id)
+
+            def get_token(self, service_id):
+                return self.retry_call(service_id)
+
+        sm.service = _make_service(token_address=None)
+        sm.registry = Registry()
+
+        result = sm._get_service_token(1)
+
+        assert result == ZERO_ADDRESS
+        sm.registry.raw_call.assert_called_once_with(1)
+        sm.registry.retry_call.assert_not_called()
+        sm.registry.chain_interface._handle_rpc_error.assert_not_called()
+
 
 # ============================================================================
 # _get_agent_bond_from_token_utility  (lines 494-495, 503-517)

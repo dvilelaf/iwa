@@ -391,11 +391,34 @@ class LifecycleManagerMixin:
         token_address = self.service.token_address
         if not token_address:
             try:
-                token_address = self.registry.get_token(service_id)
+                if callable(getattr(type(self.registry), "get_token_raw", None)):
+                    try:
+                        token_address = self.registry.get_token_raw(service_id)
+                    except Exception as e:
+                        if self._is_contract_revert(e):
+                            raise
+                        chain_interface = getattr(self.registry, "chain_interface", None)
+                        error_info = (
+                            chain_interface._handle_rpc_error(e)
+                            if chain_interface and hasattr(chain_interface, "_handle_rpc_error")
+                            else {}
+                        )
+                        if error_info.get("should_retry"):
+                            token_address = self.registry.get_token(service_id)
+                        else:
+                            raise
+                else:
+                    token_address = self.registry.get_token(service_id)
             except Exception:
                 # Default to native if query fails
                 token_address = ZERO_ADDRESS
         return token_address
+
+    @staticmethod
+    def _is_contract_revert(error: Exception) -> bool:
+        """Return True for eth_call contract reverts, even when wrapped by RPC errors."""
+        err_text = str(error).lower()
+        return "execution reverted" in err_text or "revert" in err_text
 
     def _ensure_token_approval_for_activation(
         self, token_address: str, security_deposit: Wei

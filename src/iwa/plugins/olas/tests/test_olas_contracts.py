@@ -1,6 +1,6 @@
 """Tests for Olas contracts and ServiceManager advanced scenarios."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -204,6 +204,20 @@ def test_service_manager_config_edges(mock_wallet):
         mock_call.side_effect = RuntimeError("token fail")
         with pytest.raises(RuntimeError):
             reg.get_token(1)
+
+    # test service registry raw token failure
+    token_call = MagicMock()
+    token_call.call.side_effect = RuntimeError("token fail")
+    contract = MagicMock()
+    contract.functions.token.return_value = token_call
+    with (
+        patch.object(ServiceRegistryContract, "contract", new_callable=PropertyMock) as mock_contract,
+        patch.object(reg.chain_interface, "with_retry") as mock_retry,
+    ):
+        mock_contract.return_value = contract
+        with pytest.raises(RuntimeError):
+            reg.get_token_raw(1)
+        mock_retry.assert_not_called()
 
     # test service manager deploy failure
     mgr_contract = ServiceManagerContract(VALID_ADDR, chain_name="gnosis")
