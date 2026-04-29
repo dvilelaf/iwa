@@ -212,6 +212,11 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
     # =====================================================================
     # GNOSIS — Agent ID 25 (Trader) — Marketplace V2
     # =====================================================================
+    # Economics note for 10k OLAS MM v2 trader contracts, verified on-chain
+    # on Gnosis on 2026-04-30:
+    # - Expert 5-10: 60 raw requests / 24h, ~37.945 OLAS per full epoch.
+    # - Expert 11-13: 16 raw requests / 24h, ~27.397 OLAS per full epoch.
+    # IWA adds one safety request; Triton may apply its own extra margin.
     StakingContractInfo(
         name="Expert 3 MM v2 (1k OLAS)",
         address=EthereumAddress("0x75eeca6207be98cac3fde8a20ecd7b01e50b3472"),
@@ -325,6 +330,8 @@ STAKING_CONTRACTS: List[StakingContractInfo] = [
     # =====================================================================
     # GNOSIS — Agent ID 25 (Trader) — MM v2 (new, large reward pools)
     # =====================================================================
+    # QS Expert 10k OLAS contracts use 60 raw requests / 24h and pay
+    # ~37.945 OLAS per full epoch, verified on-chain on 2026-04-30.
     StakingContractInfo(
         name="QS Expert 1 MM v2 (10k OLAS)",
         address=EthereumAddress("0xdB9E2713c3dA3C403F2eA6E570eB978b00304e9E"),
