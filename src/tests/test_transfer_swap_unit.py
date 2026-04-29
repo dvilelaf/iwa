@@ -157,4 +157,5 @@ async def test_swap_full_balance(transfer_service, mock_chain_interfaces, mock_c
         buy_token_name="USDC",
         order_type=OrderType.SELL,
         wait_for_execution=True,
+        raise_on_error=False,
     )
