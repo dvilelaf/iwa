@@ -245,6 +245,19 @@ async def test_swap(wallet, mock_keys_and_services):
     args, kwargs = mock_trs.swap.call_args
     assert args[0] == "account"
     assert args[1] == 1.0
+    assert kwargs["raise_on_error"] is False
+
+
+@pytest.mark.asyncio
+async def test_swap_passes_raise_on_error(wallet, mock_keys_and_services):
+    """Test swap can request propagation of CoW errors."""
+    mock_trs = mock_keys_and_services["transfer_service"].return_value
+    mock_trs.swap = AsyncMock(return_value=True)
+
+    result = await wallet.swap("account", 1.0, "SELL", "BUY", "gnosis", raise_on_error=True)
+
+    assert result is True
+    assert mock_trs.swap.call_args.kwargs["raise_on_error"] is True
 
 
 def test_drain(wallet, mock_keys_and_services):

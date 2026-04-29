@@ -167,6 +167,7 @@ class CowSwap:
         safe_address: ChecksumAddress | None = None,
         order_type: OrderType = OrderType.SELL,
         wait_for_execution: bool = False,
+        raise_on_error: bool = False,
     ) -> dict | None:
         """Execute a token swap on CoW Protocol.
 
@@ -178,6 +179,7 @@ class CowSwap:
             order_type: SELL or BUY order type.
             wait_for_execution: If True, wait for order to be filled (blocking).
                                If False, return immediately after order placement.
+            raise_on_error: If True, re-raise CoW API errors instead of returning None.
 
         Returns:
             dict with order info (uid, url, status) or None on error.
@@ -247,6 +249,8 @@ class CowSwap:
 
         except Exception as e:
             logger.error(f"Error during token swap: {e}")
+            if raise_on_error:
+                raise
             return None
 
     async def get_max_sell_amount_wei(

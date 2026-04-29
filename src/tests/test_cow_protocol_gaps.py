@@ -96,6 +96,42 @@ class TestCowSwapSwap:
 
         assert result is None
 
+    @pytest.mark.asyncio
+    @patch("iwa.plugins.gnosis.cow.swap.get_cowpy_module")
+    async def test_swap_reraises_exception_when_requested(self, mock_get_module):
+        """raise_on_error=True preserves the CoW failure reason for callers."""
+        mock_chain_cls = MagicMock()
+        mock_chain_cls.__iter__ = lambda self: iter([MagicMock(value=(MagicMock(),))])
+
+        def get_module(name):
+            mapping = {
+                "SupportedChainId": MagicMock(),
+                "OrderBookApi": MagicMock(),
+                "OrderBookAPIConfigFactory": MagicMock(),
+                "Chain": mock_chain_cls,
+                "swap_tokens": AsyncMock(side_effect=Exception("NoLiquidity: no route found")),
+            }
+            return mapping.get(name, MagicMock())
+
+        mock_get_module.side_effect = get_module
+
+        from iwa.plugins.gnosis.cow.swap import CowSwap
+
+        chain = MagicMock()
+        chain.chain_id = 100
+        chain.name = "gnosis"
+        chain.get_token_address.return_value = "0xTokenAddr"
+
+        with patch.object(CowSwap, "get_chain", return_value=MagicMock()):
+            cow = CowSwap(private_key_or_signer=MagicMock(), chain=chain)
+            with pytest.raises(Exception, match="NoLiquidity"):
+                await cow.swap(
+                    amount_wei=10**18,
+                    sell_token_name="olas",
+                    buy_token_name="wxdai",
+                    raise_on_error=True,
+                )
+
 
 # ---- CowSwap.check_cowswap_order() tests ----
 

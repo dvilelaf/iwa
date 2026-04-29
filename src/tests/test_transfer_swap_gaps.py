@@ -223,6 +223,37 @@ class TestSwapExecutionFailure:
         )
 
         assert result is None
+        cow_instance.swap.assert_awaited_once()
+        assert cow_instance.swap.await_args.kwargs["raise_on_error"] is False
+
+    @pytest.mark.asyncio
+    @patch("iwa.core.services.transfer.swap.CowSwap")
+    @patch("iwa.core.services.transfer.swap.ChainInterfaces")
+    async def test_swap_propagates_cowswap_error_when_requested(
+        self, mock_ci, mock_cow_cls, svc
+    ):
+        """raise_on_error=True propagates CoW failures to the caller."""
+        account_mock = MagicMock()
+        account_mock.address = "0xUser"
+        svc.account_service.resolve_account.return_value = account_mock
+        svc.key_storage.get_signer.return_value = "signer"
+        svc.balance_service.get_erc20_balance_wei.return_value = 10**18
+        svc.get_erc20_allowance.return_value = 10**18
+
+        cow_instance = AsyncMock()
+        mock_cow_cls.return_value = cow_instance
+        cow_instance.swap.side_effect = Exception("NoLiquidity: no route found")
+
+        with pytest.raises(Exception, match="NoLiquidity"):
+            await svc.swap(
+                account_address_or_tag="user",
+                amount_wei=10**18,
+                sell_token_name="olas",
+                buy_token_name="wxdai",
+                raise_on_error=True,
+            )
+
+        assert cow_instance.swap.await_args.kwargs["raise_on_error"] is True
 
     @pytest.mark.asyncio
     @patch("iwa.core.services.transfer.swap.CowSwap")

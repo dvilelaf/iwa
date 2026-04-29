@@ -26,6 +26,7 @@ class SwapMixin:
         chain_name: str = "gnosis",
         order_type: OrderType = OrderType.SELL,
         amount_wei: Optional[int] = None,
+        raise_on_error: bool = False,
     ) -> Optional[dict]:
         """Swap ERC-20 tokens on CowSwap.
 
@@ -38,6 +39,7 @@ class SwapMixin:
             order_type: SELL or BUY order (default: SELL).
             amount_wei: Amount in wei (integer). Bypasses float conversion.
                 Specify exactly one of amount_eth or amount_wei.
+            raise_on_error: If True, re-raise CoW API errors instead of returning None.
 
         Returns:
             dict | None: The executed order data if successful, None otherwise.
@@ -120,6 +122,7 @@ class SwapMixin:
             buy_token_name=buy_token_name,
             order_type=order_type,
             wait_for_execution=True,
+            raise_on_error=raise_on_error,
         )
 
         if result:

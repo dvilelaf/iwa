@@ -342,6 +342,7 @@ class Wallet:
         chain_name: str = "gnosis",
         order_type: OrderType = OrderType.SELL,
         amount_wei: Optional[int] = None,
+        raise_on_error: bool = False,
     ) -> bool:
         """Swap ERC-20 tokens on CowSwap.
 
@@ -353,6 +354,7 @@ class Wallet:
             buy_token_name: Name of the token to buy.
             chain_name: Blockchain name (must supports CowSwap, e.g., "gnosis").
             order_type: OrderType.SELL or OrderType.BUY.
+            raise_on_error: If True, re-raise CoW API errors instead of returning None.
 
         Returns:
             bool: True if swap order was created and filled successfully.
@@ -366,6 +368,7 @@ class Wallet:
             chain_name,
             order_type,
             amount_wei=amount_wei,
+            raise_on_error=raise_on_error,
         )
 
     def drain(
