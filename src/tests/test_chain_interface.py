@@ -230,12 +230,8 @@ def test_is_fd_exhaustion_error():
     assert interface._is_fd_exhaustion_error(
         Exception("SSLError(OSError(24, 'Too many open files'))")
     )
-    assert interface._is_fd_exhaustion_error(
-        Exception("OSError(24, 'Too many open files')")
-    )
-    assert interface._is_fd_exhaustion_error(
-        Exception("errno 24: too many open files")
-    )
+    assert interface._is_fd_exhaustion_error(Exception("OSError(24, 'Too many open files')"))
+    assert interface._is_fd_exhaustion_error(Exception("errno 24: too many open files"))
 
     # Should not detect other errors as FD exhaustion
     assert not interface._is_fd_exhaustion_error(Exception("connection timeout"))
@@ -263,3 +259,21 @@ def test_handle_fd_exhaustion_no_rotation(mock_chain_interface):
     # All RPCs should be in backoff
     for i in range(len(interface.chain.rpcs)):
         assert not interface._is_rpc_healthy(i)
+
+
+def test_521_server_error_is_retryable_rpc_server_error():
+    """Cloudflare 521 RPC failures should rotate/retry instead of failing once."""
+    chain = ChainInterface.__new__(ChainInterface)
+
+    assert chain._is_server_error(
+        RuntimeError(
+            "521 Server Error: <none> for url: https://rpc-gate.autonolas.tech/gnosis-rpc/"
+        )
+    )
+
+
+def test_generic_server_error_is_retryable_rpc_server_error():
+    """Requests HTTPError text can omit the status code but still say server error."""
+    chain = ChainInterface.__new__(ChainInterface)
+
+    assert chain._is_server_error(RuntimeError("Server Error: upstream unavailable"))
