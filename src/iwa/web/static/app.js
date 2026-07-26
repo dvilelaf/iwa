@@ -840,11 +840,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function getExplorerUrl(address, chain, type) {
     if (!address) return "#";
     const prefix = type === "tx" ? "tx" : "address";
-    if (chain === "gnosis") return `https://gnosisscan.io/${prefix}/${address}`;
+    if (chain === "gnosis")
+      return `https://gnosis.blockscout.com/${prefix}/${address}`;
     if (chain === "base") return `https://basescan.org/${prefix}/${address}`;
     if (chain === "ethereum")
       return `https://etherscan.io/${prefix}/${address}`;
-    return `https://gnosisscan.io/${prefix}/${address}`;
+    return `https://gnosis.blockscout.com/${prefix}/${address}`;
   }
 
   window.copyToClipboard = (text) => {

@@ -68,7 +68,7 @@ def test_get_claims(client):
     assert data[0]["price_eur"] == 1.5
     assert data[0]["value_eur"] == 15.0
     assert data[0]["service_name"] == "test_trader"
-    assert "gnosisscan.io" in data[0]["explorer_url"]
+    assert "gnosis.blockscout.com" in data[0]["explorer_url"]
 
 
 def test_get_claims_with_month_filter(client):
@@ -181,7 +181,7 @@ def test_export_csv(client):
     assert "Date" in content  # Header row
     assert "Chain" in content  # New column
     assert "0xExport1" in content
-    assert "gnosisscan.io" in content
+    assert "gnosis.blockscout.com" in content
     assert "10.000000" in content  # OLAS amount
     # Summary sections are CSV comments (# prefix)
     assert "# TAX SUMMARY" in content

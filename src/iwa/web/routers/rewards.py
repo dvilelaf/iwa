@@ -19,7 +19,7 @@ OLAS_DISPLAY_DECIMALS = 6  # OLAS token amounts
 EUR_PRICE_DECIMALS = 4     # EUR price per OLAS
 EUR_VALUE_DECIMALS = 2     # Total EUR value
 
-GNOSIS_EXPLORER = "https://gnosisscan.io/tx/"
+GNOSIS_EXPLORER = "https://gnosis.blockscout.com/tx/"
 
 # Mech request execution costs (per trader per epoch/day)
 # All staking contracts require 60 on-chain requests; with safety buffer ~64 actual

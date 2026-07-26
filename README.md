@@ -103,7 +103,6 @@ BASE_RPC=https://mainnet.base.org
 TESTING=false
 
 # Optional
-GNOSISSCAN_API_KEY=your_api_key
 COINGECKO_API_KEY=your_api_key
 ```
 

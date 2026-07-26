@@ -59,7 +59,7 @@ Common causes:
 If the stuck TX has insufficient gas, replace it with a higher-gas version:
 
 ```bash
-# From gnosisscan: find stuck TX hash, then replace with higher gas via Safe UI
+# From Blockscout: find stuck TX hash, then replace with higher gas via Safe UI
 # or submit a replacement TX at the same nonce with higher gas price
 ```
 
